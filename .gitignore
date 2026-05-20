@@ -1,0 +1,15 @@
+# Frontend
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Backend
+go/bin/
+go/tmp/
+go/.env
+
+# Logs
+*.log
+
+# OS
+.DS_Store
