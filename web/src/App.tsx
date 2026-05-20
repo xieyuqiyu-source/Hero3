@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import CityPage from './pages/CityPage'
 import MilitaryPage from './pages/MilitaryPage'
@@ -7,26 +7,15 @@ import ReportsPage from './pages/ReportsPage'
 import './App.css'
 
 function App() {
-  const [activePage, setActivePage] = useState('city')
-
-  const renderPage = () => {
-    switch (activePage) {
-      case 'city':
-        return <CityPage />
-      case 'military':
-        return <MilitaryPage />
-      case 'map':
-        return <MapPage />
-      case 'reports':
-        return <ReportsPage />
-      default:
-        return <CityPage />
-    }
-  }
-
   return (
-    <Layout activeKey={activePage} onNavigate={setActivePage}>
-      {renderPage()}
+    <Layout>
+      <Routes>
+        <Route path="/" element={<Navigate to="/city" replace />} />
+        <Route path="/city" element={<CityPage />} />
+        <Route path="/military" element={<MilitaryPage />} />
+        <Route path="/map" element={<MapPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+      </Routes>
     </Layout>
   )
 }

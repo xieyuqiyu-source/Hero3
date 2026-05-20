@@ -1,4 +1,5 @@
 import { useState, type FC, type ReactNode } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Castle,
   Swords,
@@ -12,14 +13,21 @@ import {
 import Sidebar from './Sidebar'
 
 interface LayoutProps {
-  activeKey: string
-  onNavigate: (key: string) => void
   children: ReactNode
 }
 
-const Layout: FC<LayoutProps> = ({ activeKey, onNavigate, children }) => {
+const Layout: FC<LayoutProps> = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  const activeKey = location.pathname.replace('/', '') || 'city'
+
+  const handleNavigate = (key: string) => {
+    navigate(`/${key}`)
+    setMobileOpen(false)
+  }
 
   return (
     <div className="flex min-h-dvh relative">
@@ -27,10 +35,7 @@ const Layout: FC<LayoutProps> = ({ activeKey, onNavigate, children }) => {
       <Sidebar
         activeKey={activeKey}
         collapsed={collapsed}
-        onNavigate={(key) => {
-          onNavigate(key)
-          setMobileOpen(false)
-        }}
+        onNavigate={handleNavigate}
         onToggle={() => setCollapsed(!collapsed)}
       />
 
@@ -57,10 +62,7 @@ const Layout: FC<LayoutProps> = ({ activeKey, onNavigate, children }) => {
       >
         <MobileSidebarContent
           activeKey={activeKey}
-          onNavigate={(key) => {
-            onNavigate(key)
-            setMobileOpen(false)
-          }}
+          onNavigate={handleNavigate}
         />
       </aside>
 
