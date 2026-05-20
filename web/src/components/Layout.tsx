@@ -4,13 +4,14 @@ import {
   Castle,
   Swords,
   Map,
-  ScrollText,
   Package,
   Warehouse,
   Shield,
   Menu,
+  Settings,
 } from 'lucide-react'
 import Sidebar from './Sidebar'
+import ThemeToggle from './ThemeToggle'
 
 interface LayoutProps {
   children: ReactNode
@@ -112,17 +113,45 @@ const MobileSidebarContent: FC<{ activeKey: string; onNavigate: (key: string) =>
     { key: 'city', label: '城池', icon: Castle },
     { key: 'military', label: '军事', icon: Swords },
     { key: 'map', label: '地图', icon: Map },
-    { key: 'reports', label: '战报', icon: ScrollText },
+    { key: 'settings', label: '设置', icon: Settings },
+  ]
+
+  const quickActions = [
+    { key: 'news', label: '军情', hasNotify: true },
+    { key: 'mail', label: '信函', hasNotify: true },
+    { key: 'notice', label: '公告', hasNotify: true },
+    { key: 'account', label: '账户', hasNotify: false },
   ]
 
   return (
     <>
       {/* Brand */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-[var(--color-border)]">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-[var(--color-border)]">
         <div className="flex flex-col items-start">
           <span className="text-base font-bold tracking-tight text-[var(--color-text-primary)]">Hero3</span>
           <span className="text-[11px] text-[var(--color-text-muted)] tracking-widest">英雄三国</span>
         </div>
+        <div className="ml-auto"><ThemeToggle /></div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="flex items-center gap-1 px-3 py-2 border-b border-[var(--color-border)]">
+        {quickActions.map((action) => (
+          <button
+            key={action.key}
+            type="button"
+            className={`
+              px-2.5 py-1.5 rounded-lg
+              text-[11px] font-medium
+              text-[var(--color-text-secondary)]
+              hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-light)]
+              cursor-pointer transition-all duration-200
+              ${action.hasNotify ? 'animate-text-blink' : ''}
+            `}
+          >
+            {action.label}
+          </button>
+        ))}
       </div>
 
       {/* Scrollable Content */}
@@ -179,6 +208,7 @@ const MobileSidebarContent: FC<{ activeKey: string; onNavigate: (key: string) =>
         <div className="grid grid-cols-4 gap-1.5">
           {navItems.map((item) => {
             const Icon = item.icon
+            const isActive = activeKey === item.key
             return (
               <button
                 key={item.key}
@@ -188,7 +218,7 @@ const MobileSidebarContent: FC<{ activeKey: string; onNavigate: (key: string) =>
                   flex flex-col items-center justify-center gap-1
                   min-h-[44px] rounded-xl border cursor-pointer
                   transition-all duration-200
-                  ${activeKey === item.key
+                  ${isActive
                     ? 'bg-[var(--color-accent-light)] border-[var(--color-accent-border)] text-[var(--color-accent)]'
                     : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-secondary)]'
                   }

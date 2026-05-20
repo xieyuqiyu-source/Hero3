@@ -82,10 +82,10 @@ const ResourceBar: FC = () => {
   }, [])
 
   const resources = [
-    { name: '木材', icon: TreePine, value: 1200, color: 'text-green-600' },
-    { name: '石料', icon: Mountain, value: 800, color: 'text-slate-600' },
-    { name: '铁矿', icon: Gem, value: 500, color: 'text-orange-600' },
-    { name: '粮食', icon: Wheat, value: 2000, color: 'text-amber-600' },
+    { name: '木材', icon: TreePine, value: 1200, capacity: 5000, color: 'text-green-600' },
+    { name: '石料', icon: Mountain, value: 800, capacity: 5000, color: 'text-slate-600' },
+    { name: '铁矿', icon: Gem, value: 500, capacity: 5000, color: 'text-orange-600' },
+    { name: '粮食', icon: Wheat, value: 2000, capacity: 5000, color: 'text-amber-600' },
   ]
 
   return (
@@ -103,23 +103,13 @@ const ResourceBar: FC = () => {
           return (
             <div
               key={res.name}
-              className="group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl min-w-0"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl min-w-0"
             >
               <Icon size={14} className={`${res.color} flex-shrink-0`} />
               <span className="text-[11px] text-[var(--color-text-muted)] flex-shrink-0">{res.name}</span>
-              <span className="text-xs font-semibold text-[var(--color-text-primary)] truncate">{res.value.toLocaleString()}</span>
-              {/* Hover tooltip */}
-              <div className="
-                absolute bottom-full left-1/2 -translate-x-1/2 mb-2
-                px-3 py-2 rounded-xl
-                bg-slate-900/90 text-white text-xs whitespace-nowrap
-                opacity-0 pointer-events-none group-hover:opacity-100
-                transition-opacity duration-200 z-50
-              ">
-                <div className="font-semibold">{res.name}</div>
-                <div>当前: {res.value.toLocaleString()}</div>
-                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900/90" />
-              </div>
+              <span className="text-xs font-semibold text-[var(--color-text-primary)] truncate tabular-nums">
+                {res.value.toLocaleString()}/{res.capacity.toLocaleString()}
+              </span>
             </div>
           )
         })}

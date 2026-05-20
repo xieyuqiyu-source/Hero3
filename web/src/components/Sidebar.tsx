@@ -3,13 +3,14 @@ import {
   Castle,
   Swords,
   Map,
-  ScrollText,
   ChevronLeft,
   ChevronRight,
   Warehouse,
   Package,
   Shield,
+  Settings,
 } from 'lucide-react'
+import ThemeToggle from './ThemeToggle'
 
 export interface NavItem {
   key: string
@@ -21,7 +22,15 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'city', label: '城池', icon: Castle },
   { key: 'military', label: '军事', icon: Swords },
   { key: 'map', label: '地图', icon: Map },
-  { key: 'reports', label: '战报', icon: ScrollText },
+  { key: 'settings', label: '设置', icon: Settings },
+]
+
+/** 顺序：军情、信函、公告、账户 */
+const QUICK_ACTIONS = [
+  { key: 'news', label: '军情', hasNotify: true },
+  { key: 'mail', label: '信函', hasNotify: true },
+  { key: 'notice', label: '公告', hasNotify: true },
+  { key: 'account', label: '账户', hasNotify: false },
 ]
 
 interface SidebarProps {
@@ -68,7 +77,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, onNavigate, onToggle 
 
       {/* Brand */}
       <div className={`
-        flex items-center gap-3 px-5 py-5
+        flex items-center gap-3 px-5 py-4
         border-b border-[var(--color-border)]
         transition-all duration-300
         ${collapsed ? 'justify-center px-0' : ''}
@@ -85,7 +94,51 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, onNavigate, onToggle 
             ${collapsed ? 'hidden' : ''}
           `}>英雄三国</span>
         </div>
+        {!collapsed && <div className="ml-auto"><ThemeToggle /></div>}
       </div>
+
+      {/* Quick Actions - below brand */}
+      {!collapsed && (
+        <div className="flex items-center gap-1 px-3 py-2 border-b border-[var(--color-border)]">
+          {QUICK_ACTIONS.map((action) => (
+            <button
+              key={action.key}
+              type="button"
+              className={`
+                px-2.5 py-1.5 rounded-lg
+                text-[11px] font-medium
+                text-[var(--color-text-secondary)]
+                hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-light)]
+                cursor-pointer transition-all duration-200
+                ${action.hasNotify ? 'animate-text-blink' : ''}
+              `}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {collapsed && (
+        <div className="flex flex-col items-center gap-1 py-2 border-b border-[var(--color-border)]">
+          {QUICK_ACTIONS.map((action) => (
+            <button
+              key={action.key}
+              type="button"
+              className={`
+                px-1.5 py-1.5 rounded-lg
+                text-[10px] font-medium
+                text-[var(--color-text-secondary)]
+                hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-light)]
+                cursor-pointer transition-all duration-200
+                ${action.hasNotify ? 'animate-text-blink' : ''}
+              `}
+            >
+              {action.label.charAt(0)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 py-3 scrollbar-none">
@@ -199,6 +252,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, onNavigate, onToggle 
         <div className={`grid gap-1.5 ${collapsed ? 'grid-cols-1' : 'grid-cols-4'}`}>
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon
+            const isActive = activeKey === item.key
             return (
               <button
                 key={item.key}
@@ -210,13 +264,13 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, onNavigate, onToggle 
                   relative flex flex-col items-center justify-center gap-1
                   min-h-[44px] rounded-xl border cursor-pointer
                   transition-all duration-200
-                  ${activeKey === item.key
+                  ${isActive
                     ? 'bg-[var(--color-accent-light)] border-[var(--color-accent-border)] text-[var(--color-accent)]'
                     : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-muted)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.06)]'
                   }
-                  ${hoveredKey === item.key && activeKey !== item.key ? '-translate-y-0.5' : ''}
+                  ${hoveredKey === item.key && !isActive ? '-translate-y-0.5' : ''}
                 `}
-                aria-current={activeKey === item.key ? 'page' : undefined}
+                aria-current={isActive ? 'page' : undefined}
               >
                 <Icon size={18} />
                 {!collapsed && (

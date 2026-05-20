@@ -6,7 +6,8 @@
 
 ```text
 Hero3/
-├── web/    # React + TypeScript + Vite 前端
+├── web/    # React + TypeScript + Vite 玩家前端
+├── admin/  # React + TypeScript + Vite GM 后台
 └── go/     # Go 后端 API 服务
 ```
 
@@ -54,6 +55,29 @@ http://localhost:8080
 - `GET /healthz`：健康检查
 - `GET /api/v1/meta`：服务元信息
 - `GET /api/v1/game/bootstrap`：游戏模块启动信息
+
+## GM 后台
+
+后台目录：
+
+```bash
+cd admin
+```
+
+常用命令：
+
+```bash
+pnpm install
+pnpm dev
+pnpm build
+pnpm lint
+```
+
+默认后台地址：
+
+```text
+http://localhost:5174
+```
 
 ## 参考项目
 

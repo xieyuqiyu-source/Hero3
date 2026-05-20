@@ -2,6 +2,9 @@
 web/node_modules/
 web/dist/
 web/.vite/
+admin/node_modules/
+admin/dist/
+admin/.vite/
 
 # Backend
 go/bin/
