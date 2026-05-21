@@ -104,6 +104,15 @@ h2 {
   padding: 10px 14px;
 }
 
+.status-banner {
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #b91c1c;
+  background: #fff5f5;
+}
+
 .operator-chip span,
 .metric-card span,
 .metric-card small {
@@ -170,6 +179,11 @@ button:hover {
   border-color: #64748b;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .search-field {
   display: grid;
   gap: 8px;
@@ -215,6 +229,23 @@ button:hover {
 .guardrail-panel span {
   color: #64748b;
   font-size: 13px;
+}
+
+.resource-readout,
+.state-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.resource-readout span,
+.state-summary span {
+  padding: 10px;
+  border-radius: 8px;
+  color: #334155;
+  background: #eef2f7;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .action-list button {
@@ -268,7 +299,9 @@ button:hover {
 
   .topbar,
   .panel-heading,
-  .table-row {
+  .table-row,
+  .resource-readout,
+  .state-summary {
     align-items: stretch;
     grid-template-columns: 1fr;
     flex-direction: column;

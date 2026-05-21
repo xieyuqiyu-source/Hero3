@@ -44,6 +44,10 @@ func (h *Handlers) GameBootstrap(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.gameService.Bootstrap())
 }
 
+func (h *Handlers) GameState(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.gameService.GetState())
+}
+
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)

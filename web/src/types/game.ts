@@ -61,5 +61,6 @@ export interface GameState {
   recruitQueues: RecruitQueue[]
   mapTargets: MapTarget[]
   recentBattleReports: BattleReport[]
+  unreadMessageCount: number
   serverTime: string
 }

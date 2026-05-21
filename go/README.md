@@ -79,6 +79,12 @@ curl http://localhost:8080/api/v1/meta
 curl http://localhost:8080/api/v1/game/bootstrap
 ```
 
+游戏状态快照：
+
+```bash
+curl http://localhost:8080/api/v1/game/state
+```
+
 ## 开发约定
 
 - 页面展示状态放在前端，核心游戏数据以后端为准。

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { gameApi } from '@/api/game'
 import type { GameState } from '@/types/game'
 
 interface GameStore {
@@ -17,6 +18,8 @@ interface GameStore {
   setLoading: (loading: boolean) => void
   /** 设置错误 */
   setError: (error: string | null) => void
+  /** 从后端加载完整游戏状态 */
+  loadGameState: (playerId?: string) => Promise<void>
 }
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -31,4 +34,14 @@ export const useGameStore = create<GameStore>((set) => ({
     })),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
+  loadGameState: async (playerId = 'demo-player') => {
+    set({ loading: true, error: null })
+    try {
+      const state = await gameApi.getState(playerId)
+      set({ state, loading: false, error: null })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '加载游戏状态失败'
+      set({ error: message, loading: false })
+    }
+  },
 }))

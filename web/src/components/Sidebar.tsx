@@ -11,6 +11,7 @@ import {
   Settings,
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
+import type { GameState } from '@/types/game'
 
 export interface NavItem {
   key: string
@@ -25,23 +26,25 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'settings', label: '设置', icon: Settings },
 ]
 
-/** 顺序：军情、信函、公告、账户 */
-const QUICK_ACTIONS = [
-  { key: 'news', label: '军情', hasNotify: true },
-  { key: 'mail', label: '信函', hasNotify: true },
-  { key: 'notice', label: '公告', hasNotify: true },
-  { key: 'account', label: '账户', hasNotify: false },
-]
-
 interface SidebarProps {
   activeKey: string
   collapsed: boolean
+  gameState: GameState | null
   onNavigate: (key: string) => void
   onToggle: () => void
 }
 
-const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, onNavigate, onToggle }) => {
+const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate, onToggle }) => {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
+  const resources = gameState?.resources
+  const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
+  const unreadMessageCount = gameState?.unreadMessageCount ?? 0
+  const quickActions = [
+    { key: 'news', label: '军情', hasNotify: true },
+    { key: 'mail', label: '信函', hasNotify: unreadMessageCount > 0 },
+    { key: 'notice', label: '公告', hasNotify: true },
+    { key: 'account', label: '账户', hasNotify: false },
+  ]
 
   return (
     <aside
@@ -100,7 +103,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, onNavigate, onToggle 
       {/* Quick Actions - below brand */}
       {!collapsed && (
         <div className="flex items-center gap-1 px-3 py-2 border-b border-[var(--color-border)]">
-          {QUICK_ACTIONS.map((action) => (
+          {quickActions.map((action) => (
             <button
               key={action.key}
               type="button"
@@ -121,7 +124,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, onNavigate, onToggle 
 
       {collapsed && (
         <div className="flex flex-col items-center gap-1 py-2 border-b border-[var(--color-border)]">
-          {QUICK_ACTIONS.map((action) => (
+          {quickActions.map((action) => (
             <button
               key={action.key}
               type="button"
@@ -158,7 +161,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, onNavigate, onToggle 
             <>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold text-[var(--color-text-primary)]">城市信息</span>
-                <span className="text-xs text-[var(--color-text-muted)]">Lv.1</span>
+            <span className="text-xs text-[var(--color-text-muted)]">{gameState?.player.nickname ?? '未同步'}</span>
               </div>
               <div className="text-xs text-[var(--color-text-secondary)]">
                 <p className="opacity-50">城市详情预留</p>
@@ -185,10 +188,17 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, onNavigate, onToggle 
                 <span className="text-sm font-semibold text-[var(--color-text-primary)]">资源产出</span>
               </div>
               <div className="grid grid-cols-2 gap-1.5">
-                {['木材', '石料', '铁矿', '粮食'].map((res) => (
-                  <div key={res} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
-                    <span className="text-xs">{res}</span>
-                    <span className="text-xs font-semibold text-[var(--color-accent)] ml-auto">--</span>
+                {[
+                  ['木材', resources?.wood],
+                  ['石料', resources?.stone],
+                  ['铁矿', resources?.iron],
+                  ['粮食', resources?.food],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
+                    <span className="text-xs">{label}</span>
+                    <span className="text-xs font-semibold text-[var(--color-accent)] ml-auto">
+                      {typeof value === 'number' ? value.toLocaleString() : '--'}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -212,7 +222,9 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, onNavigate, onToggle 
             <>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold text-[var(--color-text-primary)]">仓库</span>
-                <span className="text-xs text-[var(--color-text-muted)]">Lv.1</span>
+                <span className="text-xs text-[var(--color-text-muted)]">
+                  容量 {resources?.capacity.toLocaleString() ?? '--'}
+                </span>
               </div>
               <div className="text-xs text-[var(--color-text-secondary)]">
                 <p className="opacity-50">仓库容量预留</p>
@@ -237,7 +249,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, onNavigate, onToggle 
             <>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold text-[var(--color-text-primary)]">军队</span>
-                <span className="text-xs font-semibold text-[var(--color-accent)]">0</span>
+                <span className="text-xs font-semibold text-[var(--color-accent)]">{totalArmy}</span>
               </div>
               <div className="text-xs text-[var(--color-text-secondary)]">
                 <p className="opacity-50">军队信息预留</p>

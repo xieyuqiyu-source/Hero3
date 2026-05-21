@@ -2,13 +2,15 @@ import './App.css'
 import {
   auditLogs,
   guardrails,
-  overviewStats,
-  playerRows,
   resourceActions,
   systemActions,
 } from './adminData'
+import PlayerStatePanel from './PlayerStatePanel'
+import { useAdminDashboard } from './useAdminDashboard'
 
 function App() {
+  const { dashboardStats, error, gameState, health, loading } = useAdminDashboard()
+
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar" aria-label="GM 后台导航">
@@ -36,13 +38,19 @@ function App() {
             <h1>Hero3 管理后台</h1>
           </div>
           <div className="operator-chip">
-            <span>当前环境</span>
-            <strong>Development</strong>
+            <span>{loading ? '正在连接' : '当前环境'}</span>
+            <strong>{health?.environment ?? 'Offline'}</strong>
           </div>
         </header>
 
+        {error && (
+          <section className="status-banner">
+            后端未连接：{error}
+          </section>
+        )}
+
         <section className="metrics-grid" aria-label="运营指标">
-          {overviewStats.map((stat) => (
+          {dashboardStats.map((stat) => (
             <article className="metric-card" key={stat.label}>
               <span>{stat.label}</span>
               <strong>{stat.value}</strong>
@@ -63,18 +71,10 @@ function App() {
 
             <label className="search-field">
               <span>玩家 ID / 昵称</span>
-              <input placeholder="例如 demo-player 或 主公" />
+              <input value={gameState?.player.id ?? 'demo-player'} readOnly />
             </label>
 
-            <div className="table-like">
-              {playerRows.map((player) => (
-                <div className="table-row" key={player.id}>
-                  <span>{player.name}</span>
-                  <strong>{player.power}</strong>
-                  <small>{player.status}</small>
-                </div>
-              ))}
-            </div>
+            <PlayerStatePanel gameState={gameState} />
           </article>
 
           <article className="panel" id="资源">
@@ -87,7 +87,7 @@ function App() {
 
             <div className="action-list">
               {resourceActions.map((action) => (
-                <button type="button" key={action.title}>
+                <button type="button" key={action.title} disabled>
                   <strong>{action.title}</strong>
                   <span>{action.desc}</span>
                 </button>
@@ -105,7 +105,7 @@ function App() {
 
             <div className="system-actions">
               {systemActions.map((action) => (
-                <button type="button" className={action.level} key={action.title}>
+                <button type="button" className={action.level} key={action.title} disabled>
                   {action.title}
                 </button>
               ))}

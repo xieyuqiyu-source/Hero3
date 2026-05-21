@@ -1,4 +1,4 @@
-import { useState, type FC, type ReactNode } from 'react'
+import { useEffect, useState, type FC, type ReactNode } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Castle,
@@ -12,6 +12,8 @@ import {
 } from 'lucide-react'
 import Sidebar from './Sidebar'
 import ThemeToggle from './ThemeToggle'
+import { useGameStore } from '@/store/gameStore'
+import type { GameState } from '@/types/game'
 
 interface LayoutProps {
   children: ReactNode
@@ -20,6 +22,10 @@ interface LayoutProps {
 const Layout: FC<LayoutProps> = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const gameState = useGameStore((store) => store.state)
+  const loading = useGameStore((store) => store.loading)
+  const error = useGameStore((store) => store.error)
+  const loadGameState = useGameStore((store) => store.loadGameState)
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -30,12 +36,17 @@ const Layout: FC<LayoutProps> = ({ children }) => {
     setMobileOpen(false)
   }
 
+  useEffect(() => {
+    void loadGameState()
+  }, [loadGameState])
+
   return (
     <div className="flex min-h-dvh relative">
       {/* Desktop Sidebar */}
       <Sidebar
         activeKey={activeKey}
         collapsed={collapsed}
+        gameState={gameState}
         onNavigate={handleNavigate}
         onToggle={() => setCollapsed(!collapsed)}
       />
@@ -63,6 +74,7 @@ const Layout: FC<LayoutProps> = ({ children }) => {
       >
         <MobileSidebarContent
           activeKey={activeKey}
+          gameState={gameState}
           onNavigate={handleNavigate}
         />
       </aside>
@@ -75,6 +87,11 @@ const Layout: FC<LayoutProps> = ({ children }) => {
         `}
       >
         <div className="max-w-[1320px] w-full mx-auto px-4 py-6 lg:px-6 lg:py-8">
+          {(loading || error) && (
+            <div className="mb-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">
+              {loading ? '正在同步游戏状态...' : `游戏状态加载失败：${error}`}
+            </div>
+          )}
           {children}
         </div>
       </main>
@@ -105,8 +122,13 @@ const Layout: FC<LayoutProps> = ({ children }) => {
 }
 
 /* Mobile sidebar content */
-const MobileSidebarContent: FC<{ activeKey: string; onNavigate: (key: string) => void }> = ({
+const MobileSidebarContent: FC<{
+  activeKey: string
+  gameState: GameState | null
+  onNavigate: (key: string) => void
+}> = ({
   activeKey,
+  gameState,
   onNavigate,
 }) => {
   const navItems = [
@@ -118,10 +140,12 @@ const MobileSidebarContent: FC<{ activeKey: string; onNavigate: (key: string) =>
 
   const quickActions = [
     { key: 'news', label: '军情', hasNotify: true },
-    { key: 'mail', label: '信函', hasNotify: true },
+    { key: 'mail', label: '信函', hasNotify: (gameState?.unreadMessageCount ?? 0) > 0 },
     { key: 'notice', label: '公告', hasNotify: true },
     { key: 'account', label: '账户', hasNotify: false },
   ]
+  const resources = gameState?.resources
+  const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
 
   return (
     <>
@@ -173,10 +197,17 @@ const MobileSidebarContent: FC<{ activeKey: string; onNavigate: (key: string) =>
             <span className="text-sm font-semibold text-[var(--color-text-primary)]">资源产出</span>
           </div>
           <div className="grid grid-cols-2 gap-1.5">
-            {['木材', '石料', '铁矿', '粮食'].map((res) => (
-              <div key={res} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
-                <span className="text-xs">{res}</span>
-                <span className="text-xs font-semibold text-[var(--color-accent)] ml-auto">--</span>
+            {[
+              ['木材', resources?.wood],
+              ['石料', resources?.stone],
+              ['铁矿', resources?.iron],
+              ['粮食', resources?.food],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
+                <span className="text-xs">{label}</span>
+                <span className="text-xs font-semibold text-[var(--color-accent)] ml-auto">
+                  {typeof value === 'number' ? value.toLocaleString() : '--'}
+                </span>
               </div>
             ))}
           </div>
@@ -187,7 +218,9 @@ const MobileSidebarContent: FC<{ activeKey: string; onNavigate: (key: string) =>
           <div className="flex items-center gap-2 mb-2">
             <Warehouse size={14} className="text-[var(--color-accent)]" />
             <span className="text-sm font-semibold text-[var(--color-text-primary)]">仓库</span>
-            <span className="text-xs text-[var(--color-text-muted)] ml-auto">Lv.1</span>
+            <span className="text-xs text-[var(--color-text-muted)] ml-auto">
+              容量 {resources?.capacity.toLocaleString() ?? '--'}
+            </span>
           </div>
           <p className="text-xs text-[var(--color-text-secondary)] opacity-50">仓库容量预留</p>
         </div>
@@ -197,7 +230,7 @@ const MobileSidebarContent: FC<{ activeKey: string; onNavigate: (key: string) =>
           <div className="flex items-center gap-2 mb-2">
             <Shield size={14} className="text-[var(--color-accent)]" />
             <span className="text-sm font-semibold text-[var(--color-text-primary)]">军队</span>
-            <span className="text-xs font-semibold text-[var(--color-accent)] ml-auto">0</span>
+            <span className="text-xs font-semibold text-[var(--color-accent)] ml-auto">{totalArmy}</span>
           </div>
           <p className="text-xs text-[var(--color-text-secondary)] opacity-50">军队信息预留</p>
         </div>

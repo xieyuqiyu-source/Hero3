@@ -1,20 +1,7 @@
-export const overviewStats = [
-  { label: '在线玩家', value: '128', hint: '近 5 分钟活跃' },
-  { label: '今日创建', value: '42', hint: '测试服新增角色' },
-  { label: '战斗结算', value: '1,284', hint: '今日战报数量' },
-  { label: '异常告警', value: '3', hint: '等待处理' },
-]
-
-export const playerRows = [
-  { id: 'demo-player', name: '主公', power: '战力 8,420', status: '在线' },
-  { id: 'player-wei-021', name: '魏境守备', power: '战力 6,310', status: '离线 12m' },
-  { id: 'player-shu-017', name: '蜀道先锋', power: '战力 5,980', status: '征兵中' },
-]
-
 export const resourceActions = [
-  { title: '补发资源', desc: '按玩家 ID 发放木、石、铁、粮' },
-  { title: '清理队列', desc: '处理卡住的升级或征兵任务' },
-  { title: '重置地图', desc: '刷新玩家测试地图目标' },
+  { title: '补发资源', desc: '待权限、审计、二次确认接入后启用' },
+  { title: '清理队列', desc: '待队列模型和操作日志接入后启用' },
+  { title: '重置地图', desc: '待地图刷新规则接入后启用' },
 ]
 
 export const systemActions = [

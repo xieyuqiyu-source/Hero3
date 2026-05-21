@@ -1,5 +1,7 @@
 package game
 
+import "time"
+
 type Service struct{}
 
 type BootstrapResponse struct {
@@ -10,6 +12,10 @@ type BootstrapResponse struct {
 
 func NewService() *Service {
 	return &Service{}
+}
+
+func (s *Service) GetState() GameState {
+	return newDemoState(time.Now())
 }
 
 func (s *Service) Bootstrap() BootstrapResponse {

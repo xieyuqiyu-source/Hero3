@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Plus,
 } from 'lucide-react'
+import { useGameStore } from '@/store/gameStore'
 
 type Tab = 'resource' | 'military'
 
@@ -72,6 +73,7 @@ const CityPage: FC = () => {
 /* ===== Resource Summary Bar ===== */
 const ResourceBar: FC = () => {
   const [scrolled, setScrolled] = useState(false)
+  const gameResources = useGameStore((store) => store.state?.resources)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -82,10 +84,10 @@ const ResourceBar: FC = () => {
   }, [])
 
   const resources = [
-    { name: '木材', icon: TreePine, value: 1200, capacity: 5000, color: 'text-green-600' },
-    { name: '石料', icon: Mountain, value: 800, capacity: 5000, color: 'text-slate-600' },
-    { name: '铁矿', icon: Gem, value: 500, capacity: 5000, color: 'text-orange-600' },
-    { name: '粮食', icon: Wheat, value: 2000, capacity: 5000, color: 'text-amber-600' },
+    { name: '木材', icon: TreePine, value: gameResources?.wood ?? 0, capacity: gameResources?.capacity ?? 0, color: 'text-green-600' },
+    { name: '石料', icon: Mountain, value: gameResources?.stone ?? 0, capacity: gameResources?.capacity ?? 0, color: 'text-slate-600' },
+    { name: '铁矿', icon: Gem, value: gameResources?.iron ?? 0, capacity: gameResources?.capacity ?? 0, color: 'text-orange-600' },
+    { name: '粮食', icon: Wheat, value: gameResources?.food ?? 0, capacity: gameResources?.capacity ?? 0, color: 'text-amber-600' },
   ]
 
   return (

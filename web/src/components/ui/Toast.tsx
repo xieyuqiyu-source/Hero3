@@ -1,7 +1,7 @@
 /**
  * 统一通知组件
  * 用法：
- *   import { toast } from '@/components/ui/Toast'
+ *   import { toast } from '@/components/ui'
  *   toast.success('升级成功')
  *   toast.error('资源不足')
  *   toast.info('征兵已开始')
@@ -11,41 +11,7 @@
 
 import { useState, useEffect, useCallback, type FC } from 'react'
 import { CheckCircle, XCircle, Info, X } from 'lucide-react'
-import { create } from 'zustand'
-
-type ToastType = 'success' | 'error' | 'info'
-
-interface ToastItem {
-  id: number
-  type: ToastType
-  message: string
-}
-
-interface ToastStore {
-  items: ToastItem[]
-  add: (type: ToastType, message: string) => void
-  remove: (id: number) => void
-}
-
-let nextId = 0
-
-const useToastStore = create<ToastStore>((set) => ({
-  items: [],
-  add: (type, message) => {
-    const id = nextId++
-    set((s) => ({ items: [...s.items, { id, type, message }] }))
-    setTimeout(() => {
-      set((s) => ({ items: s.items.filter((t) => t.id !== id) }))
-    }, 3500)
-  },
-  remove: (id) => set((s) => ({ items: s.items.filter((t) => t.id !== id) })),
-}))
-
-export const toast = {
-  success: (message: string) => useToastStore.getState().add('success', message),
-  error: (message: string) => useToastStore.getState().add('error', message),
-  info: (message: string) => useToastStore.getState().add('info', message),
-}
+import { useToastStore, type ToastItemData, type ToastType } from './toastStore'
 
 const icons: Record<ToastType, FC<{ size?: number; className?: string }>> = {
   success: CheckCircle,
@@ -72,7 +38,7 @@ export const ToastContainer: FC = () => {
   )
 }
 
-const ToastItem: FC<{ item: ToastItem; onClose: () => void }> = ({ item, onClose }) => {
+const ToastItem: FC<{ item: ToastItemData; onClose: () => void }> = ({ item, onClose }) => {
   const [visible, setVisible] = useState(false)
   const Icon = icons[item.type]
 

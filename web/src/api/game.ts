@@ -5,7 +5,7 @@ import type { GameState, BattleReport } from '@/types/game'
 
 export const gameApi = {
   /** 获取完整游戏状态 */
-  getState(playerId: string) {
+  getState(playerId = 'demo-player') {
     return api.get<GameState>(`/game/state?playerId=${playerId}`)
   },
 

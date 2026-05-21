@@ -21,6 +21,7 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("GET /healthz", handlers.Health)
 	mux.HandleFunc("GET /api/v1/meta", handlers.Meta)
 	mux.HandleFunc("GET /api/v1/game/bootstrap", handlers.GameBootstrap)
+	mux.HandleFunc("GET /api/v1/game/state", handlers.GameState)
 
 	return corsMiddleware(options.Config, mux)
 }

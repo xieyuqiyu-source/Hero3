@@ -55,6 +55,7 @@ http://localhost:8080
 - `GET /healthz`：健康检查
 - `GET /api/v1/meta`：服务元信息
 - `GET /api/v1/game/bootstrap`：游戏模块启动信息
+- `GET /api/v1/game/state`：玩家主界面游戏状态快照
 
 ## GM 后台
 
