@@ -9,6 +9,7 @@ import {
   Shield,
   Menu,
   Settings,
+  LoaderCircle,
 } from 'lucide-react'
 import Sidebar from './Sidebar'
 import ThemeToggle from './ThemeToggle'
@@ -87,14 +88,16 @@ const Layout: FC<LayoutProps> = ({ children }) => {
         `}
       >
         <div className="max-w-[1320px] w-full mx-auto px-4 py-6 lg:px-6 lg:py-8">
-          {(loading || error) && (
+          {error && (
             <div className="mb-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">
-              {loading ? '正在同步游戏状态...' : `游戏状态加载失败：${error}`}
+              游戏状态加载失败：{error}
             </div>
           )}
           {children}
         </div>
       </main>
+
+      {loading && <GameStateLoadingOverlay />}
 
       {/* Mobile Menu Trigger */}
       <button
@@ -120,6 +123,31 @@ const Layout: FC<LayoutProps> = ({ children }) => {
     </div>
   )
 }
+
+const GameStateLoadingOverlay: FC = () => (
+  <div
+    className="
+      fixed inset-0 z-[80] flex items-center justify-center
+      bg-[var(--color-bg)]/55 backdrop-blur-[3px]
+      px-4
+    "
+    role="status"
+    aria-live="polite"
+  >
+    <div
+      className="
+        flex items-center gap-3 rounded-2xl
+        border border-[var(--color-border)]
+        bg-[var(--color-surface)]/90
+        px-4 py-3 text-sm font-medium text-[var(--color-text-secondary)]
+        shadow-[0_18px_48px_rgba(15,23,42,0.12)]
+      "
+    >
+      <LoaderCircle size={18} className="animate-spin text-[var(--color-accent)]" />
+      <span>正在同步游戏状态...</span>
+    </div>
+  </div>
+)
 
 /* Mobile sidebar content */
 const MobileSidebarContent: FC<{

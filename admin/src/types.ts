@@ -49,3 +49,17 @@ export interface GameState {
   unreadMessageCount: number
   serverTime: string
 }
+
+export interface PlayerSummary {
+  id: string
+  nickname: string
+  faction: string
+  updatedAt: string
+}
+
+export interface AccountSummary {
+  id: string
+  username: string
+  createdAt: string
+  players: PlayerSummary[]
+}

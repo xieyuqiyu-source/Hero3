@@ -6,6 +6,18 @@ export interface Player {
   faction: string
 }
 
+export interface AccountSession {
+  accountId: string
+  username: string
+}
+
+export interface PlayerSummary {
+  id: string
+  nickname: string
+  faction: string
+  updatedAt: string
+}
+
 export interface ResourceState {
   wood: number
   stone: number

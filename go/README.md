@@ -4,17 +4,15 @@
 
 ## 技术选择
 
-当前骨架优先使用 Go 标准库：
+当前骨架优先使用 Go 标准库，并接入 MySQL/MariaDB 作为可选持久化：
 
 - `net/http`：HTTP 服务与路由
 - `log/slog`：结构化日志
 - 环境变量：基础配置
+- `database/sql` + `github.com/go-sql-driver/mysql`：账号与存档持久化
 
 后续在业务需要明确后，再接入：
 
-- PostgreSQL：持久化玩家、存档、战报、地图状态
-- `pgx/sqlc`：类型安全 SQL 访问
-- `golang-migrate`：数据库迁移
 - Redis：在线状态、排行榜、短期缓存或队列
 
 ## 目录结构
@@ -57,6 +55,53 @@ HERO3_PORT=8080
 HERO3_VERSION=0.1.0
 HERO3_LOG_LEVEL=info
 HERO3_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+# HERO3_DATABASE_DSN=hero3_user:hero3_password@tcp(127.0.0.1:3306)/hero3?parseTime=true&charset=utf8mb4&loc=UTC
+```
+
+## 数据库
+
+不配置 `HERO3_DATABASE_DSN` 时，服务使用内存存储，重启后账号和新建存档会丢失。
+
+配置 `HERO3_DATABASE_DSN` 后，服务使用 MySQL/MariaDB，并在启动时自动创建当前需要的表：
+
+- `accounts`：轻账号
+- `players`：账号绑定的游戏存档，当前阶段用 `state_json` 保存完整游戏状态
+
+本地或服务器 MySQL 可以先创建库和用户：
+
+```sql
+CREATE DATABASE hero3 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'hero3_user'@'%' IDENTIFIED BY 'hero3_password';
+GRANT ALL PRIVILEGES ON hero3.* TO 'hero3_user'@'%';
+FLUSH PRIVILEGES;
+```
+
+启动示例：
+
+```bash
+export HERO3_DATABASE_DSN='hero3_user:hero3_password@tcp(127.0.0.1:3306)/hero3?parseTime=true&charset=utf8mb4&loc=UTC'
+go run ./cmd/server
+```
+
+当前开发约定：本地开发也使用服务器 MySQL，不再使用本机数据库。服务器 MySQL 只监听服务器本机地址时，本地通过 SSH 隧道连接：
+
+```bash
+ssh -N -L 3307:127.0.0.1:3306 root@服务器IP
+```
+
+然后本地后端使用：
+
+```bash
+export HERO3_DATABASE_DSN='hero3_user:hero3_password@tcp(127.0.0.1:3307)/hero3?parseTime=true&charset=utf8mb4&loc=UTC'
+go run ./cmd/server
+```
+
+项目根目录的 `dev.sh` 会自动读取 `go/.env`，本机可把实际 DSN 放在 `go/.env` 中。该文件已被 Git 忽略，不要提交数据库密码。
+
+如果 `go/.env` 配置了 `HERO3_DB_TUNNEL_ENABLED=true`，`dev.sh` 会自动启动 SSH 隧道，再启动 Go 后端。因此日常开发只需要：
+
+```bash
+./dev.sh
 ```
 
 ## 基础接口
@@ -83,6 +128,36 @@ curl http://localhost:8080/api/v1/game/bootstrap
 
 ```bash
 curl http://localhost:8080/api/v1/game/state
+```
+
+注册轻账号：
+
+```bash
+curl -X POST http://localhost:8080/api/v1/accounts/register \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"demo","password":"123456"}'
+```
+
+登录轻账号：
+
+```bash
+curl -X POST http://localhost:8080/api/v1/accounts/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"demo","password":"123456"}'
+```
+
+查看账号存档：
+
+```bash
+curl http://localhost:8080/api/v1/accounts/{accountId}/players
+```
+
+创建账号绑定存档：
+
+```bash
+curl -X POST http://localhost:8080/api/v1/players/create \
+  -H 'Content-Type: application/json' \
+  -d '{"accountId":"acc_xxx","nickname":"主公","faction":"wei"}'
 ```
 
 ## 开发约定

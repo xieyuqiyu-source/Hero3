@@ -10,7 +10,9 @@ import (
 
 	"hero3/internal/api"
 	"hero3/internal/config"
+	"hero3/internal/game"
 	"hero3/internal/httpserver"
+	"hero3/internal/storage"
 )
 
 func main() {
@@ -19,9 +21,33 @@ func main() {
 		Level: cfg.LogLevel,
 	}))
 
+	gameService := game.NewService()
+	if cfg.DatabaseDSN != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		db, err := storage.OpenMySQL(ctx, cfg.DatabaseDSN)
+		if err != nil {
+			logger.Error("database connection failed", "error", err)
+			os.Exit(1)
+		}
+		defer db.Close()
+
+		if err := storage.MigrateMySQL(ctx, db); err != nil {
+			logger.Error("database migration failed", "error", err)
+			os.Exit(1)
+		}
+
+		gameService = game.NewServiceWithRepository(storage.NewMySQLRepository(db))
+		logger.Info("database storage enabled")
+	} else {
+		logger.Info("memory storage enabled")
+	}
+
 	router := api.NewRouter(api.RouterOptions{
-		Config: cfg,
-		Logger: logger,
+		Config:      cfg,
+		Logger:      logger,
+		GameService: gameService,
 	})
 
 	server := httpserver.New(cfg, logger, router)

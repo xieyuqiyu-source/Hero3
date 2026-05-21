@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { GameState, BattleReport } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary } from '@/types/game'
 
 export const gameApi = {
   /** 获取完整游戏状态 */
@@ -9,12 +9,26 @@ export const gameApi = {
     return api.get<GameState>(`/game/state?playerId=${playerId}`)
   },
 
-  /** 创建玩家 */
-  createPlayer(nickname: string, faction: string) {
-    return api.post<{ playerId: string; state: GameState }>('/player/create', {
+  /** 创建账号绑定的游戏存档 */
+  createPlayer(accountId: string, nickname: string, faction: string, generalId?: string) {
+    return api.post<{ playerId: string; state: GameState }>('/players/create', {
+      accountId,
       nickname,
       faction,
+      generalId,
     })
+  },
+
+  registerAccount(username: string, password: string) {
+    return api.post<AccountSession>('/accounts/register', { username, password })
+  },
+
+  loginAccount(username: string, password: string) {
+    return api.post<AccountSession>('/accounts/login', { username, password })
+  },
+
+  listAccountPlayers(accountId: string) {
+    return api.get<{ players: PlayerSummary[] }>(`/accounts/${accountId}/players`)
   },
 
   /** 升级建筑 */

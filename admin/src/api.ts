@@ -1,4 +1,4 @@
-import type { GameState, HealthState } from './types'
+import type { AccountSummary, GameState, HealthState } from './types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1'
 const ROOT_BASE = API_BASE.replace(/\/api\/v1$/, '')
@@ -18,5 +18,8 @@ export const adminApi = {
   },
   getGameState() {
     return request<GameState>(`${API_BASE}/game/state`)
+  },
+  getAccounts() {
+    return request<{ accounts: AccountSummary[] }>(`${API_BASE}/admin/accounts`)
   },
 }

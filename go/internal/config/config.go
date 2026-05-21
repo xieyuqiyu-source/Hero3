@@ -20,6 +20,7 @@ type Config struct {
 	Environment    string
 	Addr           string
 	AllowedOrigins []string
+	DatabaseDSN    string
 	ReadTimeout    time.Duration
 	WriteTimeout   time.Duration
 	IdleTimeout    time.Duration
@@ -35,6 +36,7 @@ func Load() Config {
 		Environment:    getEnv("HERO3_ENV", defaultEnvironment),
 		Addr:           ":" + port,
 		AllowedOrigins: splitCSV(getEnv("HERO3_ALLOWED_ORIGINS", defaultAllowedOrigins)),
+		DatabaseDSN:    getEnv("HERO3_DATABASE_DSN", ""),
 		ReadTimeout:    getDurationEnv("HERO3_READ_TIMEOUT", 5*time.Second),
 		WriteTimeout:   getDurationEnv("HERO3_WRITE_TIMEOUT", 10*time.Second),
 		IdleTimeout:    getDurationEnv("HERO3_IDLE_TIMEOUT", 60*time.Second),

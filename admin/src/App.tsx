@@ -9,7 +9,7 @@ import PlayerStatePanel from './PlayerStatePanel'
 import { useAdminDashboard } from './useAdminDashboard'
 
 function App() {
-  const { dashboardStats, error, gameState, health, loading } = useAdminDashboard()
+  const { accounts, dashboardStats, error, gameState, health, loading } = useAdminDashboard()
 
   return (
     <div className="admin-shell">
@@ -63,16 +63,51 @@ function App() {
           <article className="panel player-panel" id="玩家">
             <div className="panel-heading">
               <div>
-                <p className="eyebrow">Player Lookup</p>
-                <h2>玩家检索</h2>
+                <p className="eyebrow">Accounts</p>
+                <h2>注册玩家与存档</h2>
               </div>
-              <button type="button">查询</button>
+              <span className="panel-count">{accounts.length} 个账号</span>
             </div>
 
-            <label className="search-field">
-              <span>玩家 ID / 昵称</span>
-              <input value={gameState?.player.id ?? 'demo-player'} readOnly />
-            </label>
+            {accounts.length === 0 ? (
+              <div className="empty-state">
+                <strong>暂无注册账号</strong>
+                <span>玩家完成注册并创建存档后会显示在这里。</span>
+              </div>
+            ) : (
+              <div className="account-list">
+                {accounts.map((account) => (
+                  <section className="account-card" key={account.id}>
+                    <div className="account-card-header">
+                      <div>
+                        <strong>{account.username}</strong>
+                        <span>{account.id}</span>
+                      </div>
+                      <small>{account.players.length} 个存档</small>
+                    </div>
+
+                    {account.players.length === 0 ? (
+                      <div className="save-empty">尚未创建游戏存档</div>
+                    ) : (
+                      <div className="save-list">
+                        {account.players.map((player) => (
+                          <div className="save-row" key={player.id}>
+                            <div>
+                              <strong>{player.nickname}</strong>
+                              <span>{player.id}</span>
+                            </div>
+                            <div className="save-meta">
+                              <span>{player.faction}</span>
+                              <time>{new Date(player.updatedAt).toLocaleString()}</time>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                ))}
+              </div>
+            )}
 
             <PlayerStatePanel gameState={gameState} />
           </article>

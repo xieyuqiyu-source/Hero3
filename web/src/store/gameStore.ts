@@ -18,6 +18,8 @@ interface GameStore {
   setLoading: (loading: boolean) => void
   /** 设置错误 */
   setError: (error: string | null) => void
+  /** 设置当前设备使用的存档 */
+  setActivePlayer: (playerId: string) => void
   /** 从后端加载完整游戏状态 */
   loadGameState: (playerId?: string) => Promise<void>
 }
@@ -34,7 +36,10 @@ export const useGameStore = create<GameStore>((set) => ({
     })),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
-  loadGameState: async (playerId = 'demo-player') => {
+  setActivePlayer: (playerId) => {
+    localStorage.setItem('hero3_active_player_id', playerId)
+  },
+  loadGameState: async (playerId = localStorage.getItem('hero3_active_player_id') ?? 'demo-player') => {
     set({ loading: true, error: null })
     try {
       const state = await gameApi.getState(playerId)

@@ -44,6 +44,18 @@ go test ./...
 go build ./cmd/server
 ```
 
+数据库：
+
+- 默认不配置数据库时使用内存存储，适合快速开发。
+- 配置 `HERO3_DATABASE_DSN` 后启用 MySQL/MariaDB，启动时会自动创建当前需要的账号和存档表。
+
+示例：
+
+```bash
+export HERO3_DATABASE_DSN='hero3_user:hero3_password@tcp(127.0.0.1:3306)/hero3?parseTime=true&charset=utf8mb4&loc=UTC'
+go run ./cmd/server
+```
+
 默认后端地址：
 
 ```text
@@ -56,6 +68,10 @@ http://localhost:8080
 - `GET /api/v1/meta`：服务元信息
 - `GET /api/v1/game/bootstrap`：游戏模块启动信息
 - `GET /api/v1/game/state`：玩家主界面游戏状态快照
+- `POST /api/v1/accounts/register`：注册轻账号
+- `POST /api/v1/accounts/login`：登录轻账号
+- `GET /api/v1/accounts/{accountId}/players`：查看账号绑定的游戏存档
+- `POST /api/v1/players/create`：创建账号绑定的游戏存档
 
 ## GM 后台
 

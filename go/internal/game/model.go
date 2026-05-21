@@ -2,6 +2,27 @@ package game
 
 import "time"
 
+type Account struct {
+	ID           string
+	Username     string
+	PasswordHash string
+	CreatedAt    time.Time
+}
+
+type PlayerSummary struct {
+	ID        string `json:"id"`
+	Nickname  string `json:"nickname"`
+	Faction   string `json:"faction"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type AccountSummary struct {
+	ID        string          `json:"id"`
+	Username  string          `json:"username"`
+	CreatedAt string          `json:"createdAt"`
+	Players   []PlayerSummary `json:"players"`
+}
+
 type Player struct {
 	ID       string `json:"id"`
 	Nickname string `json:"nickname"`
@@ -67,12 +88,12 @@ type GameState struct {
 	ServerTime          string         `json:"serverTime"`
 }
 
-func newDemoState(now time.Time) GameState {
+func newPlayerState(id string, nickname string, faction string, now time.Time) GameState {
 	return GameState{
 		Player: Player{
-			ID:       "demo-player",
-			Nickname: "主公",
-			Faction:  "wei",
+			ID:       id,
+			Nickname: nickname,
+			Faction:  faction,
 		},
 		Resources: ResourceState{
 			Wood:     1200,
@@ -125,4 +146,8 @@ func newDemoState(now time.Time) GameState {
 		UnreadMessageCount:  0,
 		ServerTime:          now.UTC().Format(time.RFC3339),
 	}
+}
+
+func newDemoState(now time.Time) GameState {
+	return newPlayerState("demo-player", "主公", "wei", now)
 }

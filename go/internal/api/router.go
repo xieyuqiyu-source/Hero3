@@ -10,18 +10,28 @@ import (
 )
 
 type RouterOptions struct {
-	Config config.Config
-	Logger *slog.Logger
+	Config      config.Config
+	Logger      *slog.Logger
+	GameService *game.Service
 }
 
 func NewRouter(options RouterOptions) http.Handler {
 	mux := http.NewServeMux()
-	handlers := NewHandlers(options.Config, game.NewService())
+	gameService := options.GameService
+	if gameService == nil {
+		gameService = game.NewService()
+	}
+	handlers := NewHandlers(options.Config, gameService)
 
 	mux.HandleFunc("GET /healthz", handlers.Health)
 	mux.HandleFunc("GET /api/v1/meta", handlers.Meta)
 	mux.HandleFunc("GET /api/v1/game/bootstrap", handlers.GameBootstrap)
 	mux.HandleFunc("GET /api/v1/game/state", handlers.GameState)
+	mux.HandleFunc("POST /api/v1/accounts/register", handlers.RegisterAccount)
+	mux.HandleFunc("POST /api/v1/accounts/login", handlers.LoginAccount)
+	mux.HandleFunc("GET /api/v1/accounts/{accountId}/players", handlers.AccountPlayers)
+	mux.HandleFunc("POST /api/v1/players/create", handlers.CreatePlayer)
+	mux.HandleFunc("GET /api/v1/admin/accounts", handlers.AdminAccounts)
 
 	return corsMiddleware(options.Config, mux)
 }

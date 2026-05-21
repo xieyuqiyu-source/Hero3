@@ -161,6 +161,16 @@ h2 {
   margin-bottom: 16px;
 }
 
+.panel-count {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #475569;
+  background: #eef2f7;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 button,
 input {
   font: inherit;
@@ -197,6 +207,86 @@ button:disabled {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: 0 12px;
+}
+
+.account-list {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.account-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #dce3ec;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.account-card-header,
+.save-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.account-card-header strong,
+.save-row strong,
+.empty-state strong {
+  display: block;
+  color: #172033;
+}
+
+.account-card-header span,
+.save-row span,
+.empty-state span,
+.save-empty {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.account-card-header small {
+  flex: 0 0 auto;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.save-list {
+  display: grid;
+  gap: 8px;
+}
+
+.save-row {
+  padding: 10px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.save-meta {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  color: #64748b;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.save-meta span {
+  color: #0f766e;
+  font-weight: 800;
+}
+
+.empty-state {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 18px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
 }
 
 .table-like,
@@ -299,12 +389,19 @@ button:disabled {
 
   .topbar,
   .panel-heading,
+  .account-card-header,
+  .save-row,
   .table-row,
   .resource-readout,
   .state-summary {
     align-items: stretch;
     grid-template-columns: 1fr;
     flex-direction: column;
+  }
+
+  .save-meta {
+    justify-items: start;
+    white-space: normal;
   }
 
   h1 {
