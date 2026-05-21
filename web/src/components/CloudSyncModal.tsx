@@ -1,97 +1,73 @@
-import { useEffect, useState, type FC, type FormEvent } from 'react'
+import { useState, type FC } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Cloud, LogIn, UserPlus, ArrowLeft, Check } from 'lucide-react'
-import { gameApi } from '@/api/game'
 import { Modal } from '@/components/ui'
-import type { AccountSession, PlayerSummary } from '@/types/game'
+import { useAccountStore } from '@/store/accountStore'
+import { useGameStore } from '@/store/gameStore'
+import type { PlayerSummary } from '@/types/game'
 
 type View = 'login' | 'register' | 'saves'
 
 interface CloudSyncModalProps {
   open: boolean
   onClose: () => void
-  onAccountReady: (account: AccountSession) => void
-  onPlayerSelected: (playerId: string) => void
 }
 
-const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose, onAccountReady, onPlayerSelected }) => {
-  const [account, setAccount] = useState<AccountSession | null>(() => {
-    const accountId = localStorage.getItem('hero3_account_id')
-    const storedUsername = localStorage.getItem('hero3_account_name')
-    return accountId && storedUsername ? { accountId, username: storedUsername } : null
-  })
-  const [view, setView] = useState<View>(() => (account ? 'saves' : 'login'))
+const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
+  const navigate = useNavigate()
+  const { account, players, login, register, loadPlayers } = useAccountStore()
+  const { setActivePlayer, loadGameState } = useGameStore()
+
+  const [view, setView] = useState<View>(account ? 'saves' : 'login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [players, setPlayers] = useState<PlayerSummary[]>([])
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!open || !account) return
-
-    gameApi.listAccountPlayers(account.accountId).then((result) => {
-      setPlayers(result.players)
-    }).catch(() => {
-      setPlayers([])
-    })
-  }, [account, open])
-
-  const loadPlayers = async (accountId: string) => {
-    const result = await gameApi.listAccountPlayers(accountId)
-    setPlayers(result.players)
-  }
-
-  const persistAccount = async (nextAccount: AccountSession) => {
-    localStorage.setItem('hero3_account_id', nextAccount.accountId)
-    localStorage.setItem('hero3_account_name', nextAccount.username)
-    setAccount(nextAccount)
-    onAccountReady(nextAccount)
-    await loadPlayers(nextAccount.accountId)
-    setView('saves')
-  }
-
-  const handleLogin = async (e: FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
     setLoading(true)
-    setError(null)
     try {
-      await persistAccount(await gameApi.loginAccount(username, password))
-    } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : '登录失败')
+      await login(username, password)
+      setView('saves')
+    } catch {
+      setError('登录失败，请检查用户名和密码')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleRegister = async (e: FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     if (password !== confirmPassword) {
-      setError('两次输入的密码不一致')
+      setError('两次密码不一致')
       return
     }
-
+    setError('')
     setLoading(true)
-    setError(null)
     try {
-      await persistAccount(await gameApi.registerAccount(username, password))
-    } catch (registerError) {
-      setError(registerError instanceof Error ? registerError.message : '注册失败')
+      await register(username, password)
+      await loadPlayers()
+      setView('saves')
+    } catch {
+      setError('注册失败，请稍后重试')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleSelectSave = (playerId: string) => {
-    localStorage.setItem('hero3_active_player_id', playerId)
-    onPlayerSelected(playerId)
+  const handleSelectSave = async (player: PlayerSummary) => {
+    setActivePlayer(player.id)
+    await loadGameState(player.id)
     onClose()
+    navigate('/city')
   }
 
   const handleBack = () => {
-    if (view === 'register') {
-      setView('login')
-    }
+    setError('')
+    if (view === 'register') setView('login')
   }
 
   return (
@@ -102,13 +78,20 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose, onAccountReady
             登录账号同步游戏存档，多设备畅玩。
           </p>
 
+          {error && (
+            <div className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleLogin} className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1">账号</label>
+              <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1">用户名</label>
               <input
+                type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="请输入账号"
+                placeholder="请输入用户名"
                 className="
                   w-full px-3 py-2.5 rounded-xl text-sm
                   bg-[var(--color-surface-dim)] border border-[var(--color-border)]
@@ -148,7 +131,7 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose, onAccountReady
               `}
             >
               <LogIn size={14} />
-              {loading ? '处理中...' : '登录'}
+              {loading ? '登录中...' : '登录'}
             </button>
           </form>
 
@@ -160,7 +143,7 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose, onAccountReady
 
           <button
             type="button"
-            onClick={() => setView('register')}
+            onClick={() => { setView('register'); setError('') }}
             className="
               w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium
               bg-[var(--color-surface-dim)] border border-[var(--color-border)]
@@ -190,13 +173,20 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose, onAccountReady
             创建账号，开始云同步之旅。
           </p>
 
+          {error && (
+            <div className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleRegister} className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1">账号</label>
+              <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1">用户名</label>
               <input
+                type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="请输入账号"
+                placeholder="请输入用户名"
                 className="
                   w-full px-3 py-2.5 rounded-xl text-sm
                   bg-[var(--color-surface-dim)] border border-[var(--color-border)]
@@ -252,7 +242,7 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose, onAccountReady
               `}
             >
               <UserPlus size={14} />
-              {loading ? '处理中...' : '注册'}
+              {loading ? '注册中...' : '注册'}
             </button>
           </form>
         </div>
@@ -261,51 +251,47 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose, onAccountReady
       {view === 'saves' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-[var(--color-text-secondary)]">
-              {account?.username} 的游戏存档
-            </p>
+            <p className="text-sm text-[var(--color-text-secondary)]">选择存档继续游戏</p>
             <span className="flex items-center gap-1 text-[10px] text-green-500 font-medium">
               <Cloud size={12} />
               已同步
             </span>
           </div>
 
-          {error && <p className="text-xs text-red-500">{error}</p>}
-
-          <div className="space-y-2">
-            {players.length === 0 && (
-              <div className="rounded-xl bg-[var(--color-surface-dim)] px-4 py-3 text-sm text-[var(--color-text-muted)]">
-                暂无绑定存档，关闭弹窗后创建新游戏即可自动绑定当前账号。
-              </div>
-            )}
-            {players.map((save) => (
-              <button
-                key={save.id}
-                type="button"
-                onClick={() => handleSelectSave(save.id)}
-                className="
-                  w-full flex items-center gap-3 px-4 py-3 rounded-xl
-                  bg-[var(--color-surface-dim)] border border-[var(--color-border)]
-                  hover:border-[var(--color-accent-border)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.06)]
-                  cursor-pointer transition-all duration-200 text-left
-                "
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-[var(--color-text-primary)]">{save.nickname}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent-light)] text-[var(--color-accent)] font-medium">
-                      {save.faction}
-                    </span>
+          {players.length > 0 ? (
+            <div className="space-y-2">
+              {players.map((player) => (
+                <button
+                  key={player.id}
+                  type="button"
+                  onClick={() => handleSelectSave(player)}
+                  className="
+                    w-full flex items-center gap-3 px-4 py-3 rounded-xl
+                    bg-[var(--color-surface-dim)] border border-[var(--color-border)]
+                    hover:border-[var(--color-accent-border)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.06)]
+                    cursor-pointer transition-all duration-200 text-left
+                  "
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-[var(--color-text-primary)]">{player.nickname}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent-light)] text-[var(--color-accent)] font-medium">
+                        {player.faction}
+                      </span>
+                    </div>
+                    <div className="mt-1">
+                      <span className="text-[11px] text-[var(--color-text-muted)]">{player.updatedAt}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-[11px] text-[var(--color-text-muted)]">{save.id}</span>
-                    <span className="text-[11px] text-[var(--color-text-muted)]">{save.updatedAt}</span>
-                  </div>
-                </div>
-                <Check size={16} className="text-[var(--color-text-muted)] flex-shrink-0" />
-              </button>
-            ))}
-          </div>
+                  <Check size={16} className="text-[var(--color-text-muted)] flex-shrink-0" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-6">
+              <span className="text-sm text-[var(--color-text-muted)]">暂无云端存档，创建新角色后自动同步</span>
+            </div>
+          )}
 
           <button
             type="button"

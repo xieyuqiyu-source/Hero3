@@ -192,6 +192,7 @@ const MobileSidebarContent: FC<{
           <button
             key={action.key}
             type="button"
+            onClick={() => { if (action.key === 'account') onNavigate('account') }}
             className={`
               px-2.5 py-1.5 rounded-lg
               text-[11px] font-medium

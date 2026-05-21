@@ -12,49 +12,48 @@ const SettingsPage: FC = () => {
   ]
 
   return (
-    <div className="space-y-6">
-      {/* Theme */}
-      <section>
-        <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">外观</h2>
-        <div className="grid grid-cols-3 gap-2">
-          {themeOptions.map((opt) => {
-            const Icon = opt.icon
-            const active = mode === opt.key
-            return (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => setMode(opt.key)}
-                className={`
-                  flex flex-col items-center gap-1.5 px-3 py-4 rounded-2xl border cursor-pointer
-                  transition-all duration-200
-                  ${active
-                    ? 'bg-[var(--color-accent-light)] border-[var(--color-accent-border)] text-[var(--color-accent)]'
-                    : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-muted)]'
-                  }
-                `}
-              >
-                <Icon size={20} />
-                <span className="text-xs font-medium">{opt.label}</span>
-              </button>
-            )
-          })}
+    <div className="space-y-5 max-w-3xl">
+      {/* 外观 */}
+      <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+          <Sun size={16} className="text-[var(--color-accent)]" />
+          <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">外观设置</h2>
+        </div>
+        <div className="px-4 py-3">
+          <div className="grid grid-cols-3 gap-2">
+            {themeOptions.map((opt) => {
+              const Icon = opt.icon
+              const active = mode === opt.key
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setMode(opt.key)}
+                  className={`
+                    flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border cursor-pointer
+                    transition-all duration-200
+                    ${active
+                      ? 'bg-[var(--color-accent-light)] border-[var(--color-accent-border)] text-[var(--color-accent)]'
+                      : 'bg-[var(--color-surface-dim)] border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-muted)]'
+                    }
+                  `}
+                >
+                  <Icon size={18} />
+                  <span className="text-xs font-medium">{opt.label}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
       </section>
 
-      {/* Sound - placeholder */}
-      <section>
-        <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">音效</h2>
-        <div className="px-4 py-3 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)]">
-          <span className="text-sm text-[var(--color-text-secondary)]">游戏音效（预留）</span>
+      {/* 更多设置预留 */}
+      <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+          <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">更多设置</h2>
         </div>
-      </section>
-
-      {/* Account - placeholder */}
-      <section>
-        <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">账号</h2>
-        <div className="px-4 py-3 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)]">
-          <span className="text-sm text-[var(--color-text-secondary)]">玩家信息（预留）</span>
+        <div className="px-4 py-8 flex items-center justify-center">
+          <span className="text-sm text-[var(--color-text-muted)]">更多设置开发中</span>
         </div>
       </section>
     </div>

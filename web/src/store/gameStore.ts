@@ -3,6 +3,8 @@ import { gameApi } from '@/api/game'
 import type { GameState } from '@/types/game'
 
 interface GameStore {
+  /** 当前活跃玩家 ID */
+  activePlayerId: string | null
   /** 后端返回的权威游戏状态 */
   state: GameState | null
   /** 是否正在加载 */
@@ -18,13 +20,16 @@ interface GameStore {
   setLoading: (loading: boolean) => void
   /** 设置错误 */
   setError: (error: string | null) => void
-  /** 设置当前设备使用的存档 */
+  /** 设置当前活跃玩家并持久化 */
   setActivePlayer: (playerId: string) => void
+  /** 清除活跃玩家（退出存档） */
+  clearActivePlayer: () => void
   /** 从后端加载完整游戏状态 */
   loadGameState: (playerId?: string) => Promise<void>
 }
 
-export const useGameStore = create<GameStore>((set) => ({
+export const useGameStore = create<GameStore>((set, get) => ({
+  activePlayerId: localStorage.getItem('hero3_active_player_id'),
   state: null,
   loading: false,
   error: null,
@@ -38,11 +43,18 @@ export const useGameStore = create<GameStore>((set) => ({
   setError: (error) => set({ error, loading: false }),
   setActivePlayer: (playerId) => {
     localStorage.setItem('hero3_active_player_id', playerId)
+    set({ activePlayerId: playerId })
   },
-  loadGameState: async (playerId = localStorage.getItem('hero3_active_player_id') ?? 'demo-player') => {
+  clearActivePlayer: () => {
+    localStorage.removeItem('hero3_active_player_id')
+    set({ activePlayerId: null, state: null })
+  },
+  loadGameState: async (playerId?: string) => {
+    const id = playerId ?? get().activePlayerId
+    if (!id) return
     set({ loading: true, error: null })
     try {
-      const state = await gameApi.getState(playerId)
+      const state = await gameApi.getState(id)
       set({ state, loading: false, error: null })
     } catch (error) {
       const message = error instanceof Error ? error.message : '加载游戏状态失败'

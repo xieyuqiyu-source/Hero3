@@ -5,7 +5,7 @@ import { gameApi } from '@/api/game'
 import GeneralCarousel from '@/components/GeneralCarousel'
 import CloudSyncModal from '@/components/CloudSyncModal'
 import { useGameStore } from '@/store/gameStore'
-import type { AccountSession } from '@/types/game'
+import { useAccountStore } from '@/store/accountStore'
 import heroBg from '@/assets/hero3background.png'
 
 type Faction = 'wei' | 'shu' | 'wu'
@@ -97,16 +97,11 @@ const LoginPage: FC = () => {
   const [faction, setFaction] = useState<Faction | null>(null)
   const [selectedGeneral, setSelectedGeneral] = useState<string | null>(null)
   const [cloudSyncOpen, setCloudSyncOpen] = useState(false)
-  const [account, setAccount] = useState<AccountSession | null>(() => {
-    const accountId = localStorage.getItem('hero3_account_id')
-    const username = localStorage.getItem('hero3_account_name')
-    return accountId && username ? { accountId, username } : null
-  })
+  const account = useAccountStore((s) => s.account)
   const [creating, setCreating] = useState(false)
   const [showSyncReminder, setShowSyncReminder] = useState(false)
   const setGameState = useGameStore((store) => store.setState)
   const setActivePlayer = useGameStore((store) => store.setActivePlayer)
-  const loadGameState = useGameStore((store) => store.loadGameState)
   const navigate = useNavigate()
 
   const canSubmit = nickname.trim().length > 0 && faction !== null && selectedGeneral !== null
@@ -119,12 +114,6 @@ const LoginPage: FC = () => {
     if (factionData) {
       setSelectedGeneral(factionData.generals[0].id)
     }
-  }
-
-  const handlePlayerSelected = async (playerId: string) => {
-    setActivePlayer(playerId)
-    await loadGameState(playerId)
-    navigate('/city')
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -143,9 +132,13 @@ const LoginPage: FC = () => {
         const result = await gameApi.createPlayer(account.accountId, nickname, faction, selectedGeneral ?? undefined)
         setActivePlayer(result.playerId)
         setGameState(result.state)
+        navigate('/city')
+      } else {
+        // Local mode - create local player ID
+        const localId = `local_${Date.now()}`
+        setActivePlayer(localId)
+        navigate('/city')
       }
-      // TODO: handle local-only mode when no account
-      navigate('/city')
     } finally {
       setCreating(false)
     }
@@ -153,9 +146,9 @@ const LoginPage: FC = () => {
 
   const handleSkipSync = () => {
     setShowSyncReminder(false)
-    setCreating(true)
-    // Enter game without cloud sync
-    // TODO: create local player
+    // Create a local-only player ID
+    const localId = `local_${Date.now()}`
+    setActivePlayer(localId)
     navigate('/city')
   }
 
@@ -378,8 +371,6 @@ const LoginPage: FC = () => {
       <CloudSyncModal
         open={cloudSyncOpen}
         onClose={() => setCloudSyncOpen(false)}
-        onAccountReady={setAccount}
-        onPlayerSelected={(playerId) => void handlePlayerSelected(playerId)}
       />
     </div>
   )
