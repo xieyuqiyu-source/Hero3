@@ -1,8 +1,10 @@
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { useEffect } from 'react'
 import Layout from './components/Layout'
 import RequirePlayer from './components/RequirePlayer'
 import ChangelogModal from './components/ChangelogModal'
 import { ToastContainer } from './components/ui'
+import { useConfigStore } from './store/configStore'
 import LoginPage from './pages/login'
 import CityPage from './pages/city'
 import MilitaryPage from './pages/military'
@@ -21,6 +23,12 @@ function GameLayout() {
 }
 
 function App() {
+  const loadBootstrap = useConfigStore((s) => s.loadBootstrap)
+
+  useEffect(() => {
+    loadBootstrap()
+  }, [loadBootstrap])
+
   return (
     <>
       <Routes>

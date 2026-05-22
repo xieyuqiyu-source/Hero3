@@ -30,9 +30,10 @@ type Service struct {
 }
 
 type BootstrapResponse struct {
-	GameName string   `json:"gameName"`
-	Modules  []string `json:"modules"`
-	Message  string   `json:"message"`
+	GameName string        `json:"gameName"`
+	Modules  []string      `json:"modules"`
+	Balance  BalanceConfig `json:"balance"`
+	Message  string        `json:"message"`
 }
 
 func NewService() *Service {
@@ -366,6 +367,7 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 }
 
 func (s *Service) Bootstrap() BootstrapResponse {
+	balance := currentBalance()
 	return BootstrapResponse{
 		GameName: "Hero3",
 		Modules: []string{
@@ -377,6 +379,7 @@ func (s *Service) Bootstrap() BootstrapResponse {
 			"combat",
 			"save",
 		},
+		Balance: balance,
 		Message: "Hero3 后端基础服务已就绪，具体玩法逻辑待接入。",
 	}
 }

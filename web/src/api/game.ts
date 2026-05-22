@@ -2,8 +2,14 @@
 
 import { api } from './client'
 import type { AccountSession, GameState, BattleReport, PlayerSummary } from '@/types/game'
+import type { BalanceConfig } from '@/store/configStore'
 
 export const gameApi = {
+  /** 获取游戏启动配置（含 balance） */
+  bootstrap() {
+    return api.get<{ gameName: string; modules: string[]; balance: BalanceConfig; message: string }>('/game/bootstrap')
+  },
+
   /** 获取完整游戏状态 */
   getState(playerId = 'demo-player') {
     return api.get<GameState>(`/game/state?playerId=${playerId}`)

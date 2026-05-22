@@ -8,7 +8,7 @@ import {
   getUpgradeSeconds,
   formatCost,
   formatDuration,
-} from '../data/buildingConfig'
+} from '@/store/configStore'
 
 interface ResourceSlotProps {
   buildingId: string
