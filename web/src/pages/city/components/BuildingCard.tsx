@@ -1,27 +1,79 @@
-import { type FC } from 'react'
-import { ArrowUpCircle } from 'lucide-react'
+import { useState, useEffect, type FC } from 'react'
+import { ArrowUpCircle, LoaderCircle } from 'lucide-react'
+import { useGameStore } from '@/store/gameStore'
 
 interface BuildingCardProps {
+  buildingId?: string
   icon: React.ReactNode
   name: string
   description: string
   level: number
   production: string
+  upgradeEndsAt?: string | null
   color: string
   bgColor: string
   locked?: boolean
 }
 
+function getRemainingSeconds(endsAt: string): number {
+  return Math.max(0, Math.ceil((new Date(endsAt).getTime() - Date.now()) / 1000))
+}
+
+function formatCountdown(totalSeconds: number): string {
+  if (totalSeconds <= 0) return '完成中...'
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 const BuildingCard: FC<BuildingCardProps> = ({
+  buildingId,
   icon,
   name,
   description,
   level,
   production,
+  upgradeEndsAt,
   color,
   bgColor,
   locked,
 }) => {
+  const [loading, setLoading] = useState(false)
+  const [countdown, setCountdown] = useState(() =>
+    upgradeEndsAt ? getRemainingSeconds(upgradeEndsAt) : 0
+  )
+  const upgrade = useGameStore((s) => s.upgradeBuilding)
+  const isUpgrading = upgradeEndsAt != null
+
+  useEffect(() => {
+    if (!upgradeEndsAt) {
+      setCountdown(0)
+      return
+    }
+    setCountdown(getRemainingSeconds(upgradeEndsAt))
+    const timer = window.setInterval(() => {
+      const remaining = getRemainingSeconds(upgradeEndsAt)
+      setCountdown(remaining)
+      if (remaining <= 0) {
+        clearInterval(timer)
+        useGameStore.getState().loadGameState()
+      }
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [upgradeEndsAt])
+
+  const handleUpgrade = async () => {
+    if (!buildingId || loading || isUpgrading) return
+    setLoading(true)
+    try {
+      await upgrade(buildingId)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className={`
       relative rounded-2xl p-4 border border-[var(--color-border)]
@@ -45,20 +97,30 @@ const BuildingCard: FC<BuildingCardProps> = ({
             <span className={`text-xs font-medium ${locked ? 'text-[var(--color-text-muted)]' : color}`}>
               {production}
             </span>
-            {!locked && (
-              <button
-                type="button"
-                className="
-                  flex items-center gap-1 px-2.5 py-1 rounded-lg
-                  text-xs font-medium text-[var(--color-accent)]
-                  bg-[var(--color-accent-light)] border border-transparent
-                  hover:border-[var(--color-accent-border)]
-                  cursor-pointer transition-all duration-200
-                "
-              >
-                <ArrowUpCircle size={12} />
-                升级
-              </button>
+            {!locked && buildingId && (
+              isUpgrading ? (
+                <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-mono font-medium text-amber-500">
+                  <LoaderCircle size={12} className="animate-spin" />
+                  {formatCountdown(countdown)}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleUpgrade}
+                  disabled={loading}
+                  className="
+                    flex items-center gap-1 px-2.5 py-1 rounded-lg
+                    text-xs font-medium text-[var(--color-accent)]
+                    bg-[var(--color-accent-light)] border border-transparent
+                    hover:border-[var(--color-accent-border)]
+                    cursor-pointer transition-all duration-200
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                  "
+                >
+                  {loading ? <LoaderCircle size={12} className="animate-spin" /> : <ArrowUpCircle size={12} />}
+                  升级
+                </button>
+              )
             )}
           </div>
         </div>

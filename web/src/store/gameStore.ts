@@ -28,6 +28,8 @@ interface GameStore {
   clearActivePlayer: () => void
   /** 从后端加载完整游戏状态 */
   loadGameState: (playerId?: string) => Promise<void>
+  /** 升级建筑 */
+  upgradeBuilding: (buildingId: string) => Promise<void>
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -64,5 +66,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const message = error instanceof Error ? error.message : '加载游戏状态失败'
       set({ error: message, loading: false })
     }
+  },
+  upgradeBuilding: async (buildingId: string) => {
+    const playerId = get().activePlayerId
+    if (!playerId) return
+    const result = await gameApi.upgradeBuilding(playerId, buildingId)
+    set({ state: result.state, stateReceivedAt: Date.now(), error: null })
   },
 }))

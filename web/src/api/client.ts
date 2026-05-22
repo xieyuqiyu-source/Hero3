@@ -17,10 +17,24 @@ export class ApiError extends Error {
   }
 }
 
+/** 后端错误消息中文映射 */
+const ERROR_MESSAGES: Record<string, string> = {
+  'insufficient resources': '资源不足',
+  'building not found': '建筑不存在',
+  'building is already upgrading': '该建筑正在升级中',
+  'building is at max level': '已达最高等级',
+  'player not found': '玩家不存在',
+  'account not found': '账号不存在',
+  'account already exists': '账号已存在',
+  'invalid username or password': '用户名或密码错误',
+  'invalid json body': '请求数据格式错误',
+}
+
 /** 从错误响应体中提取可读消息 */
 function extractMessage(status: number, body: unknown): string {
   if (body && typeof body === 'object' && 'error' in body) {
-    return (body as { error: string }).error
+    const raw = (body as { error: string }).error
+    return ERROR_MESSAGES[raw] ?? raw
   }
   if (status === 401) return '未授权，请重新登录'
   if (status === 403) return '无权限执行此操作'

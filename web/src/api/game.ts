@@ -37,11 +37,18 @@ export const gameApi = {
   },
 
   /** 升级建筑 */
-  upgradeBuilding(playerId: string, buildingType: string) {
-    return api.post<{ resources: GameState['resources']; buildings: GameState['buildings'] }>(
-      '/city/buildings/upgrade',
-      { playerId, buildingType },
-    )
+  upgradeBuilding(playerId: string, buildingId: string) {
+    return api.post<{ state: GameState }>('/city/buildings/upgrade', { playerId, buildingId })
+  },
+
+  /** 一键爆仓 */
+  fillResources(playerId: string) {
+    return api.post<{ state: GameState }>('/city/resources/fill', { playerId })
+  },
+
+  /** 一键升级（批量） */
+  upgradeBuildingBatch(playerId: string) {
+    return api.post<{ state: GameState; upgraded: number }>('/city/buildings/upgrade-batch', { playerId })
   },
 
   /** 征兵 */

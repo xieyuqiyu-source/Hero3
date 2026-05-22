@@ -1,4 +1,4 @@
-import { type FC } from 'react'
+import { useState, type FC } from 'react'
 import {
   TreePine,
   Mountain,
@@ -9,9 +9,13 @@ import {
   ChevronDown,
   ChevronRight,
   Plus,
+  ArrowUpCircle,
+  LoaderCircle,
 } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
+import { gameApi } from '@/api/game'
+import { toast } from '@/components/ui'
 import { getProductionAtLevel } from '../data/buildingConfig'
 import ResourceSlot from './ResourceSlot'
 import BuildingCard from './BuildingCard'
@@ -67,29 +71,64 @@ interface ResourceTabProps {
 
 const ResourceTab: FC<ResourceTabProps> = ({ expanded, onToggle }) => {
   const buildings = useGameStore((s) => s.state?.buildings ?? EMPTY_BUILDINGS)
+  const activePlayerId = useGameStore((s) => s.activePlayerId)
+  const setState = useGameStore((s) => s.setState)
   const resources = useProjectedResources()
+  const [batchLoading, setBatchLoading] = useState(false)
 
   // 找仓库建筑
   const warehouse = buildings.find((b) => b.type === 'warehouse')
   const warehouseLevel = warehouse?.level ?? 0
   const warehouseCapacity = resources?.capacity.wood ?? 5000
 
+  const handleBatchUpgrade = async () => {
+    if (!activePlayerId || batchLoading) return
+    setBatchLoading(true)
+    try {
+      const result = await gameApi.upgradeBuildingBatch(activePlayerId)
+      setState(result.state)
+      toast.success(`成功升级 ${result.upgraded} 块田地`)
+    } catch {
+      // 错误已由全局拦截器处理
+    } finally {
+      setBatchLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Section Header with expand/collapse */}
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex items-center gap-2 cursor-pointer group"
-      >
-        <TreePine size={16} className="text-[var(--color-accent)]" />
-        <span className="text-sm font-semibold text-[var(--color-text-primary)]">资源建筑</span>
-        {expanded ? (
-          <ChevronDown size={14} className="text-[var(--color-text-muted)] group-hover:text-[var(--color-accent)] transition-colors" />
-        ) : (
-          <ChevronRight size={14} className="text-[var(--color-text-muted)] group-hover:text-[var(--color-accent)] transition-colors" />
-        )}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex items-center gap-2 cursor-pointer group"
+        >
+          <TreePine size={16} className="text-[var(--color-accent)]" />
+          <span className="text-sm font-semibold text-[var(--color-text-primary)]">资源建筑</span>
+          {expanded ? (
+            <ChevronDown size={14} className="text-[var(--color-text-muted)] group-hover:text-[var(--color-accent)] transition-colors" />
+          ) : (
+            <ChevronRight size={14} className="text-[var(--color-text-muted)] group-hover:text-[var(--color-accent)] transition-colors" />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={handleBatchUpgrade}
+          disabled={batchLoading}
+          className="
+            ml-auto flex items-center gap-1 px-2.5 py-1 rounded-lg
+            text-[10px] font-semibold
+            bg-[var(--color-accent-light)] text-[var(--color-accent)]
+            border border-[var(--color-accent-border)]
+            hover:opacity-80 cursor-pointer transition-opacity
+            disabled:opacity-50 disabled:cursor-not-allowed
+          "
+        >
+          {batchLoading ? <LoaderCircle size={11} className="animate-spin" /> : <ArrowUpCircle size={11} />}
+          一键升级
+        </button>
+      </div>
 
       {/* 4-column resource grid */}
       <div className={`
@@ -117,9 +156,12 @@ const ResourceTab: FC<ResourceTabProps> = ({ expanded, onToggle }) => {
                   {slots.map((slot, i) => (
                     <ResourceSlot
                       key={slot.id}
+                      buildingId={slot.id}
+                      buildingType={slot.type}
                       index={i + 1}
                       level={slot.level}
                       production={getProductionAtLevel(slot.type, slot.level)}
+                      upgradeEndsAt={slot.upgradeEndsAt}
                       color={group.color}
                       bgColor={group.bgColor}
                     />
@@ -154,11 +196,13 @@ const ResourceTab: FC<ResourceTabProps> = ({ expanded, onToggle }) => {
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <BuildingCard
+            buildingId={warehouse?.id}
             icon={<Warehouse size={20} />}
             name="仓库"
             description="提升资源容量上限"
             level={warehouseLevel}
             production={`容量 ${warehouseCapacity.toLocaleString()}`}
+            upgradeEndsAt={warehouse?.upgradeEndsAt}
             color="text-indigo-600"
             bgColor="bg-indigo-50 dark:bg-indigo-950/20"
           />

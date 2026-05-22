@@ -27,6 +27,11 @@ type createPlayerRequest struct {
 	GeneralID string `json:"generalId"`
 }
 
+type upgradeBuildingRequest struct {
+	PlayerID   string `json:"playerId"`
+	BuildingID string `json:"buildingId"`
+}
+
 func NewHandlers(cfg config.Config, gameService *game.Service) *Handlers {
 	return &Handlers{
 		cfg:         cfg,
@@ -182,6 +187,75 @@ func (h *Handlers) DeletePlayer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *Handlers) FillResources(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	state, err := h.gameService.FillResources(payload.PlayerID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
+func (h *Handlers) UpgradeBuilding(w http.ResponseWriter, r *http.Request) {
+	var payload upgradeBuildingRequest
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	state, err := h.gameService.UpgradeBuilding(payload.PlayerID, payload.BuildingID)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrBuildingNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInsufficientRes):
+			status = http.StatusUnprocessableEntity
+		case errors.Is(err, game.ErrAlreadyUpgrading):
+			status = http.StatusConflict
+		case errors.Is(err, game.ErrMaxLevel):
+			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
+func (h *Handlers) UpgradeBuildingBatch(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	state, upgraded, err := h.gameService.UpgradeBuildingBatch(payload.PlayerID)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInsufficientRes):
+			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state, "upgraded": upgraded})
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

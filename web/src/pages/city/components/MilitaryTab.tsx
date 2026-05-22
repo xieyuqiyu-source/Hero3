@@ -23,41 +23,49 @@ const MilitaryTab: FC = () => {
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <BuildingCard
+            buildingId={barracks?.id}
             icon={<Swords size={20} />}
             name="兵营"
             description="训练步兵"
             level={barracks?.level ?? 0}
             production={barracks ? `步兵 Lv.${barracks.level}` : '未解锁'}
+            upgradeEndsAt={barracks?.upgradeEndsAt}
             color="text-red-600"
             bgColor="bg-red-50 dark:bg-red-950/20"
             locked={!barracks}
           />
           <BuildingCard
+            buildingId={archeryRange?.id}
             icon={<Target size={20} />}
             name="射箭场"
             description="训练弓兵"
             level={archeryRange?.level ?? 0}
             production={archeryRange ? `弓兵 Lv.${archeryRange.level}` : '未解锁'}
+            upgradeEndsAt={archeryRange?.upgradeEndsAt}
             color="text-sky-600"
             bgColor="bg-sky-50 dark:bg-sky-950/20"
             locked={!archeryRange}
           />
           <BuildingCard
+            buildingId={stable?.id}
             icon={<Shield size={20} />}
             name="马厩"
             description="训练骑兵"
             level={stable?.level ?? 0}
             production={stable ? `骑兵 Lv.${stable.level}` : '未解锁'}
+            upgradeEndsAt={stable?.upgradeEndsAt}
             color="text-yellow-600"
             bgColor="bg-yellow-50 dark:bg-yellow-950/20"
             locked={!stable}
           />
           <BuildingCard
+            buildingId={blacksmith?.id}
             icon={<Hammer size={20} />}
             name="铁匠铺"
             description="提升军队攻防加成"
             level={blacksmith?.level ?? 0}
             production={blacksmith ? `Lv.${blacksmith.level}` : '未解锁'}
+            upgradeEndsAt={blacksmith?.upgradeEndsAt}
             color="text-zinc-600"
             bgColor="bg-zinc-50 dark:bg-zinc-950/20"
             locked={!blacksmith}
