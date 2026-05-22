@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 4,
+    date: '2026-05-22',
+    title: '城建系统扩展',
+    items: [
+      '新增功能建筑：建造司、步兵营、骑兵营、兵器司、防具司、内政厅、粮仓、驿站、城墙、烽火台、集市',
+      '城建 tab 分组展示：军事 / 内政 / 防御',
+      '更新公告弹窗上线，支持版本号对比自动弹出',
+    ],
+  },
+  {
     version: 3,
     date: '2026-05-22',
     title: '建筑升级系统上线',
