@@ -8,6 +8,7 @@ admin/.vite/
 
 # Backend
 go/bin/
+go/server
 go/tmp/
 go/.env
 
