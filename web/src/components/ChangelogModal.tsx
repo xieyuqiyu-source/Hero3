@@ -58,6 +58,13 @@ const ChangelogModal: FC = () => {
         {entriesToShow.map((entry) => (
           <ChangelogSection key={entry.version} entry={entry} />
         ))}
+
+        {/* QQ 群 */}
+        <div className="pt-3 border-t border-[var(--color-border)]">
+          <p className="text-xs text-[var(--color-text-secondary)] text-center">
+            更多内容交流请加入 QQ 群 <span className="font-semibold text-[var(--color-text-primary)]">1101370293</span>
+          </p>
+        </div>
       </div>
     </Modal>
   )
