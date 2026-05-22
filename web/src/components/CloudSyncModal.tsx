@@ -1,6 +1,6 @@
-import { useState, type FC } from 'react'
+import { useState, useEffect, type FC } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Cloud, LogIn, UserPlus, ArrowLeft, Check } from 'lucide-react'
+import { Cloud, LogIn, UserPlus, ArrowLeft, Check, Trash2 } from 'lucide-react'
 import { Modal } from '@/components/ui'
 import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
@@ -15,10 +15,20 @@ interface CloudSyncModalProps {
 
 const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
   const navigate = useNavigate()
-  const { account, players, login, register, loadPlayers } = useAccountStore()
+  const { account, players, login, register, loadPlayers, deletePlayer } = useAccountStore()
   const { setActivePlayer, loadGameState } = useGameStore()
 
   const [view, setView] = useState<View>(account ? 'saves' : 'login')
+
+  // 每次弹窗打开时，根据当前登录状态重置视图，并加载存档
+  useEffect(() => {
+    if (open) {
+      setView(account ? 'saves' : 'login')
+      if (account) {
+        loadPlayers()
+      }
+    }
+  }, [open, account, loadPlayers])
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -31,6 +41,7 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
     setLoading(true)
     try {
       await login(username, password)
+      await loadPlayers()
       setView('saves')
     } catch {
       setError('登录失败，请检查用户名和密码')
@@ -65,13 +76,39 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
     navigate('/city')
   }
 
+  const handleDeletePlayer = async (e: React.MouseEvent, player: PlayerSummary) => {
+    e.stopPropagation()
+    if (!confirm(`确定删除存档「${player.nickname}」吗？此操作不可恢复。`)) return
+    try {
+      await deletePlayer(player.id)
+    } catch {
+      // silently fail
+    }
+  }
+
   const handleBack = () => {
     setError('')
     if (view === 'register') setView('login')
   }
 
+  const savesFooter = view === 'saves' ? (
+    <button
+      type="button"
+      onClick={onClose}
+      className="
+        w-full px-4 py-2.5 rounded-xl text-sm font-medium
+        bg-[var(--color-surface-dim)] border border-[var(--color-border)]
+        text-[var(--color-text-secondary)]
+        hover:border-[var(--color-text-muted)]
+        cursor-pointer transition-all duration-200
+      "
+    >
+      创建新存档
+    </button>
+  ) : undefined
+
   return (
-    <Modal open={open} onClose={onClose} title="云同步">
+    <Modal open={open} onClose={onClose} title="云同步" footer={savesFooter}>
       {view === 'login' && (
         <div className="space-y-4">
           <p className="text-sm text-[var(--color-text-secondary)]">
@@ -283,6 +320,20 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
                       <span className="text-[11px] text-[var(--color-text-muted)]">{player.updatedAt}</span>
                     </div>
                   </div>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => handleDeletePlayer(e, player)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleDeletePlayer(e as unknown as React.MouseEvent, player) }}
+                    className="
+                      w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0
+                      text-[var(--color-text-muted)] hover:text-red-500 hover:bg-red-500/10
+                      transition-colors duration-150
+                    "
+                    aria-label={`删除存档 ${player.nickname}`}
+                  >
+                    <Trash2 size={14} />
+                  </div>
                   <Check size={16} className="text-[var(--color-text-muted)] flex-shrink-0" />
                 </button>
               ))}
@@ -292,20 +343,6 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
               <span className="text-sm text-[var(--color-text-muted)]">暂无云端存档，创建新角色后自动同步</span>
             </div>
           )}
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="
-              w-full px-4 py-2.5 rounded-xl text-sm font-medium
-              bg-[var(--color-surface-dim)] border border-[var(--color-border)]
-              text-[var(--color-text-secondary)]
-              hover:border-[var(--color-text-muted)]
-              cursor-pointer transition-all duration-200
-            "
-          >
-            创建新存档
-          </button>
         </div>
       )}
     </Modal>

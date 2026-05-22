@@ -16,10 +16,10 @@ export default function PlayerStatePanel({ gameState }: PlayerStatePanelProps) {
         <small>{gameState?.player.faction ?? '未同步'}</small>
       </div>
       <div className="resource-readout">
-        <span>木 {resources?.wood.toLocaleString() ?? '--'}</span>
-        <span>石 {resources?.stone.toLocaleString() ?? '--'}</span>
-        <span>铁 {resources?.iron.toLocaleString() ?? '--'}</span>
-        <span>粮 {resources?.food.toLocaleString() ?? '--'}</span>
+        <span>木 {resources?.items.wood.toLocaleString() ?? '--'}</span>
+        <span>石 {resources?.items.stone.toLocaleString() ?? '--'}</span>
+        <span>铁 {resources?.items.iron.toLocaleString() ?? '--'}</span>
+        <span>粮 {resources?.items.food.toLocaleString() ?? '--'}</span>
       </div>
       <div className="state-summary">
         <span>建筑 {gameState?.buildings.length ?? 0}</span>

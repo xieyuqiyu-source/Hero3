@@ -1,0 +1,40 @@
+/api/v1/game/bootstrap:
+  get:
+    tags:
+    - Game
+    summary: 游戏模块启动信息
+    operationId: getGameBootstrap
+    responses:
+      '200':
+        description: 游戏模块信息
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BootstrapResponse'
+/api/v1/game/state:
+  get:
+    tags:
+    - Game
+    summary: 获取游戏状态
+    operationId: getGameState
+    parameters:
+    - name: playerId
+      in: query
+      required: false
+      description: 玩家存档 ID；不传时返回 demo-player。
+      schema:
+        type: string
+        example: player_47f23e0eeb08ab50402fedfc
+    responses:
+      '200':
+        description: 游戏状态快照
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GameState'
+      '404':
+        description: 玩家存档不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

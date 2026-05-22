@@ -1,0 +1,16 @@
+ErrorResponse:
+  type: object
+  required:
+  - error
+  properties:
+    error:
+      type: string
+      example: player not found
+DeleteResponse:
+  type: object
+  required:
+  - status
+  properties:
+    status:
+      type: string
+      example: deleted

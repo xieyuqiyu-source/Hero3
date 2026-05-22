@@ -1,0 +1,770 @@
+openapi: 3.0.3
+info:
+  title: Hero3 API
+  version: 0.1.0
+  description: Hero3 当前 MVP 阶段的后端接口文档，可导入 Apifox。
+servers:
+- url: http://localhost:8080
+  description: 本地 Go 后端
+- url: http://124.223.111.163:8080
+  description: 服务器后端占位，部署后按实际端口调整
+tags:
+- name: System
+  description: 服务状态
+- name: Game
+  description: 游戏状态
+- name: Account
+  description: 轻账号与存档
+- name: Admin
+  description: GM 后台只读接口
+paths:
+  /healthz:
+    get:
+      tags:
+      - System
+      summary: 健康检查
+      operationId: getHealth
+      responses:
+        '200':
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthState'
+  /api/v1/meta:
+    get:
+      tags:
+      - System
+      summary: 服务元信息
+      operationId: getMeta
+      responses:
+        '200':
+          description: 服务信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetaState'
+  /api/v1/game/bootstrap:
+    get:
+      tags:
+      - Game
+      summary: 游戏模块启动信息
+      operationId: getGameBootstrap
+      responses:
+        '200':
+          description: 游戏模块信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapResponse'
+  /api/v1/game/state:
+    get:
+      tags:
+      - Game
+      summary: 获取游戏状态
+      operationId: getGameState
+      parameters:
+      - name: playerId
+        in: query
+        required: false
+        description: 玩家存档 ID；不传时返回 demo-player。
+        schema:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+      responses:
+        '200':
+          description: 游戏状态快照
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameState'
+        '404':
+          description: 玩家存档不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/accounts/register:
+    post:
+      tags:
+      - Account
+      summary: 注册轻账号
+      operationId: registerAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRequest'
+      responses:
+        '201':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountSession'
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 账号已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/accounts/login:
+    post:
+      tags:
+      - Account
+      summary: 登录轻账号
+      operationId: loginAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountRequest'
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountSession'
+        '401':
+          description: 账号或密码错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/accounts/{accountId}/players:
+    get:
+      tags:
+      - Account
+      summary: 查看账号绑定的存档
+      operationId: listAccountPlayers
+      parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          example: acc_958538e3bc17faf00407ddcc
+      responses:
+        '200':
+          description: 存档列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - players
+                properties:
+                  players:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlayerSummary'
+        '404':
+          description: 账号不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/accounts/{accountId}:
+    delete:
+      tags:
+      - Account
+      summary: 删除账号
+      description: 删除账号，同时删除该账号关联的全部云存档。
+      operationId: deleteAccount
+      parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          example: acc_958538e3bc17faf00407ddcc
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+        '404':
+          description: 账号不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/players/create:
+    post:
+      tags:
+      - Account
+      summary: 创建账号绑定的游戏存档
+      operationId: createPlayer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlayerRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - playerId
+                - state
+                properties:
+                  playerId:
+                    type: string
+                    example: player_47f23e0eeb08ab50402fedfc
+                  state:
+                    $ref: '#/components/schemas/GameState'
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 账号不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/players/{playerId}:
+    delete:
+      tags:
+      - Account
+      summary: 删除云存档
+      description: 删除指定 playerId 对应的云存档，不删除账号。
+      operationId: deletePlayer
+      parameters:
+      - name: playerId
+        in: path
+        required: true
+        schema:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+        '404':
+          description: 存档不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/accounts:
+    get:
+      tags:
+      - Admin
+      summary: GM 查看所有注册账号和存档
+      operationId: adminListAccounts
+      responses:
+        '200':
+          description: 账号和存档列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - accounts
+                properties:
+                  accounts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AccountSummary'
+        '500':
+          description: 后端读取失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/balance:
+    get:
+      tags:
+      - Admin
+      summary: GM 读取游戏数值配置
+      operationId: adminGetBalance
+      responses:
+        '200':
+          description: 当前资源和建筑数值配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceConfig'
+    put:
+      tags:
+      - Admin
+      summary: GM 保存游戏数值配置
+      operationId: adminUpdateBalance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BalanceConfig'
+      responses:
+        '200':
+          description: 保存后的数值配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceConfig'
+        '400':
+          description: 配置格式或内容不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    HealthState:
+      type: object
+      required:
+      - status
+      - service
+      - version
+      - environment
+      - time
+      properties:
+        status:
+          type: string
+          example: ok
+        service:
+          type: string
+          example: Hero3 API
+        version:
+          type: string
+          example: 0.1.0
+        environment:
+          type: string
+          example: development
+        time:
+          type: string
+          format: date-time
+    MetaState:
+      type: object
+      additionalProperties: true
+      example:
+        service: Hero3 API
+        version: 0.1.0
+        environment: development
+    BootstrapResponse:
+      type: object
+      required:
+      - gameName
+      - modules
+      - message
+      properties:
+        gameName:
+          type: string
+          example: Hero3
+        modules:
+          type: array
+          items:
+            type: string
+          example:
+          - player
+          - city
+          - resource
+          - military
+          - map
+          - combat
+          - save
+        message:
+          type: string
+          example: Hero3 后端基础服务已就绪，具体玩法逻辑待接入。
+    AccountRequest:
+      type: object
+      required:
+      - username
+      - password
+      properties:
+        username:
+          type: string
+          example: xieyuqi
+        password:
+          type: string
+          format: password
+          example: '123456'
+    AccountSession:
+      type: object
+      required:
+      - accountId
+      - username
+      properties:
+        accountId:
+          type: string
+          example: acc_958538e3bc17faf00407ddcc
+        username:
+          type: string
+          example: xieyuqi
+    CreatePlayerRequest:
+      type: object
+      required:
+      - accountId
+      - nickname
+      - faction
+      properties:
+        accountId:
+          type: string
+          example: acc_958538e3bc17faf00407ddcc
+        nickname:
+          type: string
+          example: 主公
+        faction:
+          type: string
+          enum:
+          - wei
+          - shu
+          - wu
+          example: wei
+        generalId:
+          type: string
+          example: caocao
+    AccountSummary:
+      type: object
+      required:
+      - id
+      - username
+      - createdAt
+      - players
+      properties:
+        id:
+          type: string
+          example: acc_958538e3bc17faf00407ddcc
+        username:
+          type: string
+          example: xieyuqi
+        createdAt:
+          type: string
+          format: date-time
+        players:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayerSummary'
+    PlayerSummary:
+      type: object
+      required:
+      - id
+      - nickname
+      - faction
+      - updatedAt
+      properties:
+        id:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+        nickname:
+          type: string
+          example: 主公
+        faction:
+          type: string
+          example: wei
+        updatedAt:
+          type: string
+          format: date-time
+    GameState:
+      type: object
+      required:
+      - player
+      - resources
+      - resourceProduction
+      - resourceSettledAt
+      - buildings
+      - army
+      - recruitQueues
+      - mapTargets
+      - recentBattleReports
+      - unreadMessageCount
+      - serverTime
+      properties:
+        player:
+          $ref: '#/components/schemas/Player'
+        resources:
+          $ref: '#/components/schemas/ResourceState'
+        resourceProduction:
+          $ref: '#/components/schemas/ResourceProduction'
+        resourceSettledAt:
+          type: string
+          format: date-time
+          description: 资源上次由后端权威结算的时间。
+        buildings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Building'
+        army:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        recruitQueues:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecruitQueue'
+        mapTargets:
+          type: array
+          items:
+            $ref: '#/components/schemas/MapTarget'
+        recentBattleReports:
+          type: array
+          items:
+            $ref: '#/components/schemas/BattleReport'
+        unreadMessageCount:
+          type: integer
+          example: 0
+        serverTime:
+          type: string
+          format: date-time
+    Player:
+      type: object
+      required:
+      - id
+      - nickname
+      - faction
+      properties:
+        id:
+          type: string
+          example: demo-player
+        nickname:
+          type: string
+          example: 主公
+        faction:
+          type: string
+          example: wei
+    ResourceState:
+      type: object
+      required:
+      - items
+      - capacity
+      properties:
+        items:
+          type: object
+          description: 资源当前数量，key 为资源类型，可扩展。
+          additionalProperties:
+            type: integer
+          example:
+            wood: 1200
+            stone: 900
+            iron: 600
+            food: 1500
+        capacity:
+          type: object
+          description: 各资源容量上限，key 与资源类型一致。
+          additionalProperties:
+            type: integer
+          example:
+            wood: 7500
+            stone: 7500
+            iron: 7500
+            food: 7500
+    ResourceProduction:
+      type: object
+      description: 每小时资源产量，key 为资源类型，可扩展。
+      additionalProperties:
+        type: integer
+      example:
+        wood: 84
+        stone: 62
+        iron: 48
+        food: 100
+    Building:
+      type: object
+      required:
+      - id
+      - type
+      - level
+      - upgradeEndsAt
+      properties:
+        id:
+          type: string
+          example: wood-camp
+        type:
+          type: string
+          example: wood_camp
+        level:
+          type: integer
+          example: 3
+        upgradeEndsAt:
+          type: string
+          nullable: true
+          example: null
+    ArmyUnit:
+      type: object
+      required:
+      - unitType
+      - amount
+      properties:
+        unitType:
+          type: string
+          example: infantry
+        amount:
+          type: integer
+          example: 80
+    RecruitQueue:
+      type: object
+      required:
+      - id
+      - unitType
+      - amount
+      - endsAt
+      - status
+      properties:
+        id:
+          type: string
+        unitType:
+          type: string
+        amount:
+          type: integer
+        endsAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+    MapTarget:
+      type: object
+      required:
+      - id
+      - type
+      - level
+      - power
+      - rewards
+      properties:
+        id:
+          type: string
+          example: target-001
+        type:
+          type: string
+          example: bandit_camp
+        level:
+          type: integer
+          example: 1
+        power:
+          type: integer
+          example: 100
+        rewards:
+          type: object
+          additionalProperties:
+            type: integer
+    BattleReport:
+      type: object
+      properties:
+        id:
+          type: string
+        targetId:
+          type: string
+        result:
+          type: string
+        playerPower:
+          type: integer
+        enemyPower:
+          type: integer
+        lostUnits:
+          type: object
+          additionalProperties:
+            type: integer
+        rewards:
+          type: object
+          additionalProperties:
+            type: integer
+        createdAt:
+          type: string
+          format: date-time
+    BalanceConfig:
+      type: object
+      required:
+      - baseProduction
+      - buildings
+      properties:
+        baseProduction:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            wood: 30
+            stone: 30
+            iron: 20
+            food: 40
+        buildings:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/BuildingConfig'
+    BuildingConfig:
+      type: object
+      required:
+      - type
+      - name
+      properties:
+        type:
+          type: string
+          example: wood_camp
+        name:
+          type: string
+          example: 伐木场
+        resourceType:
+          type: string
+          example: wood
+        productionByLevel:
+          type: array
+          items:
+            type: integer
+          example:
+          - 0
+          - 18
+          - 36
+          - 54
+        capacityByLevel:
+          type: array
+          items:
+            type: integer
+          example:
+          - 5000
+          - 7500
+          - 10000
+        upgradeCostByLevel:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: integer
+          example:
+            '1':
+              wood: 50
+              stone: 80
+              iron: 30
+              food: 20
+        upgradeSecondsByLevel:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            '1': 30
+            '2': 45
+    ErrorResponse:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: string
+          example: player not found
+    DeleteResponse:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          example: deleted

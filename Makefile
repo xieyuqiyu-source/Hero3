@@ -1,7 +1,7 @@
 # Hero3 项目 Makefile
 # 统一开发环境启动、构建、部署命令
 
-.PHONY: dev dev-go dev-web dev-admin build build-go build-web build-admin clean install
+.PHONY: dev dev-go dev-web dev-admin build build-go build-web build-admin clean install openapi openapi-lint openapi-bundle
 
 # ===== 开发 =====
 
@@ -60,6 +60,18 @@ clean:
 migrate:
 	cd go && go run ./cmd/server migrate
 
+# ===== 接口文档 =====
+
+## 校验拆分后的 OpenAPI 入口文件
+openapi-lint:
+	python3 scripts/openapi_bundle.py --input docs/openapi/openapi.yaml --output docs/openapi.bundle.yaml
+
+## 打包 Apifox 导入文件
+openapi-bundle: openapi-lint
+
+## 校验并打包 OpenAPI
+openapi: openapi-bundle
+
 # ===== 帮助 =====
 
 ## 显示帮助
@@ -75,3 +87,4 @@ help:
 	@echo "  make build        构建所有"
 	@echo "  make clean        清理构建产物"
 	@echo "  make migrate      运行数据库迁移"
+	@echo "  make openapi      校验并打包接口文档"

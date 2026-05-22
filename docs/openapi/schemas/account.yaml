@@ -1,0 +1,89 @@
+AccountRequest:
+  type: object
+  required:
+  - username
+  - password
+  properties:
+    username:
+      type: string
+      example: xieyuqi
+    password:
+      type: string
+      format: password
+      example: '123456'
+AccountSession:
+  type: object
+  required:
+  - accountId
+  - username
+  properties:
+    accountId:
+      type: string
+      example: acc_958538e3bc17faf00407ddcc
+    username:
+      type: string
+      example: xieyuqi
+CreatePlayerRequest:
+  type: object
+  required:
+  - accountId
+  - nickname
+  - faction
+  properties:
+    accountId:
+      type: string
+      example: acc_958538e3bc17faf00407ddcc
+    nickname:
+      type: string
+      example: 主公
+    faction:
+      type: string
+      enum:
+      - wei
+      - shu
+      - wu
+      example: wei
+    generalId:
+      type: string
+      example: caocao
+AccountSummary:
+  type: object
+  required:
+  - id
+  - username
+  - createdAt
+  - players
+  properties:
+    id:
+      type: string
+      example: acc_958538e3bc17faf00407ddcc
+    username:
+      type: string
+      example: xieyuqi
+    createdAt:
+      type: string
+      format: date-time
+    players:
+      type: array
+      items:
+        $ref: '#/components/schemas/PlayerSummary'
+PlayerSummary:
+  type: object
+  required:
+  - id
+  - nickname
+  - faction
+  - updatedAt
+  properties:
+    id:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+    nickname:
+      type: string
+      example: 主公
+    faction:
+      type: string
+      example: wei
+    updatedAt:
+      type: string
+      format: date-time

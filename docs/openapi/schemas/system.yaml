@@ -1,0 +1,56 @@
+HealthState:
+  type: object
+  required:
+  - status
+  - service
+  - version
+  - environment
+  - time
+  properties:
+    status:
+      type: string
+      example: ok
+    service:
+      type: string
+      example: Hero3 API
+    version:
+      type: string
+      example: 0.1.0
+    environment:
+      type: string
+      example: development
+    time:
+      type: string
+      format: date-time
+MetaState:
+  type: object
+  additionalProperties: true
+  example:
+    service: Hero3 API
+    version: 0.1.0
+    environment: development
+BootstrapResponse:
+  type: object
+  required:
+  - gameName
+  - modules
+  - message
+  properties:
+    gameName:
+      type: string
+      example: Hero3
+    modules:
+      type: array
+      items:
+        type: string
+      example:
+      - player
+      - city
+      - resource
+      - military
+      - map
+      - combat
+      - save
+    message:
+      type: string
+      example: Hero3 后端基础服务已就绪，具体玩法逻辑待接入。

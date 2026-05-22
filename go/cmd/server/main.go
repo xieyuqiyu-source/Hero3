@@ -22,6 +22,10 @@ func main() {
 	}))
 
 	gameService := game.NewService()
+	if err := gameService.SetBalancePath(cfg.BalancePath); err != nil {
+		logger.Error("balance config load failed", "path", cfg.BalancePath, "error", err)
+		os.Exit(1)
+	}
 	if cfg.DatabaseDSN != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -39,6 +43,10 @@ func main() {
 		}
 
 		gameService = game.NewServiceWithRepository(storage.NewMySQLRepository(db))
+		if err := gameService.SetBalancePath(cfg.BalancePath); err != nil {
+			logger.Error("balance config load failed", "path", cfg.BalancePath, "error", err)
+			os.Exit(1)
+		}
 		logger.Info("database storage enabled")
 	} else {
 		logger.Info("memory storage enabled")

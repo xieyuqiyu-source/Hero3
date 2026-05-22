@@ -1,0 +1,63 @@
+/api/v1/admin/accounts:
+  get:
+    tags:
+    - Admin
+    summary: GM 查看所有注册账号和存档
+    operationId: adminListAccounts
+    responses:
+      '200':
+        description: 账号和存档列表
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - accounts
+              properties:
+                accounts:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/AccountSummary'
+      '500':
+        description: 后端读取失败
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/balance:
+  get:
+    tags:
+    - Admin
+    summary: GM 读取游戏数值配置
+    operationId: adminGetBalance
+    responses:
+      '200':
+        description: 当前资源和建筑数值配置
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BalanceConfig'
+  put:
+    tags:
+    - Admin
+    summary: GM 保存游戏数值配置
+    operationId: adminUpdateBalance
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/BalanceConfig'
+    responses:
+      '200':
+        description: 保存后的数值配置
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BalanceConfig'
+      '400':
+        description: 配置格式或内容不合法
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

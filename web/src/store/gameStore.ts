@@ -7,6 +7,8 @@ interface GameStore {
   activePlayerId: string | null
   /** 后端返回的权威游戏状态 */
   state: GameState | null
+  /** 当前 state 到达前端的本地时间，用于资源增长预测 */
+  stateReceivedAt: number | null
   /** 是否正在加载 */
   loading: boolean
   /** 错误信息 */
@@ -31,13 +33,15 @@ interface GameStore {
 export const useGameStore = create<GameStore>((set, get) => ({
   activePlayerId: localStorage.getItem('hero3_active_player_id'),
   state: null,
+  stateReceivedAt: null,
   loading: false,
   error: null,
 
-  setState: (state) => set({ state, error: null }),
+  setState: (state) => set({ state, stateReceivedAt: Date.now(), error: null }),
   patchState: (patch) =>
     set((prev) => ({
       state: prev.state ? { ...prev.state, ...patch } : null,
+      stateReceivedAt: Date.now(),
     })),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
@@ -47,7 +51,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   clearActivePlayer: () => {
     localStorage.removeItem('hero3_active_player_id')
-    set({ activePlayerId: null, state: null })
+    set({ activePlayerId: null, state: null, stateReceivedAt: null })
   },
   loadGameState: async (playerId?: string) => {
     const id = playerId ?? get().activePlayerId
@@ -55,7 +59,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ loading: true, error: null })
     try {
       const state = await gameApi.getState(id)
-      set({ state, loading: false, error: null })
+      set({ state, stateReceivedAt: Date.now(), loading: false, error: null })
     } catch (error) {
       const message = error instanceof Error ? error.message : '加载游戏状态失败'
       set({ error: message, loading: false })

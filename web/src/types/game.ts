@@ -19,12 +19,11 @@ export interface PlayerSummary {
 }
 
 export interface ResourceState {
-  wood: number
-  stone: number
-  iron: number
-  food: number
-  capacity: number
+  items: Record<string, number>
+  capacity: Record<string, number>
 }
+
+export type ResourceProduction = Record<string, number>
 
 export interface Building {
   id: string
@@ -51,7 +50,7 @@ export interface MapTarget {
   type: string
   level: number
   power: number
-  rewards: Partial<ResourceState>
+  rewards: Record<string, number>
 }
 
 export interface BattleReport {
@@ -61,13 +60,15 @@ export interface BattleReport {
   playerPower: number
   enemyPower: number
   lostUnits: Record<string, number>
-  rewards: Partial<ResourceState>
+  rewards: Record<string, number>
   createdAt: string
 }
 
 export interface GameState {
   player: Player
   resources: ResourceState
+  resourceProduction: ResourceProduction
+  resourceSettledAt: string
   buildings: Building[]
   army: ArmyUnit[]
   recruitQueues: RecruitQueue[]

@@ -31,6 +31,11 @@ export const gameApi = {
     return api.get<{ players: PlayerSummary[] }>(`/accounts/${accountId}/players`)
   },
 
+  /** 删除存档 */
+  deletePlayer(playerId: string) {
+    return api.delete<{ status: string }>(`/players/${playerId}`)
+  },
+
   /** 升级建筑 */
   upgradeBuilding(playerId: string, buildingType: string) {
     return api.post<{ resources: GameState['resources']; buildings: GameState['buildings'] }>(

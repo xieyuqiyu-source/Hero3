@@ -1,10 +1,10 @@
 import { useState, useEffect, type FC } from 'react'
 import { TreePine, Mountain, Gem, Wheat } from 'lucide-react'
-import { useGameStore } from '@/store/gameStore'
+import { useProjectedResources } from '@/hooks/useProjectedResources'
 
 const ResourceBar: FC = () => {
   const [scrolled, setScrolled] = useState(false)
-  const gameResources = useGameStore((store) => store.state?.resources)
+  const gameResources = useProjectedResources()
 
   useEffect(() => {
     const handleScroll = () => {
@@ -15,10 +15,10 @@ const ResourceBar: FC = () => {
   }, [])
 
   const resources = [
-    { name: '木材', icon: TreePine, value: gameResources?.wood ?? 0, capacity: gameResources?.capacity ?? 0, color: 'text-green-600' },
-    { name: '石料', icon: Mountain, value: gameResources?.stone ?? 0, capacity: gameResources?.capacity ?? 0, color: 'text-slate-600' },
-    { name: '铁矿', icon: Gem, value: gameResources?.iron ?? 0, capacity: gameResources?.capacity ?? 0, color: 'text-orange-600' },
-    { name: '粮食', icon: Wheat, value: gameResources?.food ?? 0, capacity: gameResources?.capacity ?? 0, color: 'text-amber-600' },
+    { key: 'wood', name: '木材', icon: TreePine, color: 'text-green-600' },
+    { key: 'stone', name: '石料', icon: Mountain, color: 'text-slate-600' },
+    { key: 'iron', name: '铁矿', icon: Gem, color: 'text-orange-600' },
+    { key: 'food', name: '粮食', icon: Wheat, color: 'text-amber-600' },
   ]
 
   return (
@@ -38,10 +38,10 @@ const ResourceBar: FC = () => {
               key={res.name}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl min-w-0"
             >
-              <Icon size={14} className={`${res.color} flex-shrink-0`} />
-              <span className="text-[11px] text-[var(--color-text-muted)] flex-shrink-0">{res.name}</span>
-              <span className="text-xs font-semibold text-[var(--color-text-primary)] truncate tabular-nums">
-                {res.value.toLocaleString()}/{res.capacity.toLocaleString()}
+              <Icon size={16} className={`${res.color} flex-shrink-0`} />
+              <span className="text-xs text-[var(--color-text-muted)] flex-shrink-0">{res.name}</span>
+              <span className="text-sm font-bold text-amber-400 truncate tabular-nums">
+                {(gameResources?.items[res.key] ?? 0).toLocaleString()}/{(gameResources?.capacity[res.key] ?? 0).toLocaleString()}
               </span>
             </div>
           )

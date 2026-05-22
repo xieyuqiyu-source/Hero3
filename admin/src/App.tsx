@@ -1,181 +1,106 @@
 import './App.css'
-import {
-  auditLogs,
-  guardrails,
-  resourceActions,
-  systemActions,
-} from '@/data'
-import PlayerStatePanel from '@/components/PlayerStatePanel'
+import { useState } from 'react'
+import AccountsPanel from '@/components/AccountsPanel'
+import AdminLayout, { type AdminPage } from '@/components/AdminLayout'
+import ApiDiagnosticsPanel from '@/components/ApiDiagnosticsPanel'
+import { AuditPanel, GuardrailPanel } from '@/components/AuditPanel'
+import BalanceConfigPanel from '@/components/BalanceConfigPanel'
+import MetricsGrid from '@/components/MetricsGrid'
+import { ResourceToolsPanel, SystemActionsPanel } from '@/components/OperationsPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
+import type { AccountSummary, PlayerSummary } from '@/types'
 
 function App() {
-  const { accounts, dashboardStats, error, gameState, health, loading } = useAdminDashboard()
+  const [activePage, setActivePage] = useState<AdminPage>('overview')
+  const {
+    accounts,
+    actionMessage,
+    busyTarget,
+    dashboardStats,
+    deleteAccount,
+    deletePlayer,
+    error,
+    gameState,
+    health,
+    loading,
+  } = useAdminDashboard()
+
+  const handleDeletePlayer = async (player: PlayerSummary) => {
+    const confirmed = window.confirm(`确认删除云存档「${player.nickname}」？此操作不可恢复。`)
+    if (!confirmed) return
+    await deletePlayer(player.id)
+  }
+
+  const handleDeleteAccount = async (account: AccountSummary) => {
+    const confirmed = window.confirm(`确认删除账号「${account.username}」及其 ${account.players.length} 个云存档？此操作不可恢复。`)
+    if (!confirmed) return
+    await deleteAccount(account.id)
+  }
+
+  const renderPage = () => {
+    switch (activePage) {
+      case 'accounts':
+        return (
+          <AccountsPanel
+            accounts={accounts}
+            busyTarget={busyTarget}
+            gameState={gameState}
+            onDeleteAccount={handleDeleteAccount}
+            onDeletePlayer={handleDeletePlayer}
+          />
+        )
+      case 'operations':
+        return (
+          <div className="page-grid two-column">
+            <ResourceToolsPanel />
+            <SystemActionsPanel />
+          </div>
+        )
+      case 'balance':
+        return <BalanceConfigPanel />
+      case 'api':
+        return <ApiDiagnosticsPanel />
+      case 'audit':
+        return (
+          <>
+            <AuditPanel />
+            <GuardrailPanel />
+          </>
+        )
+      default:
+        return (
+          <>
+            <MetricsGrid stats={dashboardStats} />
+            <div className="page-grid two-column">
+              <AccountsPanel
+                accounts={accounts}
+                busyTarget={busyTarget}
+                gameState={gameState}
+                onDeleteAccount={handleDeleteAccount}
+                onDeletePlayer={handleDeletePlayer}
+              />
+              <div className="stacked-panels">
+                <ResourceToolsPanel />
+                <SystemActionsPanel />
+              </div>
+            </div>
+          </>
+        )
+    }
+  }
 
   return (
-    <div className="admin-shell">
-      <aside className="admin-sidebar" aria-label="GM 后台导航">
-        <div className="brand-block">
-          <span className="brand-mark">H3</span>
-          <div>
-            <strong>Hero3 GM</strong>
-            <span>运营管理台</span>
-          </div>
-        </div>
+    <AdminLayout
+      activePage={activePage}
+      environment={health?.environment ?? 'Offline'}
+      loading={loading}
+      onNavigate={setActivePage}
+    >
+      {error && <section className="status-banner">后端未连接：{error}</section>}
+      {actionMessage && <section className="success-banner">{actionMessage}</section>}
 
-        <nav className="nav-list">
-          {['总览', '玩家', '资源', '战斗', '公告', '审计'].map((item) => (
-            <a href={`#${item}`} key={item}>
-              {item}
-            </a>
-          ))}
-        </nav>
-      </aside>
-
-      <main className="admin-main">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">GM Console</p>
-            <h1>Hero3 管理后台</h1>
-          </div>
-          <div className="operator-chip">
-            <span>{loading ? '正在连接' : '当前环境'}</span>
-            <strong>{health?.environment ?? 'Offline'}</strong>
-          </div>
-        </header>
-
-        {error && (
-          <section className="status-banner">
-            后端未连接：{error}
-          </section>
-        )}
-
-        <section className="metrics-grid" aria-label="运营指标">
-          {dashboardStats.map((stat) => (
-            <article className="metric-card" key={stat.label}>
-              <span>{stat.label}</span>
-              <strong>{stat.value}</strong>
-              <small>{stat.hint}</small>
-            </article>
-          ))}
-        </section>
-
-        <section className="workspace-grid">
-          <article className="panel player-panel" id="玩家">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Accounts</p>
-                <h2>注册玩家与存档</h2>
-              </div>
-              <span className="panel-count">{accounts.length} 个账号</span>
-            </div>
-
-            {accounts.length === 0 ? (
-              <div className="empty-state">
-                <strong>暂无注册账号</strong>
-                <span>玩家完成注册并创建存档后会显示在这里。</span>
-              </div>
-            ) : (
-              <div className="account-list">
-                {accounts.map((account) => (
-                  <section className="account-card" key={account.id}>
-                    <div className="account-card-header">
-                      <div>
-                        <strong>{account.username}</strong>
-                        <span>{account.id}</span>
-                      </div>
-                      <small>{account.players.length} 个存档</small>
-                    </div>
-
-                    {account.players.length === 0 ? (
-                      <div className="save-empty">尚未创建游戏存档</div>
-                    ) : (
-                      <div className="save-list">
-                        {account.players.map((player) => (
-                          <div className="save-row" key={player.id}>
-                            <div>
-                              <strong>{player.nickname}</strong>
-                              <span>{player.id}</span>
-                            </div>
-                            <div className="save-meta">
-                              <span>{player.faction}</span>
-                              <time>{new Date(player.updatedAt).toLocaleString()}</time>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                ))}
-              </div>
-            )}
-
-            <PlayerStatePanel gameState={gameState} />
-          </article>
-
-          <article className="panel" id="资源">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Resource Tools</p>
-                <h2>资源调整</h2>
-              </div>
-            </div>
-
-            <div className="action-list">
-              {resourceActions.map((action) => (
-                <button type="button" key={action.title} disabled>
-                  <strong>{action.title}</strong>
-                  <span>{action.desc}</span>
-                </button>
-              ))}
-            </div>
-          </article>
-
-          <article className="panel" id="系统">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">System Actions</p>
-                <h2>系统操作</h2>
-              </div>
-            </div>
-
-            <div className="system-actions">
-              {systemActions.map((action) => (
-                <button type="button" className={action.level} key={action.title} disabled>
-                  {action.title}
-                </button>
-              ))}
-            </div>
-          </article>
-
-          <article className="panel" id="审计">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Audit Log</p>
-                <h2>操作审计</h2>
-              </div>
-            </div>
-
-            <ol className="audit-list">
-              {auditLogs.map((log) => (
-                <li key={log.time}>
-                  <time>{log.time}</time>
-                  <span>{log.action}</span>
-                </li>
-              ))}
-            </ol>
-          </article>
-        </section>
-
-        <section className="guardrail-panel">
-          {guardrails.map((item) => (
-            <div key={item.title}>
-              <strong>{item.title}</strong>
-              <span>{item.desc}</span>
-            </div>
-          ))}
-        </section>
-      </main>
-    </div>
+      <section className="page-surface">{renderPage()}</section>
+    </AdminLayout>
   )
 }
 

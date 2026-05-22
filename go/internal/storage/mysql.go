@@ -230,6 +230,38 @@ func (r *MySQLRepository) CreatePlayer(accountID string, state game.GameState, u
 	return err
 }
 
+func (r *MySQLRepository) DeleteAccount(accountID string) error {
+	result, err := r.db.Exec(`DELETE FROM accounts WHERE id = ?`, accountID)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return game.ErrAccountNotFound
+	}
+	return nil
+}
+
+func (r *MySQLRepository) DeletePlayer(playerID string) error {
+	result, err := r.db.Exec(`DELETE FROM players WHERE id = ?`, playerID)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return game.ErrPlayerNotFound
+	}
+	return nil
+}
+
 func (r *MySQLRepository) GetState(playerID string) (game.GameState, error) {
 	var stateJSON []byte
 	err := r.db.QueryRow(`SELECT state_json FROM players WHERE id = ? LIMIT 1`, playerID).Scan(&stateJSON)
@@ -245,6 +277,36 @@ func (r *MySQLRepository) GetState(playerID string) (game.GameState, error) {
 		return game.GameState{}, err
 	}
 	return state, nil
+}
+
+func (r *MySQLRepository) SaveState(state game.GameState, updatedAt time.Time) error {
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+
+	result, err := r.db.Exec(
+		`UPDATE players
+		 SET nickname = ?, faction = ?, state_json = ?, updated_at = ?
+		 WHERE id = ?`,
+		state.Player.Nickname,
+		state.Player.Faction,
+		stateJSON,
+		updatedAt.UTC(),
+		state.Player.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return game.ErrPlayerNotFound
+	}
+	return nil
 }
 
 func isDuplicateEntry(err error) bool {

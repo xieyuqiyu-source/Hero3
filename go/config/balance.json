@@ -1,0 +1,89 @@
+{
+  "baseProduction": {
+    "food": 40,
+    "iron": 20,
+    "stone": 30,
+    "wood": 30
+  },
+  "buildings": {
+    "farm": {
+      "type": "farm",
+      "name": "农田",
+      "resourceType": "food",
+      "productionByLevel": [0, 20, 40, 60, 80, 108, 142, 182, 228, 282, 342],
+      "upgradeCostByLevel": {
+        "1": { "food": 35, "iron": 25, "stone": 55, "wood": 45 },
+        "2": { "food": 50, "iron": 40, "stone": 80, "wood": 65 },
+        "3": { "food": 70, "iron": 55, "stone": 110, "wood": 90 }
+      },
+      "upgradeSecondsByLevel": {
+        "1": 25,
+        "2": 40,
+        "3": 65
+      }
+    },
+    "iron_mine": {
+      "type": "iron_mine",
+      "name": "铁矿",
+      "resourceType": "iron",
+      "productionByLevel": [0, 14, 28, 42, 56, 76, 102, 132, 168, 210, 258],
+      "upgradeCostByLevel": {
+        "1": { "food": 25, "iron": 45, "stone": 70, "wood": 75 },
+        "2": { "food": 35, "iron": 65, "stone": 100, "wood": 105 },
+        "3": { "food": 50, "iron": 90, "stone": 140, "wood": 145 }
+      },
+      "upgradeSecondsByLevel": {
+        "1": 35,
+        "2": 55,
+        "3": 85
+      }
+    },
+    "stone_quarry": {
+      "type": "stone_quarry",
+      "name": "采石场",
+      "resourceType": "stone",
+      "productionByLevel": [0, 16, 32, 48, 64, 86, 114, 148, 188, 234, 286],
+      "upgradeCostByLevel": {
+        "1": { "food": 20, "iron": 35, "stone": 50, "wood": 80 },
+        "2": { "food": 30, "iron": 50, "stone": 70, "wood": 110 },
+        "3": { "food": 45, "iron": 70, "stone": 95, "wood": 150 }
+      },
+      "upgradeSecondsByLevel": {
+        "1": 30,
+        "2": 45,
+        "3": 70
+      }
+    },
+    "warehouse": {
+      "type": "warehouse",
+      "name": "仓库",
+      "capacityByLevel": [5000, 7500, 10000, 13000, 16500, 20500, 25000, 30000, 35500, 41500, 48000],
+      "upgradeCostByLevel": {
+        "1": { "food": 40, "iron": 80, "stone": 100, "wood": 120 },
+        "2": { "food": 60, "iron": 120, "stone": 150, "wood": 180 },
+        "3": { "food": 90, "iron": 175, "stone": 220, "wood": 260 }
+      },
+      "upgradeSecondsByLevel": {
+        "1": 45,
+        "2": 75,
+        "3": 120
+      }
+    },
+    "wood_camp": {
+      "type": "wood_camp",
+      "name": "伐木场",
+      "resourceType": "wood",
+      "productionByLevel": [0, 18, 36, 54, 72, 96, 126, 162, 204, 252, 306],
+      "upgradeCostByLevel": {
+        "1": { "food": 20, "iron": 30, "stone": 80, "wood": 50 },
+        "2": { "food": 30, "iron": 45, "stone": 110, "wood": 70 },
+        "3": { "food": 45, "iron": 65, "stone": 150, "wood": 95 }
+      },
+      "upgradeSecondsByLevel": {
+        "1": 30,
+        "2": 45,
+        "3": 70
+      }
+    }
+  }
+}

@@ -45,6 +45,17 @@ export default function ApiDiagnosticsPanel() {
   }, [results])
 
   const runCheck = async (item: ApiDocItem) => {
+    if (item.destructive) {
+      setResults((current) => ({
+        ...current,
+        [item.id]: {
+          ok: false,
+          message: '高危接口不支持在诊断面板直接测试，请在业务面板二次确认后操作。',
+        },
+      }))
+      return
+    }
+
     setRunningId(item.id)
     const startedAt = performance.now()
 
@@ -76,7 +87,7 @@ export default function ApiDiagnosticsPanel() {
   }
 
   const runAll = async () => {
-    for (const item of apiDocs) {
+    for (const item of apiDocs.filter((api) => !api.destructive)) {
       await runCheck(item)
     }
   }
@@ -122,7 +133,7 @@ export default function ApiDiagnosticsPanel() {
                   </small>
                 )}
                 <button type="button" onClick={() => runCheck(item)} disabled={runningId !== null}>
-                  {runningId === item.id ? '请求中' : '测试'}
+                  {item.destructive ? '高危' : runningId === item.id ? '请求中' : '测试'}
                 </button>
               </div>
 

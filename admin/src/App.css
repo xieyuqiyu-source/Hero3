@@ -43,15 +43,20 @@
   gap: 8px;
 }
 
-.nav-list a {
+.nav-list button {
+  min-height: 40px;
+  border: 0;
+  background: transparent;
   color: #c9d6e7;
-  text-decoration: none;
   padding: 10px 12px;
   border-radius: 8px;
+  text-align: left;
 }
 
-.nav-list a:hover {
+.nav-list button:hover,
+.nav-list button.active {
   background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
 }
 
 .admin-main {
@@ -113,6 +118,15 @@ h2 {
   background: #fff5f5;
 }
 
+.success-banner {
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  color: #15803d;
+  background: #f0fdf4;
+}
+
 .operator-chip span,
 .metric-card span,
 .metric-card small {
@@ -139,9 +153,23 @@ h2 {
   font-size: 28px;
 }
 
-.workspace-grid {
+.page-surface {
   display: grid;
+  gap: 18px;
+}
+
+.page-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.page-grid.two-column {
   grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+}
+
+.stacked-panels {
+  display: grid;
+  align-content: start;
   gap: 18px;
 }
 
@@ -258,6 +286,27 @@ button:disabled {
   font-weight: 700;
 }
 
+.account-actions {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.danger-text-button {
+  min-height: 32px;
+  padding: 0 10px;
+  border-color: #fecaca;
+  color: #b91c1c;
+  background: #fff5f5;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.danger-text-button:hover {
+  border-color: #ef4444;
+  color: #991b1b;
+}
+
 .save-list {
   display: grid;
   gap: 8px;
@@ -366,6 +415,10 @@ button:disabled {
 
 .method-badge.post {
   background: #0f766e;
+}
+
+.method-badge.delete {
+  background: #b91c1c;
 }
 
 .api-main code {
@@ -488,6 +541,71 @@ button:disabled {
   background: #fff5f5;
 }
 
+.balance-panel {
+  min-height: calc(100dvh - 180px);
+}
+
+.balance-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.balance-summary div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.balance-summary span {
+  color: #64748b;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.balance-summary strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.config-editor {
+  width: 100%;
+  min-height: 520px;
+  padding: 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #0f172a;
+  background: #f8fafc;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.config-editor:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.inline-success,
+.inline-error {
+  margin: 12px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.inline-success {
+  color: #047857;
+}
+
+.inline-error {
+  color: #b91c1c;
+}
+
 .audit-list {
   padding-left: 0;
   list-style: none;
@@ -504,8 +622,9 @@ button:disabled {
 @media (max-width: 920px) {
   .admin-shell,
   .metrics-grid,
-  .workspace-grid,
-  .guardrail-panel {
+  .page-grid.two-column,
+  .guardrail-panel,
+  .balance-summary {
     grid-template-columns: 1fr;
   }
 
@@ -527,6 +646,7 @@ button:disabled {
   .panel-heading,
   .api-summary,
   .account-card-header,
+  .account-actions,
   .save-row,
   .api-row,
   .table-row,
@@ -540,6 +660,10 @@ button:disabled {
   .save-meta {
     justify-items: start;
     white-space: normal;
+  }
+
+  .account-actions {
+    justify-items: start;
   }
 
   .api-actions {

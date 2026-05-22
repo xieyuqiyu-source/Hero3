@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import type { GameState } from '@/types/game'
+import { useProjectedResources } from '@/hooks/useProjectedResources'
 
 export interface NavItem {
   key: string
@@ -36,7 +37,7 @@ interface SidebarProps {
 
 const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate, onToggle }) => {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
-  const resources = gameState?.resources
+  const resources = useProjectedResources()
   const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
   const unreadMessageCount = gameState?.unreadMessageCount ?? 0
   const quickActions = [
@@ -187,21 +188,26 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
             <>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold text-[var(--color-text-primary)]">资源产出</span>
+                <span className="text-[10px] text-[var(--color-text-muted)]">/每小时</span>
               </div>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-1 gap-1.5">
                 {[
-                  ['木材', resources?.wood],
-                  ['石料', resources?.stone],
-                  ['铁矿', resources?.iron],
-                  ['粮食', resources?.food],
+                  ['木材', gameState?.resourceProduction?.wood],
+                  ['石料', gameState?.resourceProduction?.stone],
+                  ['铁矿', gameState?.resourceProduction?.iron],
+                  ['粮食', gameState?.resourceProduction?.food],
                 ].map(([label, value]) => (
                   <div key={label} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
                     <span className="text-xs">{label}</span>
                     <span className="text-xs font-semibold text-[var(--color-accent)] ml-auto">
-                      {typeof value === 'number' ? value.toLocaleString() : '--'}
+                      +{typeof value === 'number' ? value.toLocaleString() : '--'}
                     </span>
                   </div>
                 ))}
+                <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
+                  <span className="text-xs">口粮</span>
+                  <span className="text-xs font-semibold text-[var(--color-text-muted)] ml-auto">--</span>
+                </div>
               </div>
             </>
           )}
@@ -224,7 +230,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold text-[var(--color-text-primary)]">仓库</span>
                 <span className="text-xs text-[var(--color-text-muted)]">
-                  容量 {resources?.capacity.toLocaleString() ?? '--'}
+                  容量 {resources?.capacity.wood.toLocaleString() ?? '--'}
                 </span>
               </div>
               <div className="text-xs text-[var(--color-text-secondary)]">

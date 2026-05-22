@@ -1,0 +1,88 @@
+openapi: 3.0.3
+info:
+  title: Hero3 API
+  version: 0.1.0
+  description: Hero3 当前 MVP 阶段的后端接口文档，可导入 Apifox。
+servers:
+- url: http://localhost:8080
+  description: 本地 Go 后端
+- url: http://124.223.111.163:8080
+  description: 服务器后端占位，部署后按实际端口调整
+tags:
+- name: System
+  description: 服务状态
+- name: Game
+  description: 游戏状态
+- name: Account
+  description: 轻账号与存档
+- name: Admin
+  description: GM 后台只读接口
+paths:
+  /healthz:
+    $ref: ./paths/system.yaml#/~1healthz
+  /api/v1/meta:
+    $ref: ./paths/system.yaml#/~1api~1v1~1meta
+  /api/v1/game/bootstrap:
+    $ref: ./paths/game.yaml#/~1api~1v1~1game~1bootstrap
+  /api/v1/game/state:
+    $ref: ./paths/game.yaml#/~1api~1v1~1game~1state
+  /api/v1/accounts/register:
+    $ref: ./paths/account.yaml#/~1api~1v1~1accounts~1register
+  /api/v1/accounts/login:
+    $ref: ./paths/account.yaml#/~1api~1v1~1accounts~1login
+  /api/v1/accounts/{accountId}/players:
+    $ref: ./paths/account.yaml#/~1api~1v1~1accounts~1{accountId}~1players
+  /api/v1/accounts/{accountId}:
+    $ref: ./paths/account.yaml#/~1api~1v1~1accounts~1{accountId}
+  /api/v1/players/create:
+    $ref: ./paths/account.yaml#/~1api~1v1~1players~1create
+  /api/v1/players/{playerId}:
+    $ref: ./paths/account.yaml#/~1api~1v1~1players~1{playerId}
+  /api/v1/admin/accounts:
+    $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1accounts
+  /api/v1/admin/balance:
+    $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1balance
+components:
+  schemas:
+    HealthState:
+      $ref: ./schemas/system.yaml#/HealthState
+    MetaState:
+      $ref: ./schemas/system.yaml#/MetaState
+    BootstrapResponse:
+      $ref: ./schemas/system.yaml#/BootstrapResponse
+    AccountRequest:
+      $ref: ./schemas/account.yaml#/AccountRequest
+    AccountSession:
+      $ref: ./schemas/account.yaml#/AccountSession
+    CreatePlayerRequest:
+      $ref: ./schemas/account.yaml#/CreatePlayerRequest
+    AccountSummary:
+      $ref: ./schemas/account.yaml#/AccountSummary
+    PlayerSummary:
+      $ref: ./schemas/account.yaml#/PlayerSummary
+    GameState:
+      $ref: ./schemas/game-state.yaml#/GameState
+    Player:
+      $ref: ./schemas/game-state.yaml#/Player
+    ResourceState:
+      $ref: ./schemas/game-state.yaml#/ResourceState
+    ResourceProduction:
+      $ref: ./schemas/game-state.yaml#/ResourceProduction
+    Building:
+      $ref: ./schemas/game-state.yaml#/Building
+    ArmyUnit:
+      $ref: ./schemas/game-state.yaml#/ArmyUnit
+    RecruitQueue:
+      $ref: ./schemas/game-state.yaml#/RecruitQueue
+    MapTarget:
+      $ref: ./schemas/game-state.yaml#/MapTarget
+    BattleReport:
+      $ref: ./schemas/game-state.yaml#/BattleReport
+    BalanceConfig:
+      $ref: ./schemas/game-state.yaml#/BalanceConfig
+    BuildingConfig:
+      $ref: ./schemas/game-state.yaml#/BuildingConfig
+    ErrorResponse:
+      $ref: ./schemas/common.yaml#/ErrorResponse
+    DeleteResponse:
+      $ref: ./schemas/common.yaml#/DeleteResponse

@@ -1,0 +1,183 @@
+/api/v1/accounts/register:
+  post:
+    tags:
+    - Account
+    summary: 注册轻账号
+    operationId: registerAccount
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AccountRequest'
+    responses:
+      '201':
+        description: 注册成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountSession'
+      '400':
+        description: 参数错误
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '409':
+        description: 账号已存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/accounts/login:
+  post:
+    tags:
+    - Account
+    summary: 登录轻账号
+    operationId: loginAccount
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AccountRequest'
+    responses:
+      '200':
+        description: 登录成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountSession'
+      '401':
+        description: 账号或密码错误
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/accounts/{accountId}/players:
+  get:
+    tags:
+    - Account
+    summary: 查看账号绑定的存档
+    operationId: listAccountPlayers
+    parameters:
+    - name: accountId
+      in: path
+      required: true
+      schema:
+        type: string
+        example: acc_958538e3bc17faf00407ddcc
+    responses:
+      '200':
+        description: 存档列表
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - players
+              properties:
+                players:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/PlayerSummary'
+      '404':
+        description: 账号不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/accounts/{accountId}:
+  delete:
+    tags:
+    - Account
+    summary: 删除账号
+    description: 删除账号，同时删除该账号关联的全部云存档。
+    operationId: deleteAccount
+    parameters:
+    - name: accountId
+      in: path
+      required: true
+      schema:
+        type: string
+        example: acc_958538e3bc17faf00407ddcc
+    responses:
+      '200':
+        description: 删除成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteResponse'
+      '404':
+        description: 账号不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/players/create:
+  post:
+    tags:
+    - Account
+    summary: 创建账号绑定的游戏存档
+    operationId: createPlayer
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CreatePlayerRequest'
+    responses:
+      '201':
+        description: 创建成功
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              - state
+              properties:
+                playerId:
+                  type: string
+                  example: player_47f23e0eeb08ab50402fedfc
+                state:
+                  $ref: '#/components/schemas/GameState'
+      '400':
+        description: 参数错误
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 账号不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/players/{playerId}:
+  delete:
+    tags:
+    - Account
+    summary: 删除云存档
+    description: 删除指定 playerId 对应的云存档，不删除账号。
+    operationId: deletePlayer
+    parameters:
+    - name: playerId
+      in: path
+      required: true
+      schema:
+        type: string
+        example: player_47f23e0eeb08ab50402fedfc
+    responses:
+      '200':
+        description: 删除成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteResponse'
+      '404':
+        description: 存档不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

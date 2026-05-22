@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -17,8 +18,11 @@ var (
 	ErrPlayerNotFound     = errors.New("player not found")
 )
 
+const resourceDateLayout = time.RFC3339
+
 type Service struct {
-	repo Repository
+	repo        Repository
+	balancePath string
 }
 
 type BootstrapResponse struct {
@@ -33,6 +37,22 @@ func NewService() *Service {
 
 func NewServiceWithRepository(repo Repository) *Service {
 	return &Service{repo: repo}
+}
+
+func (s *Service) SetBalancePath(path string) error {
+	s.balancePath = path
+	return LoadBalanceConfig(path)
+}
+
+func (s *Service) GetBalance() BalanceConfig {
+	return GetBalanceConfig()
+}
+
+func (s *Service) UpdateBalance(config BalanceConfig) error {
+	if err := SaveBalanceConfig(s.balancePath, config); err != nil {
+		return err
+	}
+	return SetBalanceConfig(config)
 }
 
 func (s *Service) RegisterAccount(username string, password string) (Account, error) {
@@ -102,6 +122,22 @@ func (s *Service) CreatePlayer(accountID string, nickname string, faction string
 	return playerID, state, nil
 }
 
+func (s *Service) DeleteAccount(accountID string) error {
+	accountID = strings.TrimSpace(accountID)
+	if accountID == "" {
+		return ErrAccountNotFound
+	}
+	return s.repo.DeleteAccount(accountID)
+}
+
+func (s *Service) DeletePlayer(playerID string) error {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" || playerID == "demo-player" {
+		return ErrPlayerNotFound
+	}
+	return s.repo.DeletePlayer(playerID)
+}
+
 func (s *Service) GetState(playerID string) (GameState, error) {
 	if strings.TrimSpace(playerID) == "" {
 		playerID = "demo-player"
@@ -116,7 +152,12 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 		return GameState{}, err
 	}
 
-	state.ServerTime = time.Now().UTC().Format(time.RFC3339)
+	state, changed := settleResources(state, time.Now())
+	if changed {
+		if err := s.repo.SaveState(state, time.Now()); err != nil {
+			return GameState{}, err
+		}
+	}
 	return state, nil
 }
 
@@ -147,4 +188,127 @@ func randomID(bytesCount int) string {
 		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(bytes)
+}
+
+func settleResources(state GameState, now time.Time) (GameState, bool) {
+	now = now.UTC()
+	changed := false
+
+	production := calculateResourceProduction(state.Buildings)
+	if !reflect.DeepEqual(state.ResourceProduction, production) {
+		state.ResourceProduction = production
+		changed = true
+	}
+	capacity := calculateResourceCapacity(state.Buildings)
+	if !reflect.DeepEqual(state.Resources.Capacity, capacity) {
+		state.Resources.Capacity = capacity
+		changed = true
+	}
+	if state.Resources.Items == nil {
+		state.Resources.Items = map[string]int{}
+		changed = true
+	}
+
+	settledAt := now
+	if strings.TrimSpace(state.ResourceSettledAt) != "" {
+		if parsed, err := time.Parse(resourceDateLayout, state.ResourceSettledAt); err == nil {
+			settledAt = parsed.UTC()
+		}
+	} else {
+		state.ResourceSettledAt = now.Format(resourceDateLayout)
+		changed = true
+	}
+
+	if now.After(settledAt) {
+		elapsedSeconds := now.Sub(settledAt).Seconds()
+		nextResources := state.Resources
+		nextResources.Items = copyResourceMap(state.Resources.Items)
+		for resourceType, perHour := range state.ResourceProduction {
+			nextResources.Items[resourceType] = addProducedResource(
+				nextResources.Items[resourceType],
+				perHour,
+				elapsedSeconds,
+				nextResources.Capacity[resourceType],
+			)
+		}
+
+		if !reflect.DeepEqual(nextResources, state.Resources) || hasWholeResourceTick(state.ResourceProduction, elapsedSeconds) {
+			state.Resources = nextResources
+			state.ResourceSettledAt = now.Format(resourceDateLayout)
+			changed = true
+		}
+	}
+
+	state.ServerTime = now.Format(resourceDateLayout)
+	return state, changed
+}
+
+func addProducedResource(current int, perHour int, elapsedSeconds float64, capacity int) int {
+	if current >= capacity || perHour <= 0 || elapsedSeconds <= 0 {
+		return min(current, capacity)
+	}
+
+	produced := int(float64(perHour) * elapsedSeconds / 3600)
+	if produced <= 0 {
+		return current
+	}
+
+	return min(current+produced, capacity)
+}
+
+func hasWholeResourceTick(production ResourceProduction, elapsedSeconds float64) bool {
+	for _, perHour := range production {
+		if perHour*int(elapsedSeconds) >= 3600 {
+			return true
+		}
+	}
+	return false
+}
+
+func calculateResourceProduction(buildings []Building) ResourceProduction {
+	production := ResourceProduction{}
+	balance := currentBalance()
+	for resourceType, value := range balance.BaseProduction {
+		production[resourceType] = value
+	}
+
+	for _, building := range buildings {
+		config, exists := getBuildingConfig(building.Type)
+		if !exists || config.ResourceType == "" {
+			continue
+		}
+		production[config.ResourceType] += valueByLevel(config.ProductionByLevel, building.Level)
+	}
+
+	return production
+}
+
+func calculateResourceCapacity(buildings []Building) map[string]int {
+	balance := currentBalance()
+	capacity := valueByLevel(balance.Buildings["warehouse"].CapacityByLevel, 0)
+	for _, building := range buildings {
+		config, exists := getBuildingConfig(building.Type)
+		if !exists || len(config.CapacityByLevel) == 0 {
+			continue
+		}
+		capacity = valueByLevel(config.CapacityByLevel, building.Level)
+	}
+	return map[string]int{
+		"wood":  capacity,
+		"stone": capacity,
+		"iron":  capacity,
+		"food":  capacity,
+	}
+}
+
+func copyResourceMap(source map[string]int) map[string]int {
+	next := make(map[string]int, len(source))
+	for key, value := range source {
+		next[key] = value
+	}
+	return next
+}
+
+func coreResourceTypes() []string {
+	return []string{"wood", "stone", "iron", "food"}
 }

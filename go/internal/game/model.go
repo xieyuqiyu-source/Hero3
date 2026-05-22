@@ -1,6 +1,9 @@
 package game
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Account struct {
 	ID           string
@@ -30,12 +33,11 @@ type Player struct {
 }
 
 type ResourceState struct {
-	Wood     int `json:"wood"`
-	Stone    int `json:"stone"`
-	Iron     int `json:"iron"`
-	Food     int `json:"food"`
-	Capacity int `json:"capacity"`
+	Items    map[string]int `json:"items"`
+	Capacity map[string]int `json:"capacity"`
 }
+
+type ResourceProduction map[string]int
 
 type Building struct {
 	ID            string  `json:"id"`
@@ -77,30 +79,34 @@ type BattleReport struct {
 }
 
 type GameState struct {
-	Player              Player         `json:"player"`
-	Resources           ResourceState  `json:"resources"`
-	Buildings           []Building     `json:"buildings"`
-	Army                []ArmyUnit     `json:"army"`
-	RecruitQueues       []RecruitQueue `json:"recruitQueues"`
-	MapTargets          []MapTarget    `json:"mapTargets"`
-	RecentBattleReports []BattleReport `json:"recentBattleReports"`
-	UnreadMessageCount  int            `json:"unreadMessageCount"`
-	ServerTime          string         `json:"serverTime"`
+	Player              Player             `json:"player"`
+	Resources           ResourceState      `json:"resources"`
+	ResourceProduction  ResourceProduction `json:"resourceProduction"`
+	ResourceSettledAt   string             `json:"resourceSettledAt"`
+	Buildings           []Building         `json:"buildings"`
+	Army                []ArmyUnit         `json:"army"`
+	RecruitQueues       []RecruitQueue     `json:"recruitQueues"`
+	MapTargets          []MapTarget        `json:"mapTargets"`
+	RecentBattleReports []BattleReport     `json:"recentBattleReports"`
+	UnreadMessageCount  int                `json:"unreadMessageCount"`
+	ServerTime          string             `json:"serverTime"`
 }
 
 func newPlayerState(id string, nickname string, faction string, now time.Time) GameState {
-	return GameState{
+	state := GameState{
 		Player: Player{
 			ID:       id,
 			Nickname: nickname,
 			Faction:  faction,
 		},
 		Resources: ResourceState{
-			Wood:     1200,
-			Stone:    900,
-			Iron:     600,
-			Food:     1500,
-			Capacity: 5000,
+			Items: map[string]int{
+				"wood":  1200,
+				"stone": 900,
+				"iron":  600,
+				"food":  1500,
+			},
+			Capacity: map[string]int{},
 		},
 		Buildings: []Building{
 			{ID: "wood-camp", Type: "wood_camp", Level: 3},
@@ -144,10 +150,87 @@ func newPlayerState(id string, nickname string, faction string, now time.Time) G
 		},
 		RecentBattleReports: []BattleReport{},
 		UnreadMessageCount:  0,
+		ResourceSettledAt:   now.UTC().Format(time.RFC3339),
 		ServerTime:          now.UTC().Format(time.RFC3339),
 	}
+
+	state.ResourceProduction = calculateResourceProduction(state.Buildings)
+	state.Resources.Capacity = calculateResourceCapacity(state.Buildings)
+	return state
 }
 
 func newDemoState(now time.Time) GameState {
 	return newPlayerState("demo-player", "主公", "wei", now)
+}
+
+func (r *ResourceState) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	next := ResourceState{
+		Items:    map[string]int{},
+		Capacity: map[string]int{},
+	}
+	if value, exists := raw["items"]; exists {
+		if err := json.Unmarshal(value, &next.Items); err != nil {
+			return err
+		}
+	}
+	if value, exists := raw["capacity"]; exists {
+		if err := json.Unmarshal(value, &next.Capacity); err == nil {
+			*r = next
+			return nil
+		}
+
+		var legacyCapacity int
+		if err := json.Unmarshal(value, &legacyCapacity); err != nil {
+			return err
+		}
+		for _, resourceType := range coreResourceTypes() {
+			next.Capacity[resourceType] = legacyCapacity
+		}
+	}
+
+	if len(next.Items) == 0 {
+		for _, resourceType := range coreResourceTypes() {
+			var amount int
+			if value, exists := raw[resourceType]; exists {
+				if err := json.Unmarshal(value, &amount); err != nil {
+					return err
+				}
+			}
+			next.Items[resourceType] = amount
+		}
+	}
+
+	*r = next
+	return nil
+}
+
+func (p *ResourceProduction) UnmarshalJSON(data []byte) error {
+	var values map[string]int
+	if err := json.Unmarshal(data, &values); err != nil {
+		return err
+	}
+
+	next := ResourceProduction{}
+	for key, value := range values {
+		switch key {
+		case "woodPerHour":
+			next["wood"] = value
+		case "stonePerHour":
+			next["stone"] = value
+		case "ironPerHour":
+			next["iron"] = value
+		case "foodPerHour":
+			next["food"] = value
+		default:
+			next[key] = value
+		}
+	}
+
+	*p = next
+	return nil
 }

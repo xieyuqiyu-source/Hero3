@@ -116,6 +116,15 @@ func (h *Handlers) AccountPlayers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"players": players})
 }
 
+func (h *Handlers) DeleteAccount(w http.ResponseWriter, r *http.Request) {
+	if err := h.gameService.DeleteAccount(r.PathValue("accountId")); err != nil {
+		writeError(w, http.StatusNotFound, "account not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 func (h *Handlers) AdminAccounts(w http.ResponseWriter, r *http.Request) {
 	accounts, err := h.gameService.ListAccounts()
 	if err != nil {
@@ -124,6 +133,24 @@ func (h *Handlers) AdminAccounts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"accounts": accounts})
+}
+
+func (h *Handlers) AdminBalance(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.gameService.GetBalance())
+}
+
+func (h *Handlers) UpdateAdminBalance(w http.ResponseWriter, r *http.Request) {
+	var payload game.BalanceConfig
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	if err := h.gameService.UpdateBalance(payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, h.gameService.GetBalance())
 }
 
 func (h *Handlers) CreatePlayer(w http.ResponseWriter, r *http.Request) {
@@ -146,6 +173,15 @@ func (h *Handlers) CreatePlayer(w http.ResponseWriter, r *http.Request) {
 		"playerId": playerID,
 		"state":    state,
 	})
+}
+
+func (h *Handlers) DeletePlayer(w http.ResponseWriter, r *http.Request) {
+	if err := h.gameService.DeletePlayer(r.PathValue("playerId")); err != nil {
+		writeError(w, http.StatusNotFound, "player not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

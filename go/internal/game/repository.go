@@ -12,7 +12,10 @@ type Repository interface {
 	ListAccounts() ([]AccountSummary, error)
 	ListPlayers(accountID string) ([]PlayerSummary, error)
 	CreatePlayer(accountID string, state GameState, updatedAt time.Time) error
+	DeleteAccount(accountID string) error
+	DeletePlayer(playerID string) error
 	GetState(playerID string) (GameState, error)
+	SaveState(state GameState, updatedAt time.Time) error
 }
 
 type MemoryRepository struct {
@@ -143,6 +146,47 @@ func (r *MemoryRepository) CreatePlayer(accountID string, state GameState, updat
 	return nil
 }
 
+func (r *MemoryRepository) DeleteAccount(accountID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	account, exists := r.accounts[accountID]
+	if !exists {
+		return ErrAccountNotFound
+	}
+
+	for _, playerID := range r.accountPlayers[accountID] {
+		delete(r.players, playerID)
+		delete(r.playerUpdatedAt, playerID)
+	}
+	delete(r.accountPlayers, accountID)
+	delete(r.accountByName, account.Username)
+	delete(r.accounts, accountID)
+	return nil
+}
+
+func (r *MemoryRepository) DeletePlayer(playerID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.players[playerID]; !exists {
+		return ErrPlayerNotFound
+	}
+
+	delete(r.players, playerID)
+	delete(r.playerUpdatedAt, playerID)
+	for accountID, playerIDs := range r.accountPlayers {
+		nextPlayerIDs := playerIDs[:0]
+		for _, currentID := range playerIDs {
+			if currentID != playerID {
+				nextPlayerIDs = append(nextPlayerIDs, currentID)
+			}
+		}
+		r.accountPlayers[accountID] = nextPlayerIDs
+	}
+	return nil
+}
+
 func (r *MemoryRepository) GetState(playerID string) (GameState, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -153,4 +197,17 @@ func (r *MemoryRepository) GetState(playerID string) (GameState, error) {
 	}
 
 	return state, nil
+}
+
+func (r *MemoryRepository) SaveState(state GameState, updatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.players[state.Player.ID]; !exists {
+		return ErrPlayerNotFound
+	}
+
+	r.players[state.Player.ID] = state
+	r.playerUpdatedAt[state.Player.ID] = updatedAt
+	return nil
 }

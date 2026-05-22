@@ -13,12 +13,11 @@ export interface GameState {
     faction: string
   }
   resources: {
-    wood: number
-    stone: number
-    iron: number
-    food: number
-    capacity: number
+    items: Record<string, number>
+    capacity: Record<string, number>
   }
+  resourceProduction: Record<string, number>
+  resourceSettledAt: string
   buildings: Array<{
     id: string
     type: string
@@ -62,4 +61,19 @@ export interface AccountSummary {
   username: string
   createdAt: string
   players: PlayerSummary[]
+}
+
+export interface BuildingConfig {
+  type: string
+  name: string
+  resourceType?: string
+  productionByLevel?: number[]
+  capacityByLevel?: number[]
+  upgradeCostByLevel?: Record<string, Record<string, number>>
+  upgradeSecondsByLevel?: Record<string, number>
+}
+
+export interface BalanceConfig {
+  baseProduction: Record<string, number>
+  buildings: Record<string, BuildingConfig>
 }

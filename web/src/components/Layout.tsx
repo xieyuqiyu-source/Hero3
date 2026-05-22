@@ -14,6 +14,7 @@ import {
 import Sidebar from './Sidebar'
 import ThemeToggle from './ThemeToggle'
 import { useGameStore } from '@/store/gameStore'
+import { useProjectedResources } from '@/hooks/useProjectedResources'
 import type { GameState } from '@/types/game'
 
 interface LayoutProps {
@@ -172,7 +173,7 @@ const MobileSidebarContent: FC<{
     { key: 'notice', label: '公告', hasNotify: true },
     { key: 'account', label: '账户', hasNotify: false },
   ]
-  const resources = gameState?.resources
+  const resources = useProjectedResources()
   const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
 
   return (
@@ -224,21 +225,26 @@ const MobileSidebarContent: FC<{
           <div className="flex items-center gap-2 mb-2">
             <Package size={14} className="text-[var(--color-accent)]" />
             <span className="text-sm font-semibold text-[var(--color-text-primary)]">资源产出</span>
+            <span className="text-[10px] text-[var(--color-text-muted)] ml-auto">/每小时</span>
           </div>
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-1 gap-1.5">
             {[
-              ['木材', resources?.wood],
-              ['石料', resources?.stone],
-              ['铁矿', resources?.iron],
-              ['粮食', resources?.food],
+              ['木材', gameState?.resourceProduction?.wood],
+              ['石料', gameState?.resourceProduction?.stone],
+              ['铁矿', gameState?.resourceProduction?.iron],
+              ['粮食', gameState?.resourceProduction?.food],
             ].map(([label, value]) => (
               <div key={label} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
                 <span className="text-xs">{label}</span>
                 <span className="text-xs font-semibold text-[var(--color-accent)] ml-auto">
-                  {typeof value === 'number' ? value.toLocaleString() : '--'}
+                  +{typeof value === 'number' ? value.toLocaleString() : '--'}
                 </span>
               </div>
             ))}
+            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
+              <span className="text-xs">口粮</span>
+              <span className="text-xs font-semibold text-[var(--color-text-muted)] ml-auto">--</span>
+            </div>
           </div>
         </div>
 
@@ -248,7 +254,7 @@ const MobileSidebarContent: FC<{
             <Warehouse size={14} className="text-[var(--color-accent)]" />
             <span className="text-sm font-semibold text-[var(--color-text-primary)]">仓库</span>
             <span className="text-xs text-[var(--color-text-muted)] ml-auto">
-              容量 {resources?.capacity.toLocaleString() ?? '--'}
+              容量 {resources?.capacity.wood.toLocaleString() ?? '--'}
             </span>
           </div>
           <p className="text-xs text-[var(--color-text-secondary)] opacity-50">仓库容量预留</p>

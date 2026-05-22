@@ -103,3 +103,30 @@ http://localhost:5174
 ## 设计文档
 
 - [MVP 设计文档](./docs/mvp-design.md)：记录第一版核心循环、数据归属、页面范围、接口边界、代码规模规范、移动端适配要求和开发顺序。
+- [OpenAPI 入口文档](./docs/openapi/openapi.yaml)：按模块拆分维护，用于接口调试、文档查看和前后端对齐。
+- [OpenAPI 打包文档](./docs/openapi.bundle.yaml)：由 `make openapi` 生成，导入 Apifox 使用。
+
+## Apifox
+
+当前接口文档按模块维护在 `docs/openapi/`：
+
+```text
+docs/openapi/
+├── openapi.yaml      # 入口文件
+├── paths/            # 按模块维护接口路径
+└── schemas/          # 按领域维护请求/响应模型
+```
+
+每次新增或修改接口后，运行：
+
+```bash
+make openapi
+```
+
+它会校验拆分后的 OpenAPI 并生成 `docs/openapi.bundle.yaml`。在 Apifox 中选择“导入数据”，格式选择 `OpenAPI/Swagger`，导入 `docs/openapi.bundle.yaml` 即可。
+
+本地调试环境：
+
+```text
+Base URL: http://localhost:8080
+```
