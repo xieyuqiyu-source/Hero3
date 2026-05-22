@@ -16,23 +16,50 @@ export interface BalanceConfig {
   buildings: Record<string, BuildingConfig>
 }
 
+export interface UnitConfig {
+  name: string
+  description: string
+  category: string
+  icon: string
+  stats: Record<string, number>
+  cost: Record<string, number>
+  trainSeconds: number
+  unlock: Record<string, any>
+}
+
+export interface FactionConfig {
+  name: string
+  description: string
+  icon: string
+  traits: Record<string, number>
+}
+
 interface ConfigStore {
   balance: BalanceConfig | null
+  factions: Record<string, FactionConfig> | null
+  units: Record<string, Record<string, UnitConfig>> | null
   loaded: boolean
   loadBootstrap: () => Promise<void>
 }
 
 export const useConfigStore = create<ConfigStore>((set, get) => ({
   balance: null,
+  factions: null,
+  units: null,
   loaded: false,
 
   loadBootstrap: async () => {
     if (get().loaded) return
     try {
       const data = await gameApi.bootstrap()
-      set({ balance: data.balance, loaded: true })
+      set({
+        balance: data.balance,
+        factions: data.factions,
+        units: data.units,
+        loaded: true,
+      })
     } catch {
-      // 加载失败静默处理，前端会用 fallback
+      // 加载失败静默处理
     }
   },
 }))

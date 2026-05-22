@@ -26,14 +26,18 @@ const resourceDateLayout = time.RFC3339
 
 type Service struct {
 	repo        Repository
-	balancePath string
+	balancePath  string
+	factionsPath string
+	unitsDir     string
 }
 
 type BootstrapResponse struct {
-	GameName string        `json:"gameName"`
-	Modules  []string      `json:"modules"`
-	Balance  BalanceConfig `json:"balance"`
-	Message  string        `json:"message"`
+	GameName string         `json:"gameName"`
+	Modules  []string       `json:"modules"`
+	Balance  BalanceConfig  `json:"balance"`
+	Factions FactionsConfig `json:"factions"`
+	Units    UnitsConfig    `json:"units"`
+	Message  string         `json:"message"`
 }
 
 func NewService() *Service {
@@ -47,6 +51,16 @@ func NewServiceWithRepository(repo Repository) *Service {
 func (s *Service) SetBalancePath(path string) error {
 	s.balancePath = path
 	return LoadBalanceConfig(path)
+}
+
+func (s *Service) SetFactionsPath(path string) error {
+	s.factionsPath = path
+	return LoadFactionsConfig(path)
+}
+
+func (s *Service) SetUnitsDir(dir string) error {
+	s.unitsDir = dir
+	return LoadUnitsConfig(dir)
 }
 
 func (s *Service) GetBalance() BalanceConfig {
@@ -405,6 +419,8 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 
 func (s *Service) Bootstrap() BootstrapResponse {
 	balance := currentBalance()
+	factions := GetFactionsConfig()
+	units := GetUnitsConfig()
 	return BootstrapResponse{
 		GameName: "Hero3",
 		Modules: []string{
@@ -416,8 +432,10 @@ func (s *Service) Bootstrap() BootstrapResponse {
 			"combat",
 			"save",
 		},
-		Balance: balance,
-		Message: "Hero3 后端基础服务已就绪，具体玩法逻辑待接入。",
+		Balance:  balance,
+		Factions: factions,
+		Units:    units,
+		Message:  "Hero3 后端基础服务已就绪，具体玩法逻辑待接入。",
 	}
 }
 

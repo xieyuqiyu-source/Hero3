@@ -1,0 +1,189 @@
+{
+  "shadowGuard": {
+    "name": "影卫",
+    "description": "吴国精锐步兵，攻守兼备的基础作战单位",
+    "category": "infantry",
+    "icon": "shadowGuard",
+    "stats": {
+      "attack": 3,
+      "infantryDefense": 8,
+      "cavalryDefense": 10,
+      "speed": 7,
+      "carryCapacity": 60,
+      "upkeep": 2
+    },
+    "cost": { "wood": 200, "stone": 260, "iron": 110, "food": 60 },
+    "trainSeconds": 60,
+    "unlock": { "building": "infantry_camp", "level": 1 }
+  },
+  "xiuLuo": {
+    "name": "修罗",
+    "description": "吴国重装步兵，具有强大的攻击能力",
+    "category": "infantry",
+    "icon": "xiuLuo",
+    "stats": {
+      "attack": 13,
+      "infantryDefense": 7,
+      "cavalryDefense": 4,
+      "speed": 6,
+      "carryCapacity": 90,
+      "upkeep": 2
+    },
+    "cost": { "wood": 280, "stone": 300, "iron": 370, "food": 120 },
+    "trainSeconds": 90,
+    "unlock": { "building": "infantry_camp", "level": 3 }
+  },
+  "secretAgent": {
+    "name": "密探",
+    "description": "吴国侦察骑兵，速度极快的轻装单位",
+    "category": "cavalry",
+    "icon": "secretAgent",
+    "stats": {
+      "attack": 0,
+      "infantryDefense": 4,
+      "cavalryDefense": 2,
+      "speed": 17,
+      "carryCapacity": 0,
+      "upkeep": 1
+    },
+    "cost": { "wood": 340, "stone": 300, "iron": 40, "food": 80 },
+    "trainSeconds": 75,
+    "unlock": { "building": "cavalry_camp", "level": 1 }
+  },
+  "divineWind": {
+    "name": "神风",
+    "description": "吴国精英骑兵，速度与攻击力并重",
+    "category": "cavalry",
+    "icon": "divineWind",
+    "stats": {
+      "attack": 18,
+      "infantryDefense": 5,
+      "cavalryDefense": 8,
+      "speed": 19,
+      "carryCapacity": 150,
+      "upkeep": 3
+    },
+    "cost": { "wood": 700, "stone": 900, "iron": 460, "food": 120 },
+    "trainSeconds": 120,
+    "unlock": { "building": "cavalry_camp", "level": 3 }
+  },
+  "zhuQueRider": {
+    "name": "朱雀骑",
+    "description": "吴国重装骑兵，防御力强劲",
+    "category": "cavalry",
+    "icon": "zhuQueRider",
+    "stats": {
+      "attack": 9,
+      "infantryDefense": 23,
+      "cavalryDefense": 11,
+      "speed": 16,
+      "carryCapacity": 70,
+      "upkeep": 3
+    },
+    "cost": { "wood": 720, "stone": 660, "iron": 540, "food": 240 },
+    "trainSeconds": 180,
+    "unlock": { "building": "cavalry_camp", "level": 5 }
+  },
+  "overlordRider": {
+    "name": "霸王骑",
+    "description": "吴国精英骑兵，攻击力惊人",
+    "category": "cavalry",
+    "icon": "overlordRider",
+    "stats": {
+      "attack": 28,
+      "infantryDefense": 10,
+      "cavalryDefense": 33,
+      "speed": 13,
+      "carryCapacity": 130,
+      "upkeep": 4
+    },
+    "cost": { "wood": 1000, "stone": 1240, "iron": 1350, "food": 340 },
+    "trainSeconds": 240,
+    "unlock": { "building": "cavalry_camp", "level": 7 }
+  },
+  "chongChe": {
+    "name": "冲撞车",
+    "description": "吴国攻城器械，专门用于攻城作战",
+    "category": "siege",
+    "icon": "chongChe",
+    "stats": {
+      "attack": 10,
+      "infantryDefense": 6,
+      "cavalryDefense": 21,
+      "speed": 4,
+      "carryCapacity": 0,
+      "upkeep": 3
+    },
+    "cost": { "wood": 1900, "stone": 1110, "iron": 660, "food": 150 },
+    "trainSeconds": 300,
+    "unlock": { "building": "infantry_camp", "level": 7 }
+  },
+  "juShiChe": {
+    "name": "巨石车",
+    "description": "吴国投石器械，具有强大的攻击威力",
+    "category": "siege",
+    "icon": "juShiChe",
+    "stats": {
+      "attack": 14,
+      "infantryDefense": 9,
+      "cavalryDefense": 2,
+      "speed": 3,
+      "carryCapacity": 0,
+      "upkeep": 4
+    },
+    "cost": { "wood": 1920, "stone": 2900, "iron": 1260, "food": 180 },
+    "trainSeconds": 360,
+    "unlock": { "building": "infantry_camp", "level": 9 }
+  },
+  "fengShuiMaster": {
+    "name": "风水师",
+    "description": "吴国特殊兵种，具有超强的运载能力",
+    "category": "special",
+    "icon": "fengShuiMaster",
+    "stats": {
+      "attack": 10,
+      "infantryDefense": 160,
+      "cavalryDefense": 160,
+      "speed": 5,
+      "carryCapacity": 9999,
+      "upkeep": 5
+    },
+    "cost": { "wood": 11000, "stone": 14000, "iron": 10600, "food": 9800 },
+    "trainSeconds": 600,
+    "unlock": { "building": "infantry_camp", "level": 10 }
+  },
+  "taiPingShi": {
+    "name": "太平士",
+    "description": "吴国贵族部队，拥有极高的战斗素养",
+    "category": "special",
+    "icon": "taiPingShi",
+    "stats": {
+      "attack": 80,
+      "infantryDefense": 100,
+      "cavalryDefense": 100,
+      "speed": 5,
+      "carryCapacity": 0,
+      "upkeep": 6
+    },
+    "cost": { "wood": 61500, "stone": 90800, "iron": 62000, "food": 75000 },
+    "trainSeconds": 1200,
+    "unlock": { "building": "infantry_camp", "level": 15 }
+  },
+  "wuMerchant": {
+    "name": "吴国商人",
+    "description": "吴国商贸人员，专门负责贸易运输",
+    "category": "special",
+    "icon": "wuMerchant",
+    "stats": {
+      "attack": 0,
+      "infantryDefense": 0,
+      "cavalryDefense": 0,
+      "speed": 24,
+      "carryCapacity": 1500,
+      "upkeep": 0
+    },
+    "cost": { "wood": 0, "stone": 0, "iron": 0, "food": 0 },
+    "trainSeconds": 0,
+    "unlock": { "building": "market", "level": 1 }
+  }
+}

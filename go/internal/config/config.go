@@ -22,6 +22,8 @@ type Config struct {
 	AllowedOrigins []string
 	DatabaseDSN    string
 	BalancePath    string
+	FactionsPath   string
+	UnitsDir       string
 	ReadTimeout    time.Duration
 	WriteTimeout   time.Duration
 	IdleTimeout    time.Duration
@@ -39,6 +41,8 @@ func Load() Config {
 		AllowedOrigins: splitCSV(getEnv("HERO3_ALLOWED_ORIGINS", defaultAllowedOrigins)),
 		DatabaseDSN:    getEnv("HERO3_DATABASE_DSN", ""),
 		BalancePath:    getEnv("HERO3_BALANCE_PATH", "config/balance.json"),
+		FactionsPath:   getEnv("HERO3_FACTIONS_PATH", "config/factions.json"),
+		UnitsDir:       getEnv("HERO3_UNITS_DIR", "config/units"),
 		ReadTimeout:    getDurationEnv("HERO3_READ_TIMEOUT", 5*time.Second),
 		WriteTimeout:   getDurationEnv("HERO3_WRITE_TIMEOUT", 10*time.Second),
 		IdleTimeout:    getDurationEnv("HERO3_IDLE_TIMEOUT", 60*time.Second),

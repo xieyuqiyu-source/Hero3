@@ -26,6 +26,14 @@ func main() {
 		logger.Error("balance config load failed", "path", cfg.BalancePath, "error", err)
 		os.Exit(1)
 	}
+	if err := gameService.SetFactionsPath(cfg.FactionsPath); err != nil {
+		logger.Error("factions config load failed", "path", cfg.FactionsPath, "error", err)
+		os.Exit(1)
+	}
+	if err := gameService.SetUnitsDir(cfg.UnitsDir); err != nil {
+		logger.Error("units config load failed", "dir", cfg.UnitsDir, "error", err)
+		os.Exit(1)
+	}
 	if cfg.DatabaseDSN != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -45,6 +53,14 @@ func main() {
 		gameService = game.NewServiceWithRepository(storage.NewMySQLRepository(db))
 		if err := gameService.SetBalancePath(cfg.BalancePath); err != nil {
 			logger.Error("balance config load failed", "path", cfg.BalancePath, "error", err)
+			os.Exit(1)
+		}
+		if err := gameService.SetFactionsPath(cfg.FactionsPath); err != nil {
+			logger.Error("factions config load failed", "path", cfg.FactionsPath, "error", err)
+			os.Exit(1)
+		}
+		if err := gameService.SetUnitsDir(cfg.UnitsDir); err != nil {
+			logger.Error("units config load failed", "dir", cfg.UnitsDir, "error", err)
 			os.Exit(1)
 		}
 		logger.Info("database storage enabled")

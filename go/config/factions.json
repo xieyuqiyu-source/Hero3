@@ -1,0 +1,32 @@
+{
+  "wei": {
+    "name": "魏国",
+    "description": "以曹操为首的北方霸主，擅长政治和军事",
+    "icon": "wei",
+    "traits": {
+      "economyBonus": 1.0,
+      "militaryBonus": 1.0,
+      "buildingBonus": 1.0
+    }
+  },
+  "shu": {
+    "name": "蜀国",
+    "description": "以刘备为首的仁义之师，擅长经济和民心",
+    "icon": "shu",
+    "traits": {
+      "economyBonus": 1.0,
+      "militaryBonus": 1.0,
+      "buildingBonus": 1.0
+    }
+  },
+  "wu": {
+    "name": "吴国",
+    "description": "以孙权为首的江东豪族，擅长水战和贸易",
+    "icon": "wu",
+    "traits": {
+      "economyBonus": 1.0,
+      "militaryBonus": 1.0,
+      "buildingBonus": 1.0
+    }
+  }
+}

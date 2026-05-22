@@ -1,0 +1,189 @@
+{
+  "qingZhouArmy": {
+    "name": "青州军",
+    "description": "魏国精锐步兵，攻守兼备的基础作战单位",
+    "category": "infantry",
+    "icon": "qingZhouArmy",
+    "stats": {
+      "attack": 8,
+      "infantryDefense": 7,
+      "cavalryDefense": 10,
+      "speed": 6,
+      "carryCapacity": 80,
+      "upkeep": 2
+    },
+    "cost": { "wood": 240, "stone": 200, "iron": 360, "food": 80 },
+    "trainSeconds": 60,
+    "unlock": { "building": "infantry_camp", "level": 1 }
+  },
+  "jinWeiSoldier": {
+    "name": "禁卫甲士",
+    "description": "魏国重装步兵，具有强大的防御能力",
+    "category": "infantry",
+    "icon": "jinWeiSoldier",
+    "stats": {
+      "attack": 6,
+      "infantryDefense": 13,
+      "cavalryDefense": 7,
+      "speed": 5,
+      "carryCapacity": 40,
+      "upkeep": 2
+    },
+    "cost": { "wood": 200, "stone": 260, "iron": 320, "food": 140 },
+    "trainSeconds": 90,
+    "unlock": { "building": "infantry_camp", "level": 3 }
+  },
+  "huWei": {
+    "name": "虎卫",
+    "description": "魏国精英步兵，攻击力强劲",
+    "category": "infantry",
+    "icon": "huWei",
+    "stats": {
+      "attack": 14,
+      "infantryDefense": 8,
+      "cavalryDefense": 5,
+      "speed": 7,
+      "carryCapacity": 100,
+      "upkeep": 2
+    },
+    "cost": { "wood": 300, "stone": 320, "iron": 420, "food": 160 },
+    "trainSeconds": 120,
+    "unlock": { "building": "infantry_camp", "level": 5 }
+  },
+  "zhanYingTanMa": {
+    "name": "战鹰探马",
+    "description": "魏国侦察骑兵，速度极快的轻装单位",
+    "category": "cavalry",
+    "icon": "zhanYingTanMa",
+    "stats": {
+      "attack": 0,
+      "infantryDefense": 4,
+      "cavalryDefense": 2,
+      "speed": 16,
+      "carryCapacity": 0,
+      "upkeep": 1
+    },
+    "cost": { "wood": 280, "stone": 320, "iron": 40, "food": 80 },
+    "trainSeconds": 75,
+    "unlock": { "building": "cavalry_camp", "level": 1 }
+  },
+  "qiQiYing": {
+    "name": "骁骑营",
+    "description": "魏国重装骑兵，攻击力强劲",
+    "category": "cavalry",
+    "icon": "qiQiYing",
+    "stats": {
+      "attack": 24,
+      "infantryDefense": 13,
+      "cavalryDefense": 10,
+      "speed": 14,
+      "carryCapacity": 200,
+      "upkeep": 3
+    },
+    "cost": { "wood": 1100, "stone": 880, "iron": 640, "food": 200 },
+    "trainSeconds": 180,
+    "unlock": { "building": "cavalry_camp", "level": 3 }
+  },
+  "huBaoQi": {
+    "name": "虎豹骑",
+    "description": "魏国精英骑兵，攻防俱佳的重型单位",
+    "category": "cavalry",
+    "icon": "huBaoQi",
+    "stats": {
+      "attack": 36,
+      "infantryDefense": 16,
+      "cavalryDefense": 21,
+      "speed": 10,
+      "carryCapacity": 140,
+      "upkeep": 4
+    },
+    "cost": { "wood": 1100, "stone": 1280, "iron": 1600, "food": 360 },
+    "trainSeconds": 240,
+    "unlock": { "building": "cavalry_camp", "level": 5 }
+  },
+  "chongZhuangChe": {
+    "name": "冲撞车",
+    "description": "魏国攻城器械，专门用于攻城作战",
+    "category": "siege",
+    "icon": "chongZhuangChe",
+    "stats": {
+      "attack": 12,
+      "infantryDefense": 6,
+      "cavalryDefense": 15,
+      "speed": 4,
+      "carryCapacity": 0,
+      "upkeep": 3
+    },
+    "cost": { "wood": 1800, "stone": 720, "iron": 1000, "food": 140 },
+    "trainSeconds": 300,
+    "unlock": { "building": "infantry_camp", "level": 7 }
+  },
+  "luLeiChe": {
+    "name": "露雷车",
+    "description": "魏国火药武器，具有强大的爆炸威力",
+    "category": "siege",
+    "icon": "luLeiChe",
+    "stats": {
+      "attack": 15,
+      "infantryDefense": 12,
+      "cavalryDefense": 2,
+      "speed": 3,
+      "carryCapacity": 0,
+      "upkeep": 4
+    },
+    "cost": { "wood": 1900, "stone": 2700, "iron": 1200, "food": 180 },
+    "trainSeconds": 360,
+    "unlock": { "building": "infantry_camp", "level": 9 }
+  },
+  "jianzhuShi": {
+    "name": "建筑师",
+    "description": "魏国建筑工程师，具有超强的运载能力",
+    "category": "special",
+    "icon": "jianzhuShi",
+    "stats": {
+      "attack": 10,
+      "infantryDefense": 160,
+      "cavalryDefense": 160,
+      "speed": 5,
+      "carryCapacity": 9999,
+      "upkeep": 5
+    },
+    "cost": { "wood": 11600, "stone": 10600, "iron": 14400, "food": 11000 },
+    "trainSeconds": 600,
+    "unlock": { "building": "infantry_camp", "level": 10 }
+  },
+  "tuZu": {
+    "name": "土族",
+    "description": "魏国贵族部队，拥有极高的战斗素养",
+    "category": "special",
+    "icon": "tuZu",
+    "stats": {
+      "attack": 100,
+      "infantryDefense": 80,
+      "cavalryDefense": 60,
+      "speed": 4,
+      "carryCapacity": 0,
+      "upkeep": 6
+    },
+    "cost": { "wood": 61500, "stone": 54400, "iron": 90000, "food": 75000 },
+    "trainSeconds": 1200,
+    "unlock": { "building": "infantry_camp", "level": 15 }
+  },
+  "weiMerchant": {
+    "name": "魏国商人",
+    "description": "魏国商贸人员，专门负责贸易运输",
+    "category": "special",
+    "icon": "weiMerchant",
+    "stats": {
+      "attack": 0,
+      "infantryDefense": 0,
+      "cavalryDefense": 0,
+      "speed": 16,
+      "carryCapacity": 1000,
+      "upkeep": 0
+    },
+    "cost": { "wood": 0, "stone": 0, "iron": 0, "food": 0 },
+    "trainSeconds": 0,
+    "unlock": { "building": "market", "level": 1 }
+  }
+}

@@ -2,12 +2,19 @@
 
 import { api } from './client'
 import type { AccountSession, GameState, BattleReport, PlayerSummary } from '@/types/game'
-import type { BalanceConfig } from '@/store/configStore'
+import type { BalanceConfig, FactionConfig, UnitConfig } from '@/store/configStore'
 
 export const gameApi = {
-  /** 获取游戏启动配置（含 balance） */
+  /** 获取游戏启动配置（含 balance、factions、units） */
   bootstrap() {
-    return api.get<{ gameName: string; modules: string[]; balance: BalanceConfig; message: string }>('/game/bootstrap')
+    return api.get<{
+      gameName: string
+      modules: string[]
+      balance: BalanceConfig
+      factions: Record<string, FactionConfig>
+      units: Record<string, Record<string, UnitConfig>>
+      message: string
+    }>('/game/bootstrap')
   },
 
   /** 获取完整游戏状态 */
