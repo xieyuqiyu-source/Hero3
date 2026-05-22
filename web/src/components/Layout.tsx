@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import Sidebar from './Sidebar'
 import ThemeToggle from './ThemeToggle'
+import ResourceBar from './ResourceBar'
 import BoostButton from './BoostButton'
 import { useGameStore } from '@/store/gameStore'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
@@ -95,6 +96,7 @@ const Layout: FC<LayoutProps> = ({ children }) => {
               游戏状态加载失败：{error}
             </div>
           )}
+          <ResourceBar />
           {children}
         </div>
       </main>

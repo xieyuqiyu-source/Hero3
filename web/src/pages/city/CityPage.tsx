@@ -1,5 +1,4 @@
 import { useState, type FC } from 'react'
-import ResourceBar from './components/ResourceBar'
 import ResourceTab from './components/ResourceTab'
 import MilitaryTab from './components/MilitaryTab'
 
@@ -11,8 +10,6 @@ const CityPage: FC = () => {
 
   return (
     <div>
-      {/* Resource Summary Bar - always floating, no background */}
-      <ResourceBar />
 
       {/* Tab Switcher */}
       <div className="flex gap-1 p-1 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)] w-fit mb-6">

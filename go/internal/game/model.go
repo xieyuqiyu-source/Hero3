@@ -137,14 +137,10 @@ func newPlayerState(id string, nickname string, faction string, now time.Time) G
 			{ID: "farm-5", Type: "farm", Level: 1},
 			// 功能建筑（各一块）
 			{ID: "warehouse-1", Type: "warehouse", Level: 1},
-			{ID: "barracks-1", Type: "barracks", Level: 1},
-			{ID: "archery_range-1", Type: "archery_range", Level: 1},
+			{ID: "infantry_camp-1", Type: "infantry_camp", Level: 1},
+			{ID: "cavalry_camp-1", Type: "cavalry_camp", Level: 1},
 		},
-		Army: []ArmyUnit{
-			{UnitType: "infantry", Amount: 80},
-			{UnitType: "archer", Amount: 30},
-			{UnitType: "cavalry", Amount: 0},
-		},
+		Army:          []ArmyUnit{},
 		RecruitQueues: []RecruitQueue{},
 		MapTargets: []MapTarget{
 			{
