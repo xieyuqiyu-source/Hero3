@@ -15,6 +15,8 @@ export interface PlayerSummary {
   id: string
   nickname: string
   faction: string
+  totalArmy: number
+  buildingLevel: number
   updatedAt: string
 }
 

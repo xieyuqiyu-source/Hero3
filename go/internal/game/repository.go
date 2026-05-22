@@ -87,12 +87,7 @@ func (r *MemoryRepository) ListAccounts() ([]AccountSummary, error) {
 			if !exists {
 				continue
 			}
-			players = append(players, PlayerSummary{
-				ID:        state.Player.ID,
-				Nickname:  state.Player.Nickname,
-				Faction:   state.Player.Faction,
-				UpdatedAt: r.playerUpdatedAt[playerID].UTC().Format(time.RFC3339),
-			})
+			players = append(players, buildPlayerSummary(state, r.playerUpdatedAt[playerID]))
 		}
 
 		accounts = append(accounts, AccountSummary{
@@ -121,12 +116,7 @@ func (r *MemoryRepository) ListPlayers(accountID string) ([]PlayerSummary, error
 		if !exists {
 			continue
 		}
-		players = append(players, PlayerSummary{
-			ID:        state.Player.ID,
-			Nickname:  state.Player.Nickname,
-			Faction:   state.Player.Faction,
-			UpdatedAt: r.playerUpdatedAt[playerID].UTC().Format(time.RFC3339),
-		})
+		players = append(players, buildPlayerSummary(state, r.playerUpdatedAt[playerID]))
 	}
 
 	return players, nil

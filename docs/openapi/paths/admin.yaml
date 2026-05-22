@@ -24,6 +24,69 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/players/{playerId}/state:
+  get:
+    tags:
+    - Admin
+    summary: GM 查看指定玩家完整状态
+    operationId: adminGetPlayerState
+    parameters:
+    - name: playerId
+      in: path
+      required: true
+      schema:
+        type: string
+        example: player_47f23e0eeb08ab50402fedfc
+    responses:
+      '200':
+        description: 玩家完整游戏状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GameState'
+      '404':
+        description: 玩家不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/resources/adjust:
+  post:
+    tags:
+    - Admin
+    summary: GM 资源补发 / 扣减
+    description: 对指定玩家的资源进行加减调整。正数为补发，负数为扣减（不会低于 0，不会超过容量上限）。
+    operationId: adminAdjustResources
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AdjustResourcesRequest'
+    responses:
+      '200':
+        description: 调整后的游戏状态
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - state
+              properties:
+                state:
+                  $ref: '#/components/schemas/GameState'
+      '400':
+        description: 参数错误
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 玩家不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
 /api/v1/admin/balance:
   get:
     tags:

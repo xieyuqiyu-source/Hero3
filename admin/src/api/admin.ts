@@ -22,6 +22,16 @@ export const adminApi = {
   getAccounts() {
     return request<{ accounts: AccountSummary[] }>(`${API_BASE}/admin/accounts`)
   },
+  getPlayerState(playerId: string) {
+    return request<GameState>(`${API_BASE}/admin/players/${playerId}/state`)
+  },
+  adjustResources(playerId: string, adjustments: Record<string, number>) {
+    return request<{ state: GameState }>(`${API_BASE}/admin/resources/adjust`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, adjustments }),
+    })
+  },
   getBalance() {
     return request<BalanceConfig>(`${API_BASE}/admin/balance`)
   },

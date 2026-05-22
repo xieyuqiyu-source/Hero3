@@ -143,6 +143,43 @@ func (s *Service) DeletePlayer(playerID string) error {
 	return s.repo.DeletePlayer(playerID)
 }
 
+func (s *Service) AdjustResources(playerID string, adjustments map[string]int) (GameState, error) {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return GameState{}, ErrPlayerNotFound
+	}
+
+	state, err := s.repo.GetState(playerID)
+	if err != nil {
+		return GameState{}, err
+	}
+
+	now := time.Now()
+	state, _ = settleResources(state, now)
+
+	for resType, delta := range adjustments {
+		current := state.Resources.Items[resType]
+		next := current + delta
+		if next < 0 {
+			next = 0
+		}
+		cap := state.Resources.Capacity[resType]
+		if cap > 0 && next > cap {
+			next = cap
+		}
+		state.Resources.Items[resType] = next
+	}
+
+	state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
+	state.ServerTime = now.UTC().Format(resourceDateLayout)
+
+	if err := s.repo.SaveState(state, now); err != nil {
+		return GameState{}, err
+	}
+
+	return state, nil
+}
+
 func (s *Service) FillResources(playerID string) (GameState, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useGameStore } from '@/store/gameStore'
 import type { ResourceState } from '@/types/game'
 
@@ -38,30 +38,17 @@ function projectResources(state: ReturnType<typeof useGameStore.getState>['state
 export function useProjectedResources(): ResourceState | null {
   const state = useGameStore((store) => store.state)
   const stateReceivedAt = useGameStore((store) => store.stateReceivedAt)
-  const [projected, setProjected] = useState<ResourceState | null>(() =>
-    projectResources(state, stateReceivedAt, Date.now())
-  )
-  const stateRef = useRef(state)
-  const receivedAtRef = useRef(stateReceivedAt)
+  const [now, setNow] = useState(() => Date.now())
 
-  stateRef.current = state
-  receivedAtRef.current = stateReceivedAt
-
-  // 当 state 变化时立即更新
-  useEffect(() => {
-    setProjected(projectResources(state, stateReceivedAt, Date.now()))
-  }, [state, stateReceivedAt])
-
-  // 定时 tick 更新预测值
   useEffect(() => {
     if (!state || !stateReceivedAt) return
 
     const timer = window.setInterval(() => {
-      setProjected(projectResources(stateRef.current, receivedAtRef.current, Date.now()))
+      setNow(Date.now())
     }, TICK_MS)
 
     return () => window.clearInterval(timer)
   }, [state, stateReceivedAt])
 
-  return projected
+  return projectResources(state, stateReceivedAt, now)
 }

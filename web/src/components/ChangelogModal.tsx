@@ -1,4 +1,4 @@
-import { useState, useEffect, type FC } from 'react'
+import { useState, type FC } from 'react'
 import { Scroll, Swords, Star } from 'lucide-react'
 import { Modal } from '@/components/ui'
 import { changelog, LATEST_VERSION, type ChangelogEntry } from '@/data/changelog'
@@ -15,14 +15,7 @@ function markAsRead() {
 }
 
 const ChangelogModal: FC = () => {
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    const readVersion = getReadVersion()
-    if (readVersion < LATEST_VERSION) {
-      setOpen(true)
-    }
-  }, [])
+  const [open, setOpen] = useState(() => getReadVersion() < LATEST_VERSION)
 
   const handleClose = () => {
     markAsRead()

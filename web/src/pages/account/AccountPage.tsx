@@ -1,6 +1,6 @@
-import { useState, type FC } from 'react'
+import { useState, useEffect, type FC } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Coins, Crown, Scroll, Users, Castle, KeyRound, Sparkles, Cloud, LogOut } from 'lucide-react'
+import { Coins, Crown, Scroll, Users, Castle, KeyRound, Sparkles, Cloud, LogOut, Check } from 'lucide-react'
 import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
 import CloudSyncModal from '@/components/CloudSyncModal'
@@ -10,8 +10,16 @@ import InfoItem from './components/InfoItem'
 const AccountPage: FC = () => {
   const navigate = useNavigate()
   const { account, players, logout, loadPlayers } = useAccountStore()
-  const { state: gameState, clearActivePlayer } = useGameStore()
+  const { state: gameState, activePlayerId, clearActivePlayer, setActivePlayer, loadGameState } = useGameStore()
   const [cloudSyncOpen, setCloudSyncOpen] = useState(false)
+  const [switching, setSwitching] = useState<string | null>(null)
+
+  // 页面加载时拉取存档列表
+  useEffect(() => {
+    if (account) {
+      loadPlayers()
+    }
+  }, [account, loadPlayers])
 
   const handleLogout = () => {
     logout()
@@ -22,9 +30,19 @@ const AccountPage: FC = () => {
     navigate('/login')
   }
 
+  const handleSelectPlayer = async (playerId: string) => {
+    if (playerId === activePlayerId || switching) return
+    setSwitching(playerId)
+    try {
+      setActivePlayer(playerId)
+      await loadGameState(playerId)
+    } finally {
+      setSwitching(null)
+    }
+  }
+
   const handleCloudSyncClose = () => {
     setCloudSyncOpen(false)
-    // Refresh players list after potential login
     loadPlayers()
   }
 
@@ -84,20 +102,52 @@ const AccountPage: FC = () => {
       <Section title="城池列表" icon={Castle}>
         {players.length > 0 ? (
           <div className="space-y-2">
-            {players.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)]"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-[var(--color-text-primary)]">{p.nickname}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent-light)] text-[var(--color-accent)] font-medium">
-                    {p.faction}
-                  </span>
-                </div>
-                <span className="text-[11px] text-[var(--color-text-muted)]">{p.updatedAt}</span>
-              </div>
-            ))}
+            {players.map((p) => {
+              const isActive = p.id === activePlayerId
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => handleSelectPlayer(p.id)}
+                  disabled={isActive || switching !== null}
+                  className={`
+                    w-full flex items-center justify-between px-3 py-2.5 rounded-xl
+                    border text-left cursor-pointer
+                    transition-all duration-200
+                    ${isActive
+                      ? 'bg-[var(--color-accent-light)] border-[var(--color-accent-border)]'
+                      : 'bg-[var(--color-surface-dim)] border-[var(--color-border)] hover:border-[var(--color-accent-border)]'
+                    }
+                    disabled:cursor-default
+                  `}
+                >
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      {isActive && <Check size={12} className="text-[var(--color-accent)]" />}
+                      <span className={`text-sm font-medium ${isActive ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-primary)]'}`}>
+                        {p.nickname}
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent-light)] text-[var(--color-accent)] font-medium">
+                        {p.faction}
+                      </span>
+                      {isActive && (
+                        <span className="text-[10px] text-[var(--color-accent)] font-medium">当前</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
+                      <span>兵力 {p.totalArmy.toLocaleString()}</span>
+                      <span>建筑总等级 {p.buildingLevel}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    {switching === p.id && (
+                      <span className="text-[10px] text-[var(--color-text-muted)]">切换中...</span>
+                    )}
+                    <span className="text-[10px] text-[var(--color-text-muted)]">{p.updatedAt}</span>
+                  </div>
+                </button>
+              )
+            })}
           </div>
         ) : (
           <div className="flex items-center justify-center py-6">

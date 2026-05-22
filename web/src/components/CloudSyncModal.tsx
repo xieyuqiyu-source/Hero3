@@ -20,15 +20,13 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
 
   const [view, setView] = useState<View>(account ? 'saves' : 'login')
 
-  // 每次弹窗打开时，根据当前登录状态重置视图，并加载存档
   useEffect(() => {
-    if (open) {
-      setView(account ? 'saves' : 'login')
-      if (account) {
-        loadPlayers()
-      }
+    if (open && account) {
+      loadPlayers()
     }
   }, [open, account, loadPlayers])
+
+  const activeView: View = account ? 'saves' : (view === 'saves' ? 'login' : view)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -88,10 +86,10 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
 
   const handleBack = () => {
     setError('')
-    if (view === 'register') setView('login')
+    if (activeView === 'register') setView('login')
   }
 
-  const savesFooter = view === 'saves' ? (
+  const savesFooter = activeView === 'saves' ? (
     <button
       type="button"
       onClick={onClose}
@@ -109,7 +107,7 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
 
   return (
     <Modal open={open} onClose={onClose} title="云同步" footer={savesFooter}>
-      {view === 'login' && (
+      {activeView === 'login' && (
         <div className="space-y-4">
           <p className="text-sm text-[var(--color-text-secondary)]">
             登录账号同步游戏存档，多设备畅玩。
@@ -195,7 +193,7 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
         </div>
       )}
 
-      {view === 'register' && (
+      {activeView === 'register' && (
         <div className="space-y-4">
           <button
             type="button"
@@ -285,7 +283,7 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
         </div>
       )}
 
-      {view === 'saves' && (
+      {activeView === 'saves' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-[var(--color-text-secondary)]">选择存档继续游戏</p>

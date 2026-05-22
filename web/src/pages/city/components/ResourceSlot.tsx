@@ -1,4 +1,4 @@
-import { useState, useEffect, type FC } from 'react'
+import { useState, useEffect, useRef, type FC } from 'react'
 import { ArrowUpCircle, LoaderCircle } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { Tooltip } from '@/components/ui'
@@ -21,10 +21,12 @@ interface ResourceSlotProps {
   bgColor: string
 }
 
+const TICK_MS = 1000
+
 /** 计算剩余秒数 */
-function getRemainingSeconds(endsAt: string): number {
+function getRemainingSeconds(endsAt: string, now = Date.now()): number {
   const end = new Date(endsAt).getTime()
-  return Math.max(0, Math.ceil((end - Date.now()) / 1000))
+  return Math.max(0, Math.ceil((end - now) / 1000))
 }
 
 /** 格式化倒计时 mm:ss 或 hh:mm:ss */
@@ -48,30 +50,33 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
   bgColor,
 }) => {
   const [loading, setLoading] = useState(false)
-  const [countdown, setCountdown] = useState(() =>
-    upgradeEndsAt ? getRemainingSeconds(upgradeEndsAt) : 0
-  )
+  const [now, setNow] = useState(() => Date.now())
+  const refreshedUpgradeRef = useRef<string | null>(null)
   const upgrade = useGameStore((s) => s.upgradeBuilding)
   const isUpgrading = upgradeEndsAt !== null
+  const countdown = upgradeEndsAt ? getRemainingSeconds(upgradeEndsAt, now) : 0
 
   // 倒计时 tick
   useEffect(() => {
-    if (!upgradeEndsAt) {
-      setCountdown(0)
-      return
-    }
-    setCountdown(getRemainingSeconds(upgradeEndsAt))
+    if (!upgradeEndsAt) return
+
     const timer = window.setInterval(() => {
-      const remaining = getRemainingSeconds(upgradeEndsAt)
-      setCountdown(remaining)
-      if (remaining <= 0) {
-        clearInterval(timer)
-        // 倒计时归零，刷新状态
-        useGameStore.getState().loadGameState()
-      }
-    }, 1000)
+      setNow(Date.now())
+    }, TICK_MS)
+
     return () => clearInterval(timer)
   }, [upgradeEndsAt])
+
+  useEffect(() => {
+    if (!upgradeEndsAt) {
+      refreshedUpgradeRef.current = null
+      return
+    }
+    if (countdown > 0 || refreshedUpgradeRef.current === upgradeEndsAt) return
+
+    refreshedUpgradeRef.current = upgradeEndsAt
+    useGameStore.getState().loadGameState()
+  }, [upgradeEndsAt, countdown])
 
   const handleUpgrade = async () => {
     if (isUpgrading || loading) return

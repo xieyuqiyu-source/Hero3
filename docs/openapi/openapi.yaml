@@ -15,8 +15,10 @@ tags:
   description: 游戏状态
 - name: Account
   description: 轻账号与存档
+- name: City
+  description: 城池建设
 - name: Admin
-  description: GM 后台只读接口
+  description: GM 后台接口
 paths:
   /healthz:
     $ref: ./paths/system.yaml#/~1healthz
@@ -38,8 +40,18 @@ paths:
     $ref: ./paths/account.yaml#/~1api~1v1~1players~1create
   /api/v1/players/{playerId}:
     $ref: ./paths/account.yaml#/~1api~1v1~1players~1{playerId}
+  /api/v1/city/buildings/upgrade:
+    $ref: ./paths/city.yaml#/~1api~1v1~1city~1buildings~1upgrade
+  /api/v1/city/buildings/upgrade-batch:
+    $ref: ./paths/city.yaml#/~1api~1v1~1city~1buildings~1upgrade-batch
+  /api/v1/city/resources/fill:
+    $ref: ./paths/city.yaml#/~1api~1v1~1city~1resources~1fill
   /api/v1/admin/accounts:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1accounts
+  /api/v1/admin/players/{playerId}/state:
+    $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1players~1{playerId}~1state
+  /api/v1/admin/resources/adjust:
+    $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1resources~1adjust
   /api/v1/admin/balance:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1balance
 components:
@@ -82,6 +94,10 @@ components:
       $ref: ./schemas/game-state.yaml#/BalanceConfig
     BuildingConfig:
       $ref: ./schemas/game-state.yaml#/BuildingConfig
+    UpgradeBuildingRequest:
+      $ref: ./schemas/city.yaml#/UpgradeBuildingRequest
+    AdjustResourcesRequest:
+      $ref: ./schemas/city.yaml#/AdjustResourcesRequest
     ErrorResponse:
       $ref: ./schemas/common.yaml#/ErrorResponse
     DeleteResponse:

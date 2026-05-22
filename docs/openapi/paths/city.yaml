@@ -1,0 +1,128 @@
+/api/v1/city/buildings/upgrade:
+  post:
+    tags:
+    - City
+    summary: 升级建筑
+    description: 消耗资源发起建筑升级，升级完成前该建筑不可再次升级。
+    operationId: upgradeBuilding
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpgradeBuildingRequest'
+    responses:
+      '200':
+        description: 升级已开始，返回更新后的游戏状态
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - state
+              properties:
+                state:
+                  $ref: '#/components/schemas/GameState'
+      '404':
+        description: 玩家或建筑不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '409':
+        description: 建筑正在升级中
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '422':
+        description: 资源不足或已满级
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/city/buildings/upgrade-batch:
+  post:
+    tags:
+    - City
+    summary: 批量升级资源建筑
+    description: 按等级从低到高依次尝试升级所有空闲资源建筑，直到资源耗尽。
+    operationId: upgradeBuildingBatch
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - playerId
+            properties:
+              playerId:
+                type: string
+                example: player_47f23e0eeb08ab50402fedfc
+    responses:
+      '200':
+        description: 批量升级完成
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - state
+              - upgraded
+              properties:
+                state:
+                  $ref: '#/components/schemas/GameState'
+                upgraded:
+                  type: integer
+                  description: 本次成功升级的建筑数量
+                  example: 3
+      '404':
+        description: 玩家不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '422':
+        description: 资源不足，无法升级任何建筑
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/city/resources/fill:
+  post:
+    tags:
+    - City
+    summary: GM 填满资源
+    description: 将指定玩家的所有资源填满到仓库容量上限。
+    operationId: fillResources
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - playerId
+            properties:
+              playerId:
+                type: string
+                example: player_47f23e0eeb08ab50402fedfc
+    responses:
+      '200':
+        description: 资源已填满
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - state
+              properties:
+                state:
+                  $ref: '#/components/schemas/GameState'
+      '404':
+        description: 玩家不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

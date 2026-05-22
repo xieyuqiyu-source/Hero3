@@ -15,8 +15,10 @@ tags:
   description: 游戏状态
 - name: Account
   description: 轻账号与存档
+- name: City
+  description: 城池建设
 - name: Admin
-  description: GM 后台只读接口
+  description: GM 后台接口
 paths:
   /healthz:
     get:
@@ -267,6 +269,134 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/city/buildings/upgrade:
+    post:
+      tags:
+      - City
+      summary: 升级建筑
+      description: 消耗资源发起建筑升级，升级完成前该建筑不可再次升级。
+      operationId: upgradeBuilding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpgradeBuildingRequest'
+      responses:
+        '200':
+          description: 升级已开始，返回更新后的游戏状态
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - state
+                properties:
+                  state:
+                    $ref: '#/components/schemas/GameState'
+        '404':
+          description: 玩家或建筑不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 建筑正在升级中
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: 资源不足或已满级
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/city/buildings/upgrade-batch:
+    post:
+      tags:
+      - City
+      summary: 批量升级资源建筑
+      description: 按等级从低到高依次尝试升级所有空闲资源建筑，直到资源耗尽。
+      operationId: upgradeBuildingBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+                  example: player_47f23e0eeb08ab50402fedfc
+      responses:
+        '200':
+          description: 批量升级完成
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - state
+                - upgraded
+                properties:
+                  state:
+                    $ref: '#/components/schemas/GameState'
+                  upgraded:
+                    type: integer
+                    description: 本次成功升级的建筑数量
+                    example: 3
+        '404':
+          description: 玩家不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: 资源不足，无法升级任何建筑
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/city/resources/fill:
+    post:
+      tags:
+      - City
+      summary: GM 填满资源
+      description: 将指定玩家的所有资源填满到仓库容量上限。
+      operationId: fillResources
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+                  example: player_47f23e0eeb08ab50402fedfc
+      responses:
+        '200':
+          description: 资源已填满
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - state
+                properties:
+                  state:
+                    $ref: '#/components/schemas/GameState'
+        '404':
+          description: 玩家不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/admin/accounts:
     get:
       tags:
@@ -289,6 +419,69 @@ paths:
                       $ref: '#/components/schemas/AccountSummary'
         '500':
           description: 后端读取失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/players/{playerId}/state:
+    get:
+      tags:
+      - Admin
+      summary: GM 查看指定玩家完整状态
+      operationId: adminGetPlayerState
+      parameters:
+      - name: playerId
+        in: path
+        required: true
+        schema:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+      responses:
+        '200':
+          description: 玩家完整游戏状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameState'
+        '404':
+          description: 玩家不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/resources/adjust:
+    post:
+      tags:
+      - Admin
+      summary: GM 资源补发 / 扣减
+      description: 对指定玩家的资源进行加减调整。正数为补发，负数为扣减（不会低于 0，不会超过容量上限）。
+      operationId: adminAdjustResources
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdjustResourcesRequest'
+      responses:
+        '200':
+          description: 调整后的游戏状态
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - state
+                properties:
+                  state:
+                    $ref: '#/components/schemas/GameState'
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 玩家不存在
           content:
             application/json:
               schema:
@@ -752,6 +945,36 @@ components:
           example:
             '1': 30
             '2': 45
+    UpgradeBuildingRequest:
+      type: object
+      required:
+      - playerId
+      - buildingId
+      properties:
+        playerId:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+        buildingId:
+          type: string
+          description: 建筑实例 ID
+          example: wood_camp-1
+    AdjustResourcesRequest:
+      type: object
+      required:
+      - playerId
+      - adjustments
+      properties:
+        playerId:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+        adjustments:
+          type: object
+          description: 资源调整量，正数补发，负数扣减。
+          additionalProperties:
+            type: integer
+          example:
+            wood: 5000
+            iron: -200
     ErrorResponse:
       type: object
       required:

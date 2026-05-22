@@ -184,7 +184,7 @@ func (r *MySQLRepository) ListPlayers(accountID string) ([]game.PlayerSummary, e
 	}
 
 	rows, err := r.db.Query(
-		`SELECT id, nickname, faction, updated_at
+		`SELECT id, nickname, faction, state_json, updated_at
 		 FROM players
 		 WHERE account_id = ?
 		 ORDER BY updated_at DESC`,
@@ -197,13 +197,32 @@ func (r *MySQLRepository) ListPlayers(accountID string) ([]game.PlayerSummary, e
 
 	players := []game.PlayerSummary{}
 	for rows.Next() {
-		var player game.PlayerSummary
+		var id, nickname, faction string
+		var stateJSON []byte
 		var updatedAt time.Time
-		if err := rows.Scan(&player.ID, &player.Nickname, &player.Faction, &updatedAt); err != nil {
+		if err := rows.Scan(&id, &nickname, &faction, &stateJSON, &updatedAt); err != nil {
 			return nil, err
 		}
-		player.UpdatedAt = updatedAt.UTC().Format(time.RFC3339)
-		players = append(players, player)
+
+		summary := game.PlayerSummary{
+			ID:        id,
+			Nickname:  nickname,
+			Faction:   faction,
+			UpdatedAt: updatedAt.UTC().Format(time.RFC3339),
+		}
+
+		// 从 state_json 提取摘要
+		var state game.GameState
+		if err := json.Unmarshal(stateJSON, &state); err == nil {
+			for _, unit := range state.Army {
+				summary.TotalArmy += unit.Amount
+			}
+			for _, b := range state.Buildings {
+				summary.BuildingLevel += b.Level
+			}
+		}
+
+		players = append(players, summary)
 	}
 
 	return players, rows.Err()

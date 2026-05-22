@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import PlayerDetailPanel from '@/components/PlayerDetailPanel'
 import PlayerStatePanel from '@/components/PlayerStatePanel'
 import type { AccountSummary, GameState, PlayerSummary } from '@/types'
 
@@ -16,6 +18,8 @@ export default function AccountsPanel({
   onDeleteAccount,
   onDeletePlayer,
 }: AccountsPanelProps) {
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
+
   return (
     <article className="panel player-panel" id="玩家">
       <div className="panel-heading">
@@ -68,6 +72,13 @@ export default function AccountsPanel({
                         <time>{new Date(player.updatedAt).toLocaleString()}</time>
                         <button
                           type="button"
+                          className="ghost-button"
+                          onClick={() => setSelectedPlayerId(player.id)}
+                        >
+                          查看详情
+                        </button>
+                        <button
+                          type="button"
                           className="danger-text-button"
                           disabled={busyTarget !== null}
                           onClick={() => void onDeletePlayer(player)}
@@ -85,6 +96,13 @@ export default function AccountsPanel({
       )}
 
       <PlayerStatePanel gameState={gameState} />
+
+      {selectedPlayerId && (
+        <PlayerDetailPanel
+          playerId={selectedPlayerId}
+          onClose={() => setSelectedPlayerId(null)}
+        />
+      )}
     </article>
   )
 }

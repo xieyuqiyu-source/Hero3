@@ -13,10 +13,12 @@ type Account struct {
 }
 
 type PlayerSummary struct {
-	ID        string `json:"id"`
-	Nickname  string `json:"nickname"`
-	Faction   string `json:"faction"`
-	UpdatedAt string `json:"updatedAt"`
+	ID            string `json:"id"`
+	Nickname      string `json:"nickname"`
+	Faction       string `json:"faction"`
+	TotalArmy     int    `json:"totalArmy"`
+	BuildingLevel int    `json:"buildingLevel"`
+	UpdatedAt     string `json:"updatedAt"`
 }
 
 type AccountSummary struct {
@@ -182,6 +184,25 @@ func newPlayerState(id string, nickname string, faction string, now time.Time) G
 
 func newDemoState(now time.Time) GameState {
 	return newPlayerState("demo-player", "主公", "wei", now)
+}
+
+func buildPlayerSummary(state GameState, updatedAt time.Time) PlayerSummary {
+	totalArmy := 0
+	for _, unit := range state.Army {
+		totalArmy += unit.Amount
+	}
+	buildingLevel := 0
+	for _, b := range state.Buildings {
+		buildingLevel += b.Level
+	}
+	return PlayerSummary{
+		ID:            state.Player.ID,
+		Nickname:      state.Player.Nickname,
+		Faction:       state.Player.Faction,
+		TotalArmy:     totalArmy,
+		BuildingLevel: buildingLevel,
+		UpdatedAt:     updatedAt.UTC().Format(time.RFC3339),
+	}
 }
 
 func (r *ResourceState) UnmarshalJSON(data []byte) error {

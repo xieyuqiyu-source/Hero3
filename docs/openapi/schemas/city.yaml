@@ -1,0 +1,30 @@
+UpgradeBuildingRequest:
+  type: object
+  required:
+  - playerId
+  - buildingId
+  properties:
+    playerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+    buildingId:
+      type: string
+      description: 建筑实例 ID
+      example: wood_camp-1
+AdjustResourcesRequest:
+  type: object
+  required:
+  - playerId
+  - adjustments
+  properties:
+    playerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+    adjustments:
+      type: object
+      description: 资源调整量，正数补发，负数扣减。
+      additionalProperties:
+        type: integer
+      example:
+        wood: 5000
+        iron: -200

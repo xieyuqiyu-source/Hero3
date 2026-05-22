@@ -130,6 +130,43 @@ func (h *Handlers) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+func (h *Handlers) AdminPlayerState(w http.ResponseWriter, r *http.Request) {
+	playerID := r.PathValue("playerId")
+	state, err := h.gameService.GetState(playerID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "player not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, state)
+}
+
+func (h *Handlers) AdminAdjustResources(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID    string         `json:"playerId"`
+		Adjustments map[string]int `json:"adjustments"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	if payload.PlayerID == "" || len(payload.Adjustments) == 0 {
+		writeError(w, http.StatusBadRequest, "playerId and adjustments are required")
+		return
+	}
+
+	state, err := h.gameService.AdjustResources(payload.PlayerID, payload.Adjustments)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, game.ErrPlayerNotFound) {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
 func (h *Handlers) AdminAccounts(w http.ResponseWriter, r *http.Request) {
 	accounts, err := h.gameService.ListAccounts()
 	if err != nil {
