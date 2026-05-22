@@ -60,6 +60,9 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
   useEffect(() => {
     if (!upgradeEndsAt) return
 
+    // 立即刷新 now，避免用旧时间算出错误的倒计时
+    setNow(Date.now())
+
     const timer = window.setInterval(() => {
       setNow(Date.now())
     }, TICK_MS)
