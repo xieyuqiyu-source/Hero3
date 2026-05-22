@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import Layout from './components/Layout'
 import RequirePlayer from './components/RequirePlayer'
+import ChangelogModal from './components/ChangelogModal'
 import { ToastContainer } from './components/ui'
 import LoginPage from './pages/login'
 import CityPage from './pages/city'
@@ -38,6 +39,7 @@ function App() {
         </Route>
       </Routes>
       <ToastContainer />
+      <ChangelogModal />
     </>
   )
 }
