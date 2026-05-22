@@ -11,6 +11,7 @@ import {
   Settings,
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
+import BoostButton from './BoostButton'
 import type { GameState } from '@/types/game'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
 
@@ -188,7 +189,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
             <>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold text-[var(--color-text-primary)]">资源产出</span>
-                <span className="text-[10px] text-[var(--color-text-muted)]">/每小时</span>
+                <BoostButton currentBoost={gameState?.productionBoost} />
               </div>
               <div className="grid grid-cols-1 gap-1.5">
                 {[
@@ -200,7 +201,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
                   <div key={label} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
                     <span className="text-xs">{label}</span>
                     <span className="text-xs font-semibold text-[var(--color-accent)] ml-auto">
-                      +{typeof value === 'number' ? value.toLocaleString() : '--'}
+                      +{typeof value === 'number' ? value.toLocaleString() : '--'}/h
                     </span>
                   </div>
                 ))}
