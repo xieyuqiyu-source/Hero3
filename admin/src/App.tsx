@@ -4,9 +4,9 @@ import {
   guardrails,
   resourceActions,
   systemActions,
-} from './adminData'
-import PlayerStatePanel from './PlayerStatePanel'
-import { useAdminDashboard } from './useAdminDashboard'
+} from '@/data'
+import PlayerStatePanel from '@/components/PlayerStatePanel'
+import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 
 function App() {
   const { accounts, dashboardStats, error, gameState, health, loading } = useAdminDashboard()

@@ -153,6 +153,10 @@ h2 {
   grid-row: span 2;
 }
 
+.api-panel {
+  grid-column: 1 / -1;
+}
+
 .panel-heading {
   display: flex;
   justify-content: space-between;
@@ -289,6 +293,138 @@ button:disabled {
   background: #f8fafc;
 }
 
+.api-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.api-summary span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.api-summary strong {
+  color: #172033;
+}
+
+.api-list {
+  display: grid;
+  gap: 10px;
+}
+
+.api-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid #dce3ec;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.api-main {
+  min-width: 0;
+}
+
+.api-title-line {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.api-title-line strong {
+  color: #172033;
+}
+
+.api-title-line em {
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.method-badge {
+  display: inline-flex;
+  min-width: 48px;
+  justify-content: center;
+  padding: 3px 7px;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.method-badge.get {
+  background: #2563eb;
+}
+
+.method-badge.post {
+  background: #0f766e;
+}
+
+.api-main code {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #334155;
+  font-size: 13px;
+}
+
+.api-main p {
+  margin: 8px 0 4px;
+  color: #475569;
+  font-size: 14px;
+}
+
+.api-main small {
+  color: #64748b;
+}
+
+.api-actions {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+  align-content: start;
+}
+
+.api-actions small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.api-status {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.api-status.ok {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.api-status.fail {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.api-error {
+  grid-column: 1 / -1;
+  padding: 10px;
+  border-radius: 8px;
+  color: #b91c1c;
+  background: #fff5f5;
+  font-size: 13px;
+}
+
 .table-like,
 .action-list,
 .system-actions,
@@ -389,8 +525,10 @@ button:disabled {
 
   .topbar,
   .panel-heading,
+  .api-summary,
   .account-card-header,
   .save-row,
+  .api-row,
   .table-row,
   .resource-readout,
   .state-summary {
@@ -402,6 +540,10 @@ button:disabled {
   .save-meta {
     justify-items: start;
     white-space: normal;
+  }
+
+  .api-actions {
+    justify-items: start;
   }
 
   h1 {

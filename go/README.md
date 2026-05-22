@@ -83,26 +83,22 @@ export HERO3_DATABASE_DSN='hero3_user:hero3_password@tcp(127.0.0.1:3306)/hero3?p
 go run ./cmd/server
 ```
 
-当前开发约定：本地开发也使用服务器 MySQL，不再使用本机数据库。服务器 MySQL 只监听服务器本机地址时，本地通过 SSH 隧道连接：
+当前开发约定：本地开发也使用服务器 MySQL，不再使用本机数据库。服务器已开放 MySQL `3306` 后，本地后端直接连接服务器数据库：
 
 ```bash
-ssh -N -L 3307:127.0.0.1:3306 root@服务器IP
-```
-
-然后本地后端使用：
-
-```bash
-export HERO3_DATABASE_DSN='hero3_user:hero3_password@tcp(127.0.0.1:3307)/hero3?parseTime=true&charset=utf8mb4&loc=UTC'
+export HERO3_DATABASE_DSN='hero3_user:hero3_password@tcp(服务器IP:3306)/hero3?parseTime=true&charset=utf8mb4&loc=UTC'
 go run ./cmd/server
 ```
 
 项目根目录的 `dev.sh` 会自动读取 `go/.env`，本机可把实际 DSN 放在 `go/.env` 中。该文件已被 Git 忽略，不要提交数据库密码。
 
-如果 `go/.env` 配置了 `HERO3_DB_TUNNEL_ENABLED=true`，`dev.sh` 会自动启动 SSH 隧道，再启动 Go 后端。因此日常开发只需要：
+日常开发只需要：
 
 ```bash
 ./dev.sh
 ```
+
+如果后续关闭公网 `3306`，可以把 `go/.env` 的 `HERO3_DB_TUNNEL_ENABLED` 改为 `true`，让 `dev.sh` 自动启动 SSH 隧道。
 
 ## 基础接口
 
