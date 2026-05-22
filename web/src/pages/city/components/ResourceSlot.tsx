@@ -4,11 +4,12 @@ import { ArrowUpCircle } from 'lucide-react'
 interface ResourceSlotProps {
   index: number
   level: number
+  production: number
   color: string
   bgColor: string
 }
 
-const ResourceSlot: FC<ResourceSlotProps> = ({ index, level, color, bgColor }) => {
+const ResourceSlot: FC<ResourceSlotProps> = ({ index, level, production, color, bgColor }) => {
   return (
     <div className="flex items-center justify-between px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] hover:shadow-[0_2px_8px_rgba(15,23,42,0.04)] transition-shadow duration-150">
       <div className="flex items-center gap-2">
@@ -16,6 +17,7 @@ const ResourceSlot: FC<ResourceSlotProps> = ({ index, level, color, bgColor }) =
           <span className={`text-[10px] font-bold ${color}`}>{index}</span>
         </div>
         <span className="text-xs text-[var(--color-text-primary)]">Lv.{level}</span>
+        <span className="text-[10px] text-amber-500 font-medium">+{production}</span>
       </div>
       <button
         type="button"

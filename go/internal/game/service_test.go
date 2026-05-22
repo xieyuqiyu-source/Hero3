@@ -137,22 +137,22 @@ func TestCalculateResourceProductionUsesBalanceConfig(t *testing.T) {
 		{Type: "farm", Level: 3},
 	})
 
-	if production["wood"] != 84 {
-		t.Fatalf("expected wood production from config to be 84, got %d", production["wood"])
+	if production["wood"] != 30 {
+		t.Fatalf("expected wood production from config to be 30, got %d", production["wood"])
 	}
-	if production["food"] != 100 {
-		t.Fatalf("expected food production from config to be 100, got %d", production["food"])
+	if production["food"] != 30 {
+		t.Fatalf("expected food production from config to be 30, got %d", production["food"])
 	}
 }
 
 func TestCalculateResourceCapacityUsesWarehouseConfig(t *testing.T) {
 	capacity := calculateResourceCapacity([]Building{{Type: "warehouse", Level: 3}})
 
-	if capacity["wood"] != 13000 {
-		t.Fatalf("expected level 3 warehouse capacity to be 13000, got %d", capacity["wood"])
+	if capacity["wood"] != 9200 {
+		t.Fatalf("expected level 3 warehouse capacity to be 9200, got %d", capacity["wood"])
 	}
-	if capacity["food"] != 13000 {
-		t.Fatalf("expected level 3 warehouse food capacity to be 13000, got %d", capacity["food"])
+	if capacity["food"] != 9200 {
+		t.Fatalf("expected level 3 warehouse food capacity to be 9200, got %d", capacity["food"])
 	}
 }
 

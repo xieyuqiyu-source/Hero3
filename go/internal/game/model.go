@@ -109,13 +109,34 @@ func newPlayerState(id string, nickname string, faction string, now time.Time) G
 			Capacity: map[string]int{},
 		},
 		Buildings: []Building{
-			{ID: "wood-camp", Type: "wood_camp", Level: 3},
-			{ID: "stone-quarry", Type: "stone_quarry", Level: 2},
-			{ID: "iron-mine", Type: "iron_mine", Level: 2},
-			{ID: "farm", Type: "farm", Level: 3},
-			{ID: "warehouse", Type: "warehouse", Level: 1},
-			{ID: "barracks", Type: "barracks", Level: 1},
-			{ID: "archery-range", Type: "archery_range", Level: 1},
+			// 木场 x5
+			{ID: "wood_camp-1", Type: "wood_camp", Level: 1},
+			{ID: "wood_camp-2", Type: "wood_camp", Level: 1},
+			{ID: "wood_camp-3", Type: "wood_camp", Level: 1},
+			{ID: "wood_camp-4", Type: "wood_camp", Level: 1},
+			{ID: "wood_camp-5", Type: "wood_camp", Level: 1},
+			// 采石场 x5
+			{ID: "stone_quarry-1", Type: "stone_quarry", Level: 1},
+			{ID: "stone_quarry-2", Type: "stone_quarry", Level: 1},
+			{ID: "stone_quarry-3", Type: "stone_quarry", Level: 1},
+			{ID: "stone_quarry-4", Type: "stone_quarry", Level: 1},
+			{ID: "stone_quarry-5", Type: "stone_quarry", Level: 1},
+			// 铁矿 x5
+			{ID: "iron_mine-1", Type: "iron_mine", Level: 1},
+			{ID: "iron_mine-2", Type: "iron_mine", Level: 1},
+			{ID: "iron_mine-3", Type: "iron_mine", Level: 1},
+			{ID: "iron_mine-4", Type: "iron_mine", Level: 1},
+			{ID: "iron_mine-5", Type: "iron_mine", Level: 1},
+			// 农田 x5
+			{ID: "farm-1", Type: "farm", Level: 1},
+			{ID: "farm-2", Type: "farm", Level: 1},
+			{ID: "farm-3", Type: "farm", Level: 1},
+			{ID: "farm-4", Type: "farm", Level: 1},
+			{ID: "farm-5", Type: "farm", Level: 1},
+			// 功能建筑（各一块）
+			{ID: "warehouse-1", Type: "warehouse", Level: 1},
+			{ID: "barracks-1", Type: "barracks", Level: 1},
+			{ID: "archery_range-1", Type: "archery_range", Level: 1},
 		},
 		Army: []ArmyUnit{
 			{UnitType: "infantry", Amount: 80},
