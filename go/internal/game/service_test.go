@@ -188,3 +188,152 @@ func TestServiceUpdateBalancePersistsConfig(t *testing.T) {
 		t.Fatalf("expected updated wood base production, got %d", saved.BaseProduction["wood"])
 	}
 }
+
+func TestSettleResourcesTimeSlicingOnUpgradeCompletion(t *testing.T) {
+	// 场景：10:00 结算，wood_camp-1 Lv.1 正在升级（10:01 完成），12:00 上线
+	// 期望：wood = base + Lv.1产量×1分钟 + Lv.2产量×119分钟
+	// 而不是全段按 Lv.2 产量算 120 分钟
+
+	settledAt := time.Date(2026, 5, 22, 10, 0, 0, 0, time.UTC)
+	upgradeEndsAt := settledAt.Add(1 * time.Minute).Format(time.RFC3339) // 10:01 完成
+	onlineAt := settledAt.Add(2 * time.Hour)                             // 12:00 上线
+
+	state := GameState{
+		Player: Player{ID: "test", Nickname: "测试", Faction: "wei"},
+		Resources: ResourceState{
+			Items: map[string]int{
+				"wood":  0,
+				"stone": 0,
+				"iron":  0,
+				"food":  0,
+			},
+			Capacity: map[string]int{
+				"wood":  999999,
+				"stone": 999999,
+				"iron":  999999,
+				"food":  999999,
+			},
+		},
+		Buildings: []Building{
+			{ID: "wood_camp-1", Type: "wood_camp", Level: 1, UpgradeEndsAt: &upgradeEndsAt},
+		},
+		ResourceProduction: ResourceProduction{"wood": 10}, // 旧产量（Lv.1）
+		ResourceSettledAt:  settledAt.Format(time.RFC3339),
+	}
+
+	result, changed := settleResources(state, onlineAt)
+	if !changed {
+		t.Fatal("expected state to change")
+	}
+
+	// 升级应该完成
+	if result.Buildings[0].Level != 2 {
+		t.Fatalf("expected building to be Lv.2, got Lv.%d", result.Buildings[0].Level)
+	}
+	if result.Buildings[0].UpgradeEndsAt != nil {
+		t.Fatal("expected upgradeEndsAt to be cleared")
+	}
+
+	// 计算期望产量：
+	// Lv.1 产量 = productionByLevel[1] = 10（wood_camp Lv.1）
+	// Lv.2 产量 = productionByLevel[2] = 18（wood_camp Lv.2）
+	// 10:00-10:01 (60秒): wood += 10 * 60 / 3600 = 0（不足1单位）
+	// 10:01-12:00 (7140秒): wood += 18 * 7140 / 3600 = 35
+	// 如果错误地全段按 Lv.2 算：18 * 7200 / 3600 = 36
+	lv1Production := getProductionAtLevel("wood_camp", 1)
+	lv2Production := getProductionAtLevel("wood_camp", 2)
+
+	slice1Seconds := 60.0   // 10:00 - 10:01
+	slice2Seconds := 7140.0 // 10:01 - 12:00
+
+	expectedWood := int(float64(lv1Production)*slice1Seconds/3600) + int(float64(lv2Production)*slice2Seconds/3600)
+
+	// 错误计算（全段按新产量）
+	wrongWood := int(float64(lv2Production) * 7200.0 / 3600)
+
+	if expectedWood == wrongWood {
+		t.Fatalf("test setup error: expected and wrong values should differ (expected=%d, wrong=%d)", expectedWood, wrongWood)
+	}
+
+	if result.Resources.Items["wood"] != expectedWood {
+		t.Fatalf("time slicing error: expected wood=%d, got %d (wrong full-period calc would give %d)",
+			expectedWood, result.Resources.Items["wood"], wrongWood)
+	}
+}
+
+func TestSettleResourcesMultipleUpgradesTimeSlicing(t *testing.T) {
+	// 场景：两个建筑在离线期间先后完成升级
+	// wood_camp-1: 10:01 完成, wood_camp-2: 10:30 完成
+	// 验证三段切片都正确
+
+	settledAt := time.Date(2026, 5, 22, 10, 0, 0, 0, time.UTC)
+	upgrade1EndsAt := settledAt.Add(1 * time.Minute).Format(time.RFC3339)
+	upgrade2EndsAt := settledAt.Add(30 * time.Minute).Format(time.RFC3339)
+	onlineAt := settledAt.Add(1 * time.Hour)
+
+	state := GameState{
+		Player: Player{ID: "test", Nickname: "测试", Faction: "wei"},
+		Resources: ResourceState{
+			Items: map[string]int{
+				"wood":  0,
+				"stone": 0,
+				"iron":  0,
+				"food":  0,
+			},
+			Capacity: map[string]int{
+				"wood":  999999,
+				"stone": 999999,
+				"iron":  999999,
+				"food":  999999,
+			},
+		},
+		Buildings: []Building{
+			{ID: "wood_camp-1", Type: "wood_camp", Level: 1, UpgradeEndsAt: &upgrade1EndsAt},
+			{ID: "wood_camp-2", Type: "wood_camp", Level: 1, UpgradeEndsAt: &upgrade2EndsAt},
+		},
+		ResourceProduction: ResourceProduction{"wood": 20}, // 2 × Lv.1
+		ResourceSettledAt:  settledAt.Format(time.RFC3339),
+	}
+
+	result, changed := settleResources(state, onlineAt)
+	if !changed {
+		t.Fatal("expected state to change")
+	}
+
+	// 两个建筑都应该升到 Lv.2
+	if result.Buildings[0].Level != 2 || result.Buildings[1].Level != 2 {
+		t.Fatalf("expected both buildings at Lv.2, got Lv.%d and Lv.%d",
+			result.Buildings[0].Level, result.Buildings[1].Level)
+	}
+
+	// 三段切片：
+	// 10:00-10:01 (60s): 2×Lv.1 产量
+	// 10:01-10:30 (1740s): 1×Lv.2 + 1×Lv.1 产量
+	// 10:30-11:00 (1800s): 2×Lv.2 产量
+	lv1 := getProductionAtLevel("wood_camp", 1)
+	lv2 := getProductionAtLevel("wood_camp", 2)
+
+	slice1 := int(float64(2*lv1) * 60.0 / 3600)
+	slice2 := int(float64(lv2+lv1) * 1740.0 / 3600)
+	slice3 := int(float64(2*lv2) * 1800.0 / 3600)
+	expectedWood := slice1 + slice2 + slice3
+
+	if result.Resources.Items["wood"] != expectedWood {
+		t.Fatalf("multi-upgrade time slicing error: expected wood=%d, got %d (slices: %d+%d+%d)",
+			expectedWood, result.Resources.Items["wood"], slice1, slice2, slice3)
+	}
+}
+
+func getProductionAtLevel(buildingType string, level int) int {
+	config, exists := getBuildingConfig(buildingType)
+	if !exists || len(config.ProductionByLevel) == 0 {
+		return 0
+	}
+	if level < 0 {
+		return 0
+	}
+	if level >= len(config.ProductionByLevel) {
+		return config.ProductionByLevel[len(config.ProductionByLevel)-1]
+	}
+	return config.ProductionByLevel[level]
+}
