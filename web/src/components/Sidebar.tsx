@@ -242,6 +242,29 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
           )}
         </div>
 
+        {/* General */}
+        {!collapsed && gameState?.general && (
+          <button
+            type="button"
+            onClick={() => onNavigate('military')}
+            className="
+              w-full mb-2.5 rounded-2xl p-3
+              bg-[var(--color-surface-dim)] border border-[var(--color-border)]
+              shadow-[0_4px_12px_rgba(15,23,42,0.03)]
+              hover:border-[var(--color-accent-border)]
+              cursor-pointer transition-all duration-200 text-left
+            "
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-[var(--color-text-primary)]">{gameState.general.name}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-bold">Lv.{gameState.general.level}</span>
+              </div>
+              <span className="text-[10px] text-[var(--color-text-muted)]">将领</span>
+            </div>
+          </button>
+        )}
+
         {/* Army Placeholder */}
         <div className={`
           mb-2.5 rounded-2xl p-3

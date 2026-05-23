@@ -10,7 +10,7 @@ import (
 
 func TestSettleResourcesAddsProducedResources(t *testing.T) {
 	settledAt := time.Date(2026, 5, 22, 10, 0, 0, 0, time.UTC)
-	state := newPlayerState("player_test", "主公", "wei", settledAt)
+	state := newPlayerState("player_test", "主公", "wei", "caocao", settledAt)
 	state.Resources = ResourceState{
 		Items: map[string]int{
 			"wood":  100,
@@ -45,7 +45,7 @@ func TestSettleResourcesAddsProducedResources(t *testing.T) {
 
 func TestSettleResourcesCapsAtCapacity(t *testing.T) {
 	settledAt := time.Date(2026, 5, 22, 10, 0, 0, 0, time.UTC)
-	state := newPlayerState("player_test", "主公", "wei", settledAt)
+	state := newPlayerState("player_test", "主公", "wei", "caocao", settledAt)
 	state.Resources = ResourceState{
 		Items: map[string]int{
 			"wood":  7499,
@@ -73,7 +73,7 @@ func TestSettleResourcesCapsAtCapacity(t *testing.T) {
 
 func TestSettleResourcesAdvancesTimestampWhenCapacityIsFull(t *testing.T) {
 	settledAt := time.Date(2026, 5, 22, 10, 0, 0, 0, time.UTC)
-	state := newPlayerState("player_test", "主公", "wei", settledAt)
+	state := newPlayerState("player_test", "主公", "wei", "caocao", settledAt)
 	state.Resources = ResourceState{
 		Items: map[string]int{
 			"wood":  7500,

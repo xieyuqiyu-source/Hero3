@@ -65,6 +65,14 @@ export interface BattleReport {
   createdAt: string
 }
 
+export interface General {
+  id: string
+  name: string
+  level: number
+  exp: number
+  buffs: Record<string, number>
+}
+
 export interface GameState {
   player: Player
   resources: ResourceState
@@ -73,6 +81,7 @@ export interface GameState {
   /** 产量加成倍率（1=无加成，2/4/8/16） */
   productionBoost?: number
   buildings: Building[]
+  general: General | null
   army: ArmyUnit[]
   recruitQueues: RecruitQueue[]
   mapTargets: MapTarget[]

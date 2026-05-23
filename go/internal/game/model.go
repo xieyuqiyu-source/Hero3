@@ -53,6 +53,14 @@ type ArmyUnit struct {
 	Amount   int    `json:"amount"`
 }
 
+type General struct {
+	ID    string             `json:"id"`
+	Name  string             `json:"name"`
+	Level int                `json:"level"`
+	Exp   int                `json:"exp"`
+	Buffs map[string]float64 `json:"buffs"`
+}
+
 type RecruitQueue struct {
 	ID       string `json:"id"`
 	UnitType string `json:"unitType"`
@@ -85,6 +93,7 @@ type GameState struct {
 	ResourceProduction  ResourceProduction `json:"resourceProduction"`
 	ResourceSettledAt   string             `json:"resourceSettledAt"`
 	Buildings           []Building         `json:"buildings"`
+	General             *General           `json:"general"`
 	Army                []ArmyUnit         `json:"army"`
 	RecruitQueues       []RecruitQueue     `json:"recruitQueues"`
 	MapTargets          []MapTarget        `json:"mapTargets"`
@@ -93,7 +102,7 @@ type GameState struct {
 	ServerTime          string             `json:"serverTime"`
 }
 
-func newPlayerState(id string, nickname string, faction string, now time.Time) GameState {
+func newPlayerState(id string, nickname string, faction string, generalID string, now time.Time) GameState {
 	state := GameState{
 		Player: Player{
 			ID:       id,
@@ -140,6 +149,7 @@ func newPlayerState(id string, nickname string, faction string, now time.Time) G
 			{ID: "cavalry_camp-1", Type: "cavalry_camp", Level: 1},
 		},
 		Army:          []ArmyUnit{},
+		General:       newGeneral(faction, generalID),
 		RecruitQueues: []RecruitQueue{},
 		MapTargets: []MapTarget{
 			{
@@ -178,7 +188,30 @@ func newPlayerState(id string, nickname string, faction string, now time.Time) G
 }
 
 func newDemoState(now time.Time) GameState {
-	return newPlayerState("demo-player", "主公", "wei", now)
+	return newPlayerState("demo-player", "主公", "wei", "caocao", now)
+}
+
+func newGeneral(faction string, generalID string) *General {
+	if generalID == "" {
+		return nil
+	}
+	name := generalID // fallback
+	factions := GetFactionsConfig()
+	if fc, ok := factions[faction]; ok {
+		for _, g := range fc.Generals {
+			if g.ID == generalID {
+				name = g.Name
+				break
+			}
+		}
+	}
+	return &General{
+		ID:    generalID,
+		Name:  name,
+		Level: 1,
+		Exp:   0,
+		Buffs: map[string]float64{},
+	}
 }
 
 func buildPlayerSummary(state GameState, updatedAt time.Time) PlayerSummary {

@@ -7,7 +7,17 @@
       "economyBonus": 1.0,
       "militaryBonus": 1.0,
       "buildingBonus": 1.0
-    }
+    },
+    "generals": [
+      { "id": "caocao", "name": "曹操", "title": "魏武帝" },
+      { "id": "simayi", "name": "司马懿", "title": "冢虎" },
+      { "id": "xiahouyuan", "name": "夏侯渊", "title": "虎步关右" },
+      { "id": "zhangliao", "name": "张辽", "title": "威震逍遥津" },
+      { "id": "xuchu", "name": "许褚", "title": "虎痴" },
+      { "id": "guojia", "name": "郭嘉", "title": "鬼才" },
+      { "id": "xunyu", "name": "荀彧", "title": "王佐之才" },
+      { "id": "dianwei", "name": "典韦", "title": "古之恶来" }
+    ]
   },
   "shu": {
     "name": "蜀国",
@@ -17,7 +27,17 @@
       "economyBonus": 1.0,
       "militaryBonus": 1.0,
       "buildingBonus": 1.0
-    }
+    },
+    "generals": [
+      { "id": "liubei", "name": "刘备", "title": "昭烈帝" },
+      { "id": "guanyu", "name": "关羽", "title": "武圣" },
+      { "id": "zhangfei", "name": "张飞", "title": "万人敌" },
+      { "id": "zhugeliang", "name": "诸葛亮", "title": "卧龙" },
+      { "id": "zhaoyun", "name": "赵云", "title": "常胜将军" },
+      { "id": "machao", "name": "马超", "title": "锦马超" },
+      { "id": "huangzhong", "name": "黄忠", "title": "老当益壮" },
+      { "id": "weiyan", "name": "魏延", "title": "踏破敌阵" }
+    ]
   },
   "wu": {
     "name": "吴国",
@@ -27,6 +47,16 @@
       "economyBonus": 1.0,
       "militaryBonus": 1.0,
       "buildingBonus": 1.0
-    }
+    },
+    "generals": [
+      { "id": "sunquan", "name": "孙权", "title": "大帝" },
+      { "id": "zhouyu", "name": "周瑜", "title": "美周郎" },
+      { "id": "lvmeng", "name": "吕蒙", "title": "白衣渡江" },
+      { "id": "luxun", "name": "陆逊", "title": "火烧连营" },
+      { "id": "ganning", "name": "甘宁", "title": "锦帆贼" },
+      { "id": "taishici", "name": "太史慈", "title": "信义笃烈" },
+      { "id": "huanggai", "name": "黄盖", "title": "苦肉计" },
+      { "id": "sunce", "name": "孙策", "title": "小霸王" }
+    ]
   }
 }

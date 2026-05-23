@@ -6,8 +6,9 @@ import GeneralCarousel from '@/components/GeneralCarousel'
 import CloudSyncModal from '@/components/CloudSyncModal'
 import { useGameStore } from '@/store/gameStore'
 import { useAccountStore } from '@/store/accountStore'
+import { useConfigStore } from '@/store/configStore'
 import heroBg from '@/assets/hero3background.webp'
-import { FACTIONS } from './data/factions'
+import { FACTION_UI } from './data/factions'
 import type { Faction } from './types'
 
 // 极小的模糊占位图（112 bytes webp）
@@ -26,6 +27,19 @@ const LoginPage: FC = () => {
   const setActivePlayer = useGameStore((store) => store.setActivePlayer)
   const navigate = useNavigate()
 
+  // 从 configStore 获取将领数据，合并 UI 配置
+  const factionsConfig = useConfigStore((s) => s.factions)
+  const FACTIONS = FACTION_UI.map((ui) => {
+    const serverFaction = factionsConfig?.[ui.key]
+    const generals = serverFaction?.generals?.map((g) => ({
+      id: g.id,
+      name: g.name,
+      title: g.title,
+      faction: ui.key,
+    })) ?? []
+    return { ...ui, generals }
+  })
+
   // 预加载背景大图
   useEffect(() => {
     const img = new Image()
@@ -40,8 +54,10 @@ const LoginPage: FC = () => {
     setFaction(key)
     // Auto-select first general when switching faction
     const factionData = FACTIONS.find((f) => f.key === key)
-    if (factionData) {
+    if (factionData && factionData.generals.length > 0) {
       setSelectedGeneral(factionData.generals[0].id)
+    } else {
+      setSelectedGeneral(null)
     }
   }
 

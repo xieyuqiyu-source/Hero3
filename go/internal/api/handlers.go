@@ -201,11 +201,14 @@ func (h *Handlers) CreatePlayer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	playerID, state, err := h.gameService.CreatePlayer(payload.AccountID, payload.Nickname, payload.Faction)
+	playerID, state, err := h.gameService.CreatePlayer(payload.AccountID, payload.Nickname, payload.Faction, payload.GeneralID)
 	if err != nil {
 		status := http.StatusBadRequest
-		if errors.Is(err, game.ErrAccountNotFound) {
+		switch {
+		case errors.Is(err, game.ErrAccountNotFound):
 			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInvalidGeneral):
+			status = http.StatusUnprocessableEntity
 		}
 		writeError(w, status, err.Error())
 		return

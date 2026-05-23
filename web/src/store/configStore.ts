@@ -27,11 +27,18 @@ export interface UnitConfig {
   unlock: Record<string, any>
 }
 
+export interface GeneralInfo {
+  id: string
+  name: string
+  title: string
+}
+
 export interface FactionConfig {
   name: string
   description: string
   icon: string
   traits: Record<string, number>
+  generals: GeneralInfo[]
 }
 
 interface ConfigStore {

@@ -32,6 +32,14 @@ type FactionConfig struct {
 	Description string             `json:"description"`
 	Icon        string             `json:"icon"`
 	Traits      map[string]float64 `json:"traits"`
+	Generals    []GeneralInfo      `json:"generals"`
+}
+
+// GeneralInfo 将领基础信息（用于选择界面）
+type GeneralInfo struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Title string `json:"title"`
 }
 
 // FactionsConfig 全部阵营：map[factionId]FactionConfig

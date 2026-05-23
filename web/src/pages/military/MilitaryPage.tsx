@@ -1,6 +1,7 @@
 import { useState, type FC } from 'react'
 import { Swords, FlaskConical, Users } from 'lucide-react'
 import RecruitTab from './components/RecruitTab'
+import GeneralPanel from './components/GeneralPanel'
 
 type MainTab = 'recruit' | 'generals' | 'tech'
 
@@ -43,11 +44,7 @@ const MilitaryPage: FC = () => {
 
       {/* Tab Content */}
       {activeTab === 'recruit' && <RecruitTab />}
-      {activeTab === 'generals' && (
-        <div className="flex items-center justify-center py-16">
-          <span className="text-sm text-[var(--color-text-muted)]">将领系统开发中，敬请期待</span>
-        </div>
-      )}
+      {activeTab === 'generals' && <GeneralPanel />}
       {activeTab === 'tech' && (
         <div className="flex items-center justify-center py-16">
           <span className="text-sm text-[var(--color-text-muted)]">科技系统开发中，敬请期待</span>

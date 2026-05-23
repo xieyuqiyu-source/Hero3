@@ -22,6 +22,7 @@ var (
 	ErrUnitNotFound       = errors.New("unit not found")
 	ErrInvalidAmount      = errors.New("invalid recruit amount")
 	ErrQueueFull          = errors.New("recruit queue is full")
+	ErrInvalidGeneral     = errors.New("invalid general for faction")
 )
 
 const resourceDateLayout = time.RFC3339
@@ -118,11 +119,32 @@ func (s *Service) ListAccounts() ([]AccountSummary, error) {
 	return s.repo.ListAccounts()
 }
 
-func (s *Service) CreatePlayer(accountID string, nickname string, faction string) (string, GameState, error) {
+func (s *Service) CreatePlayer(accountID string, nickname string, faction string, generalID string) (string, GameState, error) {
 	nickname = strings.TrimSpace(nickname)
 	faction = strings.TrimSpace(faction)
+	generalID = strings.TrimSpace(generalID)
 	if nickname == "" || faction == "" {
 		return "", GameState{}, ErrPlayerNotFound
+	}
+
+	// 校验 generalID 是否属于所选阵营
+	if generalID == "" {
+		return "", GameState{}, ErrInvalidGeneral
+	}
+	factions := GetFactionsConfig()
+	fc, factionExists := factions[faction]
+	if !factionExists {
+		return "", GameState{}, ErrInvalidGeneral
+	}
+	valid := false
+	for _, g := range fc.Generals {
+		if g.ID == generalID {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return "", GameState{}, ErrInvalidGeneral
 	}
 
 	exists, err := s.repo.AccountExists(accountID)
@@ -135,7 +157,7 @@ func (s *Service) CreatePlayer(accountID string, nickname string, faction string
 
 	now := time.Now()
 	playerID := "player_" + randomID(12)
-	state := newPlayerState(playerID, nickname, faction, now)
+	state := newPlayerState(playerID, nickname, faction, generalID, now)
 	if err := s.repo.CreatePlayer(accountID, state, now); err != nil {
 		return "", GameState{}, err
 	}
@@ -174,6 +196,20 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 	}
 
 	state, changed := settleResources(state, time.Now())
+
+	// 旧存档没有将领数据时，根据阵营分配默认将领
+	if state.General == nil && state.Player.Faction != "" {
+		defaultGenerals := map[string]string{
+			"wei": "caocao",
+			"shu": "liubei",
+			"wu":  "sunquan",
+		}
+		if gid, ok := defaultGenerals[state.Player.Faction]; ok {
+			state.General = newGeneral(state.Player.Faction, gid)
+			changed = true
+		}
+	}
+
 	if changed {
 		if err := s.repo.SaveState(state, time.Now()); err != nil {
 			return GameState{}, err
