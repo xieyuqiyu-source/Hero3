@@ -17,6 +17,7 @@ import ResourceBar from './ResourceBar'
 import BoostButton from './BoostButton'
 import { useGameStore } from '@/store/gameStore'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
+import { useConfigStore } from '@/store/configStore'
 import type { GameState } from '@/types/game'
 
 interface LayoutProps {
@@ -272,7 +273,22 @@ const MobileSidebarContent: FC<{
             <span className="text-sm font-semibold text-[var(--color-text-primary)]">军队</span>
             <span className="text-xs font-semibold text-[var(--color-accent)] ml-auto">{totalArmy}</span>
           </div>
-          <p className="text-xs text-[var(--color-text-secondary)] opacity-50">军队信息预留</p>
+          {gameState?.army && gameState.army.filter(u => u.amount > 0).length > 0 ? (
+            <div className="space-y-1">
+              {gameState.army.filter(u => u.amount > 0).map((unit) => {
+                const factionUnits = useConfigStore.getState().units?.[gameState.player.faction]
+                const unitName = factionUnits?.[unit.unitType]?.name ?? unit.unitType
+                return (
+                  <div key={unit.unitType} className="flex items-center justify-between px-2 py-1 rounded-lg bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
+                    <span className="text-[10px] text-[var(--color-text-secondary)]">{unitName}</span>
+                    <span className="text-[10px] font-semibold text-[var(--color-accent)]">{unit.amount.toLocaleString()}</span>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-[var(--color-text-secondary)] opacity-50">暂无兵力</p>
+          )}
         </div>
       </div>
 
