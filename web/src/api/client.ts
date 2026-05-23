@@ -28,6 +28,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   'account already exists': '账号已存在',
   'invalid username or password': '用户名或密码错误',
   'invalid json body': '请求数据格式错误',
+  'unit not found': '兵种不存在',
+  'invalid recruit amount': '征兵数量无效',
+  'recruit queue is full': '征兵队列已满',
 }
 
 /** 从错误响应体中提取可读消息 */

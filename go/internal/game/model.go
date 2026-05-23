@@ -58,7 +58,6 @@ type RecruitQueue struct {
 	UnitType string `json:"unitType"`
 	Amount   int    `json:"amount"`
 	EndsAt   string `json:"endsAt"`
-	Status   string `json:"status"`
 }
 
 type MapTarget struct {

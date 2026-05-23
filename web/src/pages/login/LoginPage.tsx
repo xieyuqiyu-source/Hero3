@@ -1,4 +1,4 @@
-import { useState, type FC, type FormEvent } from 'react'
+import { useState, useEffect, type FC, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Cloud } from 'lucide-react'
 import { gameApi } from '@/api/game'
@@ -6,9 +6,12 @@ import GeneralCarousel from '@/components/GeneralCarousel'
 import CloudSyncModal from '@/components/CloudSyncModal'
 import { useGameStore } from '@/store/gameStore'
 import { useAccountStore } from '@/store/accountStore'
-import heroBg from '@/assets/hero3background.png'
+import heroBg from '@/assets/hero3background.webp'
 import { FACTIONS } from './data/factions'
 import type { Faction } from './types'
+
+// 极小的模糊占位图（112 bytes webp）
+const BG_PLACEHOLDER = 'data:image/webp;base64,UklGRmgAAABXRUJQVlA4IFwAAAAwBACdASoUAAsAPzmEuVOvKKWisAgB4CcJYwCdACLKCmWJ6Pdw43v4S4AA/rvqQrUD2UJiHN wrOTDEqMVex056iFRlKJ3FVgyuxcy8zTd9ta7nZoEQFTcly74AAA=='
 
 const LoginPage: FC = () => {
   const [nickname, setNickname] = useState('')
@@ -18,9 +21,17 @@ const LoginPage: FC = () => {
   const account = useAccountStore((s) => s.account)
   const [creating, setCreating] = useState(false)
   const [showSyncReminder, setShowSyncReminder] = useState(false)
+  const [bgLoaded, setBgLoaded] = useState(false)
   const setGameState = useGameStore((store) => store.setState)
   const setActivePlayer = useGameStore((store) => store.setActivePlayer)
   const navigate = useNavigate()
+
+  // 预加载背景大图
+  useEffect(() => {
+    const img = new Image()
+    img.src = heroBg
+    img.onload = () => setBgLoaded(true)
+  }, [])
 
   const canSubmit = nickname.trim().length > 0 && faction !== null && selectedGeneral !== null
 
@@ -72,10 +83,14 @@ const LoginPage: FC = () => {
 
   return (
     <div className="min-h-dvh flex flex-col relative overflow-hidden">
-      {/* Background image - full visible */}
+      {/* Background: blur placeholder + full image fade-in */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url(${heroBg})` }}
+        style={{ backgroundImage: `url(${BG_PLACEHOLDER})`, filter: 'blur(20px)', transform: 'scale(1.1)' }}
+      />
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-700"
+        style={{ backgroundImage: `url(${heroBg})`, opacity: bgLoaded ? 1 : 0 }}
       />
 
       <form onSubmit={handleSubmit} className="relative z-10 flex flex-col h-dvh p-4 sm:p-6 lg:p-8">

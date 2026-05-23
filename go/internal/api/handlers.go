@@ -243,6 +243,38 @@ func (h *Handlers) FillResources(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"state": state})
 }
 
+func (h *Handlers) Recruit(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+		UnitID   string `json:"unitId"`
+		Amount   int    `json:"amount"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	state, err := h.gameService.Recruit(payload.PlayerID, payload.UnitID, payload.Amount)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrUnitNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInsufficientRes):
+			status = http.StatusUnprocessableEntity
+		case errors.Is(err, game.ErrInvalidAmount):
+			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrQueueFull):
+			status = http.StatusConflict
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
 func (h *Handlers) UpgradeBuilding(w http.ResponseWriter, r *http.Request) {
 	var payload upgradeBuildingRequest
 	if !decodeJSON(w, r, &payload) {

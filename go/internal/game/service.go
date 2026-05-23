@@ -20,6 +20,9 @@ var (
 	ErrInsufficientRes    = errors.New("insufficient resources")
 	ErrAlreadyUpgrading   = errors.New("building is already upgrading")
 	ErrMaxLevel           = errors.New("building is at max level")
+	ErrUnitNotFound       = errors.New("unit not found")
+	ErrInvalidAmount      = errors.New("invalid recruit amount")
+	ErrQueueFull          = errors.New("recruit queue is full")
 )
 
 const resourceDateLayout = time.RFC3339
@@ -212,6 +215,81 @@ func (s *Service) FillResources(playerID string) (GameState, error) {
 	for resType, cap := range state.Resources.Capacity {
 		state.Resources.Items[resType] = cap
 	}
+
+	state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
+	state.ServerTime = now.UTC().Format(resourceDateLayout)
+
+	if err := s.repo.SaveState(state, now); err != nil {
+		return GameState{}, err
+	}
+
+	return state, nil
+}
+
+func (s *Service) Recruit(playerID string, unitID string, amount int) (GameState, error) {
+	playerID = strings.TrimSpace(playerID)
+	unitID = strings.TrimSpace(unitID)
+	if playerID == "" {
+		return GameState{}, ErrPlayerNotFound
+	}
+	if unitID == "" {
+		return GameState{}, ErrUnitNotFound
+	}
+	if amount <= 0 || amount > 100000 {
+		return GameState{}, ErrInvalidAmount
+	}
+
+	state, err := s.repo.GetState(playerID)
+	if err != nil {
+		return GameState{}, err
+	}
+
+	now := time.Now()
+	state, _ = settleResources(state, now)
+
+	// 检查队列上限
+	pendingCount := len(state.RecruitQueues)
+	if pendingCount >= 5 {
+		return GameState{}, ErrQueueFull
+	}
+
+	// 查找兵种配置
+	unitConfig, exists := GetUnitConfig(state.Player.Faction, unitID)
+	if !exists {
+		return GameState{}, ErrUnitNotFound
+	}
+
+	// 检查资源是否足够（单价 × 数量）
+	for resType, costPer := range unitConfig.Cost {
+		totalCost := costPer * amount
+		if state.Resources.Items[resType] < totalCost {
+			return GameState{}, ErrInsufficientRes
+		}
+	}
+
+	// 扣减资源
+	for resType, costPer := range unitConfig.Cost {
+		state.Resources.Items[resType] -= costPer * amount
+	}
+
+	// 计算训练总时间（串行：基于队列最后一个任务的结束时间）
+	totalSeconds := unitConfig.TrainSeconds * amount
+	queueStart := now
+	for _, q := range state.RecruitQueues {
+		if parsed, err := time.Parse(resourceDateLayout, q.EndsAt); err == nil && parsed.After(queueStart) {
+			queueStart = parsed
+		}
+	}
+	endsAt := queueStart.Add(time.Duration(totalSeconds) * time.Second).UTC().Format(resourceDateLayout)
+
+	// 添加征兵队列
+	queue := RecruitQueue{
+		ID:       "rq_" + randomID(8),
+		UnitType: unitID,
+		Amount:   amount,
+		EndsAt:   endsAt,
+	}
+	state.RecruitQueues = append(state.RecruitQueues, queue)
 
 	state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
 	state.ServerTime = now.UTC().Format(resourceDateLayout)
@@ -561,6 +639,42 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 	if !reflect.DeepEqual(state.Resources.Capacity, capacity) {
 		state.Resources.Capacity = capacity
 		changed = true
+	}
+
+	// 检查并完成已到期的征兵队列
+	if len(state.RecruitQueues) > 0 {
+		remaining := state.RecruitQueues[:0]
+		for _, queue := range state.RecruitQueues {
+			endsAt, err := time.Parse(resourceDateLayout, queue.EndsAt)
+			if err != nil {
+				remaining = append(remaining, queue)
+				continue
+			}
+			if now.After(endsAt) || now.Equal(endsAt) {
+				// 征兵完成，加入军队
+				found := false
+				for i, unit := range state.Army {
+					if unit.UnitType == queue.UnitType {
+						state.Army[i].Amount += queue.Amount
+						found = true
+						break
+					}
+				}
+				if !found {
+					state.Army = append(state.Army, ArmyUnit{
+						UnitType: queue.UnitType,
+						Amount:   queue.Amount,
+					})
+				}
+				changed = true
+			} else {
+				remaining = append(remaining, queue)
+			}
+		}
+		if len(remaining) != len(state.RecruitQueues) {
+			state.RecruitQueues = remaining
+			changed = true
+		}
 	}
 
 	state.ServerTime = now.Format(resourceDateLayout)

@@ -22,7 +22,7 @@ const UnitCard: FC<UnitCardProps> = ({ config, owned, onClick }) => {
       <div className="px-3 pt-3 pb-1.5">
         <div className="flex items-baseline justify-between">
           <span className="text-sm font-bold text-[var(--color-text-primary)]">{config.name}</span>
-          <span className="text-base font-bold text-[var(--color-accent)]">{owned}</span>
+          <span className="text-xl font-bold text-[var(--color-accent)]">{owned}</span>
         </div>
         <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5 leading-tight">{config.description}</p>
       </div>

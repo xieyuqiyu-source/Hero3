@@ -65,11 +65,8 @@ export const gameApi = {
   },
 
   /** 征兵 */
-  recruit(playerId: string, unitType: string, amount: number) {
-    return api.post<{ resources: GameState['resources']; army: GameState['army']; recruitQueues: GameState['recruitQueues'] }>(
-      '/military/recruit',
-      { playerId, unitType, amount },
-    )
+  recruit(playerId: string, unitId: string, amount: number) {
+    return api.post<{ state: GameState }>('/military/recruit', { playerId, unitId, amount })
   },
 
   /** 攻击地图目标 */

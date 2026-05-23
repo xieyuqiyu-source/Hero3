@@ -4,14 +4,14 @@
  */
 import { useState, useRef, useCallback, useEffect, type FC } from 'react'
 
-// Dynamic import all general images
+// Dynamic import all general images (webp)
 const generalImages = import.meta.glob<{ default: string }>(
-  '/src/assets/generals/**/*.png',
+  '/src/assets/generals/**/*.webp',
   { eager: true }
 )
 
 function getGeneralImage(faction: string, id: string): string | null {
-  const key = `/src/assets/generals/${faction}/${id}.png`
+  const key = `/src/assets/generals/${faction}/${id}.webp`
   return generalImages[key]?.default ?? null
 }
 
@@ -188,7 +188,10 @@ const GeneralCarousel: FC<GeneralCarouselProps> = ({
                   <img
                     src={imgSrc}
                     alt={g.name}
-                    className="w-full h-full object-cover object-top"
+                    className="w-full h-full object-cover object-top opacity-0 transition-opacity duration-300"
+                    loading="lazy"
+                    decoding="async"
+                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1' }}
                     draggable={false}
                   />
                 ) : null

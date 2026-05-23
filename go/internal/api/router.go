@@ -36,6 +36,7 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("POST /api/v1/city/buildings/upgrade", handlers.UpgradeBuilding)
 	mux.HandleFunc("POST /api/v1/city/buildings/upgrade-batch", handlers.UpgradeBuildingBatch)
 	mux.HandleFunc("POST /api/v1/city/resources/fill", handlers.FillResources)
+	mux.HandleFunc("POST /api/v1/military/recruit", handlers.Recruit)
 	mux.HandleFunc("GET /api/v1/admin/accounts", handlers.AdminAccounts)
 	mux.HandleFunc("GET /api/v1/admin/players/{playerId}/state", handlers.AdminPlayerState)
 	mux.HandleFunc("POST /api/v1/admin/resources/adjust", handlers.AdminAdjustResources)

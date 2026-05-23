@@ -44,7 +44,6 @@ export interface RecruitQueue {
   unitType: string
   amount: number
   endsAt: string
-  status: 'pending' | 'completed' | 'claimed'
 }
 
 export interface MapTarget {

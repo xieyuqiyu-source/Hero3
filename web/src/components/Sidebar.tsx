@@ -14,6 +14,7 @@ import ThemeToggle from './ThemeToggle'
 import BoostButton from './BoostButton'
 import type { GameState } from '@/types/game'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
+import { useConfigStore } from '@/store/configStore'
 
 export interface NavItem {
   key: string
@@ -259,9 +260,22 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
                 <span className="text-sm font-semibold text-[var(--color-text-primary)]">军队</span>
                 <span className="text-xs font-semibold text-[var(--color-accent)]">{totalArmy}</span>
               </div>
-              <div className="text-xs text-[var(--color-text-secondary)]">
-                <p className="opacity-50">军队信息预留</p>
-              </div>
+              {gameState?.army && gameState.army.length > 0 ? (
+                <div className="space-y-1">
+                  {gameState.army.filter(u => u.amount > 0).map((unit) => {
+                    const factionUnits = useConfigStore.getState().units?.[gameState.player.faction]
+                    const unitName = factionUnits?.[unit.unitType]?.name ?? unit.unitType
+                    return (
+                      <div key={unit.unitType} className="flex items-center justify-between px-2 py-1 rounded-lg bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
+                        <span className="text-[10px] text-[var(--color-text-secondary)]">{unitName}</span>
+                        <span className="text-[10px] font-semibold text-[var(--color-accent)]">{unit.amount.toLocaleString()}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-[var(--color-text-secondary)] opacity-50">暂无兵力</p>
+              )}
             </>
           )}
         </div>

@@ -4,6 +4,7 @@ import { useGameStore } from '@/store/gameStore'
 import { useConfigStore, type UnitConfig } from '@/store/configStore'
 import UnitCard from './UnitCard'
 import RecruitModal from './RecruitModal'
+import RecruitQueuePanel from './RecruitQueuePanel'
 import type { ArmyUnit } from '@/types/game'
 
 type UnitCategory = 'infantry' | 'cavalry' | 'siege' | 'special'
@@ -40,6 +41,9 @@ const RecruitTab: FC = () => {
 
   return (
     <div className="space-y-4">
+      {/* Recruit Queue */}
+      <RecruitQueuePanel />
+
       {/* Category Sub-tabs */}
       <div className="flex gap-1.5">
         {CATEGORIES.map((cat) => {
