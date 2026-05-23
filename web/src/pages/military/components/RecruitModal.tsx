@@ -61,9 +61,9 @@ const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, ow
     setRecruiting(true)
     try {
       const result = await gameApi.recruit(activePlayerId, unitId, amount)
-      setVisible(false)
-      onClose()
-      setState(result.state)
+      handleClose()
+      // 延迟更新 state，等弹窗动画结束
+      setTimeout(() => setState(result.state), 200)
     } catch {
       // 错误由全局拦截器处理
     } finally {
