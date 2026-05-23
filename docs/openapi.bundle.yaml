@@ -17,6 +17,8 @@ tags:
   description: 轻账号与存档
 - name: City
   description: 城池建设
+- name: Military
+  description: 军事与征兵
 - name: Admin
   description: GM 后台接口
 paths:
@@ -393,6 +395,55 @@ paths:
                     $ref: '#/components/schemas/GameState'
         '404':
           description: 玩家不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/military/recruit:
+    post:
+      tags:
+      - Military
+      summary: 发起征兵
+      description: 消耗资源创建征兵队列。队列到期后，后端在游戏状态结算时自动将兵力加入军队并移除该队列。
+      operationId: recruitUnits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecruitRequest'
+      responses:
+        '200':
+          description: 征兵已进入队列，返回更新后的游戏状态
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - state
+                properties:
+                  state:
+                    $ref: '#/components/schemas/GameState'
+        '400':
+          description: 征兵数量无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 玩家或兵种不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 征兵队列已满
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: 资源不足
           content:
             application/json:
               schema:
@@ -813,7 +864,6 @@ components:
       - unitType
       - amount
       - endsAt
-      - status
       properties:
         id:
           type: string
@@ -824,8 +874,6 @@ components:
         endsAt:
           type: string
           format: date-time
-        status:
-          type: string
     MapTarget:
       type: object
       required:
@@ -975,6 +1023,24 @@ components:
           example:
             wood: 5000
             iron: -200
+    RecruitRequest:
+      type: object
+      required:
+      - playerId
+      - unitId
+      - amount
+      properties:
+        playerId:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+        unitId:
+          type: string
+          description: 兵种配置 ID，按玩家阵营在 units 配置中查找。
+          example: infantry
+        amount:
+          type: integer
+          minimum: 1
+          example: 10
     ErrorResponse:
       type: object
       required:

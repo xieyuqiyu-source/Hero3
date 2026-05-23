@@ -17,6 +17,8 @@ tags:
   description: 轻账号与存档
 - name: City
   description: 城池建设
+- name: Military
+  description: 军事与征兵
 - name: Admin
   description: GM 后台接口
 paths:
@@ -46,6 +48,8 @@ paths:
     $ref: ./paths/city.yaml#/~1api~1v1~1city~1buildings~1upgrade-batch
   /api/v1/city/resources/fill:
     $ref: ./paths/city.yaml#/~1api~1v1~1city~1resources~1fill
+  /api/v1/military/recruit:
+    $ref: ./paths/military.yaml#/~1api~1v1~1military~1recruit
   /api/v1/admin/accounts:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1accounts
   /api/v1/admin/players/{playerId}/state:
@@ -98,6 +102,8 @@ components:
       $ref: ./schemas/city.yaml#/UpgradeBuildingRequest
     AdjustResourcesRequest:
       $ref: ./schemas/city.yaml#/AdjustResourcesRequest
+    RecruitRequest:
+      $ref: ./schemas/military.yaml#/RecruitRequest
     ErrorResponse:
       $ref: ./schemas/common.yaml#/ErrorResponse
     DeleteResponse:

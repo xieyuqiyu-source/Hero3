@@ -1,0 +1,18 @@
+RecruitRequest:
+  type: object
+  required:
+  - playerId
+  - unitId
+  - amount
+  properties:
+    playerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+    unitId:
+      type: string
+      description: 兵种配置 ID，按玩家阵营在 units 配置中查找。
+      example: infantry
+    amount:
+      type: integer
+      minimum: 1
+      example: 10

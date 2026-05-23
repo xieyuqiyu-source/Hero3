@@ -141,7 +141,6 @@ RecruitQueue:
   - unitType
   - amount
   - endsAt
-  - status
   properties:
     id:
       type: string
@@ -152,8 +151,6 @@ RecruitQueue:
     endsAt:
       type: string
       format: date-time
-    status:
-      type: string
 MapTarget:
   type: object
   required:

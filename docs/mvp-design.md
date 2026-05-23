@@ -239,15 +239,13 @@ id
 playerId
 unitType
 amount
-startedAt
 endsAt
-status
 ```
 
 说明：
 
-- `status` 可用 `pending`、`completed`、`claimed`。
-- 第一版可以在获取游戏状态时自动结算已完成队列。
+- 第一版征兵队列不保留状态字段。队列到期后，后端在获取游戏状态或其他结算入口中自动加入军队并移除队列。
+- `endsAt` 表示该队列预计完成时间。当前设计为串行队列，后续队列会排在已有队列之后。
 
 ### 7.6 MapTarget
 
@@ -371,7 +369,7 @@ POST /api/v1/military/recruit
 ```json
 {
   "playerId": "player_001",
-  "unitType": "infantry",
+  "unitId": "infantry",
   "amount": 10
 }
 ```

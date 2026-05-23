@@ -1,0 +1,49 @@
+/api/v1/military/recruit:
+  post:
+    tags:
+    - Military
+    summary: 发起征兵
+    description: 消耗资源创建征兵队列。队列到期后，后端在游戏状态结算时自动将兵力加入军队并移除该队列。
+    operationId: recruitUnits
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RecruitRequest'
+    responses:
+      '200':
+        description: 征兵已进入队列，返回更新后的游戏状态
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - state
+              properties:
+                state:
+                  $ref: '#/components/schemas/GameState'
+      '400':
+        description: 征兵数量无效
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 玩家或兵种不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '409':
+        description: 征兵队列已满
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '422':
+        description: 资源不足
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
