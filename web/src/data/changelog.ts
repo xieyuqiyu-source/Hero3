@@ -13,6 +13,19 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: 5,
+    date: '2026-05-23',
+    title: '征兵系统上线',
+    items: [
+      '军事页面全新改版：征兵 / 将领 / 科技三大模块',
+      '按阵营展示专属兵种，步兵/骑兵/攻城/特殊四分类',
+      '征兵弹窗：属性面板、资源消耗、数量调节、一键征满',
+      '征兵队列：串行训练、实时倒计时、完成通知',
+      '侧边栏军队区域显示实际兵种和数量',
+      '顶部资源栏全页面显示',
+    ],
+  },
+  {
     version: 4,
     date: '2026-05-22',
     title: '城建系统扩展',
