@@ -93,6 +93,12 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
 
   // 升级信息
   const upgradeCost = getUpgradeCost(buildingType, level)
+
+  // 检查资源是否足够
+  const resources = useGameStore((s) => s.state?.resources.items ?? {})
+  const canAfford = upgradeCost
+    ? Object.entries(upgradeCost).every(([res, cost]) => (resources[res] ?? 0) >= cost)
+    : false
   const nextProduction = getProductionAtLevel(buildingType, level + 1)
   const upgradeTime = getUpgradeSeconds(buildingType, level)
   const productionGain = nextProduction - production
@@ -128,11 +134,11 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
           {formatCountdown(countdown)}
         </span>
       ) : (
-        <Tooltip content={tooltipContent} placement="left">
+        <Tooltip content={tooltipContent} placement="top">
           <button
             type="button"
             onClick={handleUpgrade}
-            disabled={loading || !upgradeCost}
+            disabled={loading || !upgradeCost || !canAfford}
             className="
               flex items-center gap-1 px-2 py-1 rounded-lg
               text-[10px] font-medium text-[var(--color-accent)]

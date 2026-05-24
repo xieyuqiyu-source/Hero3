@@ -10,14 +10,17 @@ import {
   Menu,
   Settings,
   LoaderCircle,
+  ChevronDown,
 } from 'lucide-react'
 import Sidebar from './Sidebar'
 import ThemeToggle from './ThemeToggle'
 import ResourceBar from './ResourceBar'
 import BoostButton from './BoostButton'
 import { useGameStore } from '@/store/gameStore'
+import { useAccountStore } from '@/store/accountStore'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
 import { useConfigStore } from '@/store/configStore'
+import { FACTION_LABELS, FACTION_COLORS } from '@/utils/faction'
 import type { GameState } from '@/types/game'
 
 interface LayoutProps {
@@ -217,14 +220,9 @@ const MobileSidebarContent: FC<{
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto px-2.5 py-3 scrollbar-none">
-        {/* City Info */}
+        {/* City Info - Player Switcher */}
         <div className="mb-2.5 rounded-2xl p-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
-          <div className="flex items-center gap-2 mb-2">
-            <Castle size={14} className="text-[var(--color-accent)]" />
-            <span className="text-sm font-semibold text-[var(--color-text-primary)]">城市信息</span>
-            <span className="text-xs text-[var(--color-text-muted)] ml-auto">Lv.1</span>
-          </div>
-          <p className="text-xs text-[var(--color-text-secondary)] opacity-50">城市详情预留</p>
+          <MobilePlayerSwitcher gameState={gameState} />
         </div>
 
         {/* Resources */}
@@ -324,6 +322,73 @@ const MobileSidebarContent: FC<{
         </div>
       </div>
     </>
+  )
+}
+
+// --- Mobile Player Switcher ---
+const MobilePlayerSwitcher: FC<{ gameState: GameState | null }> = ({ gameState }) => {
+  const [open, setOpen] = useState(false)
+  const players = useAccountStore((s) => s.players)
+  const account = useAccountStore((s) => s.account)
+  const activePlayerId = useGameStore((s) => s.activePlayerId)
+  const setActivePlayer = useGameStore((s) => s.setActivePlayer)
+  const loadGameState = useGameStore((s) => s.loadGameState)
+
+  const nickname = gameState?.player.nickname ?? '未同步'
+  const civilizationLevel = gameState?.buildings.reduce((sum, b) => sum + b.level, 0) ?? 0
+
+  const handleSwitch = (playerId: string) => {
+    if (playerId === activePlayerId) { setOpen(false); return }
+    setActivePlayer(playerId)
+    loadGameState(playerId)
+    setOpen(false)
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => account && setOpen(!open)}
+        className={`w-full flex items-center justify-between ${account ? 'cursor-pointer' : 'cursor-default'}`}
+      >
+        <div className="flex items-center gap-2">
+          <Castle size={14} className="text-[var(--color-accent)]" />
+          <span className="text-sm font-semibold text-[var(--color-text-primary)]">{nickname}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent-light)] text-[var(--color-accent)] font-bold">
+            {civilizationLevel}
+          </span>
+        </div>
+        {account && (
+          <ChevronDown size={14} className={`text-[var(--color-text-muted)] transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        )}
+      </button>
+      <div className={`overflow-hidden transition-all duration-200 ease-out ${open ? 'max-h-[200px] mt-2 opacity-100' : 'max-h-0 opacity-0'}`}>
+        {players.length > 0 ? (
+          <div className="space-y-1 pt-2 border-t border-[var(--color-border)]">
+            {players.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => handleSwitch(p.id)}
+                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs cursor-pointer transition-colors ${
+                  p.id === activePlayerId
+                    ? 'bg-[var(--color-accent-light)] text-[var(--color-accent)] font-bold'
+                    : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text-primary)]'
+                }`}
+              >
+                <span className={`text-[10px] font-bold ${FACTION_COLORS[p.faction] ?? 'text-[var(--color-text-muted)]'}`}>{FACTION_LABELS[p.faction] ?? p.faction}</span>
+                <span className="flex-1 text-left truncate">{p.nickname}</span>
+                <span className="text-[10px] text-[var(--color-text-muted)] tabular-nums">{p.buildingLevel}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[10px] text-[var(--color-text-muted)] pt-2 border-t border-[var(--color-border)]">
+            {account ? '加载中...' : '本地模式'}
+          </p>
+        )}
+      </div>
+    </div>
   )
 }
 
