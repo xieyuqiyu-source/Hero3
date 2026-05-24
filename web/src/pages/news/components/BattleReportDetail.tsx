@@ -83,45 +83,68 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
           </div>
         </div>
 
-        {/* 兵种表格 */}
-        <div className="px-4 py-2 border-b border-[var(--color-border)] overflow-x-auto">
-          <table className="w-full text-center text-[10px]">
-            <thead>
-              <tr className="text-[var(--color-text-muted)]">
-                <td className="py-1 text-left font-medium">兵种</td>
-                {allUnitIds.map((uid) => (
-                  <td key={uid} className="py-1 px-1 min-w-[40px]">
-                    <span className="text-[9px]">{getUnitName(uid)}</span>
-                  </td>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="py-1 text-left font-medium text-[var(--color-text-secondary)]">出动</td>
-                {allUnitIds.map((uid) => {
-                  // 优先用 dispatchedUnits，旧战报 fallback 到 lostUnits
-                  const dispatched = report.dispatchedUnits?.[uid] ?? report.lostUnits?.[uid] ?? 0
-                  return (
-                    <td key={uid} className={`py-1 px-1 ${dispatched > 0 ? 'font-bold text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
-                      {dispatched}
+        {/* 兵种表格 - 桌面横向表格 / 手机竖向列表 */}
+        <div className="px-4 py-2 border-b border-[var(--color-border)]">
+          {/* Desktop: horizontal table */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-center text-[10px]">
+              <thead>
+                <tr className="text-[var(--color-text-muted)]">
+                  <td className="py-1 text-left font-medium">兵种</td>
+                  {allUnitIds.map((uid) => (
+                    <td key={uid} className="py-1 px-1 min-w-[40px]">
+                      <span className="text-[9px]">{getUnitName(uid)}</span>
                     </td>
-                  )
-                })}
-              </tr>
-              <tr>
-                <td className="py-1 text-left font-medium text-red-500">阵亡</td>
-                {allUnitIds.map((uid) => {
-                  const lost = report.lostUnits?.[uid] ?? 0
-                  return (
-                    <td key={uid} className={`py-1 px-1 ${lost > 0 ? 'font-bold text-red-600' : 'text-[var(--color-text-muted)]'}`}>
-                      {lost}
-                    </td>
-                  )
-                })}
-              </tr>
-            </tbody>
-          </table>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="py-1 text-left font-medium text-[var(--color-text-secondary)]">出动</td>
+                  {allUnitIds.map((uid) => {
+                    const dispatched = report.dispatchedUnits?.[uid] ?? 0
+                    return (
+                      <td key={uid} className={`py-1 px-1 ${dispatched > 0 ? 'font-bold text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
+                        {dispatched}
+                      </td>
+                    )
+                  })}
+                </tr>
+                <tr>
+                  <td className="py-1 text-left font-medium text-red-500">阵亡</td>
+                  {allUnitIds.map((uid) => {
+                    const lost = report.lostUnits?.[uid] ?? 0
+                    return (
+                      <td key={uid} className={`py-1 px-1 ${lost > 0 ? 'font-bold text-red-600' : 'text-[var(--color-text-muted)]'}`}>
+                        {lost}
+                      </td>
+                    )
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {/* Mobile: vertical list, only show units with dispatched > 0 */}
+          <div className="sm:hidden space-y-1.5">
+            {allUnitIds
+              .filter((uid) => (report.dispatchedUnits?.[uid] ?? 0) > 0)
+              .map((uid) => {
+                const dispatched = report.dispatchedUnits?.[uid] ?? 0
+                const lost = report.lostUnits?.[uid] ?? 0
+                return (
+                  <div key={uid} className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
+                    <span className="text-[10px] font-medium text-[var(--color-text-primary)]">{getUnitName(uid)}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] text-[var(--color-text-secondary)]">出动 <span className="font-bold">{dispatched}</span></span>
+                      {lost > 0 && <span className="text-[10px] text-red-600">阵亡 <span className="font-bold">{lost}</span></span>}
+                    </div>
+                  </div>
+                )
+              })}
+            {allUnitIds.filter((uid) => (report.dispatchedUnits?.[uid] ?? 0) > 0).length === 0 && (
+              <span className="text-[10px] text-[var(--color-text-muted)]">无出动兵种</span>
+            )}
+          </div>
         </div>
 
         {/* 掠夺资源 */}
@@ -198,44 +221,67 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
         </div>
 
         {/* 防守方兵种 */}
-        <div className="px-4 py-2 border-b border-[var(--color-border)] overflow-x-auto">
+        <div className="px-4 py-2 border-b border-[var(--color-border)]">
           {report.defenderRevealed && defenderAllUnitIds.length > 0 ? (
-            <table className="w-full text-center text-[10px]">
-              <thead>
-                <tr className="text-[var(--color-text-muted)]">
-                  <td className="py-1 text-left font-medium">兵种</td>
-                  {defenderAllUnitIds.map((uid) => (
-                    <td key={uid} className="py-1 px-1 min-w-[40px]">
-                      <span className="text-[9px]">{getDefenderUnitName(uid)}</span>
-                    </td>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="py-1 text-left font-medium text-[var(--color-text-secondary)]">驻守</td>
-                  {defenderAllUnitIds.map((uid) => {
+            <>
+              {/* Desktop: horizontal table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-center text-[10px]">
+                  <thead>
+                    <tr className="text-[var(--color-text-muted)]">
+                      <td className="py-1 text-left font-medium">兵种</td>
+                      {defenderAllUnitIds.map((uid) => (
+                        <td key={uid} className="py-1 px-1 min-w-[40px]">
+                          <span className="text-[9px]">{getDefenderUnitName(uid)}</span>
+                        </td>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="py-1 text-left font-medium text-[var(--color-text-secondary)]">驻守</td>
+                      {defenderAllUnitIds.map((uid) => {
+                        const count = report.defenderUnits?.[uid] ?? 0
+                        return (
+                          <td key={uid} className={`py-1 px-1 ${count > 0 ? 'font-bold text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
+                            {count}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                    <tr>
+                      <td className="py-1 text-left font-medium text-red-500">阵亡</td>
+                      {defenderAllUnitIds.map((uid) => {
+                        const lost = report.defenderLostUnits?.[uid] ?? 0
+                        return (
+                          <td key={uid} className={`py-1 px-1 ${lost > 0 ? 'font-bold text-red-600' : 'text-[var(--color-text-muted)]'}`}>
+                            {lost}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              {/* Mobile: vertical list, only show units with count > 0 */}
+              <div className="sm:hidden space-y-1.5">
+                {defenderAllUnitIds
+                  .filter((uid) => (report.defenderUnits?.[uid] ?? 0) > 0)
+                  .map((uid) => {
                     const count = report.defenderUnits?.[uid] ?? 0
-                    return (
-                      <td key={uid} className={`py-1 px-1 ${count > 0 ? 'font-bold text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
-                        {count}
-                      </td>
-                    )
-                  })}
-                </tr>
-                <tr>
-                  <td className="py-1 text-left font-medium text-red-500">阵亡</td>
-                  {defenderAllUnitIds.map((uid) => {
                     const lost = report.defenderLostUnits?.[uid] ?? 0
                     return (
-                      <td key={uid} className={`py-1 px-1 ${lost > 0 ? 'font-bold text-red-600' : 'text-[var(--color-text-muted)]'}`}>
-                        {lost}
-                      </td>
+                      <div key={uid} className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
+                        <span className="text-[10px] font-medium text-[var(--color-text-primary)]">{getDefenderUnitName(uid)}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] text-[var(--color-text-secondary)]">驻守 <span className="font-bold">{count}</span></span>
+                          {lost > 0 && <span className="text-[10px] text-red-600">阵亡 <span className="font-bold">{lost}</span></span>}
+                        </div>
+                      </div>
                     )
                   })}
-                </tr>
-              </tbody>
-            </table>
+              </div>
+            </>
           ) : (
             <div className="flex items-center justify-center py-2">
               <span className="text-[11px] text-amber-600 font-medium">对方战损低于25%，无法显示对方详细兵力情报</span>

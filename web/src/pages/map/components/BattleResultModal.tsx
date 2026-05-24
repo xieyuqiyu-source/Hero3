@@ -1,5 +1,6 @@
 import { useState, useEffect, type FC } from 'react'
 import { Trophy, Skull, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import type { BattleReport } from '@/types/game'
 import { useConfigStore } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
@@ -13,6 +14,8 @@ const RESOURCE_LABELS: Record<string, string> = { wood: '木材', stone: '石料
 
 const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
   const [visible, setVisible] = useState(false)
+  const navigate = useNavigate()
+  const nickname = useGameStore((s) => s.state?.player.nickname ?? '我方')
   const faction = useGameStore((s) => s.state?.player.faction ?? 'wei')
   const units = useConfigStore((s) => s.units)
   const factionUnits = units?.[faction] ?? {}
@@ -73,17 +76,11 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
 
         {/* Body */}
         <div className="px-4 py-3 space-y-3">
-          {/* Power comparison */}
-          <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
-            <div className="text-center">
-              <div className="text-[10px] text-[var(--color-text-muted)]">我方战力</div>
-              <div className="text-sm font-bold text-[var(--color-text-primary)]">{report.playerPower.toLocaleString()}</div>
-            </div>
+          {/* Player VS NPC */}
+          <div className="flex items-center justify-center gap-3 px-3 py-2 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
+            <span className="text-sm font-bold text-[var(--color-text-primary)]">{nickname}</span>
             <span className="text-xs font-bold text-[var(--color-text-muted)]">VS</span>
-            <div className="text-center">
-              <div className="text-[10px] text-[var(--color-text-muted)]">敌方战力</div>
-              <div className="text-sm font-bold text-[var(--color-text-primary)]">{report.enemyPower.toLocaleString()}</div>
-            </div>
+            <span className="text-sm font-bold text-[var(--color-text-primary)]">{report.targetName}</span>
           </div>
 
           {/* Losses */}
@@ -121,7 +118,18 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-[var(--color-border)]">
+        <div className="px-4 py-3 border-t border-[var(--color-border)] space-y-2">
+          <p className="text-[10px] text-[var(--color-text-muted)] text-center">
+            详细情报请前往
+            <button
+              type="button"
+              onClick={() => { handleClose(); navigate('/news') }}
+              className="text-[var(--color-accent)] font-medium hover:underline cursor-pointer mx-0.5"
+            >
+              军情
+            </button>
+            查看
+          </p>
           <button
             type="button"
             onClick={handleClose}

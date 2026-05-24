@@ -64,7 +64,8 @@ const ResourceBar: FC = () => {
             )
           })}
         </div>
-        <button
+        {/* TODO: 爆仓功能暂时隐藏，后续可能重新开启（后端接口保留） */}
+        {/* <button
           type="button"
           onClick={handleFill}
           disabled={filling}
@@ -79,7 +80,7 @@ const ResourceBar: FC = () => {
         >
           <Flame size={12} />
           爆仓
-        </button>
+        </button> */}
       </div>
     </div>
   )

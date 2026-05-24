@@ -5,6 +5,7 @@ import { useConfigStore } from '@/store/configStore'
 import { gameApi } from '@/api/game'
 import type { NpcCity, BattleReport } from '@/types/game'
 import BattleResultModal from './BattleResultModal'
+import ScoutResultModal from './ScoutResultModal'
 
 interface AttackPanelProps {
   city: NpcCity
@@ -20,9 +21,10 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
   const units = useConfigStore((s) => s.units)
 
   const [selections, setSelections] = useState<Record<string, number>>({})
-  const [mode, setMode] = useState<'attack' | 'plunder'>('attack')
+  const [mode, setMode] = useState<'scout' | 'attack' | 'plunder'>('scout')
   const [dispatching, setDispatching] = useState(false)
   const [battleReport, setBattleReport] = useState<BattleReport | null>(null)
+  const [scoutReport, setScoutReport] = useState<BattleReport | null>(null)
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
@@ -59,9 +61,23 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
 
     setDispatching(true)
     try {
-      const result = await gameApi.attackNpc(activePlayerId, city.id, mode, dispatchUnits)
+      const result = await gameApi.attackNpc(activePlayerId, city.id, mode as 'attack' | 'plunder', dispatchUnits)
       setState(result.state)
       setBattleReport(result.battleReport)
+    } catch {
+      // 错误由全局拦截器处理
+    } finally {
+      setDispatching(false)
+    }
+  }
+
+  const handleScout = async () => {
+    if (!activePlayerId || dispatching) return
+    setDispatching(true)
+    try {
+      const result = await gameApi.scoutNpc(activePlayerId, city.id)
+      setState(result.state)
+      setScoutReport(result.battleReport)
     } catch {
       // 错误由全局拦截器处理
     } finally {
@@ -97,13 +113,12 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
           <div className="flex gap-2 mb-3">
             <button
               type="button"
-              onClick={() => {
-                if (!activePlayerId) return
-                gameApi.scoutNpc(activePlayerId, city.id).then((res) => {
-                  setState(res.state)
-                }).catch(() => {})
-              }}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium cursor-pointer transition-all bg-blue-500/10 border border-blue-500/30 text-blue-600 hover:bg-blue-500/20"
+              onClick={() => setMode('scout')}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium cursor-pointer transition-all ${
+                mode === 'scout'
+                  ? 'bg-blue-500/10 border border-blue-500/30 text-blue-600'
+                  : 'bg-[var(--color-surface-dim)] border border-[var(--color-border)] text-[var(--color-text-secondary)]'
+              }`}
             >
               <Search size={12} />侦查
             </button>
@@ -131,45 +146,51 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
             </button>
           </div>
 
-          {/* Unit Selection */}
-          <div className="space-y-2 max-h-[200px] overflow-y-auto mb-3">
-            {army.filter(u => u.amount > 0).map((unit) => (
-              <div key={unit.unitType} className="flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
-                <span className="text-xs font-medium text-[var(--color-text-primary)]">
-                  {getUnitName(unit.unitType)}
-                  <span className="text-[var(--color-text-muted)] ml-1">({unit.amount})</span>
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    value={selections[unit.unitType] || 0}
-                    onChange={(e) => handleSelectionChange(unit.unitType, e.target.value)}
-                    className="w-16 text-center text-xs font-bold bg-white dark:bg-slate-800 border border-[var(--color-border)] rounded-lg py-1 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent-border)]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleSelectAll(unit.unitType)}
-                    className="text-[10px] font-medium text-[var(--color-accent)] hover:underline cursor-pointer"
-                  >
-                    全部
-                  </button>
+          {/* Unit Selection (hidden in scout mode) */}
+          {mode !== 'scout' && (
+            <div className="space-y-2 max-h-[200px] overflow-y-auto mb-3">
+              {army.filter(u => u.amount > 0).map((unit) => (
+                <div key={unit.unitType} className="flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
+                  <span className="text-xs font-medium text-[var(--color-text-primary)]">
+                    {getUnitName(unit.unitType)}
+                    <span className="text-[var(--color-text-muted)] ml-1">({unit.amount})</span>
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      value={selections[unit.unitType] || 0}
+                      onChange={(e) => handleSelectionChange(unit.unitType, e.target.value)}
+                      className="w-16 text-center text-xs font-bold bg-white dark:bg-slate-800 border border-[var(--color-border)] rounded-lg py-1 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent-border)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAll(unit.unitType)}
+                      className="text-[10px] font-medium text-[var(--color-accent)] hover:underline cursor-pointer"
+                    >
+                      全部
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {/* Footer */}
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[var(--color-text-muted)]">
-              已选 <span className="font-bold text-[var(--color-accent)]">{totalSelected}</span> 人
-            </span>
+            {mode === 'scout' ? (
+              <span className="text-xs text-[var(--color-text-muted)]">派出全部侦察兵</span>
+            ) : (
+              <span className="text-xs text-[var(--color-text-muted)]">
+                已选 <span className="font-bold text-[var(--color-accent)]">{totalSelected}</span> 人
+              </span>
+            )}
             <button
               type="button"
-              onClick={handleDispatch}
-              disabled={totalSelected <= 0 || dispatching}
+              onClick={mode === 'scout' ? handleScout : handleDispatch}
+              disabled={mode !== 'scout' && (totalSelected <= 0 || dispatching)}
               className="px-5 py-2 rounded-xl text-xs font-bold bg-[var(--color-accent)] text-white hover:opacity-90 cursor-pointer transition-opacity disabled:opacity-50"
             >
-              {dispatching ? '出征中...' : mode === 'attack' ? '发起攻击' : '发起掠夺'}
+              {dispatching ? '执行中...' : mode === 'scout' ? '发起侦查' : mode === 'attack' ? '发起攻击' : '发起掠夺'}
             </button>
           </div>
         </div>
@@ -178,6 +199,11 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
       {/* Battle Result */}
       {battleReport && (
         <BattleResultModal report={battleReport} onClose={handleBattleClose} />
+      )}
+
+      {/* Scout Result */}
+      {scoutReport && (
+        <ScoutResultModal report={scoutReport} onClose={() => setScoutReport(null)} />
       )}
     </>
   )

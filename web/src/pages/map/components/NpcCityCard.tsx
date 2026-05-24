@@ -10,6 +10,7 @@ interface NpcCityCardProps {
   selected: boolean
   onClick: () => void
   onBattleResult: (report: BattleReport) => void
+  onScoutResult: (report: BattleReport) => void
 }
 
 const TIER_CONFIG = {
@@ -30,7 +31,7 @@ function isRecovering(city: NpcCity): boolean {
   return false
 }
 
-const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleResult }) => {
+const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleResult, onScoutResult }) => {
   const tier = TIER_CONFIG[city.tier] ?? TIER_CONFIG.small
   const recovering = isRecovering(city)
   const [busy, setBusy] = useState<string | null>(null)
@@ -47,6 +48,7 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
       try {
         const result = await gameApi.scoutNpc(playerId, city.id)
         useGameStore.getState().setState(result.state)
+        onScoutResult(result.battleReport)
       } catch { /* global handler */ }
       finally { setBusy(null) }
       return

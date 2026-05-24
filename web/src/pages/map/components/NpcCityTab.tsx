@@ -6,6 +6,7 @@ import type { NpcCity, BattleReport } from '@/types/game'
 import NpcCityCard from './NpcCityCard'
 import AttackPanel from './AttackPanel'
 import BattleResultModal from './BattleResultModal'
+import ScoutResultModal from './ScoutResultModal'
 
 const NpcCityTab: FC = () => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
@@ -14,6 +15,7 @@ const NpcCityTab: FC = () => {
   const [refreshing, setRefreshing] = useState(false)
   const [selectedCity, setSelectedCity] = useState<NpcCity | null>(null)
   const [battleReport, setBattleReport] = useState<BattleReport | null>(null)
+  const [scoutReport, setScoutReport] = useState<BattleReport | null>(null)
 
   const loadCities = async () => {
     if (!activePlayerId) return
@@ -108,6 +110,7 @@ const NpcCityTab: FC = () => {
               selected={selectedCity?.id === city.id}
               onClick={() => setSelectedCity(selectedCity?.id === city.id ? null : city)}
               onBattleResult={(report) => { setBattleReport(report); loadCities() }}
+              onScoutResult={(report) => { setScoutReport(report); loadCities() }}
             />
           </div>
         ))}
@@ -125,6 +128,11 @@ const NpcCityTab: FC = () => {
       {/* Battle Result from quick actions */}
       {battleReport && (
         <BattleResultModal report={battleReport} onClose={() => setBattleReport(null)} />
+      )}
+
+      {/* Scout Result from quick actions */}
+      {scoutReport && (
+        <ScoutResultModal report={scoutReport} onClose={() => setScoutReport(null)} />
       )}
     </div>
   )
