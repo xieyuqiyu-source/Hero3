@@ -102,7 +102,56 @@ var (
 func GetNpcConfig() NpcConfig {
 	npcMu.RLock()
 	defer npcMu.RUnlock()
-	return activeNpcCfg
+	return cloneNpcConfig(activeNpcCfg)
+}
+
+// cloneNpcConfig 深拷贝 NPC 配置，避免外部代码修改共享引用
+func cloneNpcConfig(src NpcConfig) NpcConfig {
+	dst := src
+
+	// 深拷贝 Tiers map
+	if src.Tiers != nil {
+		dst.Tiers = make(map[string]NpcTierConfig, len(src.Tiers))
+		for k, v := range src.Tiers {
+			dst.Tiers[k] = v
+		}
+	}
+
+	// 深拷贝 RecoveryProfiles slice
+	if src.RecoveryProfiles != nil {
+		dst.RecoveryProfiles = make([]NpcRecoveryProfile, len(src.RecoveryProfiles))
+		copy(dst.RecoveryProfiles, src.RecoveryProfiles)
+	}
+
+	// 深拷贝 TraitPool slice（内含 map）
+	if src.TraitPool != nil {
+		dst.TraitPool = make([]NpcTraitConfig, len(src.TraitPool))
+		for i, t := range src.TraitPool {
+			dst.TraitPool[i] = t
+			if t.Buffs != nil {
+				dst.TraitPool[i].Buffs = make(map[string]float64, len(t.Buffs))
+				for k, v := range t.Buffs {
+					dst.TraitPool[i].Buffs[k] = v
+				}
+			}
+		}
+	}
+
+	// 深拷贝 CityNames slice
+	if src.CityNames != nil {
+		dst.CityNames = make([]string, len(src.CityNames))
+		copy(dst.CityNames, src.CityNames)
+	}
+
+	// 深拷贝 ScoutCost map
+	if src.ScoutCost != nil {
+		dst.ScoutCost = make(map[string]int, len(src.ScoutCost))
+		for k, v := range src.ScoutCost {
+			dst.ScoutCost[k] = v
+		}
+	}
+
+	return dst
 }
 
 func SetNpcConfig(config NpcConfig) error {

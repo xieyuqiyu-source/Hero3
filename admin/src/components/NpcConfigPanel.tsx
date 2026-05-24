@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { MapPin, Save } from 'lucide-react'
+import { MapPin, Save, Plus, Trash2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 
 interface TierConfig {
@@ -10,6 +10,21 @@ interface TierConfig {
   count: { guaranteed: number; weight: number }
 }
 
+interface RecoveryProfile {
+  id: string
+  name: string
+  armyMultiplier: number
+  resourceMultiplier: number
+  weight: number
+}
+
+interface TraitEntry {
+  id: string
+  name: string
+  buffs: Record<string, number>
+  weight: number
+}
+
 interface NpcConfig {
   baseProduction: number
   baseStorage: number
@@ -18,7 +33,10 @@ interface NpcConfig {
   goldenAppearRate: number
   totalCities: number
   tiers: Record<string, TierConfig>
+  recoveryProfiles: RecoveryProfile[]
+  traitPool: TraitEntry[]
   scoutCost: Record<string, number>
+  cityNames: string[]
   [key: string]: any
 }
 
@@ -70,7 +88,6 @@ export default function NpcConfigPanel() {
     if (!config) return
     const tier = config.tiers[tierId]
     if (!tier) return
-
     if (field === 'multiplier') {
       setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, multiplier: value } } })
     } else if (field === 'armyMin') {
@@ -79,12 +96,80 @@ export default function NpcConfigPanel() {
       setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, armyRange: { ...tier.armyRange, max: value } } } })
     } else if (field === 'guaranteed') {
       setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, count: { ...tier.count, guaranteed: value } } } })
+    } else if (field === 'traitMin') {
+      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, traitCount: { ...tier.traitCount, min: value } } } })
+    } else if (field === 'traitMax') {
+      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, traitCount: { ...tier.traitCount, max: value } } } })
     }
   }
 
   const updateScoutCost = (tierId: string, value: number) => {
     if (!config) return
     setConfig({ ...config, scoutCost: { ...config.scoutCost, [tierId]: value } })
+  }
+
+  // --- Trait Pool ---
+  const updateTrait = (index: number, field: keyof TraitEntry, value: any) => {
+    if (!config) return
+    const next = [...config.traitPool]
+    next[index] = { ...next[index], [field]: value }
+    setConfig({ ...config, traitPool: next })
+  }
+
+  const updateTraitBuff = (index: number, buffKey: string, value: number) => {
+    if (!config) return
+    const next = [...config.traitPool]
+    next[index] = { ...next[index], buffs: { ...next[index].buffs, [buffKey]: value } }
+    setConfig({ ...config, traitPool: next })
+  }
+
+  const addTrait = () => {
+    if (!config) return
+    const newTrait: TraitEntry = { id: `trait_${Date.now()}`, name: '新词条', buffs: {}, weight: 10 }
+    setConfig({ ...config, traitPool: [...config.traitPool, newTrait] })
+  }
+
+  const removeTrait = (index: number) => {
+    if (!config) return
+    const next = config.traitPool.filter((_, i) => i !== index)
+    setConfig({ ...config, traitPool: next })
+  }
+
+  const addTraitBuff = (index: number) => {
+    if (!config) return
+    const next = [...config.traitPool]
+    const existing = Object.keys(next[index].buffs)
+    const newKey = `newBuff${existing.length}`
+    next[index] = { ...next[index], buffs: { ...next[index].buffs, [newKey]: 0.1 } }
+    setConfig({ ...config, traitPool: next })
+  }
+
+  const removeTraitBuff = (traitIndex: number, buffKey: string) => {
+    if (!config) return
+    const next = [...config.traitPool]
+    const { [buffKey]: _, ...rest } = next[traitIndex].buffs
+    next[traitIndex] = { ...next[traitIndex], buffs: rest }
+    setConfig({ ...config, traitPool: next })
+  }
+
+  // --- Recovery Profiles ---
+  const updateProfile = (index: number, field: keyof RecoveryProfile, value: any) => {
+    if (!config) return
+    const next = [...config.recoveryProfiles]
+    next[index] = { ...next[index], [field]: value }
+    setConfig({ ...config, recoveryProfiles: next })
+  }
+
+  const addProfile = () => {
+    if (!config) return
+    const newProfile: RecoveryProfile = { id: `profile_${Date.now()}`, name: '新档案', armyMultiplier: 1.0, resourceMultiplier: 1.0, weight: 10 }
+    setConfig({ ...config, recoveryProfiles: [...config.recoveryProfiles, newProfile] })
+  }
+
+  const removeProfile = (index: number) => {
+    if (!config) return
+    const next = config.recoveryProfiles.filter((_, i) => i !== index)
+    setConfig({ ...config, recoveryProfiles: next })
   }
 
   if (loading) return <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4"><p className="text-sm text-[var(--color-text-muted)]">加载中...</p></div>
@@ -112,30 +197,25 @@ export default function NpcConfigPanel() {
       <section className="mb-4">
         <h3 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">全局参数</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          <label className="grid gap-1 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
-            <span className="text-[10px] text-[var(--color-text-muted)]">基础产量</span>
-            <input type="number" value={config.baseProduction} onChange={(e) => updateGlobal('baseProduction', parseInt(e.target.value) || 0)} className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
-          </label>
-          <label className="grid gap-1 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
-            <span className="text-[10px] text-[var(--color-text-muted)]">基础仓储</span>
-            <input type="number" value={config.baseStorage} onChange={(e) => updateGlobal('baseStorage', parseInt(e.target.value) || 0)} className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
-          </label>
-          <label className="grid gap-1 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
-            <span className="text-[10px] text-[var(--color-text-muted)]">刷新间隔(h)</span>
-            <input type="number" value={config.refreshIntervalHours} onChange={(e) => updateGlobal('refreshIntervalHours', parseInt(e.target.value) || 24)} className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
-          </label>
-          <label className="grid gap-1 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
-            <span className="text-[10px] text-[var(--color-text-muted)]">手动刷新金币</span>
-            <input type="number" value={config.manualRefreshCostGold} onChange={(e) => updateGlobal('manualRefreshCostGold', parseInt(e.target.value) || 0)} className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
-          </label>
-          <label className="grid gap-1 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
-            <span className="text-[10px] text-[var(--color-text-muted)]">黄金出现率</span>
-            <input type="number" step="0.01" value={config.goldenAppearRate} onChange={(e) => updateGlobal('goldenAppearRate', parseFloat(e.target.value) || 0)} className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
-          </label>
-          <label className="grid gap-1 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
-            <span className="text-[10px] text-[var(--color-text-muted)]">总城池数</span>
-            <input type="number" value={config.totalCities} onChange={(e) => updateGlobal('totalCities', parseInt(e.target.value) || 12)} className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
-          </label>
+          {[
+            { key: 'baseProduction', label: '基础产量', step: undefined },
+            { key: 'baseStorage', label: '基础仓储', step: undefined },
+            { key: 'refreshIntervalHours', label: '刷新间隔(h)', step: undefined },
+            { key: 'manualRefreshCostGold', label: '手动刷新金币', step: undefined },
+            { key: 'goldenAppearRate', label: '黄金出现率', step: '0.01' },
+            { key: 'totalCities', label: '总城池数', step: undefined },
+          ].map(({ key, label, step }) => (
+            <label key={key} className="grid gap-1 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+              <span className="text-[10px] text-[var(--color-text-muted)]">{label}</span>
+              <input
+                type="number"
+                step={step}
+                value={(config as any)[key]}
+                onChange={(e) => updateGlobal(key, step ? parseFloat(e.target.value) || 0 : parseInt(e.target.value) || 0)}
+                className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+              />
+            </label>
+          ))}
         </div>
       </section>
 
@@ -151,7 +231,7 @@ export default function NpcConfigPanel() {
                 </span>
                 <span className="text-[10px] text-[var(--color-text-muted)]">×{tier.multiplier}</span>
               </div>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-3 gap-1.5">
                 <label className="grid gap-0.5">
                   <span className="text-[9px] text-[var(--color-text-muted)]">资源倍率</span>
                   <input type="number" step="0.1" value={tier.multiplier} onChange={(e) => updateTier(tierId, 'multiplier', parseFloat(e.target.value) || 1)} className="h-6 px-1.5 rounded text-[11px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
@@ -159,6 +239,13 @@ export default function NpcConfigPanel() {
                 <label className="grid gap-0.5">
                   <span className="text-[9px] text-[var(--color-text-muted)]">保底数量</span>
                   <input type="number" value={tier.count.guaranteed} onChange={(e) => updateTier(tierId, 'guaranteed', parseInt(e.target.value) || 0)} className="h-6 px-1.5 rounded text-[11px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
+                </label>
+                <label className="grid gap-0.5">
+                  <span className="text-[9px] text-[var(--color-text-muted)]">词条数</span>
+                  <div className="flex gap-1">
+                    <input type="number" value={tier.traitCount.min} onChange={(e) => updateTier(tierId, 'traitMin', parseInt(e.target.value) || 0)} className="h-6 w-full px-1 rounded text-[11px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
+                    <input type="number" value={tier.traitCount.max} onChange={(e) => updateTier(tierId, 'traitMax', parseInt(e.target.value) || 0)} className="h-6 w-full px-1 rounded text-[11px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
+                  </div>
                 </label>
                 <label className="grid gap-0.5">
                   <span className="text-[9px] text-[var(--color-text-muted)]">兵力下限</span>
@@ -169,6 +256,107 @@ export default function NpcConfigPanel() {
                   <input type="number" value={tier.armyRange.max} onChange={(e) => updateTier(tierId, 'armyMax', parseInt(e.target.value) || 0)} className="h-6 px-1.5 rounded text-[11px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
                 </label>
               </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Trait Pool */}
+      <section className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">词条池 ({config.traitPool.length})</h3>
+          <button type="button" onClick={addTrait} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold text-[var(--color-accent)] bg-[var(--color-accent-light)] border border-[var(--color-accent-border)] cursor-pointer hover:bg-[var(--color-accent)]/15 transition-colors">
+            <Plus size={10} /> 添加
+          </button>
+        </div>
+        <div className="grid gap-2">
+          {config.traitPool.map((trait, index) => (
+            <div key={trait.id} className="p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="text"
+                  value={trait.name}
+                  onChange={(e) => updateTrait(index, 'name', e.target.value)}
+                  className="h-6 px-2 rounded-lg text-xs font-bold border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] flex-1 min-w-0"
+                />
+                <input
+                  type="text"
+                  value={trait.id}
+                  onChange={(e) => updateTrait(index, 'id', e.target.value)}
+                  className="h-6 px-2 rounded-lg text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] w-28"
+                  placeholder="id"
+                />
+                <label className="flex items-center gap-1">
+                  <span className="text-[9px] text-[var(--color-text-muted)]">权重</span>
+                  <input
+                    type="number"
+                    value={trait.weight}
+                    onChange={(e) => updateTrait(index, 'weight', parseInt(e.target.value) || 0)}
+                    className="h-6 w-12 px-1 rounded text-[11px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                  />
+                </label>
+                <button type="button" onClick={() => removeTrait(index)} className="w-6 h-6 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10 cursor-pointer transition-colors">
+                  <Trash2 size={11} />
+                </button>
+              </div>
+              {/* Buffs */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {Object.entries(trait.buffs).map(([buffKey, buffVal]) => (
+                  <div key={buffKey} className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
+                    <span className="text-[9px] text-[var(--color-text-muted)]">{buffKey}</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={buffVal}
+                      onChange={(e) => updateTraitBuff(index, buffKey, parseFloat(e.target.value) || 0)}
+                      className="h-5 w-14 px-1 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                    />
+                    <button type="button" onClick={() => removeTraitBuff(index, buffKey)} className="text-red-400 hover:text-red-600 cursor-pointer">
+                      <Trash2 size={9} />
+                    </button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => addTraitBuff(index)} className="px-1.5 py-0.5 rounded-lg text-[9px] font-bold text-[var(--color-accent)] bg-[var(--color-accent-light)] border border-[var(--color-accent-border)] cursor-pointer hover:bg-[var(--color-accent)]/15 transition-colors">
+                  +buff
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Recovery Profiles */}
+      <section className="mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">恢复档案 ({config.recoveryProfiles.length})</h3>
+          <button type="button" onClick={addProfile} className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold text-[var(--color-accent)] bg-[var(--color-accent-light)] border border-[var(--color-accent-border)] cursor-pointer hover:bg-[var(--color-accent)]/15 transition-colors">
+            <Plus size={10} /> 添加
+          </button>
+        </div>
+        <div className="grid gap-2">
+          {config.recoveryProfiles.map((profile, index) => (
+            <div key={profile.id} className="flex items-center gap-2 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+              <input
+                type="text"
+                value={profile.name}
+                onChange={(e) => updateProfile(index, 'name', e.target.value)}
+                className="h-6 px-2 rounded-lg text-xs font-bold border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] w-20"
+              />
+              <label className="flex items-center gap-1">
+                <span className="text-[9px] text-[var(--color-text-muted)]">兵力×</span>
+                <input type="number" step="0.1" value={profile.armyMultiplier} onChange={(e) => updateProfile(index, 'armyMultiplier', parseFloat(e.target.value) || 1)} className="h-6 w-14 px-1 rounded text-[11px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
+              </label>
+              <label className="flex items-center gap-1">
+                <span className="text-[9px] text-[var(--color-text-muted)]">资源×</span>
+                <input type="number" step="0.1" value={profile.resourceMultiplier} onChange={(e) => updateProfile(index, 'resourceMultiplier', parseFloat(e.target.value) || 1)} className="h-6 w-14 px-1 rounded text-[11px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
+              </label>
+              <label className="flex items-center gap-1">
+                <span className="text-[9px] text-[var(--color-text-muted)]">权重</span>
+                <input type="number" value={profile.weight} onChange={(e) => updateProfile(index, 'weight', parseInt(e.target.value) || 0)} className="h-6 w-12 px-1 rounded text-[11px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
+              </label>
+              <button type="button" onClick={() => removeProfile(index)} className="ml-auto w-6 h-6 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10 cursor-pointer transition-colors">
+                <Trash2 size={11} />
+              </button>
             </div>
           ))}
         </div>

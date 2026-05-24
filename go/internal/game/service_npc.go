@@ -458,8 +458,11 @@ func settleNpcCities(npcState *NpcState, now time.Time) bool {
 				if elapsed > 0 {
 					// 获取恢复特性倍率
 					resourceMult := getResourceMultiplier(city.RecoveryProfile)
+					// 获取词条产量加成
+					traitBuffs := collectTraitBuffs(city)
 					for resType, perHour := range city.ProductionPerHour {
 						effectivePerHour := int(float64(perHour) * resourceMult)
+						effectivePerHour = traitBuffs.applyProductionRate(effectivePerHour)
 						produced := int(float64(effectivePerHour) * elapsed / 3600)
 						if produced > 0 {
 							current := city.Resources[resType]
@@ -487,9 +490,12 @@ func settleNpcCities(npcState *NpcState, now time.Time) bool {
 			if err == nil {
 				elapsed := now.Sub(settledAt).Hours()
 				if elapsed > 0 {
-					recoveredTotal := int(city.ArmyRecoveryRate * elapsed)
+					// 词条加成恢复速度
+					traitBuffs := collectTraitBuffs(city)
+					effectiveRate := traitBuffs.applyArmyRecovery(city.ArmyRecoveryRate)
+					recoveredTotal := int(effectiveRate * elapsed)
 					if recoveredTotal > 0 {
-						armyChanged := recoverNpcArmy(city, recoveredTotal)
+						armyChanged := recoverNpcArmy(city, recoveredTotal, traitBuffs)
 						if armyChanged {
 							city.ArmySettledAt = nowStr
 							cityChanged = true
@@ -507,16 +513,17 @@ func settleNpcCities(npcState *NpcState, now time.Time) bool {
 	return changed
 }
 
-// recoverNpcArmy 按比例恢复守军到上限
-func recoverNpcArmy(city *NpcCity, totalRecovery int) bool {
+// recoverNpcArmy 按比例恢复守军到上限（词条可提升上限）
+func recoverNpcArmy(city *NpcCity, totalRecovery int, traitBuffs NpcTraitBuffs) bool {
 	if totalRecovery <= 0 {
 		return false
 	}
 
-	// 计算当前缺口
+	// 计算当前缺口（词条加成后的上限）
 	type deficit struct {
 		index   int
 		missing int
+		cap     int
 	}
 	var deficits []deficit
 	totalMissing := 0
@@ -529,9 +536,10 @@ func recoverNpcArmy(city *NpcCity, totalRecovery int) bool {
 				break
 			}
 		}
-		missing := maxUnit.Amount - current
+		effectiveCap := traitBuffs.applyArmyCap(maxUnit.Amount)
+		missing := effectiveCap - current
 		if missing > 0 {
-			deficits = append(deficits, deficit{i, missing})
+			deficits = append(deficits, deficit{i, missing, effectiveCap})
 			totalMissing += missing
 		}
 	}
@@ -555,8 +563,8 @@ func recoverNpcArmy(city *NpcCity, totalRecovery int) bool {
 		for j := range city.Army {
 			if city.Army[j].UnitType == maxUnit.UnitType {
 				newAmount := city.Army[j].Amount + share
-				if newAmount > maxUnit.Amount {
-					newAmount = maxUnit.Amount
+				if newAmount > d.cap {
+					newAmount = d.cap
 				}
 				if newAmount != city.Army[j].Amount {
 					city.Army[j].Amount = newAmount
@@ -570,7 +578,7 @@ func recoverNpcArmy(city *NpcCity, totalRecovery int) bool {
 			// 兵种被打空了，重新加入
 			city.Army = append(city.Army, ArmyUnit{
 				UnitType: maxUnit.UnitType,
-				Amount:   min(share, maxUnit.Amount),
+				Amount:   min(share, d.cap),
 			})
 			changed = true
 		}

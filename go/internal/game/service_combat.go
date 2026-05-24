@@ -407,6 +407,7 @@ func buildCombatArmy(faction string, units []combat.Unit) combat.Army {
 func buildNpcCombatArmy(npc *NpcCity) combat.Army {
 	units := make([]combat.Unit, 0, len(npc.Army))
 	factionUnits := GetFactionUnits(npc.Faction)
+	traitBuffs := collectTraitBuffs(npc)
 
 	for _, armyUnit := range npc.Army {
 		if armyUnit.Amount <= 0 {
@@ -420,9 +421,9 @@ func buildNpcCombatArmy(npc *NpcCity) combat.Army {
 			ID:              armyUnit.UnitType,
 			Category:        unitCfg.Category,
 			Count:           armyUnit.Amount,
-			Attack:          unitCfg.Stats["attack"],
-			InfantryDefense: unitCfg.Stats["infantryDefense"],
-			CavalryDefense:  unitCfg.Stats["cavalryDefense"],
+			Attack:          traitBuffs.applyAttack(unitCfg.Stats["attack"]),
+			InfantryDefense: traitBuffs.applyInfantryDefense(unitCfg.Stats["infantryDefense"]),
+			CavalryDefense:  traitBuffs.applyCavalryDefense(unitCfg.Stats["cavalryDefense"]),
 			CarryCapacity:   unitCfg.Stats["carryCapacity"],
 		})
 	}
