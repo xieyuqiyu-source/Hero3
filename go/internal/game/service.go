@@ -6,8 +6,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
+
+	"hero3/internal/combat"
 )
 
 var (
@@ -28,10 +31,12 @@ var (
 const resourceDateLayout = time.RFC3339
 
 type Service struct {
-	repo         Repository
-	balancePath  string
-	factionsPath string
-	unitsDir     string
+	repo          Repository
+	balancePath   string
+	factionsPath  string
+	unitsDir      string
+	npcConfigPath string
+	combatPath    string
 }
 
 type BootstrapResponse struct {
@@ -66,6 +71,35 @@ func (s *Service) SetUnitsDir(dir string) error {
 	return LoadUnitsConfig(dir)
 }
 
+func (s *Service) SetCombatPath(path string) error {
+	s.combatPath = path
+	return combat.LoadCombatConfig(path)
+}
+
+func (s *Service) GetCombatConfig() combat.CombatConfig {
+	return combat.GetCombatConfig()
+}
+
+func (s *Service) UpdateCombatConfig(config combat.CombatConfig) error {
+	return combat.SaveCombatConfig(s.combatPath, config)
+}
+
+func (s *Service) GetFactionsConfig() FactionsConfig {
+	return GetFactionsConfig()
+}
+
+func (s *Service) UpdateFactionsConfig(config FactionsConfig) error {
+	return SaveFactionsConfig(s.factionsPath, config)
+}
+
+func (s *Service) GetUnitsConfig() UnitsConfig {
+	return GetUnitsConfig()
+}
+
+func (s *Service) UpdateFactionUnits(faction string, units FactionUnits) error {
+	return SaveFactionUnits(s.unitsDir, faction, units)
+}
+
 func (s *Service) GetBalance() BalanceConfig {
 	return GetBalanceConfig()
 }
@@ -75,6 +109,17 @@ func (s *Service) UpdateBalance(config BalanceConfig) error {
 		return err
 	}
 	return SetBalanceConfig(config)
+}
+
+func (s *Service) GetNpcConfig() NpcConfig {
+	return GetNpcConfig()
+}
+
+func (s *Service) UpdateNpcConfig(config NpcConfig) error {
+	if err := SaveNpcConfig(s.npcConfigPath, config); err != nil {
+		return err
+	}
+	return SetNpcConfig(config)
 }
 
 func (s *Service) RegisterAccount(username string, password string) (Account, error) {
@@ -215,6 +260,12 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 			return GameState{}, err
 		}
 	}
+
+	// 从独立存储加载战报
+	reports, listErr := s.repo.ListReports(playerID, 50)
+if listErr != nil { slog.Warn("list reports failed", "error", listErr) }
+	state.RecentBattleReports = reports
+
 	return state, nil
 }
 

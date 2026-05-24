@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, type FC } from 'react'
-import { Clock, LoaderCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import { Clock, LoaderCircle, ChevronDown, ChevronRight, Zap } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
 import { toast } from '@/components/ui'
+import { gameApi } from '@/api/game'
 import type { RecruitQueue } from '@/types/game'
 
 const EMPTY_QUEUES: RecruitQueue[] = []
@@ -26,7 +27,7 @@ const RecruitQueuePanel: FC = () => {
   const faction = useGameStore((s) => s.state?.player.faction ?? 'wei')
   const units = useConfigStore((s) => s.units)
   const [now, setNow] = useState(Date.now())
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(false)
   const getUnitName = (unitId: string): string => {
     const factionUnits = units?.[faction]
     if (!factionUnits) return unitId
@@ -83,6 +84,22 @@ const RecruitQueuePanel: FC = () => {
   // 填充到 5 个槽位
   const slots = Array.from({ length: MAX_QUEUE }, (_, i) => pendingQueues[i] ?? null)
 
+  const [completing, setCompleting] = useState<string | null>(null)
+
+  const handleInstantComplete = async (queueId: string) => {
+    const playerId = useGameStore.getState().activePlayerId
+    if (!playerId || completing) return
+    setCompleting(queueId)
+    try {
+      const result = await gameApi.instantCompleteRecruit(playerId, queueId)
+      useGameStore.getState().setState(result.state)
+    } catch {
+      // 错误由全局拦截器处理
+    } finally {
+      setCompleting(null)
+    }
+  }
+
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
       <button
@@ -129,6 +146,15 @@ const RecruitQueuePanel: FC = () => {
                   ) : (
                     <span className="text-[9px] font-medium text-[var(--color-text-muted)]">队列中</span>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => handleInstantComplete(queue.id)}
+                    disabled={completing === queue.id}
+                    className="p-0.5 rounded text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 cursor-pointer transition-colors disabled:opacity-50"
+                    title="极速完成"
+                  >
+                    <Zap size={10} />
+                  </button>
                 </>
               ) : (
                 <span className="text-[10px] text-[var(--color-text-muted)] w-full text-center">空闲</span>
@@ -137,13 +163,13 @@ const RecruitQueuePanel: FC = () => {
           ))}
         </div>
 
-        {/* Mobile: single column */}
+        {/* Mobile: single column with grid alignment */}
         <div className="lg:hidden px-3 py-2.5 space-y-1.5">
           {slots.map((queue, i) => (
             <div
               key={queue?.id ?? `empty-${i}`}
               className={`
-                flex items-center justify-between px-3 py-2 rounded-xl border
+                grid grid-cols-4 items-center gap-2 px-3 py-2 rounded-xl border
                 ${queue
                   ? 'border-[var(--color-accent-border)] bg-[var(--color-accent-light)]'
                   : 'border-dashed border-[var(--color-border)] bg-[var(--color-surface-dim)]'
@@ -152,21 +178,29 @@ const RecruitQueuePanel: FC = () => {
             >
               {queue ? (
                 <>
-                  <span className="text-[11px] font-semibold text-[var(--color-text-primary)]">
+                  <span className="text-[11px] font-semibold text-[var(--color-text-primary)] truncate">
                     {getUnitName(queue.unitType)}
                   </span>
-                  <span className="text-sm font-bold text-[var(--color-accent)]">{queue.amount}</span>
+                  <span className="text-sm font-bold text-[var(--color-accent)] text-center">{queue.amount}</span>
                   {isTraining(i) ? (
-                    <span className="flex items-center gap-0.5 text-[10px] font-mono font-bold text-amber-500">
+                    <span className="flex items-center justify-center gap-0.5 text-[10px] font-mono font-bold text-amber-500">
                       <Clock size={9} />
                       {formatCountdown(getRemainingSeconds(queue.endsAt))}
                     </span>
                   ) : (
-                    <span className="text-[10px] font-medium text-[var(--color-text-muted)]">队列中</span>
+                    <span className="text-[10px] font-medium text-[var(--color-text-muted)] text-center">队列中</span>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => handleInstantComplete(queue.id)}
+                    disabled={completing === queue.id}
+                    className="px-2 py-1 rounded-lg text-[10px] font-bold text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 cursor-pointer transition-colors disabled:opacity-50 justify-self-end"
+                  >
+                    <Zap size={11} className="inline -mt-0.5" /> 极速
+                  </button>
                 </>
               ) : (
-                <span className="text-[10px] text-[var(--color-text-muted)] w-full text-center">空闲</span>
+                <span className="text-[10px] text-[var(--color-text-muted)] col-span-4 text-center">空闲</span>
               )}
             </div>
           ))}

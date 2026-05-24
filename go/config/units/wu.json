@@ -37,6 +37,7 @@
     "name": "密探",
     "description": "吴国侦察骑兵，速度极快的轻装单位",
     "category": "cavalry",
+    "role": "scout",
     "icon": "secretAgent",
     "stats": {
       "attack": 0,

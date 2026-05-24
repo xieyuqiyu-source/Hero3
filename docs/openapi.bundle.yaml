@@ -19,6 +19,8 @@ tags:
   description: 城池建设
 - name: Military
   description: 军事与征兵
+- name: Map
+  description: 地图、NPC 城池与战斗
 - name: Admin
   description: GM 后台接口
 paths:
@@ -448,6 +450,173 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/military/recruit/instant:
+    post:
+      tags:
+      - Military
+      summary: 极速完成征兵队列
+      description: 立即完成指定征兵队列并重新计算后续队列结束时间。金币消耗暂未接入，当前用于开发和 GM 验证。
+      operationId: instantCompleteRecruit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstantCompleteRecruitRequest'
+      responses:
+        '200':
+          description: 征兵队列已完成，返回更新后的游戏状态
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - state
+                properties:
+                  state:
+                    $ref: '#/components/schemas/GameState'
+        '400':
+          description: 参数错误或队列不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 玩家不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/map/npc-cities:
+    get:
+      tags:
+      - Map
+      summary: 获取 NPC 城池列表
+      description: 按玩家存档读取 NPC 城池状态。若该玩家尚未生成 NPC 城池，或已超过刷新周期，后端会生成并保存新的 NPC 状态。
+      operationId: getNpcCities
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        description: 玩家存档 ID。
+        schema:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+      responses:
+        '200':
+          description: NPC 城池状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NpcState'
+        '404':
+          description: 玩家不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/map/npc-cities/refresh:
+    post:
+      tags:
+      - Map
+      summary: 手动刷新 NPC 城池
+      description: 重新生成该玩家的 NPC 城池列表。金币消耗暂未接入，当前用于开发和 GM 验证。
+      operationId: refreshNpcCities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NpcCitiesRefreshRequest'
+      responses:
+        '200':
+          description: 刷新后的 NPC 城池状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NpcState'
+        '404':
+          description: 玩家不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/map/npc-cities/attack:
+    post:
+      tags:
+      - Map
+      summary: 攻击或掠夺 NPC 城池
+      description: 扣除出征兵力，执行战斗结算，归还存活兵力，更新 NPC 守军、NPC 资源、玩家资源和最近战报。
+      operationId: attackNpcCity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttackNpcRequest'
+      responses:
+        '200':
+          description: 战斗结算结果和更新后的游戏状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttackNpcResponse'
+        '400':
+          description: 参数错误或未选择出征兵力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 玩家、NPC 城池或兵种不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: 出征兵力不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/map/npc-cities/scout:
+    post:
+      tags:
+      - Map
+      summary: 侦查 NPC 城池
+      description: 消耗侦察兵，返回目标 NPC 城池完整信息和更新后的游戏状态。
+      operationId: scoutNpcCity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScoutNpcRequest'
+      responses:
+        '200':
+          description: 侦查结果和更新后的游戏状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoutNpcResponse'
+        '400':
+          description: 参数错误或没有可用侦察兵种
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 玩家或 NPC 城池不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: 侦察兵数量不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/admin/accounts:
     get:
       tags:
@@ -568,6 +737,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BalanceConfig'
+        '400':
+          description: 配置格式或内容不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/npc-config:
+    get:
+      tags:
+      - Admin
+      summary: GM 读取 NPC 城池配置
+      description: 读取 NPC 城池生成、刷新、守军、词条和侦查消耗配置。
+      operationId: adminGetNpcConfig
+      responses:
+        '200':
+          description: 当前 NPC 城池配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NpcConfig'
+    put:
+      tags:
+      - Admin
+      summary: GM 保存 NPC 城池配置
+      description: 保存后立即更新后端内存配置。已生成到玩家存档内的 NPC 城池不会自动重刷，需要调用 NPC 刷新接口才会按新配置重新生成。
+      operationId: adminUpdateNpcConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NpcConfig'
+      responses:
+        '200':
+          description: 保存后的 NPC 城池配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NpcConfig'
         '400':
           description: 配置格式或内容不合法
           content:
@@ -758,6 +966,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RecruitQueue'
+        npcState:
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/NpcState'
         mapTargets:
           type: array
           items:
@@ -1041,6 +1253,372 @@ components:
           type: integer
           minimum: 1
           example: 10
+    InstantCompleteRecruitRequest:
+      type: object
+      required:
+      - playerId
+      - queueId
+      properties:
+        playerId:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+        queueId:
+          type: string
+          description: 征兵队列 ID。
+          example: recruit_a1b2c3d4
+    NpcState:
+      type: object
+      required:
+      - cities
+      - lastRefreshedAt
+      properties:
+        cities:
+          type: array
+          items:
+            $ref: '#/components/schemas/NpcCity'
+        lastRefreshedAt:
+          type: string
+          format: date-time
+          description: 本轮 NPC 城池生成或刷新时间。
+    NpcCity:
+      type: object
+      required:
+      - id
+      - name
+      - faction
+      - tier
+      - resources
+      - storageCapacity
+      - productionPerHour
+      - army
+      - maxArmy
+      - armyRecoveryRate
+      - recoveryProfile
+      - traits
+      - resourceSettledAt
+      - armySettledAt
+      - generatedAt
+      properties:
+        id:
+          type: string
+          example: npc_a1b2c3d4
+        name:
+          type: string
+          example: 黑山营寨
+        faction:
+          type: string
+          enum:
+          - wei
+          - shu
+          - wu
+          example: wei
+        tier:
+          type: string
+          enum:
+          - small
+          - medium
+          - large
+          - golden
+          example: medium
+        resources:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            wood: 50000
+            stone: 50000
+            iron: 50000
+            food: 50000
+        storageCapacity:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            wood: 320000
+            stone: 320000
+            iron: 320000
+            food: 320000
+        productionPerHour:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            wood: 24500
+            stone: 24500
+            iron: 24500
+            food: 24500
+        army:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        maxArmy:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        armyRecoveryRate:
+          type: number
+          format: double
+          description: 每小时恢复守军总量。
+          example: 12.5
+        recoveryProfile:
+          type: string
+          example: normal
+        traits:
+          type: array
+          items:
+            $ref: '#/components/schemas/NpcTrait'
+        resourceSettledAt:
+          type: string
+          format: date-time
+        armySettledAt:
+          type: string
+          format: date-time
+        generatedAt:
+          type: string
+          format: date-time
+    NpcTrait:
+      type: object
+      required:
+      - id
+      - name
+      - buffs
+      properties:
+        id:
+          type: string
+          example: rich
+        name:
+          type: string
+          example: 富矿
+        buffs:
+          type: object
+          additionalProperties:
+            type: number
+          example:
+            resourceMultiplier: 1.2
+    NpcConfig:
+      type: object
+      required:
+      - baseProduction
+      - baseStorage
+      - refreshIntervalHours
+      - manualRefreshCostGold
+      - goldenAppearRate
+      - totalCities
+      - tiers
+      - recoveryProfiles
+      - traitPool
+      - cityNames
+      - scoutCost
+      properties:
+        baseProduction:
+          type: integer
+          minimum: 1
+          example: 24500
+        baseStorage:
+          type: integer
+          minimum: 1
+          example: 320000
+        refreshIntervalHours:
+          type: integer
+          minimum: 1
+          example: 24
+        manualRefreshCostGold:
+          type: integer
+          minimum: 0
+          example: 50
+        goldenAppearRate:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          example: 0.2
+        totalCities:
+          type: integer
+          minimum: 1
+          example: 12
+        tiers:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/NpcTierConfig'
+        recoveryProfiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/NpcRecoveryProfile'
+        traitPool:
+          type: array
+          items:
+            $ref: '#/components/schemas/NpcTraitConfig'
+        cityNames:
+          type: array
+          items:
+            type: string
+          example:
+          - 洛阳
+          - 长安
+          - 成都
+        scoutCost:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            small: 5
+            medium: 15
+            large: 30
+            golden: 50
+    NpcTierConfig:
+      type: object
+      required:
+      - multiplier
+      - armyRange
+      - armyTypes
+      - traitCount
+      - count
+      properties:
+        multiplier:
+          type: number
+          format: double
+          minimum: 0
+          exclusiveMinimum: true
+        armyRange:
+          $ref: '#/components/schemas/IntRange'
+        armyTypes:
+          $ref: '#/components/schemas/IntRange'
+        traitCount:
+          $ref: '#/components/schemas/IntRange'
+        count:
+          $ref: '#/components/schemas/NpcCountRule'
+    IntRange:
+      type: object
+      required:
+      - min
+      - max
+      properties:
+        min:
+          type: integer
+        max:
+          type: integer
+    NpcCountRule:
+      type: object
+      required:
+      - guaranteed
+      - weight
+      properties:
+        guaranteed:
+          type: integer
+          minimum: 0
+        weight:
+          type: integer
+          minimum: 0
+    NpcRecoveryProfile:
+      type: object
+      required:
+      - id
+      - name
+      - armyMultiplier
+      - resourceMultiplier
+      - weight
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        armyMultiplier:
+          type: number
+          format: double
+        resourceMultiplier:
+          type: number
+          format: double
+        weight:
+          type: integer
+          minimum: 0
+    NpcTraitConfig:
+      type: object
+      required:
+      - id
+      - name
+      - buffs
+      - weight
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        buffs:
+          type: object
+          additionalProperties:
+            type: number
+        weight:
+          type: integer
+          minimum: 0
+    NpcCitiesRefreshRequest:
+      type: object
+      required:
+      - playerId
+      properties:
+        playerId:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+    AttackNpcRequest:
+      type: object
+      required:
+      - playerId
+      - npcId
+      - units
+      properties:
+        playerId:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+        npcId:
+          type: string
+          example: npc_a1b2c3d4
+        mode:
+          type: string
+          enum:
+          - attack
+          - plunder
+          default: attack
+          description: attack 为攻城，plunder 为掠夺。
+        units:
+          type: object
+          description: 出征兵力，key 为兵种 ID，value 为数量。
+          additionalProperties:
+            type: integer
+            minimum: 1
+          example:
+            infantry: 50
+            cavalry: 20
+    AttackNpcResponse:
+      type: object
+      required:
+      - battleReport
+      - state
+      properties:
+        battleReport:
+          $ref: '#/components/schemas/BattleReport'
+        state:
+          $ref: '#/components/schemas/GameState'
+    ScoutNpcRequest:
+      type: object
+      required:
+      - playerId
+      - npcId
+      properties:
+        playerId:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+        npcId:
+          type: string
+          example: npc_a1b2c3d4
+    ScoutNpcResponse:
+      type: object
+      required:
+      - npcCity
+      - state
+      properties:
+        npcCity:
+          $ref: '#/components/schemas/NpcCity'
+        state:
+          $ref: '#/components/schemas/GameState'
     ErrorResponse:
       type: object
       required:

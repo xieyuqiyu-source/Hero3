@@ -9,7 +9,8 @@ import LoginPage from './pages/login'
 import CityPage from './pages/city'
 import MilitaryPage from './pages/military'
 import MapPage from './pages/map'
-import ReportsPage from './pages/reports'
+import NewsPage from './pages/news'
+
 import AccountPage from './pages/account'
 import SettingsPage from './pages/settings'
 import './App.css'
@@ -40,7 +41,8 @@ function App() {
             <Route path="/city" element={<CityPage />} />
             <Route path="/military" element={<MilitaryPage />} />
             <Route path="/map" element={<MapPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/news" element={<NewsPage />} />
+
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/account" element={<AccountPage />} />
           </Route>

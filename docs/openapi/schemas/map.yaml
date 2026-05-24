@@ -1,0 +1,353 @@
+NpcState:
+  type: object
+  required:
+  - cities
+  - lastRefreshedAt
+  properties:
+    cities:
+      type: array
+      items:
+        $ref: '#/components/schemas/NpcCity'
+    lastRefreshedAt:
+      type: string
+      format: date-time
+      description: 本轮 NPC 城池生成或刷新时间。
+NpcCity:
+  type: object
+  required:
+  - id
+  - name
+  - faction
+  - tier
+  - resources
+  - storageCapacity
+  - productionPerHour
+  - army
+  - maxArmy
+  - armyRecoveryRate
+  - recoveryProfile
+  - traits
+  - resourceSettledAt
+  - armySettledAt
+  - generatedAt
+  properties:
+    id:
+      type: string
+      example: npc_a1b2c3d4
+    name:
+      type: string
+      example: 黑山营寨
+    faction:
+      type: string
+      enum:
+      - wei
+      - shu
+      - wu
+      example: wei
+    tier:
+      type: string
+      enum:
+      - small
+      - medium
+      - large
+      - golden
+      example: medium
+    resources:
+      type: object
+      additionalProperties:
+        type: integer
+      example:
+        wood: 50000
+        stone: 50000
+        iron: 50000
+        food: 50000
+    storageCapacity:
+      type: object
+      additionalProperties:
+        type: integer
+      example:
+        wood: 320000
+        stone: 320000
+        iron: 320000
+        food: 320000
+    productionPerHour:
+      type: object
+      additionalProperties:
+        type: integer
+      example:
+        wood: 24500
+        stone: 24500
+        iron: 24500
+        food: 24500
+    army:
+      type: array
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    maxArmy:
+      type: array
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    armyRecoveryRate:
+      type: number
+      format: double
+      description: 每小时恢复守军总量。
+      example: 12.5
+    recoveryProfile:
+      type: string
+      example: normal
+    traits:
+      type: array
+      items:
+        $ref: '#/components/schemas/NpcTrait'
+    resourceSettledAt:
+      type: string
+      format: date-time
+    armySettledAt:
+      type: string
+      format: date-time
+    generatedAt:
+      type: string
+      format: date-time
+NpcTrait:
+  type: object
+  required:
+  - id
+  - name
+  - buffs
+  properties:
+    id:
+      type: string
+      example: rich
+    name:
+      type: string
+      example: 富矿
+    buffs:
+      type: object
+      additionalProperties:
+        type: number
+      example:
+        resourceMultiplier: 1.2
+NpcCitiesRefreshRequest:
+  type: object
+  required:
+  - playerId
+  properties:
+    playerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+AttackNpcRequest:
+  type: object
+  required:
+  - playerId
+  - npcId
+  - units
+  properties:
+    playerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+    npcId:
+      type: string
+      example: npc_a1b2c3d4
+    mode:
+      type: string
+      enum:
+      - attack
+      - plunder
+      default: attack
+      description: attack 为攻城，plunder 为掠夺。
+    units:
+      type: object
+      description: 出征兵力，key 为兵种 ID，value 为数量。
+      additionalProperties:
+        type: integer
+        minimum: 1
+      example:
+        infantry: 50
+        cavalry: 20
+AttackNpcResponse:
+  type: object
+  required:
+  - battleReport
+  - state
+  properties:
+    battleReport:
+      $ref: '#/components/schemas/BattleReport'
+    state:
+      $ref: '#/components/schemas/GameState'
+ScoutNpcRequest:
+  type: object
+  required:
+  - playerId
+  - npcId
+  properties:
+    playerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+    npcId:
+      type: string
+      example: npc_a1b2c3d4
+ScoutNpcResponse:
+  type: object
+  required:
+  - npcCity
+  - state
+  properties:
+    npcCity:
+      $ref: '#/components/schemas/NpcCity'
+    state:
+      $ref: '#/components/schemas/GameState'
+NpcConfig:
+  type: object
+  required:
+  - baseProduction
+  - baseStorage
+  - refreshIntervalHours
+  - manualRefreshCostGold
+  - goldenAppearRate
+  - totalCities
+  - tiers
+  - recoveryProfiles
+  - traitPool
+  - cityNames
+  - scoutCost
+  properties:
+    baseProduction:
+      type: integer
+      minimum: 1
+      example: 24500
+    baseStorage:
+      type: integer
+      minimum: 1
+      example: 320000
+    refreshIntervalHours:
+      type: integer
+      minimum: 1
+      example: 24
+    manualRefreshCostGold:
+      type: integer
+      minimum: 0
+      example: 50
+    goldenAppearRate:
+      type: number
+      format: double
+      minimum: 0
+      maximum: 1
+      example: 0.2
+    totalCities:
+      type: integer
+      minimum: 1
+      example: 12
+    tiers:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/NpcTierConfig'
+    recoveryProfiles:
+      type: array
+      items:
+        $ref: '#/components/schemas/NpcRecoveryProfile'
+    traitPool:
+      type: array
+      items:
+        $ref: '#/components/schemas/NpcTraitConfig'
+    cityNames:
+      type: array
+      items:
+        type: string
+      example:
+      - 洛阳
+      - 长安
+      - 成都
+    scoutCost:
+      type: object
+      additionalProperties:
+        type: integer
+      example:
+        small: 5
+        medium: 15
+        large: 30
+        golden: 50
+NpcTierConfig:
+  type: object
+  required:
+  - multiplier
+  - armyRange
+  - armyTypes
+  - traitCount
+  - count
+  properties:
+    multiplier:
+      type: number
+      format: double
+      minimum: 0
+      exclusiveMinimum: true
+    armyRange:
+      $ref: '#/components/schemas/IntRange'
+    armyTypes:
+      $ref: '#/components/schemas/IntRange'
+    traitCount:
+      $ref: '#/components/schemas/IntRange'
+    count:
+      $ref: '#/components/schemas/NpcCountRule'
+IntRange:
+  type: object
+  required:
+  - min
+  - max
+  properties:
+    min:
+      type: integer
+    max:
+      type: integer
+NpcCountRule:
+  type: object
+  required:
+  - guaranteed
+  - weight
+  properties:
+    guaranteed:
+      type: integer
+      minimum: 0
+    weight:
+      type: integer
+      minimum: 0
+NpcRecoveryProfile:
+  type: object
+  required:
+  - id
+  - name
+  - armyMultiplier
+  - resourceMultiplier
+  - weight
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    armyMultiplier:
+      type: number
+      format: double
+    resourceMultiplier:
+      type: number
+      format: double
+    weight:
+      type: integer
+      minimum: 0
+NpcTraitConfig:
+  type: object
+  required:
+  - id
+  - name
+  - buffs
+  - weight
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    buffs:
+      type: object
+      additionalProperties:
+        type: number
+    weight:
+      type: integer
+      minimum: 0

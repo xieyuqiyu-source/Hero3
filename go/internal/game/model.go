@@ -77,14 +77,25 @@ type MapTarget struct {
 }
 
 type BattleReport struct {
-	ID          string         `json:"id"`
-	TargetID    string         `json:"targetId"`
-	Result      string         `json:"result"`
-	PlayerPower int            `json:"playerPower"`
-	EnemyPower  int            `json:"enemyPower"`
-	LostUnits   map[string]int `json:"lostUnits"`
-	Rewards     map[string]int `json:"rewards"`
-	CreatedAt   string         `json:"createdAt"`
+	ID               string         `json:"id"`
+	PlayerID         string         `json:"playerId"`
+	TargetID         string         `json:"targetId"`
+	TargetName       string         `json:"targetName"`
+	Type             string         `json:"type"` // "attack", "plunder", "scout", "reinforce"
+	Result           string         `json:"result"`
+	PlayerPower      int            `json:"playerPower"`
+	EnemyPower       int            `json:"enemyPower"`
+	DispatchedUnits  map[string]int `json:"dispatchedUnits"`
+	LostUnits        map[string]int `json:"lostUnits"`
+	DefenderFaction  string         `json:"defenderFaction"`
+	DefenderUnits    map[string]int `json:"defenderUnits"`
+	DefenderLostUnits map[string]int `json:"defenderLostUnits"`
+	DefenderRevealed  bool           `json:"defenderRevealed"`
+	DefenderResources map[string]int `json:"defenderResources"`
+	Rewards           map[string]int `json:"rewards"`
+	Read             bool           `json:"read"`
+	DeletedByPlayer  bool           `json:"deletedByPlayer,omitempty"`
+	CreatedAt        string         `json:"createdAt"`
 }
 
 type GameState struct {
@@ -96,6 +107,7 @@ type GameState struct {
 	General             *General           `json:"general"`
 	Army                []ArmyUnit         `json:"army"`
 	RecruitQueues       []RecruitQueue     `json:"recruitQueues"`
+	NpcState            *NpcState          `json:"npcState,omitempty"`
 	MapTargets          []MapTarget        `json:"mapTargets"`
 	RecentBattleReports []BattleReport     `json:"recentBattleReports"`
 	UnreadMessageCount  int                `json:"unreadMessageCount"`

@@ -59,6 +59,16 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 				FOREIGN KEY (account_id) REFERENCES accounts(id)
 				ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS battle_reports (
+			id VARCHAR(64) PRIMARY KEY,
+			player_id VARCHAR(64) NOT NULL,
+			report_json JSON NOT NULL,
+			type VARCHAR(32) NOT NULL DEFAULT 'attack',
+			is_read TINYINT(1) NOT NULL DEFAULT 0,
+			deleted_by_player TINYINT(1) NOT NULL DEFAULT 0,
+			created_at DATETIME(6) NOT NULL,
+			INDEX idx_reports_player (player_id, deleted_by_player, created_at DESC)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 	}
 
 	for _, statement := range statements {
@@ -266,6 +276,9 @@ func (r *MySQLRepository) DeleteAccount(accountID string) error {
 }
 
 func (r *MySQLRepository) DeletePlayer(playerID string) error {
+	// 先删战报
+	_, _ = r.db.Exec(`DELETE FROM battle_reports WHERE player_id = ?`, playerID)
+
 	result, err := r.db.Exec(`DELETE FROM players WHERE id = ?`, playerID)
 	if err != nil {
 		return err
@@ -331,4 +344,130 @@ func (r *MySQLRepository) SaveState(state game.GameState, updatedAt time.Time) e
 func isDuplicateEntry(err error) bool {
 	var mysqlErr *mysql.MySQLError
 	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
+}
+
+// --- Battle Report Methods ---
+
+func (r *MySQLRepository) SaveReport(report game.BattleReport) error {
+	reportJSON, err := json.Marshal(report)
+	if err != nil {
+		return err
+	}
+
+	createdAt, _ := time.Parse(time.RFC3339, report.CreatedAt)
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+
+	_, err = r.db.Exec(
+		`INSERT INTO battle_reports (id, player_id, report_json, type, is_read, deleted_by_player, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		report.ID,
+		report.PlayerID,
+		reportJSON,
+		report.Type,
+		report.Read,
+		false,
+		createdAt.UTC(),
+	)
+	return err
+}
+
+func (r *MySQLRepository) ListReports(playerID string, limit int) ([]game.BattleReport, error) {
+	threeDaysAgo := time.Now().Add(-3 * 24 * time.Hour).UTC()
+
+	rows, err := r.db.Query(
+		`SELECT report_json, is_read FROM battle_reports
+		 WHERE player_id = ? AND deleted_by_player = 0 AND created_at > ?
+		 ORDER BY created_at DESC LIMIT ?`,
+		playerID, threeDaysAgo, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var reports []game.BattleReport
+	for rows.Next() {
+		var reportJSON []byte
+		var isRead bool
+		if err := rows.Scan(&reportJSON, &isRead); err != nil {
+			return nil, err
+		}
+		var report game.BattleReport
+		if err := json.Unmarshal(reportJSON, &report); err != nil {
+			continue
+		}
+		report.Read = isRead
+		reports = append(reports, report)
+	}
+	return reports, rows.Err()
+}
+
+func (r *MySQLRepository) ListAllReports(playerID string) ([]game.BattleReport, error) {
+	rows, err := r.db.Query(
+		`SELECT report_json FROM battle_reports
+		 WHERE player_id = ?
+		 ORDER BY created_at DESC`,
+		playerID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var reports []game.BattleReport
+	for rows.Next() {
+		var reportJSON []byte
+		if err := rows.Scan(&reportJSON); err != nil {
+			return nil, err
+		}
+		var report game.BattleReport
+		if err := json.Unmarshal(reportJSON, &report); err != nil {
+			continue
+		}
+		reports = append(reports, report)
+	}
+	return reports, rows.Err()
+}
+
+func (r *MySQLRepository) MarkReportsRead(playerID string) error {
+	_, err := r.db.Exec(
+		`UPDATE battle_reports SET is_read = 1 WHERE player_id = ? AND is_read = 0 AND deleted_by_player = 0`,
+		playerID,
+	)
+	return err
+}
+
+func (r *MySQLRepository) MarkSingleReportRead(playerID string, reportID string) error {
+	_, err := r.db.Exec(
+		`UPDATE battle_reports SET is_read = 1 WHERE id = ? AND player_id = ?`,
+		reportID, playerID,
+	)
+	return err
+}
+
+func (r *MySQLRepository) DeleteReport(playerID string, reportID string) error {
+	_, err := r.db.Exec(
+		`UPDATE battle_reports SET deleted_by_player = 1 WHERE id = ? AND player_id = ?`,
+		reportID, playerID,
+	)
+	return err
+}
+
+func (r *MySQLRepository) DeleteAllReports(playerID string) error {
+	_, err := r.db.Exec(
+		`UPDATE battle_reports SET deleted_by_player = 1 WHERE player_id = ? AND deleted_by_player = 0`,
+		playerID,
+	)
+	return err
+}
+
+func (r *MySQLRepository) CountUnreadReports(playerID string) (int, error) {
+	var count int
+	err := r.db.QueryRow(
+		`SELECT COUNT(*) FROM battle_reports WHERE player_id = ? AND is_read = 0 AND deleted_by_player = 0`,
+		playerID,
+	).Scan(&count)
+	return count, err
 }

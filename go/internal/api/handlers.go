@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"hero3/internal/combat"
 	"hero3/internal/config"
 	"hero3/internal/game"
 )
@@ -195,6 +196,89 @@ func (h *Handlers) UpdateAdminBalance(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.gameService.GetBalance())
 }
 
+func (h *Handlers) AdminNpcConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.gameService.GetNpcConfig())
+}
+
+func (h *Handlers) UpdateAdminNpcConfig(w http.ResponseWriter, r *http.Request) {
+	var payload game.NpcConfig
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	if err := h.gameService.UpdateNpcConfig(payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, h.gameService.GetNpcConfig())
+}
+
+func (h *Handlers) AdminCombatConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, combat.GetCombatConfig())
+}
+
+func (h *Handlers) UpdateAdminCombatConfig(w http.ResponseWriter, r *http.Request) {
+	var payload combat.CombatConfig
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	if err := h.gameService.UpdateCombatConfig(payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, combat.GetCombatConfig())
+}
+
+func (h *Handlers) AdminFactionsConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, game.GetFactionsConfig())
+}
+
+func (h *Handlers) UpdateAdminFactionsConfig(w http.ResponseWriter, r *http.Request) {
+	var payload game.FactionsConfig
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	if err := h.gameService.UpdateFactionsConfig(payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, game.GetFactionsConfig())
+}
+
+func (h *Handlers) AdminUnitsConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, game.GetUnitsConfig())
+}
+
+func (h *Handlers) AdminFactionUnitsConfig(w http.ResponseWriter, r *http.Request) {
+	faction := r.PathValue("faction")
+	units := game.GetFactionUnits(faction)
+	if units == nil {
+		writeError(w, http.StatusNotFound, "faction not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, units)
+}
+
+func (h *Handlers) UpdateAdminFactionUnitsConfig(w http.ResponseWriter, r *http.Request) {
+	faction := r.PathValue("faction")
+	var payload game.FactionUnits
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	if err := h.gameService.UpdateFactionUnits(faction, payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, game.GetFactionUnits(faction))
+}
+
 func (h *Handlers) CreatePlayer(w http.ResponseWriter, r *http.Request) {
 	var payload createPlayerRequest
 	if !decodeJSON(w, r, &payload) {
@@ -272,6 +356,178 @@ func (h *Handlers) Recruit(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusConflict
 		}
 		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
+func (h *Handlers) InstantCompleteRecruit(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+		QueueID  string `json:"queueId"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	state, err := h.gameService.InstantCompleteRecruit(payload.PlayerID, payload.QueueID)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
+func (h *Handlers) NpcCities(w http.ResponseWriter, r *http.Request) {
+	playerID := r.URL.Query().Get("playerId")
+	npcState, err := h.gameService.GetNpcCities(playerID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, game.ErrPlayerNotFound) {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, npcState)
+}
+
+func (h *Handlers) RefreshNpcCities(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	npcState, err := h.gameService.RefreshNpcCities(payload.PlayerID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, game.ErrPlayerNotFound) {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, npcState)
+}
+
+func (h *Handlers) AttackNpc(w http.ResponseWriter, r *http.Request) {
+	var payload game.AttackNpcRequest
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	result, err := h.gameService.AttackNpc(payload)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrNpcNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrNoUnitsSelected):
+			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrInsufficientArmy):
+			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handlers) ScoutNpc(w http.ResponseWriter, r *http.Request) {
+	var payload game.ScoutNpcRequest
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	result, err := h.gameService.ScoutNpc(payload)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrNpcNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInsufficientArmy):
+			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handlers) MarkReportsRead(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+		ReportID string `json:"reportId"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	var state game.GameState
+	var err error
+
+	if payload.ReportID != "" {
+		// 标记单条
+		state, err = h.gameService.MarkSingleReportRead(payload.PlayerID, payload.ReportID)
+	} else {
+		// 标记全部
+		state, err = h.gameService.MarkReportsRead(payload.PlayerID)
+	}
+
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
+func (h *Handlers) DeleteReport(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+		ReportID string `json:"reportId"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	state, err := h.gameService.DeleteReport(payload.PlayerID, payload.ReportID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
+func (h *Handlers) DeleteAllReports(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	state, err := h.gameService.DeleteAllReports(payload.PlayerID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

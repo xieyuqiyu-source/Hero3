@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity } from '@/types/game'
 import type { BalanceConfig, FactionConfig, UnitConfig } from '@/store/configStore'
 
 export const gameApi = {
@@ -69,6 +69,11 @@ export const gameApi = {
     return api.post<{ state: GameState }>('/military/recruit', { playerId, unitId, amount })
   },
 
+  /** 极速完成征兵队列 */
+  instantCompleteRecruit(playerId: string, queueId: string) {
+    return api.post<{ state: GameState }>('/military/recruit/instant', { playerId, queueId })
+  },
+
   /** 攻击地图目标 */
   attackTarget(playerId: string, targetId: string, units: Record<string, number>) {
     return api.post<{ battleReport: BattleReport; resources: GameState['resources']; army: GameState['army'] }>(
@@ -77,8 +82,41 @@ export const gameApi = {
     )
   },
 
-  /** 获取战报列表 */
-  getReports(playerId: string) {
-    return api.get<{ reports: BattleReport[] }>(`/battle/reports?playerId=${playerId}`)
+  /** 获取 NPC 城池列表 */
+  getNpcCities(playerId: string) {
+    return api.get<{ cities: NpcCity[]; lastRefreshedAt: string }>(`/map/npc-cities?playerId=${playerId}`)
   },
+
+  /** 手动刷新 NPC 城池 */
+  refreshNpcCities(playerId: string) {
+    return api.post<{ cities: NpcCity[]; lastRefreshedAt: string }>('/map/npc-cities/refresh', { playerId })
+  },
+
+  /** 攻击 NPC 城池 */
+  attackNpc(playerId: string, npcId: string, mode: 'attack' | 'plunder', units: Record<string, number>) {
+    return api.post<{ battleReport: BattleReport; state: GameState }>('/map/npc-cities/attack', {
+      playerId, npcId, mode, units,
+    })
+  },
+
+  /** 侦查 NPC 城池 */
+  scoutNpc(playerId: string, npcId: string) {
+    return api.post<{ success: boolean; battleReport: BattleReport; npcCity: NpcCity | null; state: GameState }>('/map/npc-cities/scout', { playerId, npcId })
+  },
+
+  /** 标记军情已读（传 reportId 标记单条，不传标记全部） */
+  markReportsRead(playerId: string, reportId?: string) {
+    return api.post<{ state: GameState }>('/news/mark-read', { playerId, reportId })
+  },
+
+  /** 删除单条战报 */
+  deleteReport(playerId: string, reportId: string) {
+    return api.post<{ state: GameState }>('/news/delete-report', { playerId, reportId })
+  },
+
+  /** 一键删除所有战报 */
+  deleteAllReports(playerId: string) {
+    return api.post<{ state: GameState }>('/news/delete-all-reports', { playerId })
+  },
+
 }

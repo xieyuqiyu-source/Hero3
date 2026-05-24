@@ -47,3 +47,40 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/military/recruit/instant:
+  post:
+    tags:
+    - Military
+    summary: 极速完成征兵队列
+    description: 立即完成指定征兵队列并重新计算后续队列结束时间。金币消耗暂未接入，当前用于开发和 GM 验证。
+    operationId: instantCompleteRecruit
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/InstantCompleteRecruitRequest'
+    responses:
+      '200':
+        description: 征兵队列已完成，返回更新后的游戏状态
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - state
+              properties:
+                state:
+                  $ref: '#/components/schemas/GameState'
+      '400':
+        description: 参数错误或队列不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 玩家不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

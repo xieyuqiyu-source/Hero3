@@ -5,7 +5,11 @@ import AdminLayout, { type AdminPage } from '@/components/AdminLayout'
 import ApiDiagnosticsPanel from '@/components/ApiDiagnosticsPanel'
 import { AuditPanel, GuardrailPanel } from '@/components/AuditPanel'
 import BalanceConfigPanel from '@/components/BalanceConfigPanel'
+import CombatConfigPanel from '@/components/CombatConfigPanel'
+import FactionsConfigPanel from '@/components/FactionsConfigPanel'
 import MetricsGrid from '@/components/MetricsGrid'
+import NpcConfigPanel from '@/components/NpcConfigPanel'
+import UnitsConfigPanel from '@/components/UnitsConfigPanel'
 import { ResourceToolsPanel, SystemActionsPanel } from '@/components/OperationsPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
@@ -51,27 +55,39 @@ function App() {
         )
       case 'operations':
         return (
-          <div className="page-grid two-column">
+          <div className="grid gap-4 lg:grid-cols-2">
             <ResourceToolsPanel />
             <SystemActionsPanel />
           </div>
         )
       case 'balance':
-        return <BalanceConfigPanel />
+        return (
+          <div className="grid gap-4">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <BalanceConfigPanel />
+              <NpcConfigPanel />
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <CombatConfigPanel />
+              <FactionsConfigPanel />
+            </div>
+            <UnitsConfigPanel />
+          </div>
+        )
       case 'api':
         return <ApiDiagnosticsPanel />
       case 'audit':
         return (
-          <>
+          <div className="grid gap-4">
             <AuditPanel />
             <GuardrailPanel />
-          </>
+          </div>
         )
       default:
         return (
-          <>
+          <div className="grid gap-4">
             <MetricsGrid stats={dashboardStats} />
-            <div className="page-grid two-column">
+            <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
               <AccountsPanel
                 accounts={accounts}
                 busyTarget={busyTarget}
@@ -79,12 +95,12 @@ function App() {
                 onDeleteAccount={handleDeleteAccount}
                 onDeletePlayer={handleDeletePlayer}
               />
-              <div className="stacked-panels">
+              <div className="grid gap-4 content-start">
                 <ResourceToolsPanel />
                 <SystemActionsPanel />
               </div>
             </div>
-          </>
+          </div>
         )
     }
   }
@@ -96,10 +112,17 @@ function App() {
       loading={loading}
       onNavigate={setActivePage}
     >
-      {error && <section className="status-banner">后端未连接：{error}</section>}
-      {actionMessage && <section className="success-banner">{actionMessage}</section>}
-
-      <section className="page-surface">{renderPage()}</section>
+      {error && (
+        <div className="mb-4 px-4 py-3 rounded-2xl border border-red-500/30 bg-red-500/8 text-red-600 text-sm font-medium">
+          后端未连接：{error}
+        </div>
+      )}
+      {actionMessage && (
+        <div className="mb-4 px-4 py-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/8 text-emerald-700 text-sm font-medium">
+          {actionMessage}
+        </div>
+      )}
+      {renderPage()}
     </AdminLayout>
   )
 }

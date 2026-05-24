@@ -20,6 +20,7 @@ export interface UnitConfig {
   name: string
   description: string
   category: string
+  role?: string
   icon: string
   stats: Record<string, number>
   cost: Record<string, number>

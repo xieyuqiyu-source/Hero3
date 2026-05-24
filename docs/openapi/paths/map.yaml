@@ -1,0 +1,130 @@
+/api/v1/map/npc-cities:
+  get:
+    tags:
+    - Map
+    summary: 获取 NPC 城池列表
+    description: 按玩家存档读取 NPC 城池状态。若该玩家尚未生成 NPC 城池，或已超过刷新周期，后端会生成并保存新的 NPC 状态。
+    operationId: getNpcCities
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      description: 玩家存档 ID。
+      schema:
+        type: string
+        example: player_47f23e0eeb08ab50402fedfc
+    responses:
+      '200':
+        description: NPC 城池状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NpcState'
+      '404':
+        description: 玩家不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/map/npc-cities/refresh:
+  post:
+    tags:
+    - Map
+    summary: 手动刷新 NPC 城池
+    description: 重新生成该玩家的 NPC 城池列表。金币消耗暂未接入，当前用于开发和 GM 验证。
+    operationId: refreshNpcCities
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NpcCitiesRefreshRequest'
+    responses:
+      '200':
+        description: 刷新后的 NPC 城池状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NpcState'
+      '404':
+        description: 玩家不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/map/npc-cities/attack:
+  post:
+    tags:
+    - Map
+    summary: 攻击或掠夺 NPC 城池
+    description: 扣除出征兵力，执行战斗结算，归还存活兵力，更新 NPC 守军、NPC 资源、玩家资源和最近战报。
+    operationId: attackNpcCity
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AttackNpcRequest'
+    responses:
+      '200':
+        description: 战斗结算结果和更新后的游戏状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttackNpcResponse'
+      '400':
+        description: 参数错误或未选择出征兵力
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 玩家、NPC 城池或兵种不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '422':
+        description: 出征兵力不足
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/map/npc-cities/scout:
+  post:
+    tags:
+    - Map
+    summary: 侦查 NPC 城池
+    description: 消耗侦察兵，返回目标 NPC 城池完整信息和更新后的游戏状态。
+    operationId: scoutNpcCity
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ScoutNpcRequest'
+    responses:
+      '200':
+        description: 侦查结果和更新后的游戏状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScoutNpcResponse'
+      '400':
+        description: 参数错误或没有可用侦察兵种
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 玩家或 NPC 城池不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '422':
+        description: 侦察兵数量不足
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

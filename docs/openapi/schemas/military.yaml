@@ -16,3 +16,16 @@ RecruitRequest:
       type: integer
       minimum: 1
       example: 10
+InstantCompleteRecruitRequest:
+  type: object
+  required:
+  - playerId
+  - queueId
+  properties:
+    playerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+    queueId:
+      type: string
+      description: 征兵队列 ID。
+      example: recruit_a1b2c3d4

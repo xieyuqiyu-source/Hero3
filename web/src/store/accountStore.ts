@@ -68,9 +68,9 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
     if (!account) return
     try {
       const result = await gameApi.listAccountPlayers(account.accountId)
-      set({ players: result.players })
-    } catch {
-      // silently fail
+      set({ players: result.players ?? [] })
+    } catch (e) {
+      console.warn('[accountStore] loadPlayers failed:', e)
     }
   },
 
@@ -86,6 +86,8 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
     const username = localStorage.getItem('hero3_account_name')
     if (accountId && username) {
       set({ account: { accountId, username } })
+      // 延迟加载存档列表，避免循环依赖导致 gameApi 未初始化
+      setTimeout(() => get().loadPlayers(), 0)
     }
   },
 }))

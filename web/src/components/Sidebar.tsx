@@ -5,16 +5,20 @@ import {
   Map,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Warehouse,
   Package,
   Shield,
   Settings,
+  RefreshCw,
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import BoostButton from './BoostButton'
 import type { GameState } from '@/types/game'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
 import { useConfigStore } from '@/store/configStore'
+import { useAccountStore } from '@/store/accountStore'
+import { useGameStore } from '@/store/gameStore'
 
 export interface NavItem {
   key: string
@@ -43,7 +47,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
   const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
   const unreadMessageCount = gameState?.unreadMessageCount ?? 0
   const quickActions = [
-    { key: 'news', label: '军情', hasNotify: true },
+    { key: 'news', label: '军情', hasNotify: (gameState?.recentBattleReports?.some(r => !r.read) ?? false) },
     { key: 'mail', label: '信函', hasNotify: unreadMessageCount > 0 },
     { key: 'notice', label: '公告', hasNotify: true },
     { key: 'account', label: '账户', hasNotify: false },
@@ -110,7 +114,10 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
             <button
               key={action.key}
               type="button"
-              onClick={() => { if (action.key === 'account') onNavigate('account') }}
+              onClick={() => {
+                if (action.key === 'account') onNavigate('account')
+                if (action.key === 'news') onNavigate('news')
+              }}
               className={`
                 px-2.5 py-1.5 rounded-lg
                 text-[11px] font-medium
@@ -132,6 +139,10 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
             <button
               key={action.key}
               type="button"
+              onClick={() => {
+                if (action.key === 'account') onNavigate('account')
+                if (action.key === 'news') onNavigate('news')
+              }}
               className={`
                 px-1.5 py-1.5 rounded-lg
                 text-[10px] font-medium
@@ -149,7 +160,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
 
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 py-3 scrollbar-none">
-        {/* City Info Placeholder */}
+        {/* City Info + Player Switch */}
         <div className={`
           mb-2.5 rounded-2xl p-3
           bg-[var(--color-surface-dim)] border border-[var(--color-border)]
@@ -162,15 +173,10 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
               <Castle size={18} className="text-[var(--color-text-secondary)]" />
             </div>
           ) : (
-            <>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-semibold text-[var(--color-text-primary)]">城市信息</span>
-            <span className="text-xs text-[var(--color-text-muted)]">{gameState?.player.nickname ?? '未同步'}</span>
-              </div>
-              <div className="text-xs text-[var(--color-text-secondary)]">
-                <p className="opacity-50">城市详情预留</p>
-              </div>
-            </>
+            <PlayerSwitcher
+              nickname={gameState?.player.nickname ?? '未同步'}
+              civilizationLevel={gameState?.buildings.reduce((sum, b) => sum + b.level, 0) ?? 0}
+            />
           )}
         </div>
 
@@ -339,6 +345,87 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
         </div>
       </div>
     </aside>
+  )
+}
+
+import { FACTION_LABELS, FACTION_COLORS } from '@/utils/faction'
+
+// --- Player Switcher Sub-component ---
+
+const PlayerSwitcher: FC<{ nickname: string; civilizationLevel: number }> = ({ nickname, civilizationLevel }) => {
+  const [open, setOpen] = useState(false)
+  const players = useAccountStore((s) => s.players)
+  const account = useAccountStore((s) => s.account)
+  const activePlayerId = useGameStore((s) => s.activePlayerId)
+  const setActivePlayer = useGameStore((s) => s.setActivePlayer)
+  const loadGameState = useGameStore((s) => s.loadGameState)
+
+  const handleSwitch = (playerId: string) => {
+    if (playerId === activePlayerId) {
+      setOpen(false)
+      return
+    }
+    setActivePlayer(playerId)
+    loadGameState(playerId)
+    setOpen(false)
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => account && setOpen(!open)}
+        className={`w-full flex items-center justify-between ${account ? 'cursor-pointer' : 'cursor-default'}`}
+      >
+        <div className="flex items-center gap-2">
+          <Castle size={14} className="text-[var(--color-accent)]" />
+          <span className="text-sm font-semibold text-[var(--color-text-primary)]">{nickname}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent-light)] text-[var(--color-accent)] font-bold">
+            文明度 {civilizationLevel}
+          </span>
+        </div>
+        {account && (
+          <ChevronDown
+            size={14}
+            className={`text-[var(--color-text-muted)] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          />
+        )}
+      </button>
+
+      {/* Player List Dropdown */}
+      <div className={`
+        overflow-hidden transition-all duration-200 ease-out
+        ${open ? 'max-h-[200px] mt-2 opacity-100' : 'max-h-0 opacity-0'}
+      `}>
+        {players.length > 0 ? (
+          <div className="space-y-1 pt-2 border-t border-[var(--color-border)]">
+            {players.map((p) => (
+
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => handleSwitch(p.id)}
+                className={`
+                  w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs cursor-pointer transition-colors
+                  ${p.id === activePlayerId
+                    ? 'bg-[var(--color-accent-light)] text-[var(--color-accent)] font-bold'
+                    : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text-primary)]'
+                  }
+                `}
+              >
+                <span className={`text-[10px] font-bold ${FACTION_COLORS[p.faction] ?? 'text-[var(--color-text-muted)]'}`}>{FACTION_LABELS[p.faction] ?? p.faction}</span>
+                <span className="flex-1 text-left truncate">{p.nickname}</span>
+                <span className="text-[10px] text-[var(--color-text-muted)] tabular-nums">{p.buildingLevel}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[10px] text-[var(--color-text-muted)] pt-2 border-t border-[var(--color-border)]">
+            {account ? '加载中...' : '请先登录云同步以切换存档'}
+          </p>
+        )}
+      </div>
+    </div>
   )
 }
 

@@ -13,6 +13,7 @@ type UnitConfig struct {
 	Name         string         `json:"name"`
 	Description  string         `json:"description"`
 	Category     string         `json:"category"`
+	Role         string         `json:"role,omitempty"` // "scout", "transport", etc.
 	Icon         string         `json:"icon"`
 	Stats        map[string]int `json:"stats"`
 	Cost         map[string]int `json:"cost"`
@@ -166,4 +167,56 @@ func ApplyTraits(base int, key string, sources ...map[string]float64) int {
 		}
 	}
 	return int(result)
+}
+
+// SaveFactionsConfig 保存阵营配置到文件
+func SaveFactionsConfig(path string, config FactionsConfig) error {
+	if path == "" {
+		factionsMu.Lock()
+		activeFactions = config
+		factionsMu.Unlock()
+		return nil
+	}
+
+	content, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, append(content, '\n'), 0o644); err != nil {
+		return err
+	}
+
+	factionsMu.Lock()
+	activeFactions = config
+	factionsMu.Unlock()
+	return nil
+}
+
+// SaveFactionUnits 保存单个阵营的兵种配置
+func SaveFactionUnits(dir string, faction string, units FactionUnits) error {
+	if dir == "" {
+		unitsMu.Lock()
+		activeUnits[faction] = units
+		unitsMu.Unlock()
+		return nil
+	}
+
+	content, err := json.MarshalIndent(units, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, faction+".json"), append(content, '\n'), 0o644); err != nil {
+		return err
+	}
+
+	unitsMu.Lock()
+	activeUnits[faction] = units
+	unitsMu.Unlock()
+	return nil
 }

@@ -54,6 +54,7 @@
     "name": "战鹰探马",
     "description": "魏国侦察骑兵，速度极快的轻装单位",
     "category": "cavalry",
+    "role": "scout",
     "icon": "zhanYingTanMa",
     "stats": {
       "attack": 0,

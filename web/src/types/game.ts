@@ -56,12 +56,22 @@ export interface MapTarget {
 
 export interface BattleReport {
   id: string
+  playerId: string
   targetId: string
-  result: 'victory' | 'defeat'
+  targetName: string
+  type: 'attack' | 'plunder' | 'scout' | 'reinforce'
+  result: 'attacker_victory' | 'defender_victory' | 'draw'
   playerPower: number
   enemyPower: number
+  dispatchedUnits: Record<string, number>
   lostUnits: Record<string, number>
+  defenderFaction: string
+  defenderUnits: Record<string, number>
+  defenderLostUnits: Record<string, number>
+  defenderRevealed: boolean
+  defenderResources: Record<string, number>
   rewards: Record<string, number>
+  read: boolean
   createdAt: string
 }
 
@@ -84,8 +94,40 @@ export interface GameState {
   general: General | null
   army: ArmyUnit[]
   recruitQueues: RecruitQueue[]
+  npcState?: NpcState | null
   mapTargets: MapTarget[]
   recentBattleReports: BattleReport[]
   unreadMessageCount: number
   serverTime: string
+}
+
+// --- NPC 城池类型 ---
+
+export interface NpcTrait {
+  id: string
+  name: string
+  buffs: Record<string, number>
+}
+
+export interface NpcCity {
+  id: string
+  name: string
+  faction: string
+  tier: 'small' | 'medium' | 'large' | 'golden'
+  resources: Record<string, number>
+  storageCapacity: Record<string, number>
+  productionPerHour: Record<string, number>
+  army: ArmyUnit[]
+  maxArmy: ArmyUnit[]
+  armyRecoveryRate: number
+  recoveryProfile: string
+  traits: NpcTrait[]
+  resourceSettledAt: string
+  armySettledAt: string
+  generatedAt: string
+}
+
+export interface NpcState {
+  cities: NpcCity[]
+  lastRefreshedAt: string
 }

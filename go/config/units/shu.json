@@ -1,38 +1,4 @@
 {
-  "greedyWolf": {
-    "name": "贪狼营",
-    "description": "蜀国精锐步兵，攻守兼备的基础作战单位",
-    "category": "infantry",
-    "icon": "greedyWolf",
-    "stats": {
-      "attack": 8,
-      "infantryDefense": 4,
-      "cavalryDefense": 1,
-      "speed": 7,
-      "carryCapacity": 120,
-      "upkeep": 2
-    },
-    "cost": { "wood": 190, "stone": 150, "iron": 80, "food": 80 },
-    "trainSeconds": 60,
-    "unlock": { "building": "infantry_camp", "level": 1 }
-  },
-  "qilinGuard": {
-    "name": "麒麟卫",
-    "description": "蜀国重装步兵，具有强大的防御能力",
-    "category": "infantry",
-    "icon": "qilinGuard",
-    "stats": {
-      "attack": 2,
-      "infantryDefense": 7,
-      "cavalryDefense": 12,
-      "speed": 7,
-      "carryCapacity": 80,
-      "upkeep": 2
-    },
-    "cost": { "wood": 290, "stone": 140, "iron": 170, "food": 80 },
-    "trainSeconds": 90,
-    "unlock": { "building": "infantry_camp", "level": 3 }
-  },
   "azureDragon": {
     "name": "青龙军",
     "description": "蜀国精英步兵，攻击力强劲",
@@ -40,117 +6,74 @@
     "icon": "azureDragon",
     "stats": {
       "attack": 12,
-      "infantryDefense": 6,
-      "cavalryDefense": 6,
-      "speed": 6,
       "carryCapacity": 100,
+      "cavalryDefense": 6,
+      "infantryDefense": 6,
+      "speed": 6,
       "upkeep": 2
     },
-    "cost": { "wood": 260, "stone": 240, "iron": 340, "food": 140 },
+    "cost": {
+      "food": 140,
+      "iron": 340,
+      "stone": 240,
+      "wood": 260
+    },
     "trainSeconds": 120,
-    "unlock": { "building": "infantry_camp", "level": 5 }
+    "unlock": {
+      "building": "infantry_camp",
+      "level": 5
+    }
   },
   "flyingKite": {
     "name": "飞鸢",
     "description": "蜀国轻装侦察兵，速度极快",
     "category": "infantry",
+    "role": "scout",
     "icon": "flyingKite",
     "stats": {
       "attack": 0,
-      "infantryDefense": 2,
-      "cavalryDefense": 1,
-      "speed": 9,
       "carryCapacity": 0,
+      "cavalryDefense": 1,
+      "infantryDefense": 2,
+      "speed": 9,
       "upkeep": 1
     },
-    "cost": { "wood": 320, "stone": 200, "iron": 100, "food": 100 },
+    "cost": {
+      "food": 100,
+      "iron": 100,
+      "stone": 200,
+      "wood": 320
+    },
     "trainSeconds": 75,
-    "unlock": { "building": "infantry_camp", "level": 1 }
+    "unlock": {
+      "building": "infantry_camp",
+      "level": 1
+    }
   },
-  "xiLiangCavalry": {
-    "name": "西凉铁骑",
-    "description": "蜀国重装骑兵，冲击力惊人",
-    "category": "cavalry",
-    "icon": "xiLiangCavalry",
+  "greedyWolf": {
+    "name": "贪狼营",
+    "description": "蜀国精锐步兵，攻守兼备的基础作战单位",
+    "category": "infantry",
+    "icon": "greedyWolf",
     "stats": {
-      "attack": 11,
-      "infantryDefense": 20,
-      "cavalryDefense": 8,
-      "speed": 10,
-      "carryCapacity": 220,
-      "upkeep": 3
+      "attack": 8,
+      "carryCapacity": 120,
+      "cavalryDefense": 1,
+      "infantryDefense": 4,
+      "speed": 7,
+      "upkeep": 2
     },
-    "cost": { "wood": 740, "stone": 540, "iron": 580, "food": 150 },
-    "trainSeconds": 180,
-    "unlock": { "building": "cavalry_camp", "level": 3 }
-  },
-  "southernElephant": {
-    "name": "南蛮象",
-    "description": "蜀国战象部队，攻防俱佳的重型单位",
-    "category": "cavalry",
-    "icon": "southernElephant",
-    "stats": {
-      "attack": 30,
-      "infantryDefense": 10,
-      "cavalryDefense": 15,
-      "speed": 9,
-      "carryCapacity": 160,
-      "upkeep": 4
+    "cost": {
+      "food": 80,
+      "iron": 80,
+      "stone": 150,
+      "wood": 190
     },
-    "cost": { "wood": 900, "stone": 1030, "iron": 960, "food": 160 },
-    "trainSeconds": 240,
-    "unlock": { "building": "cavalry_camp", "level": 5 }
-  },
-  "siegeTower": {
-    "name": "临冲车",
-    "description": "蜀国攻城器械，专门用于攻城作战",
-    "category": "siege",
-    "icon": "siegeTower",
-    "stats": {
-      "attack": 13,
-      "infantryDefense": 6,
-      "cavalryDefense": 16,
-      "speed": 4,
-      "carryCapacity": 0,
-      "upkeep": 3
-    },
-    "cost": { "wood": 2000, "stone": 600, "iron": 700, "food": 140 },
-    "trainSeconds": 300,
-    "unlock": { "building": "infantry_camp", "level": 7 }
-  },
-  "thunderBolt": {
-    "name": "霹天雷",
-    "description": "蜀国火药武器，具有强大的爆炸威力",
-    "category": "siege",
-    "icon": "thunderBolt",
-    "stats": {
-      "attack": 10,
-      "infantryDefense": 12,
-      "cavalryDefense": 2,
-      "speed": 3,
-      "carryCapacity": 0,
-      "upkeep": 4
-    },
-    "cost": { "wood": 1800, "stone": 2400, "iron": 1200, "food": 120 },
-    "trainSeconds": 360,
-    "unlock": { "building": "infantry_camp", "level": 9 }
-  },
-  "woodenOx": {
-    "name": "木牛流马",
-    "description": "蜀国运输工具，具有超强的运载能力",
-    "category": "special",
-    "icon": "woodenOx",
-    "stats": {
-      "attack": 20,
-      "infantryDefense": 160,
-      "cavalryDefense": 160,
-      "speed": 5,
-      "carryCapacity": 9999,
-      "upkeep": 5
-    },
-    "cost": { "wood": 14400, "stone": 11000, "iron": 11600, "food": 13000 },
-    "trainSeconds": 600,
-    "unlock": { "building": "infantry_camp", "level": 10 }
+    "trainSeconds": 60,
+    "unlock": {
+      "building": "infantry_camp",
+      "level": 1
+    }
   },
   "hanRoyalty": {
     "name": "汉室宗亲",
@@ -159,15 +82,48 @@
     "icon": "hanRoyalty",
     "stats": {
       "attack": 80,
-      "infantryDefense": 120,
-      "cavalryDefense": 80,
-      "speed": 4,
       "carryCapacity": 0,
+      "cavalryDefense": 80,
+      "infantryDefense": 120,
+      "speed": 4,
       "upkeep": 6
     },
-    "cost": { "wood": 71000, "stone": 53200, "iron": 50000, "food": 54400 },
+    "cost": {
+      "food": 54400,
+      "iron": 50000,
+      "stone": 53200,
+      "wood": 71000
+    },
     "trainSeconds": 1200,
-    "unlock": { "building": "infantry_camp", "level": 15 }
+    "unlock": {
+      "building": "infantry_camp",
+      "level": 15
+    }
+  },
+  "qilinGuard": {
+    "name": "麒麟卫",
+    "description": "蜀国重装步兵，具有强大的防御能力",
+    "category": "infantry",
+    "icon": "qilinGuard",
+    "stats": {
+      "attack": 2,
+      "carryCapacity": 80,
+      "cavalryDefense": 12,
+      "infantryDefense": 7,
+      "speed": 7,
+      "upkeep": 2
+    },
+    "cost": {
+      "food": 80,
+      "iron": 170,
+      "stone": 140,
+      "wood": 290
+    },
+    "trainSeconds": 90,
+    "unlock": {
+      "building": "infantry_camp",
+      "level": 3
+    }
   },
   "shuMerchant": {
     "name": "蜀国商人",
@@ -176,14 +132,147 @@
     "icon": "shuMerchant",
     "stats": {
       "attack": 0,
-      "infantryDefense": 0,
-      "cavalryDefense": 0,
-      "speed": 12,
       "carryCapacity": 2000,
+      "cavalryDefense": 0,
+      "infantryDefense": 0,
+      "speed": 12,
       "upkeep": 0
     },
-    "cost": { "wood": 0, "stone": 0, "iron": 0, "food": 0 },
+    "cost": {
+      "food": 0,
+      "iron": 0,
+      "stone": 0,
+      "wood": 0
+    },
     "trainSeconds": 0,
-    "unlock": { "building": "market", "level": 1 }
+    "unlock": {
+      "building": "market",
+      "level": 1
+    }
+  },
+  "siegeTower": {
+    "name": "临冲车",
+    "description": "蜀国攻城器械，专门用于攻城作战",
+    "category": "siege",
+    "icon": "siegeTower",
+    "stats": {
+      "attack": 13,
+      "carryCapacity": 0,
+      "cavalryDefense": 16,
+      "infantryDefense": 6,
+      "speed": 4,
+      "upkeep": 3
+    },
+    "cost": {
+      "food": 140,
+      "iron": 700,
+      "stone": 600,
+      "wood": 2000
+    },
+    "trainSeconds": 300,
+    "unlock": {
+      "building": "infantry_camp",
+      "level": 7
+    }
+  },
+  "southernElephant": {
+    "name": "南蛮象",
+    "description": "蜀国战象部队，攻防俱佳的重型单位",
+    "category": "cavalry",
+    "icon": "southernElephant",
+    "stats": {
+      "attack": 30,
+      "carryCapacity": 160,
+      "cavalryDefense": 15,
+      "infantryDefense": 10,
+      "speed": 9,
+      "upkeep": 4
+    },
+    "cost": {
+      "food": 160,
+      "iron": 960,
+      "stone": 1030,
+      "wood": 900
+    },
+    "trainSeconds": 240,
+    "unlock": {
+      "building": "cavalry_camp",
+      "level": 5
+    }
+  },
+  "thunderBolt": {
+    "name": "霹天雷",
+    "description": "蜀国火药武器，具有强大的爆炸威力",
+    "category": "siege",
+    "icon": "thunderBolt",
+    "stats": {
+      "attack": 10,
+      "carryCapacity": 0,
+      "cavalryDefense": 2,
+      "infantryDefense": 12,
+      "speed": 3,
+      "upkeep": 4
+    },
+    "cost": {
+      "food": 120,
+      "iron": 1200,
+      "stone": 2400,
+      "wood": 1800
+    },
+    "trainSeconds": 360,
+    "unlock": {
+      "building": "infantry_camp",
+      "level": 9
+    }
+  },
+  "woodenOx": {
+    "name": "木牛流马",
+    "description": "蜀国运输工具，具有超强的运载能力",
+    "category": "special",
+    "icon": "woodenOx",
+    "stats": {
+      "attack": 20,
+      "carryCapacity": 9999,
+      "cavalryDefense": 160,
+      "infantryDefense": 160,
+      "speed": 5,
+      "upkeep": 5
+    },
+    "cost": {
+      "food": 13000,
+      "iron": 11600,
+      "stone": 11000,
+      "wood": 14400
+    },
+    "trainSeconds": 600,
+    "unlock": {
+      "building": "infantry_camp",
+      "level": 10
+    }
+  },
+  "xiLiangCavalry": {
+    "name": "西凉铁骑",
+    "description": "蜀国重装骑兵，冲击力惊人",
+    "category": "cavalry",
+    "icon": "xiLiangCavalry",
+    "stats": {
+      "attack": 11,
+      "carryCapacity": 220,
+      "cavalryDefense": 8,
+      "infantryDefense": 20,
+      "speed": 10,
+      "upkeep": 3
+    },
+    "cost": {
+      "food": 150,
+      "iron": 580,
+      "stone": 540,
+      "wood": 740
+    },
+    "trainSeconds": 180,
+    "unlock": {
+      "building": "cavalry_camp",
+      "level": 3
+    }
   }
 }

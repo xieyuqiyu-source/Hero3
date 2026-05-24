@@ -16,6 +16,16 @@ type Repository interface {
 	DeletePlayer(playerID string) error
 	GetState(playerID string) (GameState, error)
 	SaveState(state GameState, updatedAt time.Time) error
+
+	// Battle Reports
+	SaveReport(report BattleReport) error
+	ListReports(playerID string, limit int) ([]BattleReport, error)
+	ListAllReports(playerID string) ([]BattleReport, error)
+	MarkReportsRead(playerID string) error
+	MarkSingleReportRead(playerID string, reportID string) error
+	DeleteReport(playerID string, reportID string) error
+	DeleteAllReports(playerID string) error
+	CountUnreadReports(playerID string) (int, error)
 }
 
 type MemoryRepository struct {
@@ -25,6 +35,7 @@ type MemoryRepository struct {
 	accountPlayers  map[string][]string
 	players         map[string]GameState
 	playerUpdatedAt map[string]time.Time
+	reports         map[string][]BattleReport // playerID → reports
 }
 
 func NewMemoryRepository() *MemoryRepository {
@@ -37,6 +48,7 @@ func NewMemoryRepository() *MemoryRepository {
 		accountPlayers:  make(map[string][]string),
 		players:         map[string]GameState{demoState.Player.ID: demoState},
 		playerUpdatedAt: map[string]time.Time{demoState.Player.ID: now},
+		reports:         make(map[string][]BattleReport),
 	}
 }
 
@@ -148,6 +160,7 @@ func (r *MemoryRepository) DeleteAccount(accountID string) error {
 	for _, playerID := range r.accountPlayers[accountID] {
 		delete(r.players, playerID)
 		delete(r.playerUpdatedAt, playerID)
+		delete(r.reports, playerID)
 	}
 	delete(r.accountPlayers, accountID)
 	delete(r.accountByName, account.Username)
@@ -165,6 +178,7 @@ func (r *MemoryRepository) DeletePlayer(playerID string) error {
 
 	delete(r.players, playerID)
 	delete(r.playerUpdatedAt, playerID)
+	delete(r.reports, playerID)
 	for accountID, playerIDs := range r.accountPlayers {
 		nextPlayerIDs := playerIDs[:0]
 		for _, currentID := range playerIDs {
@@ -200,4 +214,111 @@ func (r *MemoryRepository) SaveState(state GameState, updatedAt time.Time) error
 	r.players[state.Player.ID] = state
 	r.playerUpdatedAt[state.Player.ID] = updatedAt
 	return nil
+}
+
+// --- Battle Report Methods (MemoryRepository) ---
+
+func (r *MemoryRepository) SaveReport(report BattleReport) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.reports[report.PlayerID] = append([]BattleReport{report}, r.reports[report.PlayerID]...)
+	// 保留最多 1000 条
+	if len(r.reports[report.PlayerID]) > 1000 {
+		r.reports[report.PlayerID] = r.reports[report.PlayerID][:1000]
+	}
+	return nil
+}
+
+func (r *MemoryRepository) ListReports(playerID string, limit int) ([]BattleReport, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	all := r.reports[playerID]
+	var result []BattleReport
+	threeDaysAgo := time.Now().Add(-3 * 24 * time.Hour)
+
+	for _, report := range all {
+		if report.Read && report.DeletedByPlayer {
+			continue
+		}
+		if report.DeletedByPlayer {
+			continue
+		}
+		createdAt, err := time.Parse(time.RFC3339, report.CreatedAt)
+		if err == nil && createdAt.Before(threeDaysAgo) {
+			continue
+		}
+		result = append(result, report)
+		if limit > 0 && len(result) >= limit {
+			break
+		}
+	}
+	return result, nil
+}
+
+func (r *MemoryRepository) ListAllReports(playerID string) ([]BattleReport, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	return r.reports[playerID], nil
+}
+
+func (r *MemoryRepository) MarkReportsRead(playerID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i := range r.reports[playerID] {
+		r.reports[playerID][i].Read = true
+	}
+	return nil
+}
+
+func (r *MemoryRepository) MarkSingleReportRead(playerID string, reportID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i := range r.reports[playerID] {
+		if r.reports[playerID][i].ID == reportID {
+			r.reports[playerID][i].Read = true
+			return nil
+		}
+	}
+	return nil
+}
+
+func (r *MemoryRepository) DeleteReport(playerID string, reportID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i := range r.reports[playerID] {
+		if r.reports[playerID][i].ID == reportID {
+			r.reports[playerID][i].DeletedByPlayer = true
+			return nil
+		}
+	}
+	return nil
+}
+
+func (r *MemoryRepository) DeleteAllReports(playerID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i := range r.reports[playerID] {
+		r.reports[playerID][i].DeletedByPlayer = true
+	}
+	return nil
+}
+
+func (r *MemoryRepository) CountUnreadReports(playerID string) (int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	count := 0
+	for _, report := range r.reports[playerID] {
+		if !report.Read && !report.DeletedByPlayer {
+			count++
+		}
+	}
+	return count, nil
 }

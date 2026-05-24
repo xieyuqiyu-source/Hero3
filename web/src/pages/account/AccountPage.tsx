@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Coins, Crown, Scroll, Users, Castle, KeyRound, Sparkles, Cloud, LogOut, Check } from 'lucide-react'
 import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
+import { getFactionLabel } from '@/utils/faction'
 import CloudSyncModal from '@/components/CloudSyncModal'
 import Section from './components/Section'
 import InfoItem from './components/InfoItem'
@@ -77,7 +78,7 @@ const AccountPage: FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <InfoItem label="昵称" value={gameState?.player.nickname ?? '--'} highlight />
           <InfoItem label="天梯排名" value="等待统计中.." />
-          <InfoItem label="国度" value={gameState?.player.faction ?? '--'} />
+          <InfoItem label="国度" value={getFactionLabel(gameState?.player.faction ?? '--')} />
           <InfoItem label="所属联盟" value="--" />
           <InfoItem label="城池数" value="1" />
           <InfoItem label="文明度" value="0" />
@@ -128,7 +129,7 @@ const AccountPage: FC = () => {
                         {p.nickname}
                       </span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent-light)] text-[var(--color-accent)] font-medium">
-                        {p.faction}
+                        {getFactionLabel(p.faction)}
                       </span>
                       {isActive && (
                         <span className="text-[10px] text-[var(--color-accent)] font-medium">当前</span>
@@ -136,7 +137,7 @@ const AccountPage: FC = () => {
                     </div>
                     <div className="flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
                       <span>兵力 {p.totalArmy.toLocaleString()}</span>
-                      <span>建筑总等级 {p.buildingLevel}</span>
+                      <span>文明度 {p.buildingLevel}</span>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">

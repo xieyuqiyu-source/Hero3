@@ -24,6 +24,8 @@ type Config struct {
 	BalancePath    string
 	FactionsPath   string
 	UnitsDir       string
+	NpcConfigPath  string
+	CombatPath     string
 	ReadTimeout    time.Duration
 	WriteTimeout   time.Duration
 	IdleTimeout    time.Duration
@@ -43,6 +45,8 @@ func Load() Config {
 		BalancePath:    getEnv("HERO3_BALANCE_PATH", "config/balance.json"),
 		FactionsPath:   getEnv("HERO3_FACTIONS_PATH", "config/factions.json"),
 		UnitsDir:       getEnv("HERO3_UNITS_DIR", "config/units"),
+		NpcConfigPath:  getEnv("HERO3_NPC_CONFIG_PATH", "config/npc.json"),
+		CombatPath:     getEnv("HERO3_COMBAT_PATH", "config/combat.json"),
 		ReadTimeout:    getDurationEnv("HERO3_READ_TIMEOUT", 5*time.Second),
 		WriteTimeout:   getDurationEnv("HERO3_WRITE_TIMEOUT", 10*time.Second),
 		IdleTimeout:    getDurationEnv("HERO3_IDLE_TIMEOUT", 60*time.Second),

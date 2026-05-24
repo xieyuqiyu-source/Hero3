@@ -35,6 +35,10 @@ GameState:
       type: array
       items:
         $ref: '#/components/schemas/RecruitQueue'
+    npcState:
+      nullable: true
+      allOf:
+      - $ref: '#/components/schemas/NpcState'
     mapTargets:
       type: array
       items:

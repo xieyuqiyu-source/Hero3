@@ -34,6 +34,14 @@ func main() {
 		logger.Error("units config load failed", "dir", cfg.UnitsDir, "error", err)
 		os.Exit(1)
 	}
+	if err := gameService.SetNpcConfigPath(cfg.NpcConfigPath); err != nil {
+		logger.Error("npc config load failed", "path", cfg.NpcConfigPath, "error", err)
+		os.Exit(1)
+	}
+	if err := gameService.SetCombatPath(cfg.CombatPath); err != nil {
+		logger.Error("combat config load failed", "path", cfg.CombatPath, "error", err)
+		os.Exit(1)
+	}
 	if cfg.DatabaseDSN != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -61,6 +69,14 @@ func main() {
 		}
 		if err := gameService.SetUnitsDir(cfg.UnitsDir); err != nil {
 			logger.Error("units config load failed", "dir", cfg.UnitsDir, "error", err)
+			os.Exit(1)
+		}
+		if err := gameService.SetNpcConfigPath(cfg.NpcConfigPath); err != nil {
+			logger.Error("npc config load failed", "path", cfg.NpcConfigPath, "error", err)
+			os.Exit(1)
+		}
+		if err := gameService.SetCombatPath(cfg.CombatPath); err != nil {
+			logger.Error("combat config load failed", "path", cfg.CombatPath, "error", err)
 			os.Exit(1)
 		}
 		logger.Info("database storage enabled")

@@ -31,6 +31,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   'unit not found': '兵种不存在',
   'invalid recruit amount': '征兵数量无效',
   'recruit queue is full': '征兵队列已满',
+  'invalid general for faction': '将领不属于该阵营',
+  'npc city not found': 'NPC城池不存在',
+  'no units selected for dispatch': '未选择出征兵力',
+  'insufficient army for dispatch': '兵力不足，无法出征',
 }
 
 /** 从错误响应体中提取可读消息 */

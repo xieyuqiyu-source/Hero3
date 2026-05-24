@@ -124,3 +124,42 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/npc-config:
+  get:
+    tags:
+    - Admin
+    summary: GM 读取 NPC 城池配置
+    description: 读取 NPC 城池生成、刷新、守军、词条和侦查消耗配置。
+    operationId: adminGetNpcConfig
+    responses:
+      '200':
+        description: 当前 NPC 城池配置
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NpcConfig'
+  put:
+    tags:
+    - Admin
+    summary: GM 保存 NPC 城池配置
+    description: 保存后立即更新后端内存配置。已生成到玩家存档内的 NPC 城池不会自动重刷，需要调用 NPC 刷新接口才会按新配置重新生成。
+    operationId: adminUpdateNpcConfig
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NpcConfig'
+    responses:
+      '200':
+        description: 保存后的 NPC 城池配置
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NpcConfig'
+      '400':
+        description: 配置格式或内容不合法
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

@@ -1,4 +1,4 @@
-import type { AccountSummary, BalanceConfig, GameState, HealthState } from '@/types'
+import type { AccountSummary, BalanceConfig, GameState, HealthState, NpcConfig, NpcState } from '@/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1'
 const ROOT_BASE = API_BASE.replace(/\/api\/v1$/, '')
@@ -32,6 +32,40 @@ export const adminApi = {
       body: JSON.stringify({ playerId, adjustments }),
     })
   },
+  instantCompleteRecruit(playerId: string, queueId: string) {
+    return request<{ state: GameState }>(`${API_BASE}/military/recruit/instant`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, queueId }),
+    })
+  },
+  getNpcCities(playerId: string) {
+    return request<NpcState>(`${API_BASE}/map/npc-cities?playerId=${encodeURIComponent(playerId)}`)
+  },
+  refreshNpcCities(playerId: string) {
+    return request<NpcState>(`${API_BASE}/map/npc-cities/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId }),
+    })
+  },
+  scoutNpc(playerId: string, npcId: string) {
+    return request<{ npcCity: NpcState['cities'][number]; state: GameState }>(`${API_BASE}/map/npc-cities/scout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, npcId }),
+    })
+  },
+  attackNpc(playerId: string, npcId: string, mode: 'attack' | 'plunder', units: Record<string, number>) {
+    return request<{ battleReport: GameState['recentBattleReports'][number]; state: GameState }>(
+      `${API_BASE}/map/npc-cities/attack`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId, npcId, mode, units }),
+      },
+    )
+  },
   getBalance() {
     return request<BalanceConfig>(`${API_BASE}/admin/balance`)
   },
@@ -40,6 +74,46 @@ export const adminApi = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(balance),
+    })
+  },
+  getNpcConfig() {
+    return request<NpcConfig>(`${API_BASE}/admin/npc-config`)
+  },
+  updateNpcConfig(config: NpcConfig) {
+    return request<NpcConfig>(`${API_BASE}/admin/npc-config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+  },
+  getCombatConfig() {
+    return request<object>(`${API_BASE}/admin/combat-config`)
+  },
+  updateCombatConfig(config: object) {
+    return request<object>(`${API_BASE}/admin/combat-config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+  },
+  getFactionsConfig() {
+    return request<object>(`${API_BASE}/admin/factions-config`)
+  },
+  updateFactionsConfig(config: object) {
+    return request<object>(`${API_BASE}/admin/factions-config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+  },
+  getUnitsConfig() {
+    return request<Record<string, object>>(`${API_BASE}/admin/units-config`)
+  },
+  updateUnitsConfig(faction: string, config: object) {
+    return request<object>(`${API_BASE}/admin/units-config/${faction}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
     })
   },
   deleteAccount(accountId: string) {

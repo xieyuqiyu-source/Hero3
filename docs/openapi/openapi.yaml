@@ -19,6 +19,8 @@ tags:
   description: 城池建设
 - name: Military
   description: 军事与征兵
+- name: Map
+  description: 地图、NPC 城池与战斗
 - name: Admin
   description: GM 后台接口
 paths:
@@ -50,6 +52,16 @@ paths:
     $ref: ./paths/city.yaml#/~1api~1v1~1city~1resources~1fill
   /api/v1/military/recruit:
     $ref: ./paths/military.yaml#/~1api~1v1~1military~1recruit
+  /api/v1/military/recruit/instant:
+    $ref: ./paths/military.yaml#/~1api~1v1~1military~1recruit~1instant
+  /api/v1/map/npc-cities:
+    $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities
+  /api/v1/map/npc-cities/refresh:
+    $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1refresh
+  /api/v1/map/npc-cities/attack:
+    $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1attack
+  /api/v1/map/npc-cities/scout:
+    $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1scout
   /api/v1/admin/accounts:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1accounts
   /api/v1/admin/players/{playerId}/state:
@@ -58,6 +70,8 @@ paths:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1resources~1adjust
   /api/v1/admin/balance:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1balance
+  /api/v1/admin/npc-config:
+    $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1npc-config
 components:
   schemas:
     HealthState:
@@ -104,6 +118,36 @@ components:
       $ref: ./schemas/city.yaml#/AdjustResourcesRequest
     RecruitRequest:
       $ref: ./schemas/military.yaml#/RecruitRequest
+    InstantCompleteRecruitRequest:
+      $ref: ./schemas/military.yaml#/InstantCompleteRecruitRequest
+    NpcState:
+      $ref: ./schemas/map.yaml#/NpcState
+    NpcCity:
+      $ref: ./schemas/map.yaml#/NpcCity
+    NpcTrait:
+      $ref: ./schemas/map.yaml#/NpcTrait
+    NpcConfig:
+      $ref: ./schemas/map.yaml#/NpcConfig
+    NpcTierConfig:
+      $ref: ./schemas/map.yaml#/NpcTierConfig
+    IntRange:
+      $ref: ./schemas/map.yaml#/IntRange
+    NpcCountRule:
+      $ref: ./schemas/map.yaml#/NpcCountRule
+    NpcRecoveryProfile:
+      $ref: ./schemas/map.yaml#/NpcRecoveryProfile
+    NpcTraitConfig:
+      $ref: ./schemas/map.yaml#/NpcTraitConfig
+    NpcCitiesRefreshRequest:
+      $ref: ./schemas/map.yaml#/NpcCitiesRefreshRequest
+    AttackNpcRequest:
+      $ref: ./schemas/map.yaml#/AttackNpcRequest
+    AttackNpcResponse:
+      $ref: ./schemas/map.yaml#/AttackNpcResponse
+    ScoutNpcRequest:
+      $ref: ./schemas/map.yaml#/ScoutNpcRequest
+    ScoutNpcResponse:
+      $ref: ./schemas/map.yaml#/ScoutNpcResponse
     ErrorResponse:
       $ref: ./schemas/common.yaml#/ErrorResponse
     DeleteResponse:

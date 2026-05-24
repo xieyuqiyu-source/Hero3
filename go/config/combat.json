@@ -1,0 +1,33 @@
+{
+  "activeCombatRules": {
+    "pve_attack": "official_attack",
+    "pve_plunder": "official_plunder",
+    "pvp_attack": "official_attack",
+    "pvp_plunder": "official_plunder"
+  },
+  "rules": {
+    "official_attack": {
+      "id": "official_attack",
+      "name": "官方攻击规则",
+      "mode": "attack",
+      "exponent": 1.422,
+      "equalResult": "mutual_destruction",
+      "lossDistribution": "proportional",
+      "defenseFormula": "weighted"
+    },
+    "official_plunder": {
+      "id": "official_plunder",
+      "name": "官方掠夺规则",
+      "mode": "plunder",
+      "exponent": 1.422,
+      "equalResult": "half_each",
+      "lossDistribution": "proportional",
+      "defenseFormula": "weighted"
+    }
+  },
+  "wallConfig": {
+    "wei": { "base": 1.03 },
+    "shu": { "base": 1.02 },
+    "wu": { "base": 1.025 }
+  }
+}

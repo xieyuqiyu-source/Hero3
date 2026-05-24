@@ -172,7 +172,7 @@ const MobileSidebarContent: FC<{
   ]
 
   const quickActions = [
-    { key: 'news', label: '军情', hasNotify: true },
+    { key: 'news', label: '军情', hasNotify: (gameState?.recentBattleReports?.some(r => !r.read) ?? false) },
     { key: 'mail', label: '信函', hasNotify: (gameState?.unreadMessageCount ?? 0) > 0 },
     { key: 'notice', label: '公告', hasNotify: true },
     { key: 'account', label: '账户', hasNotify: false },
@@ -197,7 +197,10 @@ const MobileSidebarContent: FC<{
           <button
             key={action.key}
             type="button"
-            onClick={() => { if (action.key === 'account') onNavigate('account') }}
+            onClick={() => {
+              if (action.key === 'account') onNavigate('account')
+              if (action.key === 'news') onNavigate('news')
+            }}
             className={`
               px-2.5 py-1.5 rounded-lg
               text-[11px] font-medium
