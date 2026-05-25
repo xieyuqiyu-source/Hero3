@@ -283,11 +283,15 @@ const AccountGoldSection: FC = () => {
 
   const formatCooldown = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
   const minAmount = expanded === 'to_account' ? 15 : 1
-  const preview = expanded === 'to_city'
-    ? `→ ${(amount * 10).toLocaleString()} 城金 存入「${cityName}」`
-    : expanded === 'to_account'
-      ? `→ ${Math.floor(amount / 15)} 金币 到账户（损耗33%）`
-      : ''
+  const previewNode = expanded === 'to_city' ? (
+    <span className="text-[10px] text-[var(--color-text-secondary)]">
+      → {(amount * 10).toLocaleString()} 城金 存入「<span className="text-xs font-bold text-[var(--color-accent)]">{cityName}</span>」
+    </span>
+  ) : expanded === 'to_account' ? (
+    <span className="text-[10px] text-[var(--color-text-secondary)]">
+      → {Math.floor(amount / 15)} 金币 从「<span className="text-xs font-bold text-[var(--color-accent)]">{cityName}</span>」提取（损耗33%）
+    </span>
+  ) : null
 
   return (
     <div>
@@ -336,7 +340,7 @@ const AccountGoldSection: FC = () => {
             onChange={(e) => setAmount(Math.max(minAmount, parseInt(e.target.value) || minAmount))}
             className="w-16 text-center text-xs font-bold bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-lg py-1.5 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent-border)]"
           />
-          <span className="text-[10px] text-[var(--color-text-secondary)]">{preview}</span>
+          <span className="text-[10px] text-[var(--color-text-secondary)]">{previewNode}</span>
           <span className="text-[9px] text-[var(--color-text-muted)] ml-auto mr-2">冷却1h</span>
           <button
             type="button"
