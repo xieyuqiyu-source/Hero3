@@ -241,8 +241,7 @@ const AccountPage: FC = () => {
 
 // --- Account Gold Section (inline button + expand panel) ---
 const AccountGoldSection: FC = () => {
-  const [expanded, setExpanded] = useState(false)
-  const [direction, setDirection] = useState<'to_city' | 'to_account'>('to_city')
+  const [expanded, setExpanded] = useState<'to_city' | 'to_account' | null>(null)
   const [amount, setAmount] = useState(1)
   const [loading, setLoading] = useState(false)
   const account = useAccountStore((s) => s.account)
@@ -259,11 +258,17 @@ const AccountGoldSection: FC = () => {
   })()
   const onCooldown = cooldownRemaining > 0
 
+  const handleToggle = (dir: 'to_city' | 'to_account') => {
+    if (expanded === dir) { setExpanded(null); return }
+    setExpanded(dir)
+    setAmount(dir === 'to_city' ? 1 : 15)
+  }
+
   const handleExchange = async () => {
-    if (!account || !activePlayerId || loading || onCooldown || amount <= 0) return
+    if (!account || !activePlayerId || loading || onCooldown || !expanded) return
     setLoading(true)
     try {
-      if (direction === 'to_city') {
+      if (expanded === 'to_city') {
         const result = await gameApi.exchangeGold(account.accountId, activePlayerId, amount)
         setState(result.state)
         toast.success(`${amount * 10} 城金已存入「${cityName}」`)
@@ -272,19 +277,21 @@ const AccountGoldSection: FC = () => {
         setState(result.state)
         toast.success(`从「${cityName}」提取 ${Math.floor(amount / 15)} 金币到账户`)
       }
-      setExpanded(false)
+      setExpanded(null)
     } catch { /* global */ } finally { setLoading(false) }
   }
 
   const formatCooldown = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-  const minAmount = direction === 'to_city' ? 1 : 15
-  const preview = direction === 'to_city'
+  const minAmount = expanded === 'to_account' ? 15 : 1
+  const preview = expanded === 'to_city'
     ? `→ ${(amount * 10).toLocaleString()} 城金 存入「${cityName}」`
-    : `→ ${Math.floor(amount / 15)} 金币 到账户（损耗33%）`
+    : expanded === 'to_account'
+      ? `→ ${Math.floor(amount / 15)} 金币 到账户（损耗33%）`
+      : ''
 
   return (
     <div>
-      {/* Top row: balance + buttons */}
+      {/* Top row: balance + 3 buttons */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-sm text-[var(--color-text-secondary)]">您目前帐户上有</span>
@@ -293,18 +300,26 @@ const AccountGoldSection: FC = () => {
         </div>
         <div className="flex items-center gap-2">
           {account && activePlayerId && (
-            <button
-              type="button"
-              onClick={() => setExpanded(!expanded)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-500/10 text-indigo-600 border border-indigo-500/30 hover:bg-indigo-500/20 cursor-pointer transition-all duration-200"
-            >
-              <ArrowRightLeft size={12} />
-              兑换
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => handleToggle('to_city')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-all duration-200 ${expanded === 'to_city' ? 'bg-indigo-500/20 text-indigo-600 border border-indigo-500/40' : 'bg-indigo-500/10 text-indigo-600 border border-indigo-500/30 hover:bg-indigo-500/20'}`}
+              >
+                金币→城金
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggle('to_account')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition-all duration-200 ${expanded === 'to_account' ? 'bg-amber-500/20 text-amber-600 border border-amber-500/40' : 'bg-amber-500/10 text-amber-600 border border-amber-500/30 hover:bg-amber-500/20'}`}
+              >
+                城金→金币
+              </button>
+            </>
           )}
           <button
             type="button"
-            className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 text-white hover:bg-amber-400 hover:-translate-y-0.5 cursor-pointer transition-all duration-200 shadow-[0_4px_12px_rgba(245,158,11,0.3)]"
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 text-white hover:bg-amber-400 cursor-pointer transition-all duration-200 shadow-[0_4px_12px_rgba(245,158,11,0.3)]"
           >
             充值金币
           </button>
@@ -312,26 +327,7 @@ const AccountGoldSection: FC = () => {
       </div>
 
       {/* Expand panel */}
-      <div className={`overflow-hidden transition-all duration-200 ease-out ${expanded ? 'max-h-[120px] mt-3 pt-3 border-t border-[var(--color-border)] opacity-100' : 'max-h-0 opacity-0'}`}>
-        <div className="flex items-center gap-2 mb-2">
-          <button
-            type="button"
-            onClick={() => { setDirection('to_city'); setAmount(1) }}
-            className={`text-[10px] px-2 py-1 rounded-lg cursor-pointer transition-colors ${direction === 'to_city' ? 'bg-indigo-500/10 text-indigo-600 font-bold' : 'text-[var(--color-text-muted)]'}`}
-          >
-            金币→城金
-          </button>
-          <button
-            type="button"
-            onClick={() => { setDirection('to_account'); setAmount(15) }}
-            className={`text-[10px] px-2 py-1 rounded-lg cursor-pointer transition-colors ${direction === 'to_account' ? 'bg-amber-500/10 text-amber-600 font-bold' : 'text-[var(--color-text-muted)]'}`}
-          >
-            城金→金币
-          </button>
-          <span className="text-[9px] text-[var(--color-text-muted)] ml-auto">
-            {direction === 'to_city' ? '1:10 无损' : '15:1 损耗33%'} · 冷却1h
-          </span>
-        </div>
+      <div className={`overflow-hidden transition-all duration-200 ease-out ${expanded ? 'max-h-[80px] mt-3 pt-3 border-t border-[var(--color-border)] opacity-100' : 'max-h-0 opacity-0'}`}>
         <div className="flex items-center gap-2 flex-wrap">
           <input
             type="number"
@@ -340,15 +336,15 @@ const AccountGoldSection: FC = () => {
             onChange={(e) => setAmount(Math.max(minAmount, parseInt(e.target.value) || minAmount))}
             className="w-16 text-center text-xs font-bold bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-lg py-1.5 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent-border)]"
           />
-          <span className="text-[10px] text-[var(--color-text-muted)]">{direction === 'to_city' ? '金币' : '城金'}</span>
           <span className="text-[10px] text-[var(--color-text-secondary)]">{preview}</span>
+          <span className="text-[9px] text-[var(--color-text-muted)] ml-auto mr-2">冷却1h</span>
           <button
             type="button"
             onClick={handleExchange}
             disabled={loading || onCooldown || amount < minAmount}
-            className="ml-auto px-3 py-1.5 rounded-lg text-[10px] font-bold bg-[var(--color-accent)] text-white hover:opacity-90 cursor-pointer transition-opacity disabled:opacity-50"
+            className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-[var(--color-accent)] text-white hover:opacity-90 cursor-pointer transition-opacity disabled:opacity-50"
           >
-            {loading ? '...' : onCooldown ? formatCooldown(cooldownRemaining) : '确认'}
+            {loading ? '...' : onCooldown ? formatCooldown(cooldownRemaining) : '确认兑换'}
           </button>
         </div>
       </div>
