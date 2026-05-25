@@ -20,7 +20,7 @@ const (
 	ExchangeCooldownSeconds = 3600 // 兑换冷却 1 小时
 )
 
-// AddGold 给存档增加城金（内部调用，如 NPC 掉落、任务奖励）
+// AddGold 给存档增加城金（原子操作）
 func (s *Service) AddGold(playerID string, amount int, reason string) (GameState, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
@@ -30,16 +30,14 @@ func (s *Service) AddGold(playerID string, amount int, reason string) (GameState
 		return GameState{}, ErrInvalidGoldAmount
 	}
 
-	state, err := s.repo.GetState(playerID)
-	if err != nil {
+	// 原子加城金
+	if _, err := s.repo.AddCityGold(playerID, amount); err != nil {
 		return GameState{}, err
 	}
 
-	state.CityGold += amount
-
-	now := time.Now()
-	state.ServerTime = now.UTC().Format(resourceDateLayout)
-	if err := s.repo.SaveState(state, now); err != nil {
+	// 读取最新状态返回
+	state, err := s.repo.GetState(playerID)
+	if err != nil {
 		return GameState{}, err
 	}
 
@@ -47,7 +45,7 @@ func (s *Service) AddGold(playerID string, amount int, reason string) (GameState
 	return state, nil
 }
 
-// DeductGold 从存档扣除城金（内部调用，如加速、刷新）
+// DeductGold 从存档扣除城金（原子操作，余额不足返回 ErrInsufficientCityGold）
 func (s *Service) DeductGold(playerID string, amount int, reason string) (GameState, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
@@ -57,20 +55,13 @@ func (s *Service) DeductGold(playerID string, amount int, reason string) (GameSt
 		return GameState{}, ErrInvalidGoldAmount
 	}
 
-	state, err := s.repo.GetState(playerID)
-	if err != nil {
+	// 原子扣城金（余额不足会返回错误）
+	if _, err := s.repo.DeductCityGold(playerID, amount); err != nil {
 		return GameState{}, err
 	}
 
-	if state.CityGold < amount {
-		return GameState{}, ErrInsufficientCityGold
-	}
-
-	state.CityGold -= amount
-
-	now := time.Now()
-	state.ServerTime = now.UTC().Format(resourceDateLayout)
-	if err := s.repo.SaveState(state, now); err != nil {
+	state, err := s.repo.GetState(playerID)
+	if err != nil {
 		return GameState{}, err
 	}
 
@@ -93,7 +84,7 @@ func (s *Service) GetGold(playerID string) (int, error) {
 	return state.CityGold, nil
 }
 
-// ExchangeGoldToCityGold 金币 → 城金（1 金币 = 10 城金）
+// ExchangeGoldToCityGold 金币 → 城金（1 金币 = 10 城金，原子操作）
 func (s *Service) ExchangeGoldToCityGold(accountID string, playerID string, goldAmount int) (GameState, error) {
 	accountID = strings.TrimSpace(accountID)
 	playerID = strings.TrimSpace(playerID)
@@ -107,21 +98,11 @@ func (s *Service) ExchangeGoldToCityGold(accountID string, playerID string, gold
 		return GameState{}, ErrInvalidGoldAmount
 	}
 
-	// 获取账户，校验金币余额
-	account, err := s.repo.GetAccountByID(accountID)
-	if err != nil {
-		return GameState{}, err
-	}
-	if account.Gold < goldAmount {
-		return GameState{}, ErrInsufficientGold
-	}
-
-	// 获取存档，校验冷却
+	// 检查冷却
 	state, err := s.repo.GetState(playerID)
 	if err != nil {
 		return GameState{}, err
 	}
-
 	now := time.Now()
 	if state.LastExchangeAt != "" {
 		lastExchange, parseErr := time.Parse(resourceDateLayout, state.LastExchangeAt)
@@ -130,26 +111,31 @@ func (s *Service) ExchangeGoldToCityGold(accountID string, playerID string, gold
 		}
 	}
 
-	// 扣除账户金币
-	account.Gold -= goldAmount
-	if err := s.repo.UpdateAccountGold(accountID, account.Gold); err != nil {
+	// 原子扣除账户金币（余额不足返回 ErrInsufficientGold）
+	if err := s.repo.DeductAccountGold(accountID, goldAmount); err != nil {
 		return GameState{}, err
 	}
 
-	// 发放城金
+	// 原子加城金
 	cityGoldGain := goldAmount * ExchangeRate
-	state.CityGold += cityGoldGain
+	if _, err := s.repo.AddCityGold(playerID, cityGoldGain); err != nil {
+		// 回滚账户金币（尽力而为）
+		_ = s.repo.AddAccountGold(accountID, goldAmount)
+		return GameState{}, err
+	}
+
+	// 更新冷却时间
+	state, _ = s.repo.GetState(playerID)
 	state.LastExchangeAt = now.UTC().Format(resourceDateLayout)
 	state.ServerTime = now.UTC().Format(resourceDateLayout)
+	_ = s.repo.SaveState(state, now)
 
-	if err := s.repo.SaveState(state, now); err != nil {
-		return GameState{}, err
-	}
-
+	// 返回最新状态
+	state, _ = s.repo.GetState(playerID)
 	return state, nil
 }
 
-// ExchangeCityGoldToGold 城金 → 金币（15 城金 = 1 金币，有损耗）
+// ExchangeCityGoldToGold 城金 → 金币（15 城金 = 1 金币，有损耗，原子操作）
 func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, cityGoldAmount int) (GameState, error) {
 	accountID = strings.TrimSpace(accountID)
 	playerID = strings.TrimSpace(playerID)
@@ -163,16 +149,11 @@ func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, city
 		return GameState{}, ErrInvalidGoldAmount
 	}
 
-	// 获取存档，校验城金余额和冷却
+	// 检查冷却
 	state, err := s.repo.GetState(playerID)
 	if err != nil {
 		return GameState{}, err
 	}
-
-	if state.CityGold < cityGoldAmount {
-		return GameState{}, ErrInsufficientCityGold
-	}
-
 	now := time.Now()
 	if state.LastExchangeAt != "" {
 		lastExchange, parseErr := time.Parse(resourceDateLayout, state.LastExchangeAt)
@@ -181,27 +162,26 @@ func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, city
 		}
 	}
 
-	// 计算获得金币（向下取整）
-	goldGain := cityGoldAmount / ReverseExchangeRate
+	// 原子扣城金（余额不足返回 ErrInsufficientCityGold）
+	if _, err := s.repo.DeductCityGold(playerID, cityGoldAmount); err != nil {
+		return GameState{}, err
+	}
 
-	// 扣除城金
-	state.CityGold -= cityGoldAmount
+	// 原子加账户金币
+	goldGain := cityGoldAmount / ReverseExchangeRate
+	if err := s.repo.AddAccountGold(accountID, goldGain); err != nil {
+		// 回滚城金（尽力而为）
+		_, _ = s.repo.AddCityGold(playerID, cityGoldAmount)
+		return GameState{}, err
+	}
+
+	// 更新冷却时间
+	state, _ = s.repo.GetState(playerID)
 	state.LastExchangeAt = now.UTC().Format(resourceDateLayout)
 	state.ServerTime = now.UTC().Format(resourceDateLayout)
+	_ = s.repo.SaveState(state, now)
 
-	if err := s.repo.SaveState(state, now); err != nil {
-		return GameState{}, err
-	}
-
-	// 增加账户金币
-	account, err := s.repo.GetAccountByID(accountID)
-	if err != nil {
-		return GameState{}, err
-	}
-	account.Gold += goldGain
-	if err := s.repo.UpdateAccountGold(accountID, account.Gold); err != nil {
-		return GameState{}, err
-	}
-
+	// 返回最新状态
+	state, _ = s.repo.GetState(playerID)
 	return state, nil
 }

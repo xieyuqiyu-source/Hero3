@@ -10,6 +10,8 @@ type Repository interface {
 	GetAccountByUsername(username string) (Account, error)
 	GetAccountByID(accountID string) (Account, error)
 	UpdateAccountGold(accountID string, gold int) error
+	AddAccountGold(accountID string, amount int) error
+	DeductAccountGold(accountID string, amount int) error
 	AccountExists(accountID string) (bool, error)
 	ListAccounts() ([]AccountSummary, error)
 	ListPlayers(accountID string) ([]PlayerSummary, error)
@@ -18,6 +20,9 @@ type Repository interface {
 	DeletePlayer(playerID string) error
 	GetState(playerID string) (GameState, error)
 	SaveState(state GameState, updatedAt time.Time) error
+	// 城金原子操作
+	AddCityGold(playerID string, amount int) (int, error)    // 返回操作后余额
+	DeductCityGold(playerID string, amount int) (int, error) // 余额不足返回 ErrInsufficientCityGold
 
 	// Battle Reports
 	SaveReport(report BattleReport) error
@@ -102,6 +107,64 @@ func (r *MemoryRepository) UpdateAccountGold(accountID string, gold int) error {
 	account.Gold = gold
 	r.accounts[accountID] = account
 	return nil
+}
+
+func (r *MemoryRepository) AddAccountGold(accountID string, amount int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	account, exists := r.accounts[accountID]
+	if !exists {
+		return ErrAccountNotFound
+	}
+	account.Gold += amount
+	r.accounts[accountID] = account
+	return nil
+}
+
+func (r *MemoryRepository) DeductAccountGold(accountID string, amount int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	account, exists := r.accounts[accountID]
+	if !exists {
+		return ErrAccountNotFound
+	}
+	if account.Gold < amount {
+		return ErrInsufficientGold
+	}
+	account.Gold -= amount
+	r.accounts[accountID] = account
+	return nil
+}
+
+func (r *MemoryRepository) AddCityGold(playerID string, amount int) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	state, exists := r.players[playerID]
+	if !exists {
+		return 0, ErrPlayerNotFound
+	}
+	state.CityGold += amount
+	r.players[playerID] = state
+	return state.CityGold, nil
+}
+
+func (r *MemoryRepository) DeductCityGold(playerID string, amount int) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	state, exists := r.players[playerID]
+	if !exists {
+		return 0, ErrPlayerNotFound
+	}
+	if state.CityGold < amount {
+		return 0, ErrInsufficientCityGold
+	}
+	state.CityGold -= amount
+	r.players[playerID] = state
+	return state.CityGold, nil
 }
 
 func (r *MemoryRepository) AccountExists(accountID string) (bool, error) {

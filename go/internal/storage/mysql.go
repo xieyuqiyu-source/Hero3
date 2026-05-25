@@ -135,6 +135,77 @@ func (r *MySQLRepository) UpdateAccountGold(accountID string, gold int) error {
 	return nil
 }
 
+func (r *MySQLRepository) AddAccountGold(accountID string, amount int) error {
+	result, err := r.db.Exec(`UPDATE accounts SET gold = gold + ? WHERE id = ?`, amount, accountID)
+	if err != nil {
+		return err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return game.ErrAccountNotFound
+	}
+	return nil
+}
+
+func (r *MySQLRepository) DeductAccountGold(accountID string, amount int) error {
+	result, err := r.db.Exec(`UPDATE accounts SET gold = gold - ? WHERE id = ? AND gold >= ?`, amount, accountID, amount)
+	if err != nil {
+		return err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		// 区分：账户不存在 vs 余额不足
+		var exists int
+		if scanErr := r.db.QueryRow(`SELECT 1 FROM accounts WHERE id = ? LIMIT 1`, accountID).Scan(&exists); scanErr != nil {
+			return game.ErrAccountNotFound
+		}
+		return game.ErrInsufficientGold
+	}
+	return nil
+}
+
+func (r *MySQLRepository) AddCityGold(playerID string, amount int) (int, error) {
+	result, err := r.db.Exec(
+		`UPDATE players SET state_json = JSON_SET(state_json, '$.cityGold', COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) + ?) WHERE id = ?`,
+		amount, playerID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return 0, game.ErrPlayerNotFound
+	}
+	// 读取最新余额
+	var balance int
+	err = r.db.QueryRow(`SELECT COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) FROM players WHERE id = ?`, playerID).Scan(&balance)
+	return balance, err
+}
+
+func (r *MySQLRepository) DeductCityGold(playerID string, amount int) (int, error) {
+	// 原子扣减：只有余额 >= amount 时才扣
+	result, err := r.db.Exec(
+		`UPDATE players SET state_json = JSON_SET(state_json, '$.cityGold', JSON_EXTRACT(state_json, '$.cityGold') - ?) WHERE id = ? AND COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) >= ?`,
+		amount, playerID, amount,
+	)
+	if err != nil {
+		return 0, err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		// 区分：玩家不存在 vs 余额不足
+		var exists int
+		if scanErr := r.db.QueryRow(`SELECT 1 FROM players WHERE id = ? LIMIT 1`, playerID).Scan(&exists); scanErr != nil {
+			return 0, game.ErrPlayerNotFound
+		}
+		return 0, game.ErrInsufficientCityGold
+	}
+	// 读取最新余额
+	var balance int
+	err = r.db.QueryRow(`SELECT COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) FROM players WHERE id = ?`, playerID).Scan(&balance)
+	return balance, err
+}
+
 func (r *MySQLRepository) AccountExists(accountID string) (bool, error) {
 	var exists int
 	err := r.db.QueryRow(`SELECT 1 FROM accounts WHERE id = ? LIMIT 1`, accountID).Scan(&exists)
