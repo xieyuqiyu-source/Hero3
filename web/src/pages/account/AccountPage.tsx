@@ -60,22 +60,20 @@ const AccountPage: FC = () => {
             <span className="text-lg font-bold text-amber-500">{account?.gold ?? 0}</span>
             <span className="text-sm text-[var(--color-text-secondary)]">金币</span>
           </div>
-          <div className="flex items-center gap-2">
-            <ExchangeButton />
-            <button
-              type="button"
-              className="
-                px-4 py-1.5 rounded-xl text-xs font-semibold
-                bg-amber-500 text-white
-                hover:bg-amber-400 hover:-translate-y-0.5
-                cursor-pointer transition-all duration-200
-                shadow-[0_4px_12px_rgba(245,158,11,0.3)]
-              "
-            >
-              充值金币
-            </button>
-          </div>
+          <button
+            type="button"
+            className="
+              px-4 py-1.5 rounded-xl text-xs font-semibold
+              bg-amber-500 text-white
+              hover:bg-amber-400 hover:-translate-y-0.5
+              cursor-pointer transition-all duration-200
+              shadow-[0_4px_12px_rgba(245,158,11,0.3)]
+            "
+          >
+            充值金币
+          </button>
         </div>
+        <ExchangeButton />
       </Section>
 
       {/* 个人概况 */}
@@ -262,7 +260,7 @@ const AccountPage: FC = () => {
 
 // --- Exchange Button ---
 const ExchangeButton: FC = () => {
-  const [open, setOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const [amount, setAmount] = useState(1)
   const [loading, setLoading] = useState(false)
   const account = useAccountStore((s) => s.account)
@@ -287,7 +285,7 @@ const ExchangeButton: FC = () => {
       const result = await gameApi.exchangeGold(account.accountId, activePlayerId, amount)
       setState(result.state)
       toast.success(`兑换成功！获得 ${amount * 10} 城金`)
-      setOpen(false)
+      setExpanded(false)
     } catch {
       // global handler
     } finally {
@@ -304,70 +302,41 @@ const ExchangeButton: FC = () => {
   if (!account || !activePlayerId) return null
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="
-          flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold
-          bg-indigo-500/10 text-indigo-600 border border-indigo-500/30
-          hover:bg-indigo-500/20 cursor-pointer transition-all duration-200
-        "
-      >
-        <ArrowRightLeft size={12} />
-        兑换
-      </button>
+    <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-[var(--color-text-secondary)]">兑换比例：1 金币 = 10 城金</span>
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500 cursor-pointer transition-colors"
+        >
+          <ArrowRightLeft size={12} />
+          {expanded ? '收起' : '兑换'}
+        </button>
+      </div>
 
-      {open && (
-        <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-[4px]" onClick={() => setOpen(false)} />
-          <div className="relative w-full max-w-xs rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xl p-5 space-y-4">
-            <h3 className="text-sm font-bold text-[var(--color-text-primary)] text-center">金币兑换城金</h3>
-            <p className="text-[11px] text-[var(--color-text-muted)] text-center">兑换比例：1 金币 = 10 城金</p>
-
-            <div className="flex items-center justify-center gap-3">
-              <div className="text-center">
-                <div className="text-[10px] text-[var(--color-text-muted)]">消耗金币</div>
-                <input
-                  type="number"
-                  min={1}
-                  value={amount}
-                  onChange={(e) => setAmount(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-20 text-center text-sm font-bold bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-lg py-1.5 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent-border)]"
-                />
-              </div>
-              <ArrowRightLeft size={16} className="text-[var(--color-text-muted)]" />
-              <div className="text-center">
-                <div className="text-[10px] text-[var(--color-text-muted)]">获得城金</div>
-                <div className="text-sm font-bold text-amber-600 py-1.5">{(amount * 10).toLocaleString()}</div>
-              </div>
-            </div>
-
-            {onCooldown && (
-              <p className="text-[10px] text-red-500 text-center">冷却中：{formatCooldown(cooldownRemaining)}</p>
-            )}
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="flex-1 px-3 py-2 rounded-xl text-xs font-medium bg-[var(--color-surface-dim)] border border-[var(--color-border)] text-[var(--color-text-secondary)] cursor-pointer"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={handleExchange}
-                disabled={loading || onCooldown || amount <= 0}
-                className="flex-1 px-3 py-2 rounded-xl text-xs font-bold bg-[var(--color-accent)] text-white hover:opacity-90 cursor-pointer transition-opacity disabled:opacity-50"
-              >
-                {loading ? '兑换中...' : '确认兑换'}
-              </button>
-            </div>
-          </div>
+      <div className={`overflow-hidden transition-all duration-200 ease-out ${expanded ? 'max-h-[80px] mt-2 opacity-100' : 'max-h-0 opacity-0'}`}>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            value={amount}
+            onChange={(e) => setAmount(Math.max(1, parseInt(e.target.value) || 1))}
+            className="w-16 text-center text-xs font-bold bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-lg py-1.5 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent-border)]"
+          />
+          <span className="text-[10px] text-[var(--color-text-muted)]">金币 →</span>
+          <span className="text-xs font-bold text-amber-600">{(amount * 10).toLocaleString()} 城金</span>
+          <button
+            type="button"
+            onClick={handleExchange}
+            disabled={loading || onCooldown || amount <= 0}
+            className="ml-auto px-3 py-1.5 rounded-lg text-[10px] font-bold bg-[var(--color-accent)] text-white hover:opacity-90 cursor-pointer transition-opacity disabled:opacity-50"
+          >
+            {loading ? '...' : onCooldown ? formatCooldown(cooldownRemaining) : '确认'}
+          </button>
         </div>
-      )}
-    </>
+      </div>
+    </div>
   )
 }
 
