@@ -72,6 +72,8 @@ export interface BattleReport {
   defenderRevealed: boolean
   defenderResources: Record<string, number>
   rewards: Record<string, number>
+  overflow?: Record<string, number>
+  overflowCityGold?: number
   read: boolean
   createdAt: string
 }

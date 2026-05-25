@@ -115,6 +115,24 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
           {!hasRewards && isVictory && (
             <p className="text-xs text-[var(--color-text-muted)] text-center">敌方城池资源已空</p>
           )}
+
+          {/* Overflow → CityGold */}
+          {(report.overflowCityGold ?? 0) > 0 && (
+            <div>
+              <h3 className="text-[11px] font-semibold text-[var(--color-text-primary)] mb-1.5">仓库溢出转城金</h3>
+              <div className="grid grid-cols-2 gap-1.5">
+                {Object.entries(report.overflow ?? {}).filter(([, v]) => v > 0).map(([res, val]) => (
+                  <div key={res} className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                    <span className="text-[10px] text-[var(--color-text-secondary)]">{RESOURCE_LABELS[res] ?? res}</span>
+                    <span className="text-[10px] text-amber-600">溢出 {val.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-amber-600 font-medium mt-1.5 text-center">
+                🪙 +{report.overflowCityGold} 城金
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

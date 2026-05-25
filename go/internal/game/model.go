@@ -94,6 +94,8 @@ type BattleReport struct {
 	DefenderRevealed  bool           `json:"defenderRevealed"`
 	DefenderResources map[string]int `json:"defenderResources"`
 	Rewards           map[string]int `json:"rewards"`
+	Overflow          map[string]int `json:"overflow,omitempty"`    // 各资源溢出量
+	OverflowCityGold  int            `json:"overflowCityGold"`     // 溢出转换获得的城金
 	Read              bool           `json:"read"`
 	DeletedByPlayer   bool           `json:"deletedByPlayer,omitempty"`
 	CreatedAt         string         `json:"createdAt"`

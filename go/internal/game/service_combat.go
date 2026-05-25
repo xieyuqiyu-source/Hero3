@@ -510,6 +510,8 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 
 	// 掠夺资源（仅进攻方胜时）
 	plundered := map[string]int{}
+	overflowDetail := map[string]int{}
+	overflowCityGold := 0
 	if result.Winner == "attacker" && result.SurvivingCarry > 0 {
 		plundered = calculatePlunder(npc, result.SurvivingCarry)
 		// 扣减 NPC 资源
@@ -531,6 +533,7 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 				overflow := state.Resources.Items[resType] - cap
 				state.Resources.Items[resType] = cap
 				totalOverflow += overflow
+				overflowDetail[resType] = overflow
 			}
 		}
 		// 溢出转城金
@@ -539,8 +542,8 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 			overflowRate = 200
 		}
 		if totalOverflow >= overflowRate {
-			cityGoldGain := totalOverflow / overflowRate
-			state.CityGold += cityGoldGain
+			overflowCityGold = totalOverflow / overflowRate
+			state.CityGold += overflowCityGold
 		}
 	}
 
@@ -569,6 +572,8 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 		DefenderRevealed:  defenderRevealed,
 		DefenderResources: copyResources(npc.Resources),
 		Rewards:           plundered,
+		Overflow:          overflowDetail,
+		OverflowCityGold:  overflowCityGold,
 		Read:              false,
 		CreatedAt:         nowStr,
 	}
