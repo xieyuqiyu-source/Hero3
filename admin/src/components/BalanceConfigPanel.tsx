@@ -120,6 +120,21 @@ export default function BalanceConfigPanel() {
         </div>
       </section>
 
+      {/* Overflow to CityGold */}
+      <section className="mb-4">
+        <h3 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">溢出转城金</h3>
+        <label className="flex items-center gap-3 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+          <span className="text-[10px] font-bold text-[var(--color-text-muted)] whitespace-nowrap">兑换比例</span>
+          <input
+            type="number"
+            value={balance.overflowToCityGold ?? 200}
+            onChange={(e) => setBalance({ ...balance, overflowToCityGold: parseInt(e.target.value) || 200 })}
+            className="h-7 w-20 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+          />
+          <span className="text-[10px] text-[var(--color-text-muted)]">资源 = 1 城金</span>
+        </label>
+      </section>
+
       {/* Buildings */}
       <section>
         <h3 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">建筑列表</h3>

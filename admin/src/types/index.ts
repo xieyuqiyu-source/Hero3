@@ -165,4 +165,5 @@ export interface BuildingConfig {
 export interface BalanceConfig {
   baseProduction: Record<string, number>
   buildings: Record<string, BuildingConfig>
+  overflowToCityGold: number
 }

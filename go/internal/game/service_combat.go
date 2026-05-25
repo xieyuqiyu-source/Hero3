@@ -522,13 +522,25 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 		// 重置资源结算时间
 		npc.ResourceSettledAt = nowStr
 
-		// 资源入库玩家
+		// 资源入库玩家（溢出部分按比例转城金）
+		totalOverflow := 0
 		for resType, amount := range plundered {
 			state.Resources.Items[resType] += amount
 			cap := state.Resources.Capacity[resType]
 			if cap > 0 && state.Resources.Items[resType] > cap {
+				overflow := state.Resources.Items[resType] - cap
 				state.Resources.Items[resType] = cap
+				totalOverflow += overflow
 			}
+		}
+		// 溢出转城金
+		overflowRate := currentBalance().OverflowToCityGold
+		if overflowRate <= 0 {
+			overflowRate = 200
+		}
+		if totalOverflow >= overflowRate {
+			cityGoldGain := totalOverflow / overflowRate
+			state.CityGold += cityGoldGain
 		}
 	}
 

@@ -14,6 +14,7 @@ export interface BuildingConfig {
 export interface BalanceConfig {
   baseProduction: Record<string, number>
   buildings: Record<string, BuildingConfig>
+  overflowToCityGold: number // 多少溢出资源兑换 1 城金
 }
 
 export interface UnitConfig {

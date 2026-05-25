@@ -19,8 +19,9 @@ type BuildingConfig struct {
 }
 
 type BalanceConfig struct {
-	BaseProduction ResourceMap               `json:"baseProduction"`
-	Buildings      map[string]BuildingConfig `json:"buildings"`
+	BaseProduction        ResourceMap               `json:"baseProduction"`
+	Buildings             map[string]BuildingConfig `json:"buildings"`
+	OverflowToCityGold    int                       `json:"overflowToCityGold"`    // 多少溢出资源兑换 1 城金（默认 200）
 }
 
 type ResourceMap map[string]int
@@ -37,6 +38,7 @@ var defaultBalance = BalanceConfig{
 		"iron":  0,
 		"food":  0,
 	},
+	OverflowToCityGold: 200, // 200 溢出资源 = 1 城金
 	Buildings: map[string]BuildingConfig{
 		"wood_camp": {
 			Type:              "wood_camp",
