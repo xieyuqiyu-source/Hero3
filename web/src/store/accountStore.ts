@@ -35,6 +35,7 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
       const session = await gameApi.loginAccount(username, password)
       localStorage.setItem('hero3_account_id', session.accountId)
       localStorage.setItem('hero3_account_name', session.username)
+      localStorage.setItem('hero3_account_gold', String(session.gold ?? 0))
       set({ account: session, loading: false })
       // Auto-load players after login
       await get().loadPlayers()
@@ -50,6 +51,7 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
       const session = await gameApi.registerAccount(username, password)
       localStorage.setItem('hero3_account_id', session.accountId)
       localStorage.setItem('hero3_account_name', session.username)
+      localStorage.setItem('hero3_account_gold', String(session.gold ?? 0))
       set({ account: session, loading: false })
     } catch {
       set({ loading: false })
@@ -60,6 +62,7 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
   logout: () => {
     localStorage.removeItem('hero3_account_id')
     localStorage.removeItem('hero3_account_name')
+    localStorage.removeItem('hero3_account_gold')
     set({ account: null, players: [] })
   },
 
@@ -84,8 +87,9 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
   restore: () => {
     const accountId = localStorage.getItem('hero3_account_id')
     const username = localStorage.getItem('hero3_account_name')
+    const gold = parseInt(localStorage.getItem('hero3_account_gold') ?? '0', 10)
     if (accountId && username) {
-      set({ account: { accountId, username } })
+      set({ account: { accountId, username, gold } })
       // 延迟加载存档列表，避免循环依赖导致 gameApi 未初始化
       setTimeout(() => get().loadPlayers(), 0)
     }

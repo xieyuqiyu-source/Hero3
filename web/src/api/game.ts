@@ -119,4 +119,9 @@ export const gameApi = {
     return api.post<{ state: GameState }>('/news/delete-all-reports', { playerId })
   },
 
+  /** 金币兑换城金（1金币=10城金，有冷却） */
+  exchangeGold(accountId: string, playerId: string, amount: number) {
+    return api.post<{ state: GameState }>('/gold/exchange', { accountId, playerId, amount })
+  },
+
 }

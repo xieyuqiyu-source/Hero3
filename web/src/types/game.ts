@@ -9,6 +9,7 @@ export interface Player {
 export interface AccountSession {
   accountId: string
   username: string
+  gold: number
 }
 
 export interface PlayerSummary {
@@ -90,6 +91,8 @@ export interface GameState {
   resourceSettledAt: string
   /** 存档级城金 */
   cityGold: number
+  /** 上次兑换时间（冷却用） */
+  lastExchangeAt?: string
   /** 产量加成倍率（1=无加成，2/4/8/16） */
   productionBoost?: number
   buildings: Building[]

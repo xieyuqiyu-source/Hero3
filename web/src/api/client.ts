@@ -37,6 +37,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   'insufficient army for dispatch': '兵力不足，无法出征',
   'insufficient gold': '城金不足',
   'invalid gold amount': '城金数量无效',
+  'exchange is on cooldown': '兑换冷却中，请稍后再试',
 }
 
 /** 从错误响应体中提取可读消息 */

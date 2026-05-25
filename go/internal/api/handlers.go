@@ -88,9 +88,10 @@ func (h *Handlers) RegisterAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]string{
+	writeJSON(w, http.StatusCreated, map[string]any{
 		"accountId": account.ID,
 		"username":  account.Username,
+		"gold":      account.Gold,
 	})
 }
 
@@ -106,9 +107,10 @@ func (h *Handlers) LoginAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"accountId": account.ID,
 		"username":  account.Username,
+		"gold":      account.Gold,
 	})
 }
 
@@ -655,6 +657,38 @@ func (h *Handlers) DeductGold(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusUnprocessableEntity
 		case errors.Is(err, game.ErrInvalidGoldAmount):
 			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
+func (h *Handlers) ExchangeGold(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		AccountID string `json:"accountId"`
+		PlayerID  string `json:"playerId"`
+		Amount    int    `json:"amount"` // 金币数量
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	state, err := h.gameService.ExchangeGoldToCityGold(payload.AccountID, payload.PlayerID, payload.Amount)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrAccountNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInvalidGoldAmount):
+			status = http.StatusUnprocessableEntity
+		case errors.Is(err, game.ErrInsufficientGold):
+			status = http.StatusUnprocessableEntity
+		case errors.Is(err, game.ErrExchangeCooldown):
+			status = http.StatusTooManyRequests
 		}
 		writeError(w, status, err.Error())
 		return

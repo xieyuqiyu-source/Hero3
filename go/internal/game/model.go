@@ -105,6 +105,7 @@ type GameState struct {
 	ResourceProduction  ResourceProduction `json:"resourceProduction"`
 	ResourceSettledAt   string             `json:"resourceSettledAt"`
 	CityGold            int                `json:"cityGold"`
+	LastExchangeAt      string             `json:"lastExchangeAt,omitempty"`
 	Buildings           []Building         `json:"buildings"`
 	General             *General           `json:"general"`
 	Army                []ArmyUnit         `json:"army"`

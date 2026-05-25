@@ -45,6 +45,7 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("POST /api/v1/news/mark-read", handlers.MarkReportsRead)
 	mux.HandleFunc("POST /api/v1/news/delete-report", handlers.DeleteReport)
 	mux.HandleFunc("POST /api/v1/news/delete-all-reports", handlers.DeleteAllReports)
+	mux.HandleFunc("POST /api/v1/gold/exchange", handlers.ExchangeGold)
 	mux.HandleFunc("GET /api/v1/admin/accounts", handlers.AdminAccounts)
 	mux.HandleFunc("GET /api/v1/admin/players/{playerId}/state", handlers.AdminPlayerState)
 	mux.HandleFunc("POST /api/v1/admin/resources/adjust", handlers.AdminAdjustResources)

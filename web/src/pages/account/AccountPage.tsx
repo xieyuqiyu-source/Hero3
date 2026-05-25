@@ -1,9 +1,11 @@
 import { useState, useEffect, type FC } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Coins, Crown, Scroll, Users, Castle, KeyRound, Sparkles, Cloud, LogOut, Check } from 'lucide-react'
+import { Coins, Crown, Scroll, Users, Castle, KeyRound, Sparkles, Cloud, LogOut, Check, ArrowRightLeft } from 'lucide-react'
 import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
 import { getFactionLabel } from '@/utils/faction'
+import { gameApi } from '@/api/game'
+import { toast } from '@/components/ui'
 import CloudSyncModal from '@/components/CloudSyncModal'
 import Section from './components/Section'
 import InfoItem from './components/InfoItem'
@@ -55,21 +57,24 @@ const AccountPage: FC = () => {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm text-[var(--color-text-secondary)]">您目前帐户上有</span>
-            <span className="text-lg font-bold text-amber-500">0</span>
+            <span className="text-lg font-bold text-amber-500">{account?.gold ?? 0}</span>
             <span className="text-sm text-[var(--color-text-secondary)]">金币</span>
           </div>
-          <button
-            type="button"
-            className="
-              px-4 py-1.5 rounded-xl text-xs font-semibold
-              bg-amber-500 text-white
-              hover:bg-amber-400 hover:-translate-y-0.5
-              cursor-pointer transition-all duration-200
-              shadow-[0_4px_12px_rgba(245,158,11,0.3)]
-            "
-          >
-            充值金币
-          </button>
+          <div className="flex items-center gap-2">
+            <ExchangeButton />
+            <button
+              type="button"
+              className="
+                px-4 py-1.5 rounded-xl text-xs font-semibold
+                bg-amber-500 text-white
+                hover:bg-amber-400 hover:-translate-y-0.5
+                cursor-pointer transition-all duration-200
+                shadow-[0_4px_12px_rgba(245,158,11,0.3)]
+              "
+            >
+              充值金币
+            </button>
+          </div>
         </div>
       </Section>
 
@@ -252,6 +257,117 @@ const AccountPage: FC = () => {
 
       <CloudSyncModal open={cloudSyncOpen} onClose={handleCloudSyncClose} />
     </div>
+  )
+}
+
+// --- Exchange Button ---
+const ExchangeButton: FC = () => {
+  const [open, setOpen] = useState(false)
+  const [amount, setAmount] = useState(1)
+  const [loading, setLoading] = useState(false)
+  const account = useAccountStore((s) => s.account)
+  const activePlayerId = useGameStore((s) => s.activePlayerId)
+  const setState = useGameStore((s) => s.setState)
+  const gameState = useGameStore((s) => s.state)
+
+  // 冷却计算
+  const cooldownRemaining = (() => {
+    if (!gameState?.lastExchangeAt) return 0
+    const last = new Date(gameState.lastExchangeAt).getTime()
+    const remaining = Math.max(0, 3600 - (Date.now() - last) / 1000)
+    return Math.ceil(remaining)
+  })()
+
+  const onCooldown = cooldownRemaining > 0
+
+  const handleExchange = async () => {
+    if (!account || !activePlayerId || loading || onCooldown || amount <= 0) return
+    setLoading(true)
+    try {
+      const result = await gameApi.exchangeGold(account.accountId, activePlayerId, amount)
+      setState(result.state)
+      toast.success(`兑换成功！获得 ${amount * 10} 城金`)
+      setOpen(false)
+    } catch {
+      // global handler
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatCooldown = (seconds: number) => {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `${m}:${String(s).padStart(2, '0')}`
+  }
+
+  if (!account || !activePlayerId) return null
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="
+          flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold
+          bg-indigo-500/10 text-indigo-600 border border-indigo-500/30
+          hover:bg-indigo-500/20 cursor-pointer transition-all duration-200
+        "
+      >
+        <ArrowRightLeft size={12} />
+        兑换
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-[4px]" onClick={() => setOpen(false)} />
+          <div className="relative w-full max-w-xs rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xl p-5 space-y-4">
+            <h3 className="text-sm font-bold text-[var(--color-text-primary)] text-center">金币兑换城金</h3>
+            <p className="text-[11px] text-[var(--color-text-muted)] text-center">兑换比例：1 金币 = 10 城金</p>
+
+            <div className="flex items-center justify-center gap-3">
+              <div className="text-center">
+                <div className="text-[10px] text-[var(--color-text-muted)]">消耗金币</div>
+                <input
+                  type="number"
+                  min={1}
+                  value={amount}
+                  onChange={(e) => setAmount(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-20 text-center text-sm font-bold bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-lg py-1.5 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent-border)]"
+                />
+              </div>
+              <ArrowRightLeft size={16} className="text-[var(--color-text-muted)]" />
+              <div className="text-center">
+                <div className="text-[10px] text-[var(--color-text-muted)]">获得城金</div>
+                <div className="text-sm font-bold text-amber-600 py-1.5">{(amount * 10).toLocaleString()}</div>
+              </div>
+            </div>
+
+            {onCooldown && (
+              <p className="text-[10px] text-red-500 text-center">冷却中：{formatCooldown(cooldownRemaining)}</p>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="flex-1 px-3 py-2 rounded-xl text-xs font-medium bg-[var(--color-surface-dim)] border border-[var(--color-border)] text-[var(--color-text-secondary)] cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleExchange}
+                disabled={loading || onCooldown || amount <= 0}
+                className="flex-1 px-3 py-2 rounded-xl text-xs font-bold bg-[var(--color-accent)] text-white hover:opacity-90 cursor-pointer transition-opacity disabled:opacity-50"
+              >
+                {loading ? '兑换中...' : '确认兑换'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
