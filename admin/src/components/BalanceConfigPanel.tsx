@@ -11,6 +11,13 @@ const BUILDING_LABELS: Record<string, string> = {
   warehouse: '仓库',
 }
 
+const RES_LABELS: Record<string, string> = {
+  wood: '木材',
+  stone: '石料',
+  iron: '铁矿',
+  food: '粮食',
+}
+
 export default function BalanceConfigPanel() {
   const [balance, setBalance] = useState<BalanceConfig | null>(null)
   const [expandedBuilding, setExpandedBuilding] = useState<string | null>(null)
@@ -101,7 +108,7 @@ export default function BalanceConfigPanel() {
         <div className="grid grid-cols-4 gap-2">
           {Object.entries(balance.baseProduction).map(([res, val]) => (
             <label key={res} className="grid gap-1 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
-              <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">{res}</span>
+              <span className="text-[10px] font-bold text-[var(--color-text-muted)]">{RES_LABELS[res] ?? res}</span>
               <input
                 type="number"
                 value={val}
@@ -194,7 +201,7 @@ function BuildingLevelTable({
           </tr>
         </thead>
         <tbody>
-          {Array.from({ length: Math.min(levels, 15) }, (_, i) => {
+          {Array.from({ length: levels }, (_, i) => {
             const upgradeCost = building.upgradeCostByLevel?.[String(i)] ?? building.upgradeCostByLevel?.[i as unknown as string]
             const upgradeSeconds = building.upgradeSecondsByLevel?.[String(i)] ?? building.upgradeSecondsByLevel?.[i as unknown as string]
             return (
@@ -229,9 +236,6 @@ function BuildingLevelTable({
           })}
         </tbody>
       </table>
-      {levels > 15 && (
-        <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">显示前 15 级，共 {levels} 级</p>
-      )}
     </div>
   )
 }

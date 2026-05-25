@@ -99,9 +99,13 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
           ))}
           <span className="ml-auto flex-shrink-0">
             {recovering ? (
-              <LoaderCircle size={13} className="text-amber-500 animate-spin" title="恢复中" />
+              <span title="恢复中">
+                <LoaderCircle size={13} className="text-amber-500 animate-spin" />
+              </span>
             ) : (
-              <CircleCheck size={13} className="text-green-500" title="完整状态" />
+              <span title="完整状态">
+                <CircleCheck size={13} className="text-green-500" />
+              </span>
             )}
           </span>
         </div>

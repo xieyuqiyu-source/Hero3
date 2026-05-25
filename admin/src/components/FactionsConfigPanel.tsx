@@ -18,6 +18,12 @@ interface FactionConfig {
 
 type FactionsConfig = Record<string, FactionConfig>
 
+const TRAIT_LABELS: Record<string, string> = {
+  economyBonus: '经济加成',
+  militaryBonus: '军事加成',
+  buildingBonus: '建筑加成',
+}
+
 export default function FactionsConfigPanel() {
   const [config, setConfig] = useState<FactionsConfig | null>(null)
   const [loading, setLoading] = useState(true)
@@ -104,7 +110,7 @@ export default function FactionsConfigPanel() {
               <div className="grid grid-cols-3 gap-2 mt-1.5">
                 {Object.entries(faction.traits).map(([traitKey, value]) => (
                   <label key={traitKey} className="grid gap-0.5">
-                    <span className="text-[10px] text-[var(--color-text-muted)]">{traitKey}</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)]">{TRAIT_LABELS[traitKey] ?? traitKey}</span>
                     <input
                       type="number"
                       step="0.01"

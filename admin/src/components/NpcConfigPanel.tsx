@@ -47,6 +47,17 @@ const TIER_LABELS: Record<string, string> = {
   golden: '黄金',
 }
 
+const BUFF_LABELS: Record<string, string> = {
+  productionBonus: '产量加成',
+  cavalryDefenseBonus: '骑防加成',
+  infantryDefenseBonus: '步防加成',
+  attackBonus: '攻击加成',
+  allDefenseBonus: '全防加成',
+  armyRecoveryBonus: '兵力恢复',
+  armyCapBonus: '兵力上限',
+  armyAttackBonus: '兵攻加成',
+}
+
 export default function NpcConfigPanel() {
   const [config, setConfig] = useState<NpcConfig | null>(null)
   const [loading, setLoading] = useState(true)
@@ -303,7 +314,7 @@ export default function NpcConfigPanel() {
               <div className="flex flex-wrap items-center gap-1.5">
                 {Object.entries(trait.buffs).map(([buffKey, buffVal]) => (
                   <div key={buffKey} className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
-                    <span className="text-[9px] text-[var(--color-text-muted)]">{buffKey}</span>
+                    <span className="text-[9px] text-[var(--color-text-muted)]">{BUFF_LABELS[buffKey] ?? buffKey}</span>
                     <input
                       type="number"
                       step="0.01"

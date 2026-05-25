@@ -22,6 +22,19 @@ interface CombatConfig {
   wallConfig: Record<string, WallEntry>
 }
 
+const SCENE_LABELS: Record<string, string> = {
+  pve_attack: 'PVE 攻击',
+  pve_plunder: 'PVE 掠夺',
+  pvp_attack: 'PVP 攻击',
+  pvp_plunder: 'PVP 掠夺',
+}
+
+const FACTION_LABELS: Record<string, string> = {
+  wei: '魏',
+  shu: '蜀',
+  wu: '吴',
+}
+
 export default function CombatConfigPanel() {
   const [config, setConfig] = useState<CombatConfig | null>(null)
   const [loading, setLoading] = useState(true)
@@ -112,7 +125,7 @@ export default function CombatConfigPanel() {
           {Object.entries(config.activeCombatRules).map(([scene, ruleId]) => (
             <div key={scene} className="px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
               <label className="grid gap-1">
-                <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">{scene}</span>
+                <span className="text-[10px] font-bold text-[var(--color-text-muted)]">{SCENE_LABELS[scene] ?? scene}</span>
                 <select
                   value={ruleId}
                   onChange={(e) => updateActiveRule(scene, e.target.value)}
@@ -196,7 +209,7 @@ export default function CombatConfigPanel() {
         <div className="grid grid-cols-3 gap-2">
           {Object.entries(config.wallConfig).map(([faction, entry]) => (
             <label key={faction} className="grid gap-1 px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
-              <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">{faction}</span>
+              <span className="text-[10px] font-bold text-[var(--color-text-muted)]">{FACTION_LABELS[faction] ?? faction}</span>
               <input
                 type="number"
                 step="0.001"

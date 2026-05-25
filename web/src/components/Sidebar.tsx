@@ -10,7 +10,6 @@ import {
   Package,
   Shield,
   Settings,
-  RefreshCw,
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import BoostButton from './BoostButton'

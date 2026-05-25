@@ -5,6 +5,7 @@ import AdminLayout, { type AdminPage } from '@/components/AdminLayout'
 import ApiDiagnosticsPanel from '@/components/ApiDiagnosticsPanel'
 import { AuditPanel, GuardrailPanel } from '@/components/AuditPanel'
 import BalanceConfigPanel from '@/components/BalanceConfigPanel'
+import CollapsiblePanel from '@/components/CollapsiblePanel'
 import CombatConfigPanel from '@/components/CombatConfigPanel'
 import FactionsConfigPanel from '@/components/FactionsConfigPanel'
 import MetricsGrid from '@/components/MetricsGrid'
@@ -13,6 +14,7 @@ import UnitsConfigPanel from '@/components/UnitsConfigPanel'
 import { ResourceToolsPanel, SystemActionsPanel } from '@/components/OperationsPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
+import { Sliders, MapPin, Swords, Flag, Shield } from 'lucide-react'
 
 function App() {
   const [activePage, setActivePage] = useState<AdminPage>('overview')
@@ -63,15 +65,21 @@ function App() {
       case 'balance':
         return (
           <div className="grid gap-4">
-            <div className="grid gap-4 lg:grid-cols-2">
+            <CollapsiblePanel icon={<Sliders size={16} className="text-[var(--color-accent)]" />} title="建筑数值">
               <BalanceConfigPanel />
+            </CollapsiblePanel>
+            <CollapsiblePanel icon={<MapPin size={16} className="text-[var(--color-accent)]" />} title="NPC 城池">
               <NpcConfigPanel />
-            </div>
-            <div className="grid gap-4 lg:grid-cols-2">
+            </CollapsiblePanel>
+            <CollapsiblePanel icon={<Swords size={16} className="text-[var(--color-accent)]" />} title="战斗规则">
               <CombatConfigPanel />
+            </CollapsiblePanel>
+            <CollapsiblePanel icon={<Flag size={16} className="text-[var(--color-accent)]" />} title="阵营配置">
               <FactionsConfigPanel />
-            </div>
-            <UnitsConfigPanel />
+            </CollapsiblePanel>
+            <CollapsiblePanel icon={<Shield size={16} className="text-[var(--color-accent)]" />} title="兵种配置">
+              <UnitsConfigPanel />
+            </CollapsiblePanel>
           </div>
         )
       case 'api':

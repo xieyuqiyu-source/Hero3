@@ -32,6 +32,13 @@ const STAT_LABELS: Record<string, string> = {
   upkeep: '粮耗',
 }
 
+const RES_LABELS: Record<string, string> = {
+  wood: '木材',
+  stone: '石料',
+  iron: '铁矿',
+  food: '粮食',
+}
+
 export default function UnitsConfigPanel() {
   const [config, setConfig] = useState<UnitsConfig | null>(null)
   const [activeFaction, setActiveFaction] = useState<string>('')
@@ -217,7 +224,7 @@ export default function UnitsConfigPanel() {
                     <div className="grid grid-cols-5 gap-1.5 mt-1">
                       {Object.entries(unit.cost).map(([res, val]) => (
                         <label key={res} className="grid gap-0.5">
-                          <span className="text-[9px] text-[var(--color-text-muted)]">{res}</span>
+                          <span className="text-[9px] text-[var(--color-text-muted)]">{RES_LABELS[res] ?? res}</span>
                           <input
                             type="number"
                             value={val}
