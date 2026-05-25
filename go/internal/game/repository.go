@@ -146,9 +146,9 @@ func (r *MemoryRepository) AddCityGold(playerID string, amount int) (int, error)
 	if !exists {
 		return 0, ErrPlayerNotFound
 	}
-	state.CityGold += amount
+	state.CityGold += FlexInt(amount)
 	r.players[playerID] = state
-	return state.CityGold, nil
+	return int(state.CityGold), nil
 }
 
 func (r *MemoryRepository) DeductCityGold(playerID string, amount int) (int, error) {
@@ -159,12 +159,12 @@ func (r *MemoryRepository) DeductCityGold(playerID string, amount int) (int, err
 	if !exists {
 		return 0, ErrPlayerNotFound
 	}
-	if state.CityGold < amount {
+	if int(state.CityGold) < amount {
 		return 0, ErrInsufficientCityGold
 	}
-	state.CityGold -= amount
+	state.CityGold -= FlexInt(amount)
 	r.players[playerID] = state
-	return state.CityGold, nil
+	return int(state.CityGold), nil
 }
 
 func (r *MemoryRepository) AccountExists(accountID string) (bool, error) {

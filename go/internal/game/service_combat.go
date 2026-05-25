@@ -543,7 +543,7 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 		}
 		if totalOverflow >= overflowRate {
 			overflowCityGold = totalOverflow / overflowRate
-			state.CityGold += overflowCityGold
+			state.CityGold += FlexInt(overflowCityGold)
 		}
 	}
 

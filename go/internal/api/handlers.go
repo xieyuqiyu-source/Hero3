@@ -66,7 +66,11 @@ func (h *Handlers) GameBootstrap(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) GameState(w http.ResponseWriter, r *http.Request) {
 	state, err := h.gameService.GetState(r.URL.Query().Get("playerId"))
 	if err != nil {
-		writeError(w, http.StatusNotFound, "player not found")
+		if errors.Is(err, game.ErrPlayerNotFound) {
+			writeError(w, http.StatusNotFound, "player not found")
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, state)

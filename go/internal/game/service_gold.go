@@ -81,7 +81,7 @@ func (s *Service) GetGold(playerID string) (int, error) {
 		return 0, err
 	}
 
-	return state.CityGold, nil
+	return int(state.CityGold), nil
 }
 
 // ExchangeGoldToCityGold 金币 → 城金（1 金币 = 10 城金，原子操作）

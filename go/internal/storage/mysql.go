@@ -166,7 +166,7 @@ func (r *MySQLRepository) DeductAccountGold(accountID string, amount int) error 
 
 func (r *MySQLRepository) AddCityGold(playerID string, amount int) (int, error) {
 	result, err := r.db.Exec(
-		`UPDATE players SET state_json = JSON_SET(state_json, '$.cityGold', COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) + ?) WHERE id = ?`,
+		`UPDATE players SET state_json = JSON_SET(state_json, '$.cityGold', CAST(COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) + ? AS SIGNED)) WHERE id = ?`,
 		amount, playerID,
 	)
 	if err != nil {
@@ -178,14 +178,14 @@ func (r *MySQLRepository) AddCityGold(playerID string, amount int) (int, error) 
 	}
 	// 读取最新余额
 	var balance int
-	err = r.db.QueryRow(`SELECT COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) FROM players WHERE id = ?`, playerID).Scan(&balance)
+	err = r.db.QueryRow(`SELECT CAST(COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) AS SIGNED) FROM players WHERE id = ?`, playerID).Scan(&balance)
 	return balance, err
 }
 
 func (r *MySQLRepository) DeductCityGold(playerID string, amount int) (int, error) {
 	// 原子扣减：只有余额 >= amount 时才扣
 	result, err := r.db.Exec(
-		`UPDATE players SET state_json = JSON_SET(state_json, '$.cityGold', JSON_EXTRACT(state_json, '$.cityGold') - ?) WHERE id = ? AND COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) >= ?`,
+		`UPDATE players SET state_json = JSON_SET(state_json, '$.cityGold', CAST(JSON_EXTRACT(state_json, '$.cityGold') - ? AS SIGNED)) WHERE id = ? AND CAST(COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) AS SIGNED) >= ?`,
 		amount, playerID, amount,
 	)
 	if err != nil {
@@ -202,7 +202,7 @@ func (r *MySQLRepository) DeductCityGold(playerID string, amount int) (int, erro
 	}
 	// 读取最新余额
 	var balance int
-	err = r.db.QueryRow(`SELECT COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) FROM players WHERE id = ?`, playerID).Scan(&balance)
+	err = r.db.QueryRow(`SELECT CAST(COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) AS SIGNED) FROM players WHERE id = ?`, playerID).Scan(&balance)
 	return balance, err
 }
 

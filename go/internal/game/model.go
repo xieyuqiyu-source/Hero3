@@ -5,6 +5,22 @@ import (
 	"time"
 )
 
+// FlexInt 兼容 JSON 中 int 和 float 的整数类型（MySQL JSON 列可能存为 float）
+type FlexInt int
+
+func (fi *FlexInt) UnmarshalJSON(data []byte) error {
+	var f float64
+	if err := json.Unmarshal(data, &f); err != nil {
+		return err
+	}
+	*fi = FlexInt(int(f))
+	return nil
+}
+
+func (fi FlexInt) MarshalJSON() ([]byte, error) {
+	return json.Marshal(int(fi))
+}
+
 type Account struct {
 	ID           string
 	Username     string
@@ -106,7 +122,7 @@ type GameState struct {
 	Resources           ResourceState      `json:"resources"`
 	ResourceProduction  ResourceProduction `json:"resourceProduction"`
 	ResourceSettledAt   string             `json:"resourceSettledAt"`
-	CityGold            int                `json:"cityGold"`
+	CityGold            FlexInt            `json:"cityGold"`
 	LastExchangeAt      string             `json:"lastExchangeAt,omitempty"`
 	Buildings           []Building         `json:"buildings"`
 	General             *General           `json:"general"`
