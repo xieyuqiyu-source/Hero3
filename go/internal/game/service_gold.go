@@ -7,9 +7,10 @@ import (
 )
 
 var (
-	ErrInsufficientGold  = errors.New("insufficient gold")
-	ErrInvalidGoldAmount = errors.New("invalid gold amount")
-	ErrExchangeCooldown  = errors.New("exchange is on cooldown")
+	ErrInsufficientGold     = errors.New("insufficient gold")
+	ErrInsufficientCityGold = errors.New("insufficient city gold")
+	ErrInvalidGoldAmount    = errors.New("invalid gold amount")
+	ErrExchangeCooldown     = errors.New("exchange is on cooldown")
 )
 
 // 兑换配置
@@ -62,7 +63,7 @@ func (s *Service) DeductGold(playerID string, amount int, reason string) (GameSt
 	}
 
 	if state.CityGold < amount {
-		return GameState{}, ErrInsufficientGold
+		return GameState{}, ErrInsufficientCityGold
 	}
 
 	state.CityGold -= amount
@@ -169,7 +170,7 @@ func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, city
 	}
 
 	if state.CityGold < cityGoldAmount {
-		return GameState{}, ErrInsufficientGold
+		return GameState{}, ErrInsufficientCityGold
 	}
 
 	now := time.Now()

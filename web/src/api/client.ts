@@ -35,8 +35,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   'npc city not found': 'NPC城池不存在',
   'no units selected for dispatch': '未选择出征兵力',
   'insufficient army for dispatch': '兵力不足，无法出征',
-  'insufficient gold': '城金不足',
-  'invalid gold amount': '城金数量无效',
+  'insufficient gold': '金币不足',
+  'insufficient city gold': '城金不足',
+  'invalid gold amount': '数量无效',
   'exchange is on cooldown': '兑换冷却中，请稍后再试',
 }
 

@@ -719,6 +719,8 @@ func (h *Handlers) ReverseExchangeGold(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusUnprocessableEntity
 		case errors.Is(err, game.ErrInsufficientGold):
 			status = http.StatusUnprocessableEntity
+		case errors.Is(err, game.ErrInsufficientCityGold):
+			status = http.StatusUnprocessableEntity
 		case errors.Is(err, game.ErrExchangeCooldown):
 			status = http.StatusTooManyRequests
 		}
