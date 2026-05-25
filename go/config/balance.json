@@ -866,5 +866,8 @@
       }
     }
   },
-  "overflowToCityGold": 200
+  "overflowToCityGold": 200,
+  "exchangeRate": 10,
+  "reverseExchangeRate": 15,
+  "exchangeCooldownSecs": 3600
 }

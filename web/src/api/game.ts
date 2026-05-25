@@ -44,6 +44,11 @@ export const gameApi = {
     return api.get<{ players: PlayerSummary[] }>(`/accounts/${accountId}/players`)
   },
 
+  /** 获取账户信息（含最新金币） */
+  getAccountInfo(accountId: string) {
+    return api.get<AccountSession>(`/accounts/${accountId}`)
+  },
+
   /** 删除存档 */
   deletePlayer(playerId: string) {
     return api.delete<{ status: string }>(`/players/${playerId}`)
@@ -121,12 +126,12 @@ export const gameApi = {
 
   /** 金币兑换城金（1金币=10城金，有冷却） */
   exchangeGold(accountId: string, playerId: string, amount: number) {
-    return api.post<{ state: GameState }>('/gold/exchange', { accountId, playerId, amount })
+    return api.post<{ state: GameState; accountGold: number }>('/gold/exchange', { accountId, playerId, amount })
   },
 
   /** 城金兑换金币（15城金=1金币，有损耗+冷却） */
   reverseExchangeGold(accountId: string, playerId: string, cityGoldAmount: number) {
-    return api.post<{ state: GameState }>('/gold/reverse-exchange', { accountId, playerId, cityGoldAmount })
+    return api.post<{ state: GameState; accountGold: number }>('/gold/reverse-exchange', { accountId, playerId, cityGoldAmount })
   },
 
 }

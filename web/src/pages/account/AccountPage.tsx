@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Coins, Crown, Scroll, Users, Castle, KeyRound, Sparkles, Cloud, LogOut, Check, ArrowRightLeft } from 'lucide-react'
 import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
+import { useConfigStore } from '@/store/configStore'
 import { getFactionLabel } from '@/utils/faction'
 import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
@@ -249,6 +250,11 @@ const AccountGoldSection: FC = () => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const setState = useGameStore((s) => s.setState)
   const gameState = useGameStore((s) => s.state)
+  const balance = useConfigStore((s) => s.balance)
+
+  const exRate = balance?.exchangeRate ?? 10
+  const revRate = balance?.reverseExchangeRate ?? 15
+  const cooldownSecs = balance?.exchangeCooldownSecs ?? 3600
 
   const cityName = gameState?.player.nickname ?? '当前城池'
 
@@ -260,16 +266,16 @@ const AccountGoldSection: FC = () => {
   }, [gameState?.lastExchangeAt])
 
   const cooldownRemaining = (() => {
-    if (!gameState?.lastExchangeAt) return 0
+    if (!gameState?.lastExchangeAt || cooldownSecs <= 0) return 0
     const last = new Date(gameState.lastExchangeAt).getTime()
-    return Math.max(0, Math.ceil(3600 - (now - last) / 1000))
+    return Math.max(0, Math.ceil(cooldownSecs - (now - last) / 1000))
   })()
   const onCooldown = cooldownRemaining > 0
 
   const handleToggle = (dir: 'to_city' | 'to_account') => {
     if (expanded === dir) { setExpanded(null); return }
     setExpanded(dir)
-    setAmount(dir === 'to_city' ? 1 : 15)
+    setAmount(dir === 'to_city' ? 1 : revRate)
   }
 
   const handleExchange = async () => {
@@ -279,25 +285,31 @@ const AccountGoldSection: FC = () => {
       if (expanded === 'to_city') {
         const result = await gameApi.exchangeGold(account.accountId, activePlayerId, amount)
         setState(result.state)
-        toast.success(`${amount * 10} 城金已存入「${cityName}」`)
+        if (result.accountGold !== undefined) {
+          useAccountStore.setState({ account: { ...account, gold: result.accountGold } })
+        }
+        toast.success(`${amount * exRate} 城金已存入「${cityName}」`)
       } else {
         const result = await gameApi.reverseExchangeGold(account.accountId, activePlayerId, amount)
         setState(result.state)
-        toast.success(`从「${cityName}」提取 ${Math.floor(amount / 15)} 金币到账户`)
+        if (result.accountGold !== undefined) {
+          useAccountStore.setState({ account: { ...account, gold: result.accountGold } })
+        }
+        toast.success(`从「${cityName}」提取 ${Math.floor(amount / revRate)} 金币到账户`)
       }
       setExpanded(null)
     } catch { /* global */ } finally { setLoading(false) }
   }
 
   const formatCooldown = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-  const minAmount = expanded === 'to_account' ? 15 : 1
+  const minAmount = expanded === 'to_account' ? revRate : 1
   const previewNode = expanded === 'to_city' ? (
     <span className="text-[10px] text-[var(--color-text-secondary)]">
-      → {(amount * 10).toLocaleString()} 城金 存入「<span className="text-xs font-bold text-[var(--color-accent)]">{cityName}</span>」
+      → {(amount * exRate).toLocaleString()} 城金 存入「<span className="text-xs font-bold text-[var(--color-accent)]">{cityName}</span>」
     </span>
   ) : expanded === 'to_account' ? (
     <span className="text-[10px] text-[var(--color-text-secondary)]">
-      → {Math.floor(amount / 15)} 金币 从「<span className="text-xs font-bold text-[var(--color-accent)]">{cityName}</span>」提取（损耗33%）
+      → {Math.floor(amount / revRate)} 金币 从「<span className="text-xs font-bold text-[var(--color-accent)]">{cityName}</span>」提取（损耗{Math.round((1 - exRate / revRate) * 100)}%）
     </span>
   ) : null
 
@@ -348,8 +360,18 @@ const AccountGoldSection: FC = () => {
             onChange={(e) => setAmount(Math.max(minAmount, parseInt(e.target.value) || minAmount))}
             className="w-16 text-center text-xs font-bold bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-lg py-1.5 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent-border)]"
           />
+          <button
+            type="button"
+            onClick={() => {
+              const max = expanded === 'to_city' ? (account?.gold ?? 0) : (Number(gameState?.cityGold ?? 0))
+              setAmount(Math.max(minAmount, max))
+            }}
+            className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-[var(--color-surface-dim)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-accent)]/10 hover:text-[var(--color-accent)] cursor-pointer transition-all"
+          >
+            最大
+          </button>
           <span className="text-[10px] text-[var(--color-text-secondary)]">{previewNode}</span>
-          <span className="text-[9px] text-[var(--color-text-muted)] ml-auto mr-2">冷却1h</span>
+          <span className="text-[9px] text-[var(--color-text-muted)] ml-auto mr-2">{cooldownSecs > 0 ? `冷却${cooldownSecs >= 3600 ? `${cooldownSecs / 3600}h` : `${cooldownSecs}s`}` : ''}</span>
           <button
             type="button"
             onClick={handleExchange}

@@ -24,6 +24,10 @@ type Repository interface {
 	AddCityGold(playerID string, amount int) (int, error)    // 返回操作后余额
 	DeductCityGold(playerID string, amount int) (int, error) // 余额不足返回 ErrInsufficientCityGold
 
+	// 金币兑换事务操作（保证原子性）
+	ExchangeGoldToCityGold(accountID string, playerID string, goldAmount int, cityGoldGain int) error
+	ExchangeCityGoldToGold(accountID string, playerID string, cityGoldAmount int, goldGain int) error
+
 	// Battle Reports
 	SaveReport(report BattleReport) error
 	ListReports(playerID string, limit int) ([]BattleReport, error)
@@ -165,6 +169,56 @@ func (r *MemoryRepository) DeductCityGold(playerID string, amount int) (int, err
 	state.CityGold -= FlexInt(amount)
 	r.players[playerID] = state
 	return int(state.CityGold), nil
+}
+
+func (r *MemoryRepository) ExchangeGoldToCityGold(accountID string, playerID string, goldAmount int, cityGoldGain int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	account, exists := r.accounts[accountID]
+	if !exists {
+		return ErrAccountNotFound
+	}
+	if account.Gold < goldAmount {
+		return ErrInsufficientGold
+	}
+
+	state, exists := r.players[playerID]
+	if !exists {
+		return ErrPlayerNotFound
+	}
+
+	// 同一把锁内完成，天然原子
+	account.Gold -= goldAmount
+	r.accounts[accountID] = account
+	state.CityGold += FlexInt(cityGoldGain)
+	r.players[playerID] = state
+	return nil
+}
+
+func (r *MemoryRepository) ExchangeCityGoldToGold(accountID string, playerID string, cityGoldAmount int, goldGain int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	state, exists := r.players[playerID]
+	if !exists {
+		return ErrPlayerNotFound
+	}
+	if int(state.CityGold) < cityGoldAmount {
+		return ErrInsufficientCityGold
+	}
+
+	account, exists := r.accounts[accountID]
+	if !exists {
+		return ErrAccountNotFound
+	}
+
+	// 同一把锁内完成，天然原子
+	state.CityGold -= FlexInt(cityGoldAmount)
+	r.players[playerID] = state
+	account.Gold += goldGain
+	r.accounts[accountID] = account
+	return nil
 }
 
 func (r *MemoryRepository) AccountExists(accountID string) (bool, error) {

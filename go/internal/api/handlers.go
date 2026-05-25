@@ -128,6 +128,20 @@ func (h *Handlers) AccountPlayers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"players": players})
 }
 
+func (h *Handlers) AccountInfo(w http.ResponseWriter, r *http.Request) {
+	account, err := h.gameService.GetAccountByID(r.PathValue("accountId"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "account not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"accountId": account.ID,
+		"username":  account.Username,
+		"gold":      account.Gold,
+	})
+}
+
 func (h *Handlers) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 	if err := h.gameService.DeleteAccount(r.PathValue("accountId")); err != nil {
 		writeError(w, http.StatusNotFound, "account not found")
@@ -698,7 +712,9 @@ func (h *Handlers) ExchangeGold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	// 读取最新账户信息，返回更新后的账户金币
+	account, _ := h.gameService.GetAccountByID(payload.AccountID)
+	writeJSON(w, http.StatusOK, map[string]any{"state": state, "accountGold": account.Gold})
 }
 
 func (h *Handlers) ReverseExchangeGold(w http.ResponseWriter, r *http.Request) {
@@ -732,5 +748,7 @@ func (h *Handlers) ReverseExchangeGold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	// 读取最新账户信息，返回更新后的账户金币
+	account, _ := h.gameService.GetAccountByID(payload.AccountID)
+	writeJSON(w, http.StatusOK, map[string]any{"state": state, "accountGold": account.Gold})
 }

@@ -8,6 +8,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
+
 	"hero3/internal/api"
 	"hero3/internal/config"
 	"hero3/internal/game"
@@ -16,6 +18,9 @@ import (
 )
 
 func main() {
+	// 自动加载 .env 文件（不存在则忽略）
+	_ = godotenv.Load()
+
 	cfg := config.Load()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: cfg.LogLevel,

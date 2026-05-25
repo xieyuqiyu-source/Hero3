@@ -117,6 +117,13 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 	// 应用战斗结果
 	report := applyNpcBattleResult(&state, npc, result, attackerUnits, mode, now)
 
+	// 溢出城金通过原子操作写入（避免并发覆盖）
+	if report.OverflowCityGold > 0 {
+		if newBalance, err := s.repo.AddCityGold(state.Player.ID, report.OverflowCityGold); err == nil {
+			state.CityGold = FlexInt(newBalance)
+		}
+	}
+
 	// 保存战报到独立存储
 	if err := s.repo.SaveReport(report); err != nil { slog.Warn("battle report save failed", "error", err, "reportId", report.ID) }
 
@@ -543,7 +550,7 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 		}
 		if totalOverflow >= overflowRate {
 			overflowCityGold = totalOverflow / overflowRate
-			state.CityGold += FlexInt(overflowCityGold)
+			// 注意：不在此处直接修改 state.CityGold，由调用方通过原子操作处理
 		}
 	}
 

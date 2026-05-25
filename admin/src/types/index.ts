@@ -166,4 +166,7 @@ export interface BalanceConfig {
   baseProduction: Record<string, number>
   buildings: Record<string, BuildingConfig>
   overflowToCityGold: number
+  exchangeRate: number
+  reverseExchangeRate: number
+  exchangeCooldownSecs: number
 }

@@ -8,9 +8,9 @@ import BalanceConfigPanel from '@/components/BalanceConfigPanel'
 import CollapsiblePanel from '@/components/CollapsiblePanel'
 import CombatConfigPanel from '@/components/CombatConfigPanel'
 import FactionsConfigPanel from '@/components/FactionsConfigPanel'
-import MetricsGrid from '@/components/MetricsGrid'
 import NpcConfigPanel from '@/components/NpcConfigPanel'
 import UnitsConfigPanel from '@/components/UnitsConfigPanel'
+import OverviewPage from '@/components/OverviewPage'
 import { ResourceToolsPanel, SystemActionsPanel } from '@/components/OperationsPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
@@ -26,7 +26,7 @@ function App() {
     deleteAccount,
     deletePlayer,
     error,
-    gameState,
+    reload,
     health,
     loading,
   } = useAdminDashboard()
@@ -50,9 +50,20 @@ function App() {
           <AccountsPanel
             accounts={accounts}
             busyTarget={busyTarget}
-            gameState={gameState}
             onDeleteAccount={handleDeleteAccount}
             onDeletePlayer={handleDeletePlayer}
+          />
+        )
+      case 'overview':
+        return (
+          <OverviewPage
+            accounts={accounts}
+            busyTarget={busyTarget}
+            dashboardStats={dashboardStats}
+            health={health}
+            loading={loading}
+            onDeletePlayer={handleDeletePlayer}
+            onReload={reload}
           />
         )
       case 'operations':
@@ -93,22 +104,15 @@ function App() {
         )
       default:
         return (
-          <div className="grid gap-4">
-            <MetricsGrid stats={dashboardStats} />
-            <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
-              <AccountsPanel
-                accounts={accounts}
-                busyTarget={busyTarget}
-                gameState={gameState}
-                onDeleteAccount={handleDeleteAccount}
-                onDeletePlayer={handleDeletePlayer}
-              />
-              <div className="grid gap-4 content-start">
-                <ResourceToolsPanel />
-                <SystemActionsPanel />
-              </div>
-            </div>
-          </div>
+          <OverviewPage
+            accounts={accounts}
+            busyTarget={busyTarget}
+            dashboardStats={dashboardStats}
+            health={health}
+            loading={loading}
+            onDeletePlayer={handleDeletePlayer}
+            onReload={reload}
+          />
         )
     }
   }

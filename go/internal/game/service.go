@@ -164,6 +164,10 @@ func (s *Service) ListAccounts() ([]AccountSummary, error) {
 	return s.repo.ListAccounts()
 }
 
+func (s *Service) GetAccountByID(accountID string) (Account, error) {
+	return s.repo.GetAccountByID(accountID)
+}
+
 func (s *Service) CreatePlayer(accountID string, nickname string, faction string, generalID string) (string, GameState, error) {
 	nickname = strings.TrimSpace(nickname)
 	faction = strings.TrimSpace(faction)

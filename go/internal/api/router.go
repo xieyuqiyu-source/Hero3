@@ -30,6 +30,7 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("POST /api/v1/accounts/register", handlers.RegisterAccount)
 	mux.HandleFunc("POST /api/v1/accounts/login", handlers.LoginAccount)
 	mux.HandleFunc("GET /api/v1/accounts/{accountId}/players", handlers.AccountPlayers)
+	mux.HandleFunc("GET /api/v1/accounts/{accountId}", handlers.AccountInfo)
 	mux.HandleFunc("DELETE /api/v1/accounts/{accountId}", handlers.DeleteAccount)
 	mux.HandleFunc("POST /api/v1/players/create", handlers.CreatePlayer)
 	mux.HandleFunc("DELETE /api/v1/players/{playerId}", handlers.DeletePlayer)

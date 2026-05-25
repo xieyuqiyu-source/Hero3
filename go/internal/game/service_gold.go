@@ -13,12 +13,26 @@ var (
 	ErrExchangeCooldown     = errors.New("exchange is on cooldown")
 )
 
-// 兑换配置
-const (
-	ExchangeRate            = 10   // 1 金币 = 10 城金
-	ReverseExchangeRate     = 15   // 15 城金 = 1 金币（反向有损耗）
-	ExchangeCooldownSeconds = 3600 // 兑换冷却 1 小时
-)
+// 兑换配置（从 balance 配置读取，支持热更）
+func exchangeRate() int {
+	r := currentBalance().ExchangeRate
+	if r <= 0 {
+		return 10
+	}
+	return r
+}
+
+func reverseExchangeRate() int {
+	r := currentBalance().ReverseExchangeRate
+	if r <= 0 {
+		return 15
+	}
+	return r
+}
+
+func exchangeCooldownSeconds() int {
+	return currentBalance().ExchangeCooldownSecs // 0 表示无冷却
+}
 
 // AddGold 给存档增加城金（原子操作）
 func (s *Service) AddGold(playerID string, amount int, reason string) (GameState, error) {
@@ -84,7 +98,7 @@ func (s *Service) GetGold(playerID string) (int, error) {
 	return int(state.CityGold), nil
 }
 
-// ExchangeGoldToCityGold 金币 → 城金（1 金币 = 10 城金，原子操作）
+// ExchangeGoldToCityGold 金币 → 城金（事务操作，比例从配置读取）
 func (s *Service) ExchangeGoldToCityGold(accountID string, playerID string, goldAmount int) (GameState, error) {
 	accountID = strings.TrimSpace(accountID)
 	playerID = strings.TrimSpace(playerID)
@@ -104,23 +118,17 @@ func (s *Service) ExchangeGoldToCityGold(accountID string, playerID string, gold
 		return GameState{}, err
 	}
 	now := time.Now()
-	if state.LastExchangeAt != "" {
+	cooldown := exchangeCooldownSeconds()
+	if cooldown > 0 && state.LastExchangeAt != "" {
 		lastExchange, parseErr := time.Parse(resourceDateLayout, state.LastExchangeAt)
-		if parseErr == nil && now.Sub(lastExchange).Seconds() < float64(ExchangeCooldownSeconds) {
+		if parseErr == nil && now.Sub(lastExchange).Seconds() < float64(cooldown) {
 			return GameState{}, ErrExchangeCooldown
 		}
 	}
 
-	// 原子扣除账户金币（余额不足返回 ErrInsufficientGold）
-	if err := s.repo.DeductAccountGold(accountID, goldAmount); err != nil {
-		return GameState{}, err
-	}
-
-	// 原子加城金
-	cityGoldGain := goldAmount * ExchangeRate
-	if _, err := s.repo.AddCityGold(playerID, cityGoldGain); err != nil {
-		// 回滚账户金币（尽力而为）
-		_ = s.repo.AddAccountGold(accountID, goldAmount)
+	// 事务：扣账户金币 + 加城金（要么都成功，要么都不执行）
+	cityGoldGain := goldAmount * exchangeRate()
+	if err := s.repo.ExchangeGoldToCityGold(accountID, playerID, goldAmount, cityGoldGain); err != nil {
 		return GameState{}, err
 	}
 
@@ -135,7 +143,7 @@ func (s *Service) ExchangeGoldToCityGold(accountID string, playerID string, gold
 	return state, nil
 }
 
-// ExchangeCityGoldToGold 城金 → 金币（15 城金 = 1 金币，有损耗，原子操作）
+// ExchangeCityGoldToGold 城金 → 金币（有损耗，事务操作，比例从配置读取）
 func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, cityGoldAmount int) (GameState, error) {
 	accountID = strings.TrimSpace(accountID)
 	playerID = strings.TrimSpace(playerID)
@@ -145,7 +153,7 @@ func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, city
 	if playerID == "" {
 		return GameState{}, ErrPlayerNotFound
 	}
-	if cityGoldAmount < ReverseExchangeRate {
+	if cityGoldAmount < reverseExchangeRate() {
 		return GameState{}, ErrInvalidGoldAmount
 	}
 
@@ -155,23 +163,17 @@ func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, city
 		return GameState{}, err
 	}
 	now := time.Now()
-	if state.LastExchangeAt != "" {
+	cooldown := exchangeCooldownSeconds()
+	if cooldown > 0 && state.LastExchangeAt != "" {
 		lastExchange, parseErr := time.Parse(resourceDateLayout, state.LastExchangeAt)
-		if parseErr == nil && now.Sub(lastExchange).Seconds() < float64(ExchangeCooldownSeconds) {
+		if parseErr == nil && now.Sub(lastExchange).Seconds() < float64(cooldown) {
 			return GameState{}, ErrExchangeCooldown
 		}
 	}
 
-	// 原子扣城金（余额不足返回 ErrInsufficientCityGold）
-	if _, err := s.repo.DeductCityGold(playerID, cityGoldAmount); err != nil {
-		return GameState{}, err
-	}
-
-	// 原子加账户金币
-	goldGain := cityGoldAmount / ReverseExchangeRate
-	if err := s.repo.AddAccountGold(accountID, goldGain); err != nil {
-		// 回滚城金（尽力而为）
-		_, _ = s.repo.AddCityGold(playerID, cityGoldAmount)
+	// 事务：扣城金 + 加账户金币（要么都成功，要么都不执行）
+	goldGain := cityGoldAmount / reverseExchangeRate()
+	if err := s.repo.ExchangeCityGoldToGold(accountID, playerID, cityGoldAmount, goldGain); err != nil {
 		return GameState{}, err
 	}
 

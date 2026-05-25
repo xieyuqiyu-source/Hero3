@@ -202,6 +202,80 @@ func (r *MySQLRepository) DeductCityGold(playerID string, amount int) (int, erro
 	return balance, err
 }
 
+func (r *MySQLRepository) ExchangeGoldToCityGold(accountID string, playerID string, goldAmount int, cityGoldGain int) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// 扣账户金币
+	result, err := tx.Exec(`UPDATE accounts SET gold = gold - ? WHERE id = ? AND gold >= ?`, goldAmount, accountID, goldAmount)
+	if err != nil {
+		return err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		var exists int
+		if scanErr := tx.QueryRow(`SELECT 1 FROM accounts WHERE id = ? LIMIT 1`, accountID).Scan(&exists); scanErr != nil {
+			return game.ErrAccountNotFound
+		}
+		return game.ErrInsufficientGold
+	}
+
+	// 加城金
+	result, err = tx.Exec(
+		`UPDATE players SET state_json = JSON_SET(state_json, '$.cityGold', CAST(IFNULL(JSON_EXTRACT(state_json, '$.cityGold'), 0) + 0 + ? AS SIGNED)) WHERE id = ?`,
+		cityGoldGain, playerID,
+	)
+	if err != nil {
+		return err
+	}
+	affected, _ = result.RowsAffected()
+	if affected == 0 {
+		return game.ErrPlayerNotFound
+	}
+
+	return tx.Commit()
+}
+
+func (r *MySQLRepository) ExchangeCityGoldToGold(accountID string, playerID string, cityGoldAmount int, goldGain int) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// 扣城金
+	result, err := tx.Exec(
+		`UPDATE players SET state_json = JSON_SET(state_json, '$.cityGold', CAST(IFNULL(JSON_EXTRACT(state_json, '$.cityGold'), 0) + 0 - ? AS SIGNED)) WHERE id = ? AND IFNULL(JSON_EXTRACT(state_json, '$.cityGold'), 0) + 0 >= ?`,
+		cityGoldAmount, playerID, cityGoldAmount,
+	)
+	if err != nil {
+		return err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		var exists int
+		if scanErr := tx.QueryRow(`SELECT 1 FROM players WHERE id = ? LIMIT 1`, playerID).Scan(&exists); scanErr != nil {
+			return game.ErrPlayerNotFound
+		}
+		return game.ErrInsufficientCityGold
+	}
+
+	// 加账户金币
+	result, err = tx.Exec(`UPDATE accounts SET gold = gold + ? WHERE id = ?`, goldGain, accountID)
+	if err != nil {
+		return err
+	}
+	affected, _ = result.RowsAffected()
+	if affected == 0 {
+		return game.ErrAccountNotFound
+	}
+
+	return tx.Commit()
+}
+
 func (r *MySQLRepository) AccountExists(accountID string) (bool, error) {
 	var exists int
 	err := r.db.QueryRow(`SELECT 1 FROM accounts WHERE id = ? LIMIT 1`, accountID).Scan(&exists)

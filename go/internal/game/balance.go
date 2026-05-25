@@ -22,6 +22,9 @@ type BalanceConfig struct {
 	BaseProduction        ResourceMap               `json:"baseProduction"`
 	Buildings             map[string]BuildingConfig `json:"buildings"`
 	OverflowToCityGold    int                       `json:"overflowToCityGold"`    // 多少溢出资源兑换 1 城金（默认 200）
+	ExchangeRate          int                       `json:"exchangeRate"`          // 1 金币 = N 城金（默认 10）
+	ReverseExchangeRate   int                       `json:"reverseExchangeRate"`   // N 城金 = 1 金币（默认 15，有损耗）
+	ExchangeCooldownSecs  int                       `json:"exchangeCooldownSecs"`  // 兑换冷却秒数（默认 3600）
 }
 
 type ResourceMap map[string]int
@@ -38,7 +41,10 @@ var defaultBalance = BalanceConfig{
 		"iron":  0,
 		"food":  0,
 	},
-	OverflowToCityGold: 200, // 200 溢出资源 = 1 城金
+	OverflowToCityGold:   200,  // 200 溢出资源 = 1 城金
+	ExchangeRate:         10,   // 1 金币 = 10 城金
+	ReverseExchangeRate:  15,   // 15 城金 = 1 金币（反向有损耗）
+	ExchangeCooldownSecs: 3600, // 兑换冷却 1 小时
 	Buildings: map[string]BuildingConfig{
 		"wood_camp": {
 			Type:              "wood_camp",
@@ -266,8 +272,12 @@ func validateBalance(config BalanceConfig) error {
 
 func cloneBalance(source BalanceConfig) BalanceConfig {
 	next := BalanceConfig{
-		BaseProduction: cloneResourceMap(source.BaseProduction),
-		Buildings:      make(map[string]BuildingConfig, len(source.Buildings)),
+		BaseProduction:       cloneResourceMap(source.BaseProduction),
+		Buildings:            make(map[string]BuildingConfig, len(source.Buildings)),
+		OverflowToCityGold:   source.OverflowToCityGold,
+		ExchangeRate:         source.ExchangeRate,
+		ReverseExchangeRate:  source.ReverseExchangeRate,
+		ExchangeCooldownSecs: source.ExchangeCooldownSecs,
 	}
 	for key, building := range source.Buildings {
 		next.Buildings[key] = cloneBuildingConfig(building)

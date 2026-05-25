@@ -135,6 +135,44 @@ export default function BalanceConfigPanel() {
         </label>
       </section>
 
+      {/* Gold Exchange Config */}
+      <section className="mb-4">
+        <h3 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">金币兑换配置</h3>
+        <div className="grid gap-2">
+          <label className="flex items-center gap-3 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+            <span className="text-[10px] font-bold text-[var(--color-text-muted)] whitespace-nowrap">金币→城金</span>
+            <span className="text-[10px] text-[var(--color-text-muted)]">1 金币 =</span>
+            <input
+              type="number"
+              value={balance.exchangeRate ?? 10}
+              onChange={(e) => setBalance({ ...balance, exchangeRate: parseInt(e.target.value) || 10 })}
+              className="h-7 w-16 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+            />
+            <span className="text-[10px] text-[var(--color-text-muted)]">城金</span>
+          </label>
+          <label className="flex items-center gap-3 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+            <span className="text-[10px] font-bold text-[var(--color-text-muted)] whitespace-nowrap">城金→金币</span>
+            <input
+              type="number"
+              value={balance.reverseExchangeRate ?? 15}
+              onChange={(e) => setBalance({ ...balance, reverseExchangeRate: parseInt(e.target.value) || 15 })}
+              className="h-7 w-16 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+            />
+            <span className="text-[10px] text-[var(--color-text-muted)]">城金 = 1 金币</span>
+          </label>
+          <label className="flex items-center gap-3 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+            <span className="text-[10px] font-bold text-[var(--color-text-muted)] whitespace-nowrap">兑换冷却</span>
+            <input
+              type="number"
+              value={balance.exchangeCooldownSecs ?? 3600}
+              onChange={(e) => setBalance({ ...balance, exchangeCooldownSecs: parseInt(e.target.value) || 0 })}
+              className="h-7 w-20 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+            />
+            <span className="text-[10px] text-[var(--color-text-muted)]">秒（0=无冷却）</span>
+          </label>
+        </div>
+      </section>
+
       {/* Buildings */}
       <section>
         <h3 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">建筑列表</h3>
