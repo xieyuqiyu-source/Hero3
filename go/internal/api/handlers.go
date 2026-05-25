@@ -606,3 +606,59 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }
+
+// --- Gold Handlers ---
+
+func (h *Handlers) AddGold(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+		Amount   int    `json:"amount"`
+		Reason   string `json:"reason"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	state, err := h.gameService.AddGold(payload.PlayerID, payload.Amount, payload.Reason)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInvalidGoldAmount):
+			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
+func (h *Handlers) DeductGold(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+		Amount   int    `json:"amount"`
+		Reason   string `json:"reason"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	state, err := h.gameService.DeductGold(payload.PlayerID, payload.Amount, payload.Reason)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInsufficientGold):
+			status = http.StatusUnprocessableEntity
+		case errors.Is(err, game.ErrInvalidGoldAmount):
+			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}

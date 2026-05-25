@@ -175,6 +175,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
             <PlayerSwitcher
               nickname={gameState?.player.nickname ?? '未同步'}
               civilizationLevel={gameState?.buildings.reduce((sum, b) => sum + b.level, 0) ?? 0}
+              cityGold={gameState?.cityGold ?? 0}
             />
           )}
         </div>
@@ -351,7 +352,7 @@ import { FACTION_LABELS, FACTION_COLORS } from '@/utils/faction'
 
 // --- Player Switcher Sub-component ---
 
-const PlayerSwitcher: FC<{ nickname: string; civilizationLevel: number }> = ({ nickname, civilizationLevel }) => {
+const PlayerSwitcher: FC<{ nickname: string; civilizationLevel: number; cityGold: number }> = ({ nickname, civilizationLevel, cityGold }) => {
   const [open, setOpen] = useState(false)
   const players = useAccountStore((s) => s.players)
   const account = useAccountStore((s) => s.account)
@@ -381,6 +382,9 @@ const PlayerSwitcher: FC<{ nickname: string; civilizationLevel: number }> = ({ n
           <span className="text-sm font-semibold text-[var(--color-text-primary)]">{nickname}</span>
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent-light)] text-[var(--color-accent)] font-bold">
             文明度 {civilizationLevel}
+          </span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-bold">
+            🪙 {cityGold.toLocaleString()}
           </span>
         </div>
         {account && (

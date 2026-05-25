@@ -48,6 +48,8 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/accounts", handlers.AdminAccounts)
 	mux.HandleFunc("GET /api/v1/admin/players/{playerId}/state", handlers.AdminPlayerState)
 	mux.HandleFunc("POST /api/v1/admin/resources/adjust", handlers.AdminAdjustResources)
+	mux.HandleFunc("POST /api/v1/admin/gold/add", handlers.AddGold)
+	mux.HandleFunc("POST /api/v1/admin/gold/deduct", handlers.DeductGold)
 	mux.HandleFunc("GET /api/v1/admin/balance", handlers.AdminBalance)
 	mux.HandleFunc("PUT /api/v1/admin/balance", handlers.UpdateAdminBalance)
 	mux.HandleFunc("GET /api/v1/admin/npc-config", handlers.AdminNpcConfig)

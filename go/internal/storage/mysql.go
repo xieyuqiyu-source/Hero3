@@ -44,6 +44,7 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			id VARCHAR(64) PRIMARY KEY,
 			username VARCHAR(64) NOT NULL UNIQUE,
 			password_hash CHAR(64) NOT NULL,
+			gold INT NOT NULL DEFAULT 0,
 			created_at DATETIME(6) NOT NULL
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS players (
@@ -77,15 +78,19 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 		}
 	}
 
+	// 增量迁移：为已有的 accounts 表添加 gold 列
+	_, _ = db.ExecContext(ctx, `ALTER TABLE accounts ADD COLUMN gold INT NOT NULL DEFAULT 0`)
+
 	return nil
 }
 
 func (r *MySQLRepository) CreateAccount(account game.Account) error {
 	_, err := r.db.Exec(
-		`INSERT INTO accounts (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO accounts (id, username, password_hash, gold, created_at) VALUES (?, ?, ?, ?, ?)`,
 		account.ID,
 		account.Username,
 		account.PasswordHash,
+		account.Gold,
 		account.CreatedAt.UTC(),
 	)
 	if isDuplicateEntry(err) {
@@ -97,9 +102,9 @@ func (r *MySQLRepository) CreateAccount(account game.Account) error {
 func (r *MySQLRepository) GetAccountByUsername(username string) (game.Account, error) {
 	var account game.Account
 	err := r.db.QueryRow(
-		`SELECT id, username, password_hash, created_at FROM accounts WHERE username = ? LIMIT 1`,
+		`SELECT id, username, password_hash, gold, created_at FROM accounts WHERE username = ? LIMIT 1`,
 		username,
-	).Scan(&account.ID, &account.Username, &account.PasswordHash, &account.CreatedAt)
+	).Scan(&account.ID, &account.Username, &account.PasswordHash, &account.Gold, &account.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return game.Account{}, game.ErrAccountNotFound
 	}

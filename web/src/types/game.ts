@@ -88,6 +88,8 @@ export interface GameState {
   resources: ResourceState
   resourceProduction: ResourceProduction
   resourceSettledAt: string
+  /** 存档级城金 */
+  cityGold: number
   /** 产量加成倍率（1=无加成，2/4/8/16） */
   productionBoost?: number
   buildings: Building[]

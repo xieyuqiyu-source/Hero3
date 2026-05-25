@@ -9,6 +9,7 @@ type Account struct {
 	ID           string
 	Username     string
 	PasswordHash string
+	Gold         int // 账户级金币（充值/活动获得，可兑换为城金）
 	CreatedAt    time.Time
 }
 
@@ -77,25 +78,25 @@ type MapTarget struct {
 }
 
 type BattleReport struct {
-	ID               string         `json:"id"`
-	PlayerID         string         `json:"playerId"`
-	TargetID         string         `json:"targetId"`
-	TargetName       string         `json:"targetName"`
-	Type             string         `json:"type"` // "attack", "plunder", "scout", "reinforce"
-	Result           string         `json:"result"`
-	PlayerPower      int            `json:"playerPower"`
-	EnemyPower       int            `json:"enemyPower"`
-	DispatchedUnits  map[string]int `json:"dispatchedUnits"`
-	LostUnits        map[string]int `json:"lostUnits"`
-	DefenderFaction  string         `json:"defenderFaction"`
-	DefenderUnits    map[string]int `json:"defenderUnits"`
+	ID                string         `json:"id"`
+	PlayerID          string         `json:"playerId"`
+	TargetID          string         `json:"targetId"`
+	TargetName        string         `json:"targetName"`
+	Type              string         `json:"type"` // "attack", "plunder", "scout", "reinforce"
+	Result            string         `json:"result"`
+	PlayerPower       int            `json:"playerPower"`
+	EnemyPower        int            `json:"enemyPower"`
+	DispatchedUnits   map[string]int `json:"dispatchedUnits"`
+	LostUnits         map[string]int `json:"lostUnits"`
+	DefenderFaction   string         `json:"defenderFaction"`
+	DefenderUnits     map[string]int `json:"defenderUnits"`
 	DefenderLostUnits map[string]int `json:"defenderLostUnits"`
 	DefenderRevealed  bool           `json:"defenderRevealed"`
 	DefenderResources map[string]int `json:"defenderResources"`
 	Rewards           map[string]int `json:"rewards"`
-	Read             bool           `json:"read"`
-	DeletedByPlayer  bool           `json:"deletedByPlayer,omitempty"`
-	CreatedAt        string         `json:"createdAt"`
+	Read              bool           `json:"read"`
+	DeletedByPlayer   bool           `json:"deletedByPlayer,omitempty"`
+	CreatedAt         string         `json:"createdAt"`
 }
 
 type GameState struct {
@@ -103,6 +104,7 @@ type GameState struct {
 	Resources           ResourceState      `json:"resources"`
 	ResourceProduction  ResourceProduction `json:"resourceProduction"`
 	ResourceSettledAt   string             `json:"resourceSettledAt"`
+	CityGold            int                `json:"cityGold"`
 	Buildings           []Building         `json:"buildings"`
 	General             *General           `json:"general"`
 	Army                []ArmyUnit         `json:"army"`
