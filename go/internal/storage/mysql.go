@@ -166,7 +166,7 @@ func (r *MySQLRepository) DeductAccountGold(accountID string, amount int) error 
 
 func (r *MySQLRepository) AddCityGold(playerID string, amount int) (int, error) {
 	result, err := r.db.Exec(
-		`UPDATE players SET state_json = JSON_SET(state_json, '$.cityGold', CAST(COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) + ? AS SIGNED)) WHERE id = ?`,
+		`UPDATE players SET state_json = JSON_SET(state_json, '$.cityGold', CAST(IFNULL(JSON_EXTRACT(state_json, '$.cityGold'), 0) + 0 + ? AS SIGNED)) WHERE id = ?`,
 		amount, playerID,
 	)
 	if err != nil {
@@ -176,16 +176,14 @@ func (r *MySQLRepository) AddCityGold(playerID string, amount int) (int, error) 
 	if affected == 0 {
 		return 0, game.ErrPlayerNotFound
 	}
-	// 读取最新余额
 	var balance int
-	err = r.db.QueryRow(`SELECT CAST(COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) AS SIGNED) FROM players WHERE id = ?`, playerID).Scan(&balance)
+	err = r.db.QueryRow(`SELECT CAST(IFNULL(JSON_EXTRACT(state_json, '$.cityGold'), 0) + 0 AS SIGNED) FROM players WHERE id = ?`, playerID).Scan(&balance)
 	return balance, err
 }
 
 func (r *MySQLRepository) DeductCityGold(playerID string, amount int) (int, error) {
-	// 原子扣减：只有余额 >= amount 时才扣
 	result, err := r.db.Exec(
-		`UPDATE players SET state_json = JSON_SET(state_json, '$.cityGold', CAST(JSON_EXTRACT(state_json, '$.cityGold') - ? AS SIGNED)) WHERE id = ? AND CAST(COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) AS SIGNED) >= ?`,
+		`UPDATE players SET state_json = JSON_SET(state_json, '$.cityGold', CAST(IFNULL(JSON_EXTRACT(state_json, '$.cityGold'), 0) + 0 - ? AS SIGNED)) WHERE id = ? AND IFNULL(JSON_EXTRACT(state_json, '$.cityGold'), 0) + 0 >= ?`,
 		amount, playerID, amount,
 	)
 	if err != nil {
@@ -193,16 +191,14 @@ func (r *MySQLRepository) DeductCityGold(playerID string, amount int) (int, erro
 	}
 	affected, _ := result.RowsAffected()
 	if affected == 0 {
-		// 区分：玩家不存在 vs 余额不足
 		var exists int
 		if scanErr := r.db.QueryRow(`SELECT 1 FROM players WHERE id = ? LIMIT 1`, playerID).Scan(&exists); scanErr != nil {
 			return 0, game.ErrPlayerNotFound
 		}
 		return 0, game.ErrInsufficientCityGold
 	}
-	// 读取最新余额
 	var balance int
-	err = r.db.QueryRow(`SELECT CAST(COALESCE(JSON_EXTRACT(state_json, '$.cityGold'), 0) AS SIGNED) FROM players WHERE id = ?`, playerID).Scan(&balance)
+	err = r.db.QueryRow(`SELECT CAST(IFNULL(JSON_EXTRACT(state_json, '$.cityGold'), 0) + 0 AS SIGNED) FROM players WHERE id = ?`, playerID).Scan(&balance)
 	return balance, err
 }
 
