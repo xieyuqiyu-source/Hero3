@@ -244,6 +244,7 @@ const AccountGoldSection: FC = () => {
   const [expanded, setExpanded] = useState<'to_city' | 'to_account' | null>(null)
   const [amount, setAmount] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
   const account = useAccountStore((s) => s.account)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const setState = useGameStore((s) => s.setState)
@@ -251,10 +252,17 @@ const AccountGoldSection: FC = () => {
 
   const cityName = gameState?.player.nickname ?? '当前城池'
 
+  // 实时倒计时
+  useEffect(() => {
+    if (!gameState?.lastExchangeAt) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [gameState?.lastExchangeAt])
+
   const cooldownRemaining = (() => {
     if (!gameState?.lastExchangeAt) return 0
     const last = new Date(gameState.lastExchangeAt).getTime()
-    return Math.max(0, Math.ceil(3600 - (Date.now() - last) / 1000))
+    return Math.max(0, Math.ceil(3600 - (now - last) / 1000))
   })()
   const onCooldown = cooldownRemaining > 0
 
