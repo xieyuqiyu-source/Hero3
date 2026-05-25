@@ -696,3 +696,35 @@ func (h *Handlers) ExchangeGold(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{"state": state})
 }
+
+func (h *Handlers) ReverseExchangeGold(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		AccountID    string `json:"accountId"`
+		PlayerID     string `json:"playerId"`
+		CityGoldAmount int  `json:"cityGoldAmount"` // 要消耗的城金数量
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	state, err := h.gameService.ExchangeCityGoldToGold(payload.AccountID, payload.PlayerID, payload.CityGoldAmount)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrAccountNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInvalidGoldAmount):
+			status = http.StatusUnprocessableEntity
+		case errors.Is(err, game.ErrInsufficientGold):
+			status = http.StatusUnprocessableEntity
+		case errors.Is(err, game.ErrExchangeCooldown):
+			status = http.StatusTooManyRequests
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}

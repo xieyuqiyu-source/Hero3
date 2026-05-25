@@ -8,6 +8,8 @@ import (
 type Repository interface {
 	CreateAccount(account Account) error
 	GetAccountByUsername(username string) (Account, error)
+	GetAccountByID(accountID string) (Account, error)
+	UpdateAccountGold(accountID string, gold int) error
 	AccountExists(accountID string) (bool, error)
 	ListAccounts() ([]AccountSummary, error)
 	ListPlayers(accountID string) ([]PlayerSummary, error)
@@ -76,6 +78,30 @@ func (r *MemoryRepository) GetAccountByUsername(username string) (Account, error
 	}
 
 	return r.accounts[accountID], nil
+}
+
+func (r *MemoryRepository) GetAccountByID(accountID string) (Account, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	account, exists := r.accounts[accountID]
+	if !exists {
+		return Account{}, ErrAccountNotFound
+	}
+	return account, nil
+}
+
+func (r *MemoryRepository) UpdateAccountGold(accountID string, gold int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	account, exists := r.accounts[accountID]
+	if !exists {
+		return ErrAccountNotFound
+	}
+	account.Gold = gold
+	r.accounts[accountID] = account
+	return nil
 }
 
 func (r *MemoryRepository) AccountExists(accountID string) (bool, error) {

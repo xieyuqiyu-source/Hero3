@@ -124,4 +124,9 @@ export const gameApi = {
     return api.post<{ state: GameState }>('/gold/exchange', { accountId, playerId, amount })
   },
 
+  /** 城金兑换金币（15城金=1金币，有损耗+冷却） */
+  reverseExchangeGold(accountId: string, playerId: string, cityGoldAmount: number) {
+    return api.post<{ state: GameState }>('/gold/reverse-exchange', { accountId, playerId, cityGoldAmount })
+  },
+
 }

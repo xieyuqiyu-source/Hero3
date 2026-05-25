@@ -111,6 +111,30 @@ func (r *MySQLRepository) GetAccountByUsername(username string) (game.Account, e
 	return account, err
 }
 
+func (r *MySQLRepository) GetAccountByID(accountID string) (game.Account, error) {
+	var account game.Account
+	err := r.db.QueryRow(
+		`SELECT id, username, password_hash, gold, created_at FROM accounts WHERE id = ? LIMIT 1`,
+		accountID,
+	).Scan(&account.ID, &account.Username, &account.PasswordHash, &account.Gold, &account.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return game.Account{}, game.ErrAccountNotFound
+	}
+	return account, err
+}
+
+func (r *MySQLRepository) UpdateAccountGold(accountID string, gold int) error {
+	result, err := r.db.Exec(`UPDATE accounts SET gold = ? WHERE id = ?`, gold, accountID)
+	if err != nil {
+		return err
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return game.ErrAccountNotFound
+	}
+	return nil
+}
+
 func (r *MySQLRepository) AccountExists(accountID string) (bool, error) {
 	var exists int
 	err := r.db.QueryRow(`SELECT 1 FROM accounts WHERE id = ? LIMIT 1`, accountID).Scan(&exists)
