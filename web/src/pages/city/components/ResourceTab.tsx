@@ -132,8 +132,8 @@ const ResourceTab: FC<ResourceTabProps> = ({ expanded, onToggle }) => {
 
       {/* 4-column resource grid */}
       <div className={`
-        transition-all duration-300 ease-in-out overflow-hidden
-        ${expanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}
+        transition-all duration-300 ease-in-out
+        ${expanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}
       `}>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {RESOURCE_GROUPS.map((group) => {
@@ -141,7 +141,7 @@ const ResourceTab: FC<ResourceTabProps> = ({ expanded, onToggle }) => {
             const slots = filterBuildings(buildings, group.type)
             const totalProduction = slots.reduce((sum, b) => sum + getProductionAtLevel(b.type, b.level), 0)
             return (
-              <div key={group.key} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+              <div key={group.key} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
                 {/* Column Header */}
                 <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--color-border)]">
                   <div className={`w-7 h-7 rounded-lg ${group.bgColor} flex items-center justify-center ${group.color} flex-shrink-0`}>
