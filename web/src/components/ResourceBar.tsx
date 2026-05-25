@@ -1,15 +1,10 @@
 import { useState, useEffect, type FC } from 'react'
-import { TreePine, Mountain, Gem, Wheat, Flame } from 'lucide-react'
+import { TreePine, Mountain, Gem, Wheat } from 'lucide-react'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
-import { useGameStore } from '@/store/gameStore'
-import { gameApi } from '@/api/game'
 
 const ResourceBar: FC = () => {
   const [scrolled, setScrolled] = useState(false)
-  const [filling, setFilling] = useState(false)
   const gameResources = useProjectedResources()
-  const activePlayerId = useGameStore((s) => s.activePlayerId)
-  const setState = useGameStore((s) => s.setState)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -18,17 +13,6 @@ const ResourceBar: FC = () => {
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
-
-  const handleFill = async () => {
-    if (!activePlayerId || filling) return
-    setFilling(true)
-    try {
-      const result = await gameApi.fillResources(activePlayerId)
-      setState(result.state)
-    } finally {
-      setFilling(false)
-    }
-  }
 
   const resources = [
     { key: 'wood', name: '木材', icon: TreePine, color: 'text-green-600' },
@@ -64,23 +48,6 @@ const ResourceBar: FC = () => {
             )
           })}
         </div>
-        {/* TODO: 爆仓功能暂时隐藏，后续可能重新开启（后端接口保留） */}
-        {/* <button
-          type="button"
-          onClick={handleFill}
-          disabled={filling}
-          className="
-            flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl
-            text-[11px] font-bold
-            bg-red-500/10 text-red-500 border border-red-500/30
-            hover:bg-red-500/20 hover:border-red-500/50
-            cursor-pointer transition-all duration-200
-            disabled:opacity-50 disabled:cursor-not-allowed
-          "
-        >
-          <Flame size={12} />
-          爆仓
-        </button> */}
       </div>
     </div>
   )
