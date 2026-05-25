@@ -54,26 +54,7 @@ const AccountPage: FC = () => {
 
       {/* 账户信息 */}
       <Section title="账户信息" icon={Coins}>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-[var(--color-text-secondary)]">您目前帐户上有</span>
-            <span className="text-lg font-bold text-amber-500">{account?.gold ?? 0}</span>
-            <span className="text-sm text-[var(--color-text-secondary)]">金币</span>
-          </div>
-          <button
-            type="button"
-            className="
-              px-4 py-1.5 rounded-xl text-xs font-semibold
-              bg-amber-500 text-white
-              hover:bg-amber-400 hover:-translate-y-0.5
-              cursor-pointer transition-all duration-200
-              shadow-[0_4px_12px_rgba(245,158,11,0.3)]
-            "
-          >
-            充值金币
-          </button>
-        </div>
-        <ExchangeButton />
+        <AccountGoldSection />
       </Section>
 
       {/* 个人概况 */}
@@ -258,8 +239,8 @@ const AccountPage: FC = () => {
   )
 }
 
-// --- Exchange Button ---
-const ExchangeButton: FC = () => {
+// --- Account Gold Section (inline button + expand panel) ---
+const AccountGoldSection: FC = () => {
   const [expanded, setExpanded] = useState(false)
   const [direction, setDirection] = useState<'to_city' | 'to_account'>('to_city')
   const [amount, setAmount] = useState(1)
@@ -271,14 +252,11 @@ const ExchangeButton: FC = () => {
 
   const cityName = gameState?.player.nickname ?? '当前城池'
 
-  // 冷却计算
   const cooldownRemaining = (() => {
     if (!gameState?.lastExchangeAt) return 0
     const last = new Date(gameState.lastExchangeAt).getTime()
-    const remaining = Math.max(0, 3600 - (Date.now() - last) / 1000)
-    return Math.ceil(remaining)
+    return Math.max(0, Math.ceil(3600 - (Date.now() - last) / 1000))
   })()
-
   const onCooldown = cooldownRemaining > 0
 
   const handleExchange = async () => {
@@ -288,61 +266,72 @@ const ExchangeButton: FC = () => {
       if (direction === 'to_city') {
         const result = await gameApi.exchangeGold(account.accountId, activePlayerId, amount)
         setState(result.state)
-        toast.success(`兑换成功！${amount * 10} 城金已存入「${cityName}」`)
+        toast.success(`${amount * 10} 城金已存入「${cityName}」`)
       } else {
         const result = await gameApi.reverseExchangeGold(account.accountId, activePlayerId, amount)
         setState(result.state)
-        const goldGain = Math.floor(amount / 15)
-        toast.success(`兑换成功！从「${cityName}」提取 ${goldGain} 金币到账户`)
+        toast.success(`从「${cityName}」提取 ${Math.floor(amount / 15)} 金币到账户`)
       }
       setExpanded(false)
-    } catch {
-      // global handler
-    } finally {
-      setLoading(false)
-    }
+    } catch { /* global */ } finally { setLoading(false) }
   }
 
-  const formatCooldown = (seconds: number) => {
-    const m = Math.floor(seconds / 60)
-    const s = seconds % 60
-    return `${m}:${String(s).padStart(2, '0')}`
-  }
-
-  if (!account || !activePlayerId) return null
-
-  // 预览计算
+  const formatCooldown = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  const minAmount = direction === 'to_city' ? 1 : 15
   const preview = direction === 'to_city'
     ? `→ ${(amount * 10).toLocaleString()} 城金 存入「${cityName}」`
-    : `→ ${Math.floor(amount / 15)} 金币 存入账户（损耗33%）`
-
-  const minAmount = direction === 'to_city' ? 1 : 15
+    : `→ ${Math.floor(amount / 15)} 金币 到账户（损耗33%）`
 
   return (
-    <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
-      <div className="flex items-center justify-between">
+    <div>
+      {/* Top row: balance + buttons */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
+          <span className="text-sm text-[var(--color-text-secondary)]">您目前帐户上有</span>
+          <span className="text-lg font-bold text-amber-500">{account?.gold ?? 0}</span>
+          <span className="text-sm text-[var(--color-text-secondary)]">金币</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {account && activePlayerId && (
+            <button
+              type="button"
+              onClick={() => setExpanded(!expanded)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-500/10 text-indigo-600 border border-indigo-500/30 hover:bg-indigo-500/20 cursor-pointer transition-all duration-200"
+            >
+              <ArrowRightLeft size={12} />
+              兑换
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => { setDirection('to_city'); setAmount(1); setExpanded(true) }}
-            className={`text-[10px] px-2 py-1 rounded-lg cursor-pointer transition-colors ${direction === 'to_city' && expanded ? 'bg-indigo-500/10 text-indigo-600 font-bold' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}`}
+            className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-amber-500 text-white hover:bg-amber-400 hover:-translate-y-0.5 cursor-pointer transition-all duration-200 shadow-[0_4px_12px_rgba(245,158,11,0.3)]"
+          >
+            充值金币
+          </button>
+        </div>
+      </div>
+
+      {/* Expand panel */}
+      <div className={`overflow-hidden transition-all duration-200 ease-out ${expanded ? 'max-h-[120px] mt-3 pt-3 border-t border-[var(--color-border)] opacity-100' : 'max-h-0 opacity-0'}`}>
+        <div className="flex items-center gap-2 mb-2">
+          <button
+            type="button"
+            onClick={() => { setDirection('to_city'); setAmount(1) }}
+            className={`text-[10px] px-2 py-1 rounded-lg cursor-pointer transition-colors ${direction === 'to_city' ? 'bg-indigo-500/10 text-indigo-600 font-bold' : 'text-[var(--color-text-muted)]'}`}
           >
             金币→城金
           </button>
           <button
             type="button"
-            onClick={() => { setDirection('to_account'); setAmount(15); setExpanded(true) }}
-            className={`text-[10px] px-2 py-1 rounded-lg cursor-pointer transition-colors ${direction === 'to_account' && expanded ? 'bg-amber-500/10 text-amber-600 font-bold' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}`}
+            onClick={() => { setDirection('to_account'); setAmount(15) }}
+            className={`text-[10px] px-2 py-1 rounded-lg cursor-pointer transition-colors ${direction === 'to_account' ? 'bg-amber-500/10 text-amber-600 font-bold' : 'text-[var(--color-text-muted)]'}`}
           >
             城金→金币
           </button>
+          <span className="text-[9px] text-[var(--color-text-muted)] ml-auto">
+            {direction === 'to_city' ? '1:10 无损' : '15:1 损耗33%'} · 冷却1h
+          </span>
         </div>
-        {expanded && (
-          <button type="button" onClick={() => setExpanded(false)} className="text-[10px] text-[var(--color-text-muted)] cursor-pointer">收起</button>
-        )}
-      </div>
-
-      <div className={`overflow-hidden transition-all duration-200 ease-out ${expanded ? 'max-h-[100px] mt-2 opacity-100' : 'max-h-0 opacity-0'}`}>
         <div className="flex items-center gap-2 flex-wrap">
           <input
             type="number"
@@ -351,9 +340,7 @@ const ExchangeButton: FC = () => {
             onChange={(e) => setAmount(Math.max(minAmount, parseInt(e.target.value) || minAmount))}
             className="w-16 text-center text-xs font-bold bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-lg py-1.5 text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent-border)]"
           />
-          <span className="text-[10px] text-[var(--color-text-muted)]">
-            {direction === 'to_city' ? '金币' : '城金'}
-          </span>
+          <span className="text-[10px] text-[var(--color-text-muted)]">{direction === 'to_city' ? '金币' : '城金'}</span>
           <span className="text-[10px] text-[var(--color-text-secondary)]">{preview}</span>
           <button
             type="button"
@@ -364,10 +351,6 @@ const ExchangeButton: FC = () => {
             {loading ? '...' : onCooldown ? formatCooldown(cooldownRemaining) : '确认'}
           </button>
         </div>
-        <p className="text-[9px] text-[var(--color-text-muted)] mt-1">
-          {direction === 'to_city' ? '比例 1:10，无损耗' : '比例 15:1，损耗约33%'}
-          {' · '}冷却 1 小时
-        </p>
       </div>
     </div>
   )
