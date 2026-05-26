@@ -58,6 +58,8 @@ export interface MapTarget {
 export interface BattleReport {
   id: string
   playerId: string
+  playerFaction?: string
+  playerName?: string
   targetId: string
   targetName: string
   type: 'attack' | 'plunder' | 'scout' | 'reinforce'

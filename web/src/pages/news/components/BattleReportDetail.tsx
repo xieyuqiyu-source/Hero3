@@ -1,5 +1,5 @@
-import { type FC } from 'react'
-import { ArrowLeft } from 'lucide-react'
+import { type FC, useState } from 'react'
+import { ArrowLeft, Share2, Check } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
 import type { BattleReport } from '@/types/game'
@@ -15,47 +15,77 @@ const RESOURCE_ORDER = ['wood', 'stone', 'iron', 'food']
 const TYPE_LABELS: Record<string, string> = { attack: '攻击', plunder: '掠夺', scout: '侦查', reinforce: '增援' }
 
 const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => {
-  const faction = useGameStore((s) => s.state?.player.faction ?? 'wei')
+  const faction = useGameStore((s) => s.state?.player.faction) || report.playerFaction || ''
   const general = useGameStore((s) => s.state?.general)
   const units = useConfigStore((s) => s.units)
   const factionUnits = units?.[faction] ?? {}
+  const [copied, setCopied] = useState(false)
 
   const isVictory = report.result === 'attacker_victory'
   const isDraw = report.result === 'draw'
   const targetDisplayName = report.targetName || report.targetId
 
-  // 全兵种列表（进攻方）
-  const allUnitIds = Object.keys(factionUnits)
+  const handleShare = () => {
+    const url = `${window.location.origin}/report/${report.id}`
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  // 全兵种列表（进攻方）— 用阵营配置获取完整列表
+  const allUnitIds = Object.keys(factionUnits).length > 0
+    ? Object.keys(factionUnits)
+    : Object.keys(report.dispatchedUnits ?? {})
 
   // 防守方阵营兵种
   const defenderFaction = report.defenderFaction || ''
   const defenderFactionUnits = units?.[defenderFaction] ?? {}
-  const defenderAllUnitIds = Object.keys(defenderFactionUnits)
+  const defenderAllUnitIds = Object.keys(defenderFactionUnits).length > 0
+    ? Object.keys(defenderFactionUnits)
+    : Object.keys(report.defenderUnits ?? {})
 
   const getUnitName = (unitType: string): string => {
-    return factionUnits[unitType]?.name ?? defenderFactionUnits[unitType]?.name ?? unitType
+    // 尝试从所有阵营配置里找名字
+    for (const f of Object.values(units ?? {})) {
+      if (f[unitType]?.name) return f[unitType].name
+    }
+    return unitType
   }
 
   const getDefenderUnitName = (unitType: string): string => {
-    return defenderFactionUnits[unitType]?.name ?? unitType
+    if (defenderFactionUnits[unitType]?.name) return defenderFactionUnits[unitType].name
+    for (const f of Object.values(units ?? {})) {
+      if (f[unitType]?.name) return f[unitType].name
+    }
+    return unitType
   }
 
   return (
     <div className="space-y-4">
-      {/* Back button */}
-      <button
-        type="button"
-        onClick={onBack}
-        className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
-      >
-        <ArrowLeft size={14} />
-        返回列表
-      </button>
+      {/* Back button + Share */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
+        >
+          <ArrowLeft size={14} />
+          返回列表
+        </button>
+        <button
+          type="button"
+          onClick={handleShare}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium text-blue-500 bg-blue-500/10 hover:bg-blue-500/20 cursor-pointer transition-colors"
+        >
+          {copied ? <Check size={12} /> : <Share2 size={12} />}
+          {copied ? '已复制' : '分享'}
+        </button>
+      </div>
 
       {/* Title */}
       <div className={`text-center py-3 rounded-xl ${isVictory ? 'bg-green-500/10' : isDraw ? 'bg-slate-500/10' : 'bg-red-500/10'}`}>
         <h2 className={`text-base font-bold ${isVictory ? 'text-green-600' : isDraw ? 'text-slate-500' : 'text-red-600'}`}>
-          {general?.name ?? '主公'} {TYPE_LABELS[report.type] ?? '攻击'} {targetDisplayName}
+          {report.playerName || useGameStore.getState().state?.player.nickname || '主公'} {TYPE_LABELS[report.type] ?? '攻击'} {targetDisplayName}
         </h2>
         <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
           {new Date(report.createdAt).toLocaleString('zh-CN')}

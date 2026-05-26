@@ -523,6 +523,22 @@ func (h *Handlers) ScoutNpc(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *Handlers) GetReport(w http.ResponseWriter, r *http.Request) {
+	reportID := r.PathValue("reportId")
+	if reportID == "" {
+		writeError(w, http.StatusBadRequest, "reportId is required")
+		return
+	}
+
+	report, err := h.gameService.GetReportByID(reportID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "report not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, report)
+}
+
 func (h *Handlers) MarkReportsRead(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		PlayerID string `json:"playerId"`

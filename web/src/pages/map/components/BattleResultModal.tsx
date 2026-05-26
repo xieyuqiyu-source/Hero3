@@ -1,5 +1,5 @@
 import { useState, useEffect, type FC } from 'react'
-import { Trophy, Skull, X } from 'lucide-react'
+import { Trophy, Skull, X, Share2, Check } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import type { BattleReport } from '@/types/game'
 import { useConfigStore } from '@/store/configStore'
@@ -14,6 +14,7 @@ const RESOURCE_LABELS: Record<string, string> = { wood: '木材', stone: '石料
 
 const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
   const [visible, setVisible] = useState(false)
+  const [copied, setCopied] = useState(false)
   const navigate = useNavigate()
   const nickname = useGameStore((s) => s.state?.player.nickname ?? '我方')
   const faction = useGameStore((s) => s.state?.player.faction ?? 'wei')
@@ -154,6 +155,19 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
             className="w-full px-4 py-2.5 rounded-xl text-sm font-bold bg-[var(--color-accent)] text-white hover:opacity-90 cursor-pointer transition-opacity"
           >
             确定
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const url = `${window.location.origin}/report/${report.id}`
+              navigator.clipboard.writeText(url)
+              setCopied(true)
+              setTimeout(() => setCopied(false), 2000)
+            }}
+            className="w-full flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium text-blue-500 bg-blue-500/10 hover:bg-blue-500/20 cursor-pointer transition-colors"
+          >
+            {copied ? <Check size={12} /> : <Share2 size={12} />}
+            {copied ? '链接已复制' : '分享战报'}
           </button>
         </div>
       </div>

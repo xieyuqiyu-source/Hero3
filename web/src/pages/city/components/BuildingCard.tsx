@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, type FC } from 'react'
-import { ArrowUpCircle, LoaderCircle } from 'lucide-react'
+import { ArrowUpCircle, LoaderCircle, Zap } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
+import { useConfigStore } from '@/store/configStore'
+import { gameApi } from '@/api/game'
+import { toast } from '@/components/ui'
+import ConfirmCityGoldModal from '@/components/ConfirmCityGoldModal'
 
 interface BuildingCardProps {
   buildingId?: string
@@ -44,10 +48,15 @@ const BuildingCard: FC<BuildingCardProps> = ({
 }) => {
   const [loading, setLoading] = useState(false)
   const [now, setNow] = useState(() => Date.now())
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [instantLoading, setInstantLoading] = useState(false)
   const refreshedUpgradeRef = useRef<string | null>(null)
   const upgrade = useGameStore((s) => s.upgradeBuilding)
+  const balance = useConfigStore((s) => s.balance)
+  const cityGoldPerSecond = balance?.cityGoldPerSecond ?? 120
   const isUpgrading = upgradeEndsAt != null
   const countdown = upgradeEndsAt ? getRemainingSeconds(upgradeEndsAt, now) : 0
+  const instantCost = Math.max(1, Math.ceil(countdown / cityGoldPerSecond))
 
   useEffect(() => {
     if (!upgradeEndsAt) return
@@ -80,6 +89,28 @@ const BuildingCard: FC<BuildingCardProps> = ({
     }
   }
 
+  const handleInstantComplete = async () => {
+    if (!buildingId || instantLoading) return
+    setInstantLoading(true)
+    try {
+      const playerId = useGameStore.getState().activePlayerId
+      if (!playerId) return
+      const result = await gameApi.instantCompleteBuilding(playerId, buildingId)
+      useGameStore.getState().setState(result.state)
+      toast.success(`${name} 升级完成`)
+    } catch (e: any) {
+      const msg = e?.message || '加速失败'
+      if (msg.includes('insufficient')) {
+        toast.error('城金不足')
+      } else {
+        toast.error(msg)
+      }
+    } finally {
+      setInstantLoading(false)
+      setConfirmOpen(false)
+    }
+  }
+
   return (
     <div className={`
       relative rounded-2xl p-4 border border-[var(--color-border)]
@@ -105,10 +136,15 @@ const BuildingCard: FC<BuildingCardProps> = ({
             </span>
             {!locked && buildingId && (
               isUpgrading ? (
-                <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-mono font-medium text-amber-500">
-                  <LoaderCircle size={12} className="animate-spin" />
+                <button
+                  type="button"
+                  onClick={() => setConfirmOpen(true)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-amber-500 hover:bg-amber-500/10 cursor-pointer transition-colors"
+                  title="点击快速完成"
+                >
+                  <Zap size={10} />
                   {formatCountdown(countdown)}
-                </span>
+                </button>
               ) : (
                 <button
                   type="button"
@@ -131,6 +167,17 @@ const BuildingCard: FC<BuildingCardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 城金加速确认弹窗 */}
+      <ConfirmCityGoldModal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={handleInstantComplete}
+        title={`${name} 快速完成`}
+        description={`立即完成升级到 Lv.${level + 1}`}
+        cost={instantCost}
+        loading={instantLoading}
+      />
     </div>
   )
 }

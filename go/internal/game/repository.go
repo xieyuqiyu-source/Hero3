@@ -1,6 +1,7 @@
 package game
 
 import (
+	"errors"
 	"sync"
 	"time"
 )
@@ -30,6 +31,7 @@ type Repository interface {
 
 	// Battle Reports
 	SaveReport(report BattleReport) error
+	GetReportByID(reportID string) (BattleReport, error)
 	ListReports(playerID string, limit int) ([]BattleReport, error)
 	ListAllReports(playerID string) ([]BattleReport, error)
 	MarkReportsRead(playerID string) error
@@ -371,6 +373,20 @@ func (r *MemoryRepository) SaveReport(report BattleReport) error {
 		r.reports[report.PlayerID] = r.reports[report.PlayerID][:1000]
 	}
 	return nil
+}
+
+func (r *MemoryRepository) GetReportByID(reportID string) (BattleReport, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, reports := range r.reports {
+		for _, report := range reports {
+			if report.ID == reportID {
+				return report, nil
+			}
+		}
+	}
+	return BattleReport{}, errors.New("report not found")
 }
 
 func (r *MemoryRepository) ListReports(playerID string, limit int) ([]BattleReport, error) {

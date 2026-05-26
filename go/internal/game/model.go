@@ -96,6 +96,8 @@ type MapTarget struct {
 type BattleReport struct {
 	ID                string         `json:"id"`
 	PlayerID          string         `json:"playerId"`
+	PlayerFaction     string         `json:"playerFaction"`
+	PlayerName        string         `json:"playerName,omitempty"`
 	TargetID          string         `json:"targetId"`
 	TargetName        string         `json:"targetName"`
 	Type              string         `json:"type"` // "attack", "plunder", "scout", "reinforce"

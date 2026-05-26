@@ -174,6 +174,57 @@ ssh $SERVER "chmod +x /tmp/hero3-server.$STAMP; mv -f /tmp/hero3-server.$STAMP /
 
 静态资源使用覆盖发布，不在上线过程中清空目录，避免用户刷新时遇到空白站点。Vite 生成的旧 hash 资源会保留，可在确认版本稳定且已有备份后定期清理。
 
+## GitHub Actions 自动部署
+
+仓库已配置 `.github/workflows/deploy.yml`。推送到 `main` 分支时会自动执行生产部署，也可以在 GitHub 仓库的 **Actions** 页面手动点击 `Deploy Hero3` 运行。
+
+自动部署流程：
+
+```text
+push main
+  -> GitHub Actions checkout
+  -> 构建 Go Linux 后端
+  -> 构建玩家前端 web
+  -> 构建 GM 后台 admin
+  -> 打包 release
+  -> SSH 上传到服务器
+  -> 服务器备份旧版本
+  -> 覆盖后端、配置和静态资源
+  -> 重启 hero3.service
+  -> reload Nginx
+  -> 检查 /healthz
+```
+
+需要在 GitHub 仓库中配置 Secrets：
+
+```text
+HERO3_SSH_HOST          # 服务器 IP，例如 124.223.111.163
+HERO3_SSH_PORT          # SSH 端口，默认 22
+HERO3_SSH_USER          # SSH 用户，例如 root
+HERO3_SSH_PRIVATE_KEY   # 用于部署的 SSH 私钥内容
+```
+
+Secrets 配置入口：
+
+```text
+GitHub 仓库 -> Settings -> Secrets and variables -> Actions -> New repository secret
+```
+
+推荐使用 SSH key 部署，不使用 SSH 密码。准备方式：
+
+```bash
+ssh-keygen -t ed25519 -C "github-actions-hero3"
+```
+
+把生成的公钥追加到服务器部署用户的 `~/.ssh/authorized_keys`，把私钥全文保存到 GitHub Secret `HERO3_SSH_PRIVATE_KEY`。
+
+注意事项：
+
+- 自动部署只在 `main` 分支 push 时触发，普通开发分支不会发布线上。
+- 如果 Actions 失败，先看 GitHub Actions 日志；如果已经连上服务器，再看 `journalctl -u hero3 -f`。
+- 服务器上的数据库密码、环境变量、证书不进入 GitHub，仍然保留在 `/etc/hero3/hero3.env` 和 Nginx 证书目录。
+- 当前 workflow 使用覆盖发布静态资源，不清空 `/var/www/hero3/web/` 和 `/var/www/hero3/admin/`，避免刷新时短暂空白。
+
 ## 验证发布
 
 检查后端服务：

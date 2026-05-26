@@ -279,6 +279,8 @@ func (s *Service) ScoutNpc(req ScoutNpcRequest) (ScoutNpcResponse, error) {
 	report := BattleReport{
 		ID:              "br_" + randomID(8),
 		PlayerID:        state.Player.ID,
+		PlayerFaction:   state.Player.Faction,
+		PlayerName:      state.Player.Nickname,
 		TargetID:        targetNpc.ID,
 		TargetName:      targetNpc.Name + "（NPC）",
 		Type:            "scout",
@@ -565,6 +567,8 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 	report := BattleReport{
 		ID:                "br_" + randomID(8),
 		PlayerID:          state.Player.ID,
+		PlayerFaction:     state.Player.Faction,
+		PlayerName:        state.Player.Nickname,
 		TargetID:          npc.ID,
 		TargetName:        npc.Name + "（NPC）",
 		Type:              mode,
@@ -686,6 +690,11 @@ func findScoutUnit(faction string) string {
 		}
 	}
 	return ""
+}
+
+// GetReportByID 公开获取单条战报（用于分享链接）
+func (s *Service) GetReportByID(reportID string) (BattleReport, error) {
+	return s.repo.GetReportByID(reportID)
 }
 
 // MarkReportsRead 标记所有战报为已读

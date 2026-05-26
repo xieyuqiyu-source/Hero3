@@ -113,19 +113,16 @@ func (s *Service) InstantCompleteRecruit(playerID string, queueID string) (GameS
 
 	queue := state.RecruitQueues[queueIdx]
 
-	// 计算剩余秒数
-	endsAt, err := time.Parse(resourceDateLayout, queue.EndsAt)
-	if err != nil {
-		return GameState{}, ErrQueueFull
-	}
-	remainingSecs := int(endsAt.Sub(now).Seconds())
-	if remainingSecs <= 0 {
-		remainingSecs = 0
+	// 计算该队列自身的训练时长（不含排队等待时间）
+	unitCfg, unitExists := GetUnitConfig(state.Player.Faction, queue.UnitType)
+	trainSeconds := 0
+	if unitExists {
+		trainSeconds = unitCfg.TrainSeconds * queue.Amount
 	}
 
 	// 计算城金花费并扣除
-	if remainingSecs > 0 {
-		cost := speedUpCost(remainingSecs)
+	if trainSeconds > 0 {
+		cost := speedUpCost(trainSeconds)
 		if _, err := s.repo.DeductCityGold(playerID, cost); err != nil {
 			return GameState{}, err
 		}

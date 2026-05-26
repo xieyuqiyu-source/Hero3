@@ -94,6 +94,11 @@ export const gameApi = {
     return api.get<Record<string, number>>('/city/boost/prices')
   },
 
+  /** 获取单条战报（公开，用于分享） */
+  getReport(reportId: string) {
+    return api.get<BattleReport>(`/reports/${reportId}`)
+  },
+
   /** 攻击地图目标 */
   attackTarget(playerId: string, targetId: string, units: Record<string, number>) {
     return api.post<{ battleReport: BattleReport; resources: GameState['resources']; army: GameState['army'] }>(

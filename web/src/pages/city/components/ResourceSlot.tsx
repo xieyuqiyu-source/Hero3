@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef, type FC } from 'react'
-import { ArrowUpCircle, LoaderCircle } from 'lucide-react'
+import { ArrowUpCircle, LoaderCircle, Zap } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
-import { Tooltip } from '@/components/ui'
+import { useConfigStore } from '@/store/configStore'
+import { Tooltip, toast } from '@/components/ui'
+import { gameApi } from '@/api/game'
+import ConfirmCityGoldModal from '@/components/ConfirmCityGoldModal'
 import {
   getProductionAtLevel,
   getUpgradeCost,
@@ -51,10 +54,15 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
 }) => {
   const [loading, setLoading] = useState(false)
   const [now, setNow] = useState(() => Date.now())
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [instantLoading, setInstantLoading] = useState(false)
   const refreshedUpgradeRef = useRef<string | null>(null)
   const upgrade = useGameStore((s) => s.upgradeBuilding)
+  const balance = useConfigStore((s) => s.balance)
+  const cityGoldPerSecond = balance?.cityGoldPerSecond ?? 120
   const isUpgrading = upgradeEndsAt !== null
   const countdown = upgradeEndsAt ? getRemainingSeconds(upgradeEndsAt, now) : 0
+  const instantCost = Math.max(1, Math.ceil(countdown / cityGoldPerSecond))
 
   // 倒计时 tick
   useEffect(() => {
@@ -88,6 +96,27 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
       await upgrade(buildingId)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleInstantComplete = async () => {
+    if (instantLoading) return
+    setInstantLoading(true)
+    try {
+      const playerId = useGameStore.getState().activePlayerId
+      if (!playerId) return
+      const result = await gameApi.instantCompleteBuilding(playerId, buildingId)
+      useGameStore.getState().setState(result.state)
+    } catch (e: any) {
+      const msg = e?.message || '加速失败'
+      if (msg.includes('insufficient')) {
+        toast.error('城金不足')
+      } else {
+        toast.error(msg)
+      }
+    } finally {
+      setInstantLoading(false)
+      setConfirmOpen(false)
     }
   }
 
@@ -129,10 +158,15 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
       </div>
 
       {isUpgrading ? (
-        <span className="flex items-center gap-1 px-2 py-1 text-[10px] font-mono font-medium text-amber-500">
-          <LoaderCircle size={10} className="animate-spin" />
+        <button
+          type="button"
+          onClick={() => setConfirmOpen(true)}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-mono font-medium text-amber-500 hover:bg-amber-500/10 cursor-pointer transition-colors"
+          title="点击快速完成"
+        >
+          <Zap size={9} />
           {formatCountdown(countdown)}
-        </span>
+        </button>
       ) : (
         <Tooltip content={tooltipContent} placement="top">
           <button
@@ -153,6 +187,17 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
           </button>
         </Tooltip>
       )}
+
+      {/* 城金加速确认弹窗 */}
+      <ConfirmCityGoldModal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={handleInstantComplete}
+        title="快速完成升级"
+        description={`立即完成升级到 Lv.${level + 1}`}
+        cost={instantCost}
+        loading={instantLoading}
+      />
     </div>
   )
 }

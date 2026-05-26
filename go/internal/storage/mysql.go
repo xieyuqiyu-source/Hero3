@@ -543,6 +543,19 @@ func (r *MySQLRepository) SaveReport(report game.BattleReport) error {
 	return err
 }
 
+func (r *MySQLRepository) GetReportByID(reportID string) (game.BattleReport, error) {
+	var reportJSON []byte
+	err := r.db.QueryRow(`SELECT report_json FROM battle_reports WHERE id = ? LIMIT 1`, reportID).Scan(&reportJSON)
+	if err != nil {
+		return game.BattleReport{}, errors.New("report not found")
+	}
+	var report game.BattleReport
+	if err := json.Unmarshal(reportJSON, &report); err != nil {
+		return game.BattleReport{}, err
+	}
+	return report, nil
+}
+
 func (r *MySQLRepository) ListReports(playerID string, limit int) ([]game.BattleReport, error) {
 	threeDaysAgo := time.Now().Add(-3 * 24 * time.Hour).UTC()
 
