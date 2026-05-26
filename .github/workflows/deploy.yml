@@ -1,0 +1,140 @@
+name: Deploy Hero3
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: hero3-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      HERO3_HEALTH_URL: https://hero3.ccoos.cn/healthz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Build backend
+        working-directory: go
+        run: |
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/hero3-server ./cmd/server
+
+      - name: Build web
+        working-directory: web
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm build
+
+      - name: Build admin
+        working-directory: admin
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm build
+
+      - name: Pack release
+        run: |
+          set -euo pipefail
+          rm -rf release hero3-release.tgz
+          mkdir -p release/backend release/web release/admin
+          cp go/bin/hero3-server release/backend/hero3-server
+          cp -a go/config release/backend/config
+          cp -a web/dist/. release/web/
+          cp -a admin/dist/. release/admin/
+          tar -czf hero3-release.tgz -C release .
+
+      - name: Configure SSH
+        env:
+          HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
+          HERO3_SSH_PORT: ${{ secrets.HERO3_SSH_PORT || '22' }}
+          HERO3_SSH_PRIVATE_KEY: ${{ secrets.HERO3_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$HERO3_SSH_HOST"
+          test -n "$HERO3_SSH_PRIVATE_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$HERO3_SSH_PRIVATE_KEY" > ~/.ssh/hero3_deploy_key
+          chmod 600 ~/.ssh/hero3_deploy_key
+          ssh-keyscan -p "$HERO3_SSH_PORT" -H "$HERO3_SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload release
+        env:
+          HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
+          HERO3_SSH_PORT: ${{ secrets.HERO3_SSH_PORT || '22' }}
+          HERO3_SSH_USER: ${{ secrets.HERO3_SSH_USER }}
+        run: |
+          set -euo pipefail
+          test -n "$HERO3_SSH_USER"
+          scp -i ~/.ssh/hero3_deploy_key -P "$HERO3_SSH_PORT" hero3-release.tgz "$HERO3_SSH_USER@$HERO3_SSH_HOST:/tmp/hero3-release.$GITHUB_SHA.tgz"
+
+      - name: Deploy on server
+        env:
+          HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
+          HERO3_SSH_PORT: ${{ secrets.HERO3_SSH_PORT || '22' }}
+          HERO3_SSH_USER: ${{ secrets.HERO3_SSH_USER }}
+        run: |
+          set -euo pipefail
+          REMOTE_RELEASE="/tmp/hero3-release.$GITHUB_SHA.tgz"
+          ssh -i ~/.ssh/hero3_deploy_key -p "$HERO3_SSH_PORT" "$HERO3_SSH_USER@$HERO3_SSH_HOST" "REMOTE_RELEASE='$REMOTE_RELEASE' bash -s" <<'EOF'
+          set -euo pipefail
+
+          STAMP="$(date +%Y%m%d%H%M%S)"
+          DEPLOY_DIR="/tmp/hero3-deploy.$STAMP"
+
+          mkdir -p /opt/hero3/backups /var/www/hero3/backups "$DEPLOY_DIR"
+          tar -xzf "$REMOTE_RELEASE" -C "$DEPLOY_DIR"
+
+          if [ -f /opt/hero3/go/bin/hero3-server ]; then
+            cp -a /opt/hero3/go/bin/hero3-server "/opt/hero3/backups/hero3-server.$STAMP"
+          fi
+          if [ -d /var/www/hero3/web ]; then
+            tar -czf "/var/www/hero3/backups/web.$STAMP.tar.gz" -C /var/www/hero3 web
+          fi
+          if [ -d /var/www/hero3/admin ]; then
+            tar -czf "/var/www/hero3/backups/admin.$STAMP.tar.gz" -C /var/www/hero3 admin
+          fi
+
+          mkdir -p /opt/hero3/go/bin /opt/hero3/go/config /var/www/hero3/web /var/www/hero3/admin
+          install -m 755 "$DEPLOY_DIR/backend/hero3-server" /opt/hero3/go/bin/hero3-server
+          cp -a "$DEPLOY_DIR/backend/config/." /opt/hero3/go/config/
+          cp -a "$DEPLOY_DIR/web/." /var/www/hero3/web/
+          cp -a "$DEPLOY_DIR/admin/." /var/www/hero3/admin/
+
+          systemctl restart hero3
+          nginx -t
+          systemctl reload nginx
+
+          rm -rf "$DEPLOY_DIR" "$REMOTE_RELEASE"
+          EOF
+
+      - name: Health check
+        run: |
+          curl --fail --show-error --silent --retry 5 --retry-delay 3 "$HERO3_HEALTH_URL"
