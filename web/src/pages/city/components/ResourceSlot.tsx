@@ -9,7 +9,6 @@ import {
   getProductionAtLevel,
   getUpgradeCost,
   getUpgradeSeconds,
-  formatCost,
   formatDuration,
 } from '@/store/configStore'
 
