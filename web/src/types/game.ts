@@ -101,6 +101,10 @@ export interface GameState {
   productionBoost?: number
   /** 产量加成到期时间 */
   productionBoostEnd?: string
+  /** 仓库容量加成倍率（1=无加成，2/4/8/16） */
+  capacityBoost?: number
+  /** 容量加成到期时间 */
+  capacityBoostEnd?: string
   buildings: Building[]
   general: General | null
   army: ArmyUnit[]

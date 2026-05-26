@@ -101,3 +101,59 @@ func (s *Service) PurchaseBoost(playerID string, multiplier int, hours int) (Gam
 func GetBoostCost(multiplier int, hours int) int {
 	return boostCost(multiplier, hours)
 }
+
+// PurchaseCapacityBoost 购买仓库容量加成（消耗城金，价格同产量加成）
+func (s *Service) PurchaseCapacityBoost(playerID string, multiplier int, hours int) (GameState, error) {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return GameState{}, ErrPlayerNotFound
+	}
+	if !validBoostMultipliers[multiplier] {
+		return GameState{}, ErrInvalidBoost
+	}
+	if !validBoostHours[hours] {
+		return GameState{}, ErrInvalidDuration
+	}
+
+	state, err := s.repo.GetState(playerID)
+	if err != nil {
+		return GameState{}, err
+	}
+
+	now := time.Now()
+	state, _ = settleResources(state, now)
+
+	// 检查是否已有活跃容量加成
+	if state.CapacityBoost > 1 && state.CapacityBoostEnd != "" {
+		expiresAt, parseErr := time.Parse(resourceDateLayout, state.CapacityBoostEnd)
+		if parseErr == nil && now.Before(expiresAt) {
+			return GameState{}, ErrBoostActive
+		}
+	}
+
+	// 计算费用并扣除城金
+	cost := boostCost(multiplier, hours)
+	if _, err := s.repo.DeductCityGold(playerID, cost); err != nil {
+		return GameState{}, err
+	}
+
+	// 设置容量加成
+	state, _ = s.repo.GetState(playerID)
+	state.CapacityBoost = multiplier
+	state.CapacityBoostEnd = now.Add(time.Duration(hours) * time.Hour).UTC().Format(resourceDateLayout)
+	state.ServerTime = now.UTC().Format(resourceDateLayout)
+
+	// 重新计算容量（含加成）
+	capacity := calculateResourceCapacity(state.Buildings)
+	for k, v := range capacity {
+		capacity[k] = v * multiplier
+	}
+	state.Resources.Capacity = capacity
+	state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
+
+	if err := s.repo.SaveState(state, now); err != nil {
+		return GameState{}, err
+	}
+
+	return state, nil
+}

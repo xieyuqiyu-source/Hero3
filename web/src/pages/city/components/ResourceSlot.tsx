@@ -135,8 +135,17 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
   const tooltipContent = upgradeCost ? (
     <div className="space-y-1.5 text-[11px] min-w-[140px]">
       <p className="font-semibold text-white">升级到 Lv.{level + 1}</p>
-      <div className="space-y-0.5 text-white/70">
-        <p>{formatCost(upgradeCost)}</p>
+      <div className="space-y-0.5">
+        {Object.entries(upgradeCost).map(([res, cost]) => {
+          const have = resources[res] ?? 0
+          const enough = have >= cost
+          const label: Record<string, string> = { wood: '木材', stone: '石料', iron: '铁矿', food: '粮食' }
+          return (
+            <p key={res} className={enough ? 'text-white/70' : 'text-red-400'}>
+              {label[res] ?? res} {cost.toLocaleString()}
+            </p>
+          )
+        })}
       </div>
       <div className="pt-1 border-t border-white/10 space-y-0.5">
         <p className="text-amber-300">产量 +{production} → +{nextProduction} <span className="text-green-400">(+{productionGain})</span></p>

@@ -192,6 +192,12 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 
 		// 获取当前加成倍率
 		boost := getActiveBoost(&state, now)
+		capBoost := getActiveCapacityBoost(&state, now)
+		if capBoost > 1 {
+			for k, v := range capacity {
+				capacity[k] = v * capBoost
+			}
+		}
 
 		for _, event := range events {
 			// 用当前建筑等级（升级前）算这段时间的产出
@@ -252,6 +258,12 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 		changed = true
 	}
 	capacity := calculateResourceCapacity(state.Buildings)
+	capBoost := getActiveCapacityBoost(&state, now)
+	if capBoost > 1 {
+		for k, v := range capacity {
+			capacity[k] = v * capBoost
+		}
+	}
 	if !reflect.DeepEqual(state.Resources.Capacity, capacity) {
 		state.Resources.Capacity = capacity
 		changed = true
@@ -365,6 +377,23 @@ func getActiveBoost(state *GameState, now time.Time) int {
 		return 0
 	}
 	return state.ProductionBoost
+}
+
+// getActiveCapacityBoost 返回当前有效的容量加成倍率（过期返回 0）
+func getActiveCapacityBoost(state *GameState, now time.Time) int {
+	if state.CapacityBoost <= 1 || state.CapacityBoostEnd == "" {
+		return 0
+	}
+	expiresAt, err := time.Parse(resourceDateLayout, state.CapacityBoostEnd)
+	if err != nil {
+		return 0
+	}
+	if now.After(expiresAt) {
+		state.CapacityBoost = 0
+		state.CapacityBoostEnd = ""
+		return 0
+	}
+	return state.CapacityBoost
 }
 
 func calculateResourceCapacity(buildings []Building) map[string]int {

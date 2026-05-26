@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type FC } from 'react'
-import { Zap, Coins, Clock, Circle } from 'lucide-react'
+import { Expand, Coins, Clock, Circle } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
@@ -14,11 +14,11 @@ const BOOST_DURATIONS = [
   { label: '24h', hours: 24 },
 ] as const
 
-interface BoostButtonProps {
+interface CapacityBoostButtonProps {
   currentBoost?: number
 }
 
-const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
+const CapacityBoostButton: FC<CapacityBoostButtonProps> = ({ currentBoost = 1 }) => {
   const [open, setOpen] = useState(false)
   const [selectedMultiplier, setSelectedMultiplier] = useState<number>(2)
   const [loading, setLoading] = useState(false)
@@ -29,7 +29,7 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const setState = useGameStore((s) => s.setState)
   const balance = useConfigStore((s) => s.balance)
-  const boostEnd = useGameStore((s) => s.state?.productionBoostEnd)
+  const boostEnd = useGameStore((s) => s.state?.capacityBoostEnd)
 
   const isActive = currentBoost > 1
 
@@ -80,14 +80,14 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
     if (!activePlayerId || loading) return
     setLoading(true)
     try {
-      const result = await gameApi.purchaseBoost(activePlayerId, selectedMultiplier, pendingHours)
+      const result = await gameApi.purchaseCapacityBoost(activePlayerId, selectedMultiplier, pendingHours)
       setState(result.state)
-      toast.success(`产量 ×${selectedMultiplier} 加成已激活`)
+      toast.success(`仓库 ×${selectedMultiplier} 扩容已激活`)
       setOpen(false)
       setConfirmOpen(false)
     } catch (e: any) {
       const msg = e?.message || '购买失败'
-      if (msg.includes('still active')) toast.error('当前加成尚未到期')
+      if (msg.includes('still active')) toast.error('当前扩容尚未到期')
       else if (msg.includes('insufficient')) toast.error('城金不足')
       else toast.error(msg)
     } finally {
@@ -105,13 +105,13 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
           text-[10px] font-bold cursor-pointer
           transition-all duration-200
           ${isActive
-            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-            : 'bg-[var(--color-surface-dim)] text-[var(--color-text-muted)] border border-[var(--color-border)] hover:text-amber-400 hover:border-amber-500/40'
+            ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/40'
+            : 'bg-[var(--color-surface-dim)] text-[var(--color-text-muted)] border border-[var(--color-border)] hover:text-indigo-400 hover:border-indigo-500/40'
           }
         `}
       >
-        <Zap size={11} />
-        {isActive ? `×${currentBoost}` : '加成'}
+        <Expand size={11} />
+        {isActive ? `×${currentBoost}` : '扩容'}
       </button>
 
       {/* Popover */}
@@ -128,13 +128,13 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
         {/* Header + countdown */}
         <div className="px-3 pt-2.5 pb-1.5">
           {isActive ? (
-            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
-              <Clock size={10} className="text-amber-400" />
-              <span className="text-[10px] text-amber-300 font-mono font-bold">{formatRemaining(remainingSeconds)}</span>
-              <span className="text-[9px] text-amber-300/60 ml-auto">×{currentBoost}</span>
+            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+              <Clock size={10} className="text-indigo-400" />
+              <span className="text-[10px] text-indigo-300 font-mono font-bold">{formatRemaining(remainingSeconds)}</span>
+              <span className="text-[9px] text-indigo-300/60 ml-auto">×{currentBoost}</span>
             </div>
           ) : (
-            <p className="text-[10px] font-semibold text-amber-300">产量加成</p>
+            <p className="text-[10px] font-semibold text-indigo-300">仓库扩容</p>
           )}
         </div>
 
@@ -151,13 +151,13 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
                   flex items-center gap-0.5 px-1.5 py-1 rounded-md cursor-pointer
                   transition-all duration-150
                   ${selectedMultiplier === m
-                    ? 'text-amber-400'
-                    : 'text-white/40 hover:text-amber-300'
+                    ? 'text-indigo-400'
+                    : 'text-white/40 hover:text-indigo-300'
                   }
                   disabled:opacity-40 disabled:cursor-not-allowed
                 `}
               >
-                <Circle size={6} className={selectedMultiplier === m ? 'fill-amber-400' : ''} />
+                <Circle size={6} className={selectedMultiplier === m ? 'fill-indigo-400' : ''} />
                 <span className="text-[10px] font-bold">×{m}</span>
               </button>
             ))}
@@ -176,13 +176,13 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
                 className="
                   flex items-center justify-between px-2 py-1.5 rounded-lg
                   bg-white/5 border border-white/10
-                  hover:bg-amber-500/10 hover:border-amber-500/30
+                  hover:bg-indigo-500/10 hover:border-indigo-500/30
                   cursor-pointer transition-all duration-150
                   disabled:opacity-40 disabled:cursor-not-allowed
                 "
               >
                 <span className="text-[10px] text-white/70 font-medium">{d.label}</span>
-                <span className="flex items-center gap-0.5 text-[9px] text-amber-400 font-bold">
+                <span className="flex items-center gap-0.5 text-[9px] text-indigo-400 font-bold">
                   <Coins size={8} />
                   {calcPrice(selectedMultiplier, d.hours)}
                 </span>
@@ -196,8 +196,8 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={handleConfirmPurchase}
-        title="购买产量加成"
-        description={`全资源产量 ×${selectedMultiplier}，持续 ${pendingHours} 小时`}
+        title="购买仓库扩容"
+        description={`仓库容量 ×${selectedMultiplier}，持续 ${pendingHours} 小时`}
         cost={calcPrice(selectedMultiplier, pendingHours)}
         loading={loading}
       />
@@ -205,4 +205,4 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
   )
 }
 
-export default BoostButton
+export default CapacityBoostButton

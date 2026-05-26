@@ -94,6 +94,11 @@ export const gameApi = {
     return api.post<{ state: GameState }>('/city/boost', { playerId, multiplier, hours })
   },
 
+  /** 购买仓库容量加成 */
+  purchaseCapacityBoost(playerId: string, multiplier: number, hours: number) {
+    return api.post<{ state: GameState }>('/city/capacity-boost', { playerId, multiplier, hours })
+  },
+
   /** 获取加成价格表 */
   getBoostPrices() {
     return api.get<Record<string, number>>('/city/boost/prices')

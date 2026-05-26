@@ -128,6 +128,8 @@ type GameState struct {
 	LastExchangeAt      string             `json:"lastExchangeAt,omitempty"`
 	ProductionBoost     int                `json:"productionBoost,omitempty"`          // 产量加成倍率（1=无，2/4/8/16）
 	ProductionBoostEnd  string             `json:"productionBoostEnd,omitempty"`       // 加成到期时间
+	CapacityBoost       int                `json:"capacityBoost,omitempty"`            // 仓库容量加成倍率（1=无，2/4/8/16）
+	CapacityBoostEnd    string             `json:"capacityBoostEnd,omitempty"`         // 容量加成到期时间
 	Buildings           []Building         `json:"buildings"`
 	General             *General           `json:"general"`
 	Army                []ArmyUnit         `json:"army"`

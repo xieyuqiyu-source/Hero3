@@ -703,6 +703,38 @@ func (h *Handlers) BoostPrices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, prices)
 }
 
+func (h *Handlers) PurchaseCapacityBoost(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID   string `json:"playerId"`
+		Multiplier int    `json:"multiplier"`
+		Hours      int    `json:"hours"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	state, err := h.gameService.PurchaseCapacityBoost(payload.PlayerID, payload.Multiplier, payload.Hours)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInsufficientCityGold):
+			status = http.StatusUnprocessableEntity
+		case errors.Is(err, game.ErrBoostActive):
+			status = http.StatusConflict
+		case errors.Is(err, game.ErrInvalidBoost):
+			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrInvalidDuration):
+			status = http.StatusBadRequest
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
 func (h *Handlers) UpgradeBuildingBatch(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		PlayerID string `json:"playerId"`

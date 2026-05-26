@@ -14,6 +14,7 @@ import {
 import ThemeToggle from './ThemeToggle'
 import BoostButton from './BoostButton'
 import FillButton from './FillButton'
+import CapacityBoostButton from './CapacityBoostButton'
 import type { GameState } from '@/types/game'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
 import { useConfigStore } from '@/store/configStore'
@@ -58,7 +59,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
       className={`
         fixed left-4 top-4 z-50 flex flex-col
         h-[calc(100dvh-32px)] rounded-3xl
-        bg-[var(--color-surface)] backdrop-blur-[14px]
+        bg-[var(--color-surface)]
         border border-[var(--color-border)]
         shadow-[0_18px_44px_rgba(15,23,42,0.12)]
         transition-all duration-300 ease-in-out
@@ -87,7 +88,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
 
       {/* Brand */}
       <div className={`
-        flex items-center gap-3 px-5 py-4
+        flex-shrink-0 flex items-center gap-3 px-5 py-4
         border-b border-[var(--color-border)]
         transition-all duration-300
         ${collapsed ? 'justify-center px-0' : ''}
@@ -159,7 +160,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
       )}
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 py-3 scrollbar-none">
+      <div className="flex-1 overflow-y-auto px-2.5 py-3 scrollbar-none">
         {/* City Info + Player Switch */}
         <div className={`
           mb-2.5 rounded-2xl p-3
@@ -196,9 +197,13 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
           ) : (
             <>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-semibold text-[var(--color-text-primary)]">资源产出</span>
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--color-text-primary)]">
+                  <Package size={14} className="text-[var(--color-accent)]" />
+                  产出
+                </span>
                 <div className="flex items-center gap-1.5">
                   <FillButton />
+                  <CapacityBoostButton currentBoost={gameState?.capacityBoost} />
                   <BoostButton currentBoost={gameState?.productionBoost} />
                 </div>
               </div>
@@ -240,7 +245,10 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
           ) : (
             <>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-semibold text-[var(--color-text-primary)]">仓库</span>
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--color-text-primary)]">
+                  <Warehouse size={14} className="text-[var(--color-accent)]" />
+                  仓库
+                </span>
                 <span className="text-xs text-[var(--color-text-muted)]">
                   容量 {resources?.capacity.wood.toLocaleString() ?? '--'}
                 </span>
@@ -290,7 +298,10 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
           ) : (
             <>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-semibold text-[var(--color-text-primary)]">军队</span>
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--color-text-primary)]">
+                  <Shield size={14} className="text-[var(--color-accent)]" />
+                  军队
+                </span>
                 <span className="text-xs font-semibold text-[var(--color-accent)]">{totalArmy}</span>
               </div>
               {gameState?.army && gameState.army.length > 0 ? (
@@ -315,7 +326,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
       </div>
 
       {/* Bottom Navigation */}
-      <div className="border-t border-[var(--color-border)] bg-[var(--color-surface-dim)] rounded-b-3xl p-2">
+      <div className="flex-shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface-dim)] rounded-b-3xl p-2">
         <div className={`grid gap-1.5 ${collapsed ? 'grid-cols-1' : 'grid-cols-4'}`}>
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon

@@ -17,6 +17,7 @@ import ThemeToggle from './ThemeToggle'
 import ResourceBar from './ResourceBar'
 import BoostButton from './BoostButton'
 import FillButton from './FillButton'
+import CapacityBoostButton from './CapacityBoostButton'
 import { useGameStore } from '@/store/gameStore'
 import { useAccountStore } from '@/store/accountStore'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
@@ -230,9 +231,10 @@ const MobileSidebarContent: FC<{
         <div className="mb-2.5 rounded-2xl p-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
           <div className="flex items-center gap-2 mb-2">
             <Package size={14} className="text-[var(--color-accent)]" />
-            <span className="text-sm font-semibold text-[var(--color-text-primary)]">资源产出</span>
+            <span className="text-sm font-semibold text-[var(--color-text-primary)]">产出</span>
             <div className="ml-auto flex items-center gap-1.5">
               <FillButton />
+              <CapacityBoostButton currentBoost={gameState?.capacityBoost} />
               <BoostButton currentBoost={gameState?.productionBoost} />
             </div>
           </div>

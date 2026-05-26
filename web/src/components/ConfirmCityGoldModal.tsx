@@ -1,4 +1,5 @@
 import { useState, useEffect, type FC, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Coins } from 'lucide-react'
 
 interface ConfirmCityGoldModalProps {
@@ -37,43 +38,38 @@ const ConfirmCityGoldModal: FC<ConfirmCityGoldModalProps> = ({
 
   if (!open) return null
 
-  return (
+  return createPortal(
     <div
-      className={`fixed inset-0 z-[200] flex items-center justify-center transition-all duration-150 ${visible ? 'bg-black/40 backdrop-blur-[2px]' : 'bg-transparent'}`}
+      className={`fixed inset-0 z-[200] flex items-center justify-center transition-all duration-150 ${visible ? 'bg-black/30' : 'bg-transparent'}`}
       onClick={handleClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         className={`
-          w-72 rounded-2xl overflow-hidden
+          rounded-xl overflow-hidden
           bg-[var(--color-surface)] border border-[var(--color-border)]
-          shadow-[0_16px_48px_rgba(0,0,0,0.25)]
+          shadow-[0_8px_24px_rgba(0,0,0,0.2)]
           transition-all duration-150 ease-out
-          ${visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-2'}
+          ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}
         `}
       >
-        {/* Header */}
-        <div className="px-4 pt-4 pb-2 text-center">
-          <p className="text-sm font-bold text-[var(--color-text-primary)]">{title}</p>
+        <div className="px-4 pt-3 pb-1.5 text-center">
+          <p className="text-xs font-bold text-[var(--color-text-primary)]">{title}</p>
           {description && (
-            <p className="text-[11px] text-[var(--color-text-muted)] mt-1">{description}</p>
+            <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">{description}</p>
           )}
         </div>
-
-        {/* Cost */}
-        <div className="flex items-center justify-center gap-1.5 py-3">
-          <Coins size={14} className="text-amber-500" />
-          <span className="text-lg font-bold text-amber-500">{cost}</span>
-          <span className="text-xs text-[var(--color-text-muted)]">城金</span>
+        <div className="flex items-center justify-center gap-1 py-2">
+          <Coins size={12} className="text-amber-500" />
+          <span className="text-sm font-bold text-amber-500">{cost}</span>
+          <span className="text-[10px] text-[var(--color-text-muted)]">城金</span>
         </div>
-
-        {/* Buttons */}
         <div className="flex border-t border-[var(--color-border)]">
           <button
             type="button"
             onClick={handleClose}
             disabled={loading}
-            className="flex-1 py-3 text-xs font-semibold text-[var(--color-text-secondary)] cursor-pointer hover:bg-[var(--color-surface-dim)] transition-colors border-r border-[var(--color-border)]"
+            className="flex-1 py-2 text-[11px] font-medium text-[var(--color-text-secondary)] cursor-pointer hover:bg-[var(--color-surface-dim)] transition-colors border-r border-[var(--color-border)]"
           >
             取消
           </button>
@@ -81,13 +77,14 @@ const ConfirmCityGoldModal: FC<ConfirmCityGoldModalProps> = ({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className="flex-1 py-3 text-xs font-bold text-amber-500 cursor-pointer hover:bg-amber-500/5 transition-colors disabled:opacity-50"
+            className="flex-1 py-2 text-[11px] font-bold text-amber-500 cursor-pointer hover:bg-amber-500/5 transition-colors disabled:opacity-50"
           >
             {loading ? '...' : '确认'}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
