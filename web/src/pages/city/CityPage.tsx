@@ -12,12 +12,12 @@ const CityPage: FC = () => {
     <div>
 
       {/* Tab Switcher */}
-      <div className="flex gap-1 p-1 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)] w-fit mb-6">
+      <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)] w-full max-w-full sm:flex sm:w-fit mb-6">
         <button
           type="button"
           onClick={() => setActiveTab('resource')}
           className={`
-            px-4 py-2 rounded-lg text-sm font-medium cursor-pointer
+            px-4 py-2 rounded-lg text-sm font-medium cursor-pointer w-full sm:w-auto
             transition-all duration-200
             ${activeTab === 'resource'
               ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[0_2px_8px_rgba(15,23,42,0.06)] border border-[var(--color-border)]'
@@ -31,7 +31,7 @@ const CityPage: FC = () => {
           type="button"
           onClick={() => setActiveTab('military')}
           className={`
-            px-4 py-2 rounded-lg text-sm font-medium cursor-pointer
+            px-4 py-2 rounded-lg text-sm font-medium cursor-pointer w-full sm:w-auto
             transition-all duration-200
             ${activeTab === 'military'
               ? 'bg-[var(--color-surface)] text-[var(--color-accent)] shadow-[0_2px_8px_rgba(15,23,42,0.06)] border border-[var(--color-border)]'

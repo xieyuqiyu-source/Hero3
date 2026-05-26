@@ -97,6 +97,8 @@ export interface GameState {
   lastExchangeAt?: string
   /** 产量加成倍率（1=无加成，2/4/8/16） */
   productionBoost?: number
+  /** 产量加成到期时间 */
+  productionBoostEnd?: string
   buildings: Building[]
   general: General | null
   army: ArmyUnit[]

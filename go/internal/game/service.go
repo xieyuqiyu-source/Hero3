@@ -21,6 +21,7 @@ var (
 	ErrBuildingNotFound   = errors.New("building not found")
 	ErrInsufficientRes    = errors.New("insufficient resources")
 	ErrAlreadyUpgrading   = errors.New("building is already upgrading")
+	ErrNotUpgrading       = errors.New("building is not upgrading")
 	ErrMaxLevel           = errors.New("building is at max level")
 	ErrUnitNotFound       = errors.New("unit not found")
 	ErrInvalidAmount      = errors.New("invalid recruit amount")

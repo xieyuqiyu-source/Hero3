@@ -1,6 +1,6 @@
 import { useState, useEffect, type FC } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Coins, Crown, Scroll, Users, Castle, KeyRound, Sparkles, Cloud, LogOut, Check, ArrowRightLeft } from 'lucide-react'
+import { Coins, Crown, Scroll, Users, Castle, KeyRound, Sparkles, Cloud, LogOut, Check } from 'lucide-react'
 import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'

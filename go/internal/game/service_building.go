@@ -175,3 +175,85 @@ func (s *Service) UpgradeBuildingBatch(playerID string) (GameState, int, error) 
 
 	return state, upgraded, nil
 }
+
+// InstantCompleteBuilding 极速完成建筑升级（消耗城金）
+func (s *Service) InstantCompleteBuilding(playerID string, buildingID string) (GameState, error) {
+	playerID = strings.TrimSpace(playerID)
+	buildingID = strings.TrimSpace(buildingID)
+	if playerID == "" {
+		return GameState{}, ErrPlayerNotFound
+	}
+	if buildingID == "" {
+		return GameState{}, ErrBuildingNotFound
+	}
+
+	state, err := s.repo.GetState(playerID)
+	if err != nil {
+		return GameState{}, err
+	}
+
+	now := time.Now()
+	state, _ = settleResources(state, now)
+
+	// 找到目标建筑
+	buildingIdx := -1
+	for i, b := range state.Buildings {
+		if b.ID == buildingID {
+			buildingIdx = i
+			break
+		}
+	}
+	if buildingIdx == -1 {
+		return GameState{}, ErrBuildingNotFound
+	}
+
+	building := &state.Buildings[buildingIdx]
+
+	// 必须正在升级中
+	if building.UpgradeEndsAt == nil {
+		return GameState{}, ErrNotUpgrading
+	}
+
+	// 计算剩余秒数
+	endsAt, err := time.Parse(resourceDateLayout, *building.UpgradeEndsAt)
+	if err != nil {
+		return GameState{}, ErrNotUpgrading
+	}
+	remainingSecs := int(endsAt.Sub(now).Seconds())
+	if remainingSecs <= 0 {
+		// 已经完成了，直接结算
+		state, _ = settleResources(state, now)
+		state.ServerTime = now.UTC().Format(resourceDateLayout)
+		_ = s.repo.SaveState(state, now)
+		return state, nil
+	}
+
+	// 计算城金花费并扣除
+	cost := speedUpCost(remainingSecs)
+	if _, err := s.repo.DeductCityGold(playerID, cost); err != nil {
+		return GameState{}, err
+	}
+
+	// 立即完成升级
+	building.Level++
+	building.UpgradeEndsAt = nil
+
+	// 重新计算产量和容量
+	state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
+	state.ServerTime = now.UTC().Format(resourceDateLayout)
+
+	// 重新读取城金余额（已扣除）
+	latestState, _ := s.repo.GetState(playerID)
+	state.CityGold = latestState.CityGold
+
+	if err := s.repo.SaveState(state, now); err != nil {
+		return GameState{}, err
+	}
+
+	// 重新结算一次确保产量/容量更新
+	state, _ = settleResources(state, now)
+	state.ServerTime = now.UTC().Format(resourceDateLayout)
+	_ = s.repo.SaveState(state, now)
+
+	return state, nil
+}

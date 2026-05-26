@@ -80,8 +80,7 @@ func (s *Service) Recruit(playerID string, unitID string, amount int) (GameState
 	return state, nil
 }
 
-// InstantCompleteRecruit 极速完成征兵队列（消耗金币）
-// TODO: 金币系统接入后在此处扣费，当前免费完成用于测试
+// InstantCompleteRecruit 极速完成征兵队列（消耗城金）
 func (s *Service) InstantCompleteRecruit(playerID string, queueID string) (GameState, error) {
 	playerID = strings.TrimSpace(playerID)
 	queueID = strings.TrimSpace(queueID)
@@ -100,31 +99,65 @@ func (s *Service) InstantCompleteRecruit(playerID string, queueID string) (GameS
 	now := time.Now()
 	state, _ = settleResources(state, now)
 
-	// 找到目标队列并立即完成
-	found := false
+	// 找到目标队列，计算剩余时间和费用
+	queueIdx := -1
 	for i, queue := range state.RecruitQueues {
 		if queue.ID == queueID {
+			queueIdx = i
+			break
+		}
+	}
+	if queueIdx == -1 {
+		return GameState{}, ErrQueueFull
+	}
+
+	queue := state.RecruitQueues[queueIdx]
+
+	// 计算剩余秒数
+	endsAt, err := time.Parse(resourceDateLayout, queue.EndsAt)
+	if err != nil {
+		return GameState{}, ErrQueueFull
+	}
+	remainingSecs := int(endsAt.Sub(now).Seconds())
+	if remainingSecs <= 0 {
+		remainingSecs = 0
+	}
+
+	// 计算城金花费并扣除
+	if remainingSecs > 0 {
+		cost := speedUpCost(remainingSecs)
+		if _, err := s.repo.DeductCityGold(playerID, cost); err != nil {
+			return GameState{}, err
+		}
+		// 重新读取最新状态（城金已扣）
+		state, _ = s.repo.GetState(playerID)
+		state, _ = settleResources(state, now)
+	}
+
+	// 找到目标队列并立即完成（重新定位，因为 state 可能重新加载了）
+	found := false
+	for i, q := range state.RecruitQueues {
+		if q.ID == queueID {
 			// 加入军队
 			addedToArmy := false
 			for j := range state.Army {
-				if state.Army[j].UnitType == queue.UnitType {
-					state.Army[j].Amount += queue.Amount
+				if state.Army[j].UnitType == q.UnitType {
+					state.Army[j].Amount += q.Amount
 					addedToArmy = true
 					break
 				}
 			}
 			if !addedToArmy {
 				state.Army = append(state.Army, ArmyUnit{
-					UnitType: queue.UnitType,
-					Amount:   queue.Amount,
+					UnitType: q.UnitType,
+					Amount:   q.Amount,
 				})
 			}
 
 			// 从队列移除
 			state.RecruitQueues = append(state.RecruitQueues[:i], state.RecruitQueues[i+1:]...)
 
-			// 后续队列的 endsAt 需要前移（因为这个队列被跳过了）
-			// 重新计算后续队列的结束时间
+			// 后续队列的 endsAt 需要前移
 			if i < len(state.RecruitQueues) {
 				prevEnd := now
 				if i > 0 {
@@ -133,14 +166,14 @@ func (s *Service) InstantCompleteRecruit(playerID string, queueID string) (GameS
 					}
 				}
 				for j := i; j < len(state.RecruitQueues); j++ {
-					q := &state.RecruitQueues[j]
-					unitCfg, exists := GetUnitConfig(state.Player.Faction, q.UnitType)
+					rq := &state.RecruitQueues[j]
+					unitCfg, exists := GetUnitConfig(state.Player.Faction, rq.UnitType)
 					if !exists {
 						continue
 					}
-					duration := time.Duration(unitCfg.TrainSeconds*q.Amount) * time.Second
+					duration := time.Duration(unitCfg.TrainSeconds*rq.Amount) * time.Second
 					newEnd := prevEnd.Add(duration)
-					q.EndsAt = newEnd.UTC().Format(resourceDateLayout)
+					rq.EndsAt = newEnd.UTC().Format(resourceDateLayout)
 					prevEnd = newEnd
 				}
 			}

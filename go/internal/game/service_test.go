@@ -135,7 +135,7 @@ func TestCalculateResourceProductionUsesBalanceConfig(t *testing.T) {
 		{Type: "stone_quarry", Level: 2},
 		{Type: "iron_mine", Level: 2},
 		{Type: "farm", Level: 3},
-	})
+	}, nil)
 
 	if production["wood"] != 30 {
 		t.Fatalf("expected wood production from config to be 30, got %d", production["wood"])

@@ -170,6 +170,27 @@ export default function BalanceConfigPanel() {
             />
             <span className="text-[10px] text-[var(--color-text-muted)]">秒（0=无冷却）</span>
           </label>
+          <label className="flex items-center gap-3 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+            <span className="text-[10px] font-bold text-[var(--color-text-muted)] whitespace-nowrap">加速折抵</span>
+            <span className="text-[10px] text-[var(--color-text-muted)]">1 城金 =</span>
+            <input
+              type="number"
+              value={balance.cityGoldPerSecond ?? 120}
+              onChange={(e) => setBalance({ ...balance, cityGoldPerSecond: parseInt(e.target.value) || 120 })}
+              className="h-7 w-16 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+            />
+            <span className="text-[10px] text-[var(--color-text-muted)]">秒（征兵/建筑加速）</span>
+          </label>
+          <label className="flex items-center gap-3 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+            <span className="text-[10px] font-bold text-[var(--color-text-muted)] whitespace-nowrap">加成基价</span>
+            <input
+              type="number"
+              value={balance.boostBaseCost ?? 30}
+              onChange={(e) => setBalance({ ...balance, boostBaseCost: parseInt(e.target.value) || 30 })}
+              className="h-7 w-16 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+            />
+            <span className="text-[10px] text-[var(--color-text-muted)]">城金（产量加成基础价）</span>
+          </label>
         </div>
       </section>
 

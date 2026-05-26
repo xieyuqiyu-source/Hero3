@@ -169,4 +169,8 @@ export interface BalanceConfig {
   exchangeRate: number
   reverseExchangeRate: number
   exchangeCooldownSecs: number
+  cityGoldPerSecond: number
+  boostBaseCost: number
+  boostMultiplierFactor: Record<string, number>
+  boostDurationFactor: Record<string, number>
 }

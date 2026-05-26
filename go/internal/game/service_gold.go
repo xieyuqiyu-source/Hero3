@@ -34,6 +34,19 @@ func exchangeCooldownSeconds() int {
 	return currentBalance().ExchangeCooldownSecs // 0 表示无冷却
 }
 
+// speedUpCost 计算加速所需城金（剩余秒数 / 每城金折抵秒数，向上取整，最少 1）
+func speedUpCost(remainingSeconds int) int {
+	rate := currentBalance().CityGoldPerSecond
+	if rate <= 0 {
+		rate = 120
+	}
+	cost := (remainingSeconds + rate - 1) / rate // 向上取整
+	if cost < 1 {
+		cost = 1
+	}
+	return cost
+}
+
 // AddGold 给存档增加城金（原子操作）
 func (s *Service) AddGold(playerID string, amount int, reason string) (GameState, error) {
 	playerID = strings.TrimSpace(playerID)

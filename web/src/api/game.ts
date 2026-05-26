@@ -79,6 +79,21 @@ export const gameApi = {
     return api.post<{ state: GameState }>('/military/recruit/instant', { playerId, queueId })
   },
 
+  /** 极速完成建筑升级 */
+  instantCompleteBuilding(playerId: string, buildingId: string) {
+    return api.post<{ state: GameState }>('/city/buildings/instant', { playerId, buildingId })
+  },
+
+  /** 购买产量加成 */
+  purchaseBoost(playerId: string, multiplier: number, hours: number) {
+    return api.post<{ state: GameState }>('/city/boost', { playerId, multiplier, hours })
+  },
+
+  /** 获取加成价格表 */
+  getBoostPrices() {
+    return api.get<Record<string, number>>('/city/boost/prices')
+  },
+
   /** 攻击地图目标 */
   attackTarget(playerId: string, targetId: string, units: Record<string, number>) {
     return api.post<{ battleReport: BattleReport; resources: GameState['resources']; army: GameState['army'] }>(

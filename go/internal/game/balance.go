@@ -25,6 +25,10 @@ type BalanceConfig struct {
 	ExchangeRate          int                       `json:"exchangeRate"`          // 1 金币 = N 城金（默认 10）
 	ReverseExchangeRate   int                       `json:"reverseExchangeRate"`   // N 城金 = 1 金币（默认 15，有损耗）
 	ExchangeCooldownSecs  int                       `json:"exchangeCooldownSecs"`  // 兑换冷却秒数（默认 3600）
+	CityGoldPerSecond     int                       `json:"cityGoldPerSecond"`     // 1 城金可折抵多少秒（加速用，默认 120）
+	BoostBaseCost         int                       `json:"boostBaseCost"`         // 产量加成基础价格（默认 30）
+	BoostMultiplierFactor map[int]int               `json:"boostMultiplierFactor"` // 倍率系数 {2:1, 4:3, 8:8, 16:20}
+	BoostDurationFactor   map[int]int               `json:"boostDurationFactor"`   // 时长系数 {1:1, 6:5, 12:9, 24:16}
 }
 
 type ResourceMap map[string]int
@@ -45,6 +49,10 @@ var defaultBalance = BalanceConfig{
 	ExchangeRate:         10,   // 1 金币 = 10 城金
 	ReverseExchangeRate:  15,   // 15 城金 = 1 金币（反向有损耗）
 	ExchangeCooldownSecs: 3600, // 兑换冷却 1 小时
+	CityGoldPerSecond:    120,  // 1 城金折抵 120 秒（2分钟）
+	BoostBaseCost:        30,   // 产量加成基础价格
+	BoostMultiplierFactor: map[int]int{2: 1, 4: 3, 8: 8, 16: 20},
+	BoostDurationFactor:   map[int]int{1: 1, 6: 5, 12: 9, 24: 16},
 	Buildings: map[string]BuildingConfig{
 		"wood_camp": {
 			Type:              "wood_camp",
@@ -278,6 +286,10 @@ func cloneBalance(source BalanceConfig) BalanceConfig {
 		ExchangeRate:         source.ExchangeRate,
 		ReverseExchangeRate:  source.ReverseExchangeRate,
 		ExchangeCooldownSecs: source.ExchangeCooldownSecs,
+		CityGoldPerSecond:    source.CityGoldPerSecond,
+		BoostBaseCost:        source.BoostBaseCost,
+		BoostMultiplierFactor: cloneIntMap(source.BoostMultiplierFactor),
+		BoostDurationFactor:   cloneIntMap(source.BoostDurationFactor),
 	}
 	for key, building := range source.Buildings {
 		next.Buildings[key] = cloneBuildingConfig(building)
@@ -306,6 +318,17 @@ func cloneBuildingConfig(source BuildingConfig) BuildingConfig {
 
 func cloneResourceMap(source ResourceMap) ResourceMap {
 	next := make(ResourceMap, len(source))
+	for key, value := range source {
+		next[key] = value
+	}
+	return next
+}
+
+func cloneIntMap(source map[int]int) map[int]int {
+	if source == nil {
+		return nil
+	}
+	next := make(map[int]int, len(source))
 	for key, value := range source {
 		next[key] = value
 	}

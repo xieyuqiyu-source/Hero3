@@ -132,9 +132,15 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 		resources := copyResourceMap(state.Resources.Items)
 		capacity := calculateResourceCapacity(state.Buildings)
 
+		// 获取当前加成倍率
+		boost := getActiveBoost(&state, now)
+
 		for _, event := range events {
 			// 用当前建筑等级（升级前）算这段时间的产出
-			production := calculateResourceProduction(state.Buildings)
+			production := calculateResourceProduction(state.Buildings, state.General)
+			if boost > 1 {
+				production = calculateBoostedProduction(production, boost)
+			}
 			elapsed := event.endsAt.Sub(sliceStart).Seconds()
 			if elapsed > 0 {
 				for resType, perHour := range production {
@@ -155,7 +161,10 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 		}
 
 		// 最后一段：从最后一个升级完成时间到 now
-		production := calculateResourceProduction(state.Buildings)
+		production := calculateResourceProduction(state.Buildings, state.General)
+		if boost > 1 {
+			production = calculateBoostedProduction(production, boost)
+		}
 		elapsed := now.Sub(sliceStart).Seconds()
 		if elapsed > 0 {
 			for resType, perHour := range production {
@@ -172,8 +181,14 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 		}
 	}
 
-	// 更新产量和容量（反映最终建筑等级）
-	production := calculateResourceProduction(state.Buildings)
+	// 检查加成是否过期
+	boost := getActiveBoost(&state, now)
+
+	// 更新产量和容量（反映最终建筑等级 + 加成）
+	production := calculateResourceProduction(state.Buildings, state.General)
+	if boost > 1 {
+		production = calculateBoostedProduction(production, boost)
+	}
 	if !reflect.DeepEqual(state.ResourceProduction, production) {
 		state.ResourceProduction = production
 		changed = true
@@ -237,7 +252,7 @@ func addProducedResource(current int, perHour int, elapsedSeconds float64, capac
 	return min(current+produced, capacity)
 }
 
-func calculateResourceProduction(buildings []Building) ResourceProduction {
+func calculateResourceProduction(buildings []Building, general *General) ResourceProduction {
 	production := ResourceProduction{}
 	balance := currentBalance()
 	for resourceType, value := range balance.BaseProduction {
@@ -252,7 +267,46 @@ func calculateResourceProduction(buildings []Building) ResourceProduction {
 		production[config.ResourceType] += valueByLevel(config.ProductionByLevel, building.Level)
 	}
 
+	// 应用将军产量加成
+	if general != nil && general.Buffs != nil {
+		if bonus, ok := general.Buffs["productionBonus"]; ok && bonus != 0 {
+			for resType, value := range production {
+				production[resType] = int(float64(value) * (1 + bonus))
+			}
+		}
+	}
+
 	return production
+}
+
+// calculateBoostedProduction 返回应用了产量加成后的产量（用于实际结算和 UI 展示）
+func calculateBoostedProduction(production ResourceProduction, boost int) ResourceProduction {
+	if boost <= 1 {
+		return production
+	}
+	boosted := ResourceProduction{}
+	for resType, value := range production {
+		boosted[resType] = value * boost
+	}
+	return boosted
+}
+
+// getActiveBoost 返回当前有效的加成倍率（过期返回 0）
+func getActiveBoost(state *GameState, now time.Time) int {
+	if state.ProductionBoost <= 1 || state.ProductionBoostEnd == "" {
+		return 0
+	}
+	expiresAt, err := time.Parse(resourceDateLayout, state.ProductionBoostEnd)
+	if err != nil {
+		return 0
+	}
+	if now.After(expiresAt) {
+		// 已过期，清除
+		state.ProductionBoost = 0
+		state.ProductionBoostEnd = ""
+		return 0
+	}
+	return state.ProductionBoost
 }
 
 func calculateResourceCapacity(buildings []Building) map[string]int {

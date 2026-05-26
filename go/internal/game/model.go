@@ -124,6 +124,8 @@ type GameState struct {
 	ResourceSettledAt   string             `json:"resourceSettledAt"`
 	CityGold            FlexInt            `json:"cityGold"`
 	LastExchangeAt      string             `json:"lastExchangeAt,omitempty"`
+	ProductionBoost     int                `json:"productionBoost,omitempty"`          // 产量加成倍率（1=无，2/4/8/16）
+	ProductionBoostEnd  string             `json:"productionBoostEnd,omitempty"`       // 加成到期时间
 	Buildings           []Building         `json:"buildings"`
 	General             *General           `json:"general"`
 	Army                []ArmyUnit         `json:"army"`
@@ -215,7 +217,7 @@ func newPlayerState(id string, nickname string, faction string, generalID string
 		ServerTime:          now.UTC().Format(time.RFC3339),
 	}
 
-	state.ResourceProduction = calculateResourceProduction(state.Buildings)
+	state.ResourceProduction = calculateResourceProduction(state.Buildings, state.General)
 	state.Resources.Capacity = calculateResourceCapacity(state.Buildings)
 	return state
 }

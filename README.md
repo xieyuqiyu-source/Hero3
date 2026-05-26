@@ -103,6 +103,7 @@ http://localhost:5174
 ## 设计文档
 
 - [MVP 设计文档](./docs/mvp-design.md)：记录第一版核心循环、数据归属、页面范围、接口边界、代码规模规范、移动端适配要求和开发顺序。
+- [服务器部署文档](./docs/deployment.md)：记录当前线上部署结构、发版流程、回滚和排查命令。
 - [OpenAPI 入口文档](./docs/openapi/openapi.yaml)：按模块拆分维护，用于接口调试、文档查看和前后端对齐。
 - [OpenAPI 打包文档](./docs/openapi.bundle.yaml)：由 `make openapi` 生成，导入 Apifox 使用。
 

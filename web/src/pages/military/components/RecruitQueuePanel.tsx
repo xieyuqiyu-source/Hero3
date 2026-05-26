@@ -4,6 +4,7 @@ import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
 import { toast } from '@/components/ui'
 import { gameApi } from '@/api/game'
+import ConfirmCityGoldModal from '@/components/ConfirmCityGoldModal'
 import type { RecruitQueue } from '@/types/game'
 
 const EMPTY_QUEUES: RecruitQueue[] = []
@@ -14,7 +15,7 @@ function getRemainingSeconds(endsAt: string): number {
 }
 
 function formatCountdown(totalSeconds: number): string {
-  if (totalSeconds <= 0) return '完成中'
+  if (totalSeconds <= 0) return '完成'
   const h = Math.floor(totalSeconds / 3600)
   const m = Math.floor((totalSeconds % 3600) / 60)
   const s = totalSeconds % 60
@@ -39,7 +40,7 @@ const RecruitQueuePanel: FC = () => {
 
   const pendingQueues = queues
 
-  // 记录上一轮队列的 id → unitType 映射，用于完成通知
+  // 记录上一轮队列的 id 和 unitType 映射，用于完成通知
 
   // 检测队列项消失（征兵完成），弹通知
   useEffect(() => {
@@ -85,18 +86,34 @@ const RecruitQueuePanel: FC = () => {
   const slots = Array.from({ length: MAX_QUEUE }, (_, i) => pendingQueues[i] ?? null)
 
   const [completing, setCompleting] = useState<string | null>(null)
+  const [confirmQueue, setConfirmQueue] = useState<string | null>(null)
 
-  const handleInstantComplete = async (queueId: string) => {
+  const balance = useConfigStore((s) => s.balance)
+  const cityGoldPerSecond = balance?.cityGoldPerSecond ?? 120
+
+  const getInstantCost = (queueId: string): number => {
+    const queue = pendingQueues.find((q) => q.id === queueId)
+    if (!queue) return 0
+    const remaining = getRemainingSeconds(queue.endsAt)
+    return Math.max(1, Math.ceil(remaining / cityGoldPerSecond))
+  }
+
+  const handleInstantClick = (queueId: string) => {
+    setConfirmQueue(queueId)
+  }
+
+  const handleInstantComplete = async () => {
     const playerId = useGameStore.getState().activePlayerId
-    if (!playerId || completing) return
-    setCompleting(queueId)
+    if (!playerId || completing || !confirmQueue) return
+    setCompleting(confirmQueue)
     try {
-      const result = await gameApi.instantCompleteRecruit(playerId, queueId)
+      const result = await gameApi.instantCompleteRecruit(playerId, confirmQueue)
       useGameStore.getState().setState(result.state)
     } catch {
       // 错误由全局拦截器处理
     } finally {
       setCompleting(null)
+      setConfirmQueue(null)
     }
   }
 
@@ -148,7 +165,7 @@ const RecruitQueuePanel: FC = () => {
                   )}
                   <button
                     type="button"
-                    onClick={() => handleInstantComplete(queue.id)}
+                    onClick={() => handleInstantClick(queue.id)}
                     disabled={completing === queue.id}
                     className="p-0.5 rounded text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 cursor-pointer transition-colors disabled:opacity-50"
                     title="极速完成"
@@ -192,7 +209,7 @@ const RecruitQueuePanel: FC = () => {
                   )}
                   <button
                     type="button"
-                    onClick={() => handleInstantComplete(queue.id)}
+                    onClick={() => handleInstantClick(queue.id)}
                     disabled={completing === queue.id}
                     className="px-2 py-1 rounded-lg text-[10px] font-bold text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 cursor-pointer transition-colors disabled:opacity-50 justify-self-end"
                   >
@@ -206,6 +223,17 @@ const RecruitQueuePanel: FC = () => {
           ))}
         </div>
       </div>
+
+      {/* 城金消费二次确认 */}
+      <ConfirmCityGoldModal
+        open={confirmQueue !== null}
+        onClose={() => setConfirmQueue(null)}
+        onConfirm={handleInstantComplete}
+        title="极速完成征兵"
+        description="立即完成当前征兵队列"
+        cost={confirmQueue ? getInstantCost(confirmQueue) : 0}
+        loading={completing !== null}
+      />
     </div>
   )
 }

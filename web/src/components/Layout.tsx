@@ -49,7 +49,7 @@ const Layout: FC<LayoutProps> = ({ children }) => {
   }, [loadGameState])
 
   return (
-    <div className="flex min-h-dvh relative">
+    <div className="flex min-h-dvh relative overflow-x-hidden">
       {/* Desktop Sidebar */}
       <Sidebar
         activeKey={activeKey}
@@ -90,11 +90,11 @@ const Layout: FC<LayoutProps> = ({ children }) => {
       {/* Main Content */}
       <main
         className={`
-          flex-1 transition-all duration-300 ease-in-out
+          flex-1 min-w-0 overflow-x-hidden transition-all duration-300 ease-in-out
           ${collapsed ? 'lg:ml-[100px]' : 'lg:ml-[312px]'}
         `}
       >
-        <div className="max-w-[1320px] w-full mx-auto px-4 py-6 lg:px-6 lg:py-8">
+        <div className="max-w-[1320px] w-full min-w-0 mx-auto px-4 py-6 lg:px-6 lg:py-8">
           {error && (
             <div className="mb-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">
               游戏状态加载失败：{error}

@@ -18,6 +18,10 @@ export interface BalanceConfig {
   exchangeRate: number // 1 金币 = N 城金
   reverseExchangeRate: number // N 城金 = 1 金币
   exchangeCooldownSecs: number // 兑换冷却秒数
+  cityGoldPerSecond: number // 1 城金折抵多少秒（加速用）
+  boostBaseCost: number // 产量加成基础价格
+  boostMultiplierFactor: Record<string, number> // 倍率系数
+  boostDurationFactor: Record<string, number> // 时长系数
 }
 
 export interface UnitConfig {
