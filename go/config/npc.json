@@ -6,64 +6,229 @@
   "goldenAppearRate": 0.2,
   "totalCities": 12,
   "tiers": {
-    "small": {
-      "multiplier": 1.0,
-      "armyRange": { "min": 50, "max": 300 },
-      "armyTypes": { "min": 1, "max": 2 },
-      "traitCount": { "min": 0, "max": 0 },
-      "count": { "guaranteed": 4, "weight": 5 }
-    },
-    "medium": {
-      "multiplier": 4.0,
-      "armyRange": { "min": 300, "max": 1500 },
-      "armyTypes": { "min": 2, "max": 3 },
-      "traitCount": { "min": 0, "max": 1 },
-      "count": { "guaranteed": 2, "weight": 3 }
+    "golden": {
+      "multiplier": 16,
+      "armyRange": {
+        "min": 5000,
+        "max": 500001
+      },
+      "armyTypes": {
+        "min": 4,
+        "max": 5
+      },
+      "traitCount": {
+        "min": 1,
+        "max": 3
+      },
+      "count": {
+        "guaranteed": 0,
+        "weight": 0
+      }
     },
     "large": {
-      "multiplier": 8.0,
-      "armyRange": { "min": 1500, "max": 5000 },
-      "armyTypes": { "min": 3, "max": 4 },
-      "traitCount": { "min": 0, "max": 2 },
-      "count": { "guaranteed": 1, "weight": 2 }
+      "multiplier": 8,
+      "armyRange": {
+        "min": 1500,
+        "max": 20000
+      },
+      "armyTypes": {
+        "min": 3,
+        "max": 4
+      },
+      "traitCount": {
+        "min": 0,
+        "max": 2
+      },
+      "count": {
+        "guaranteed": 1,
+        "weight": 2
+      }
     },
-    "golden": {
-      "multiplier": 16.0,
-      "armyRange": { "min": 5000, "max": 15000 },
-      "armyTypes": { "min": 4, "max": 5 },
-      "traitCount": { "min": 1, "max": 3 },
-      "count": { "guaranteed": 0, "weight": 0 }
+    "medium": {
+      "multiplier": 4,
+      "armyRange": {
+        "min": 300,
+        "max": 1500
+      },
+      "armyTypes": {
+        "min": 2,
+        "max": 3
+      },
+      "traitCount": {
+        "min": 0,
+        "max": 1
+      },
+      "count": {
+        "guaranteed": 2,
+        "weight": 3
+      }
+    },
+    "small": {
+      "multiplier": 1,
+      "armyRange": {
+        "min": 50,
+        "max": 300
+      },
+      "armyTypes": {
+        "min": 1,
+        "max": 2
+      },
+      "traitCount": {
+        "min": 0,
+        "max": 0
+      },
+      "count": {
+        "guaranteed": 4,
+        "weight": 5
+      }
     }
   },
   "recoveryProfiles": [
-    { "id": "iron_wall", "name": "铁壁", "armyMultiplier": 2.0, "resourceMultiplier": 1.0, "weight": 20 },
-    { "id": "rich_mine", "name": "富矿", "armyMultiplier": 0.5, "resourceMultiplier": 2.0, "weight": 20 },
-    { "id": "normal", "name": "平庸", "armyMultiplier": 1.0, "resourceMultiplier": 1.0, "weight": 40 },
-    { "id": "fortress", "name": "要塞", "armyMultiplier": 2.0, "resourceMultiplier": 2.0, "weight": 20 }
+    {
+      "id": "iron_wall",
+      "name": "铁壁",
+      "armyMultiplier": 2,
+      "resourceMultiplier": 1,
+      "weight": 20
+    },
+    {
+      "id": "rich_mine",
+      "name": "富矿",
+      "armyMultiplier": 0.5,
+      "resourceMultiplier": 2,
+      "weight": 20
+    },
+    {
+      "id": "normal",
+      "name": "平庸",
+      "armyMultiplier": 1,
+      "resourceMultiplier": 1,
+      "weight": 40
+    },
+    {
+      "id": "fortress",
+      "name": "要塞",
+      "armyMultiplier": 2,
+      "resourceMultiplier": 2,
+      "weight": 20
+    }
   ],
   "traitPool": [
-    { "id": "rich_harvest", "name": "丰收之地", "buffs": { "productionBonus": 0.3 }, "weight": 10 },
-    { "id": "iron_wall", "name": "坚毅不倒", "buffs": { "cavalryDefenseBonus": 0.1 }, "weight": 10 },
-    { "id": "spear_forest", "name": "枪林如雨", "buffs": { "infantryDefenseBonus": 0.15 }, "weight": 10 },
-    { "id": "arrow_rain", "name": "箭雨连天", "buffs": { "attackBonus": 0.1 }, "weight": 8 },
-    { "id": "fortified", "name": "固若金汤", "buffs": { "allDefenseBonus": 0.08 }, "weight": 8 },
-    { "id": "rapid_muster", "name": "兵贵神速", "buffs": { "armyRecoveryBonus": 0.5 }, "weight": 10 },
-    { "id": "endless_army", "name": "源源不绝", "buffs": { "armyCapBonus": 0.2 }, "weight": 8 },
-    { "id": "elite_guard", "name": "精锐守卫", "buffs": { "armyAttackBonus": 0.1 }, "weight": 8 },
-    { "id": "none", "name": "无", "buffs": {}, "weight": 30 }
+    {
+      "id": "rich_harvest",
+      "name": "丰收之地",
+      "buffs": {
+        "productionBonus": 0.3
+      },
+      "weight": 10
+    },
+    {
+      "id": "iron_wall",
+      "name": "坚毅不倒",
+      "buffs": {
+        "cavalryDefenseBonus": 0.4
+      },
+      "weight": 10
+    },
+    {
+      "id": "spear_forest",
+      "name": "枪林如雨",
+      "buffs": {
+        "infantryDefenseBonus": 0.15
+      },
+      "weight": 10
+    },
+    {
+      "id": "arrow_rain",
+      "name": "箭雨连天",
+      "buffs": {
+        "attackBonus": 0.1
+      },
+      "weight": 8
+    },
+    {
+      "id": "fortified",
+      "name": "固若金汤",
+      "buffs": {
+        "allDefenseBonus": 0.2
+      },
+      "weight": 8
+    },
+    {
+      "id": "rapid_muster",
+      "name": "兵贵神速",
+      "buffs": {
+        "armyRecoveryBonus": 0.9
+      },
+      "weight": 10
+    },
+    {
+      "id": "endless_army",
+      "name": "源源不绝",
+      "buffs": {
+        "armyCapBonus": 0.8
+      },
+      "weight": 8
+    },
+    {
+      "id": "elite_guard",
+      "name": "精锐守卫",
+      "buffs": {
+        "armyAttackBonus": 0.1
+      },
+      "weight": 8
+    }
   ],
   "cityNames": [
-    "洛阳", "长安", "成都", "建业", "襄阳", "江陵", "合肥", "濮阳",
-    "徐州", "荆州", "益州", "扬州", "兖州", "青州", "冀州", "并州",
-    "凉州", "交州", "幽州", "豫州", "虎牢关", "长坂坡", "赤壁", "官渡",
-    "汉中", "街亭", "五丈原", "白帝城", "夷陵", "新野", "樊城", "陈仓",
-    "定军山", "麦城", "博望坡", "华容道", "潼关", "函谷关", "剑阁", "阳平关",
-    "葭萌关", "白水关", "瓦口关", "落凤坡"
+    "洛阳",
+    "长安",
+    "成都",
+    "建业",
+    "襄阳",
+    "江陵",
+    "合肥",
+    "濮阳",
+    "徐州",
+    "荆州",
+    "益州",
+    "扬州",
+    "兖州",
+    "青州",
+    "冀州",
+    "并州",
+    "凉州",
+    "交州",
+    "幽州",
+    "豫州",
+    "虎牢关",
+    "长坂坡",
+    "赤壁",
+    "官渡",
+    "汉中",
+    "街亭",
+    "五丈原",
+    "白帝城",
+    "夷陵",
+    "新野",
+    "樊城",
+    "陈仓",
+    "定军山",
+    "麦城",
+    "博望坡",
+    "华容道",
+    "潼关",
+    "函谷关",
+    "剑阁",
+    "阳平关",
+    "葭萌关",
+    "白水关",
+    "瓦口关",
+    "落凤坡"
   ],
   "scoutCost": {
-    "small": 5,
-    "medium": 15,
+    "golden": 50,
     "large": 30,
-    "golden": 50
+    "medium": 15,
+    "small": 5
   }
 }

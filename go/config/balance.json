@@ -867,11 +867,21 @@
     }
   },
   "overflowToCityGold": 2000,
-  "exchangeRate": 10,
-  "reverseExchangeRate": 15,
+  "exchangeRate": 100,
+  "reverseExchangeRate": 150,
   "exchangeCooldownSecs": 3600,
   "cityGoldPerSecond": 120,
   "boostBaseCost": 30,
-  "boostMultiplierFactor": { "2": 1, "4": 3, "8": 8, "16": 20 },
-  "boostDurationFactor": { "1": 1, "6": 5, "12": 9, "24": 16 }
+  "boostMultiplierFactor": {
+    "16": 20,
+    "2": 1,
+    "4": 3,
+    "8": 8
+  },
+  "boostDurationFactor": {
+    "1": 1,
+    "12": 9,
+    "24": 16,
+    "6": 5
+  }
 }

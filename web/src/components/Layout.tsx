@@ -361,6 +361,9 @@ const MobilePlayerSwitcher: FC<{ gameState: GameState | null }> = ({ gameState }
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent-light)] text-[var(--color-accent)] font-bold">
             {civilizationLevel}
           </span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-bold">
+            🪙 {(gameState?.cityGold ?? 0).toLocaleString()}
+          </span>
         </div>
         {account && (
           <ChevronDown size={14} className={`text-[var(--color-text-muted)] transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
