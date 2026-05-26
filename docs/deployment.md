@@ -177,6 +177,7 @@ ssh $SERVER "chmod +x /tmp/hero3-server.$STAMP; mv -f /tmp/hero3-server.$STAMP /
 ## GitHub Actions 自动部署
 
 仓库已配置 `.github/workflows/deploy.yml`。推送到 `main` 分支时会自动执行生产部署，也可以在 GitHub 仓库的 **Actions** 页面手动点击 `Deploy Hero3` 运行。
+首次把这份 workflow 推到 `main` 后，GitHub Actions 会自动跑一轮，方便先验证链路是否通。
 
 自动部署流程：
 
