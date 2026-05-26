@@ -351,6 +351,30 @@ func (h *Handlers) FillResources(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"state": state})
 }
 
+func (h *Handlers) FillResourcesPaid(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	state, cost, err := h.gameService.FillResourcesPaid(payload.PlayerID)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInsufficientCityGold):
+			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state, "cost": cost})
+}
+
 func (h *Handlers) Recruit(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		PlayerID string `json:"playerId"`
@@ -725,6 +749,28 @@ func writeError(w http.ResponseWriter, status int, message string) {
 }
 
 // --- Gold Handlers ---
+
+func (h *Handlers) AddAccountGold(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		AccountID string `json:"accountId"`
+		Amount    int    `json:"amount"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if payload.Amount <= 0 {
+		writeError(w, http.StatusBadRequest, "amount must be positive")
+		return
+	}
+
+	if err := h.gameService.AddAccountGoldAdmin(payload.AccountID, payload.Amount); err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	account, _ := h.gameService.GetAccountByID(payload.AccountID)
+	writeJSON(w, http.StatusOK, map[string]any{"gold": account.Gold})
+}
 
 func (h *Handlers) AddGold(w http.ResponseWriter, r *http.Request) {
 	var payload struct {

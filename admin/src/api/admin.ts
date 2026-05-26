@@ -126,4 +126,18 @@ export const adminApi = {
       method: 'DELETE',
     })
   },
+  addAccountGold(accountId: string, amount: number) {
+    return request<{ gold: number }>(`${API_BASE}/admin/gold/add-account`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId, amount }),
+    })
+  },
+  addCityGold(playerId: string, amount: number) {
+    return request<{ state: GameState }>(`${API_BASE}/admin/gold/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, amount, reason: 'GM补发' }),
+    })
+  },
 }

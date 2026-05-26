@@ -141,6 +141,20 @@ export default function PlayerDrawer({ playerId, onClose }: PlayerDrawerProps) {
             <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">
               <h4 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">GM 资源调整</h4>
               <ResourceAdjustForm playerId={playerId} onSuccess={(s) => setState(s)} />
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!confirm('确认补发 30000 全资源？')) return
+                  try {
+                    const result = await adminApi.adjustResources(playerId, { wood: 30000, stone: 30000, iron: 30000, food: 30000 })
+                    setState(result.state)
+                  } catch { /* ignore */ }
+                }}
+                className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-emerald-600 bg-emerald-500/8 border border-emerald-500/20 hover:bg-emerald-500/15 cursor-pointer transition-colors"
+              >
+                <Coins size={12} />
+                一键补发资源（各 +30000）
+              </button>
             </section>
 
             {/* Buildings */}

@@ -72,6 +72,64 @@ func (s *Service) FillResources(playerID string) (GameState, error) {
 	return state, nil
 }
 
+// FillResourcesPaid 一键爆仓（消耗城金，3000 资源 = 1 城金）
+func (s *Service) FillResourcesPaid(playerID string) (GameState, int, error) {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return GameState{}, 0, ErrPlayerNotFound
+	}
+
+	state, err := s.repo.GetState(playerID)
+	if err != nil {
+		return GameState{}, 0, err
+	}
+
+	now := time.Now()
+	state, _ = settleResources(state, now)
+
+	// 计算需要补充的总资源量
+	totalNeeded := 0
+	for resType, cap := range state.Resources.Capacity {
+		current := state.Resources.Items[resType]
+		if current < cap {
+			totalNeeded += cap - current
+		}
+	}
+
+	if totalNeeded == 0 {
+		return state, 0, nil
+	}
+
+	// 计算城金花费（3000 资源 = 1 城金，向上取整）
+	cost := (totalNeeded + 2999) / 3000
+	if cost < 1 {
+		cost = 1
+	}
+
+	// 扣城金
+	if _, err := s.repo.DeductCityGold(playerID, cost); err != nil {
+		return GameState{}, 0, err
+	}
+
+	// 重新读取状态（城金已扣）
+	state, _ = s.repo.GetState(playerID)
+	state, _ = settleResources(state, now)
+
+	// 填满资源
+	for resType, cap := range state.Resources.Capacity {
+		state.Resources.Items[resType] = cap
+	}
+
+	state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
+	state.ServerTime = now.UTC().Format(resourceDateLayout)
+
+	if err := s.repo.SaveState(state, now); err != nil {
+		return GameState{}, 0, err
+	}
+
+	return state, cost, nil
+}
+
 // settleResources 结算资源产出、建筑升级完成、征兵队列完成
 func settleResources(state GameState, now time.Time) (GameState, bool) {
 	now = now.UTC()

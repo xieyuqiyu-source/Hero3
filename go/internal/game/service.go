@@ -169,6 +169,10 @@ func (s *Service) GetAccountByID(accountID string) (Account, error) {
 	return s.repo.GetAccountByID(accountID)
 }
 
+func (s *Service) AddAccountGoldAdmin(accountID string, amount int) error {
+	return s.repo.AddAccountGold(accountID, amount)
+}
+
 func (s *Service) CreatePlayer(accountID string, nickname string, faction string, generalID string) (string, GameState, error) {
 	nickname = strings.TrimSpace(nickname)
 	faction = strings.TrimSpace(faction)

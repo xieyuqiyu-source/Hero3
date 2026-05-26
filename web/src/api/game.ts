@@ -59,9 +59,14 @@ export const gameApi = {
     return api.post<{ state: GameState }>('/city/buildings/upgrade', { playerId, buildingId })
   },
 
-  /** 一键爆仓 */
+  /** 一键爆仓（GM免费） */
   fillResources(playerId: string) {
     return api.post<{ state: GameState }>('/city/resources/fill', { playerId })
+  },
+
+  /** 一键爆仓（消耗城金） */
+  fillResourcesPaid(playerId: string) {
+    return api.post<{ state: GameState; cost: number }>('/city/resources/fill-paid', { playerId })
   },
 
   /** 一键升级（批量） */

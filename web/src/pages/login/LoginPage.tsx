@@ -1,6 +1,6 @@
-import { useState, useEffect, type FC, type FormEvent } from 'react'
+import { useState, useEffect, useRef, useCallback, type FC, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Cloud } from 'lucide-react'
+import { Cloud, ChevronDown } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import GeneralCarousel from '@/components/GeneralCarousel'
 import CloudSyncModal from '@/components/CloudSyncModal'
@@ -23,6 +23,8 @@ const LoginPage: FC = () => {
   const [creating, setCreating] = useState(false)
   const [showSyncReminder, setShowSyncReminder] = useState(false)
   const [bgLoaded, setBgLoaded] = useState(false)
+  const [showScrollHint, setShowScrollHint] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const setGameState = useGameStore((store) => store.setState)
   const setActivePlayer = useGameStore((store) => store.setActivePlayer)
   const navigate = useNavigate()
@@ -46,6 +48,19 @@ const LoginPage: FC = () => {
     img.src = heroBg
     img.onload = () => setBgLoaded(true)
   }, [])
+
+  // Track whether scrollable content has more to scroll
+  const checkScrollHint = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) { setShowScrollHint(false); return }
+    const canScroll = el.scrollHeight > el.clientHeight + 10
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20
+    setShowScrollHint(canScroll && !atBottom)
+  }, [])
+
+  useEffect(() => {
+    checkScrollHint()
+  }, [faction, selectedGeneral, checkScrollHint])
 
   const canSubmit = nickname.trim().length > 0 && faction !== null && selectedGeneral !== null
 
@@ -145,7 +160,7 @@ const LoginPage: FC = () => {
                 key={f.key}
                 onClick={() => handleFactionClick(f.key)}
                 className={`
-                  flex flex-col rounded-2xl border overflow-hidden cursor-pointer
+                  relative flex flex-col rounded-2xl border overflow-hidden cursor-pointer
                   backdrop-blur-sm
                   transition-all duration-400 ease-in-out
                   ${isActive
@@ -188,12 +203,19 @@ const LoginPage: FC = () => {
                   </span>
                 </div>
 
-                {/* Content - hidden on mobile when collapsed */}
-                <div className={`
-                  flex flex-col flex-1 min-h-0 overflow-hidden
-                  transition-all duration-400 ease-in-out
-                  ${isMobileCollapsed ? 'max-sm:max-h-0 max-sm:opacity-0' : 'max-sm:max-h-[2000px] max-sm:opacity-100'}
-                `}>
+                {/* Content - hidden on mobile when collapsed, scrollable when expanded */}
+                <div
+                  ref={isActive && !isMobileCollapsed ? scrollRef : undefined}
+                  onScroll={checkScrollHint}
+                  className={`
+                    flex flex-col min-h-0
+                    transition-all duration-400 ease-in-out
+                    ${isMobileCollapsed
+                      ? 'max-sm:h-0 max-sm:opacity-0 overflow-hidden'
+                      : 'flex-1 max-sm:opacity-100 overflow-y-auto'
+                    }
+                  `}
+                >
                   {/* Motto */}
                   <div className="px-5 pb-3">
                     <p
@@ -243,10 +265,20 @@ const LoginPage: FC = () => {
 
                   {/* Bottom action - only show when this faction is fully selected */}
                 <div className={`
-                  border-t border-[var(--color-border)] px-4 py-3
+                  border-t border-[var(--color-border)] px-4 py-3 flex-shrink-0
                   transition-all duration-300 overflow-hidden
                   ${isActive && selectedGeneral ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0 py-0 border-t-0'}
                 `}>
+
+                {/* Floating scroll hint - shows when content is scrollable and not at bottom */}
+                {isActive && !isMobileCollapsed && showScrollHint && (
+                  <div className="sm:hidden absolute bottom-3 left-0 right-0 flex justify-center pointer-events-none z-10">
+                    <span className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-black/70 text-white/90 text-[11px] font-medium backdrop-blur-sm shadow-lg animate-pulse">
+                      <ChevronDown size={12} />
+                      下滑进入游戏
+                    </span>
+                  </div>
+                )}
                   {/* Sync reminder */}
                   {showSyncReminder && !account && isActive && (
                     <div className="mb-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">

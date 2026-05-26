@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
 import BoostButton from './BoostButton'
+import FillButton from './FillButton'
 import type { GameState } from '@/types/game'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
 import { useConfigStore } from '@/store/configStore'
@@ -196,7 +197,10 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
             <>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold text-[var(--color-text-primary)]">资源产出</span>
-                <BoostButton currentBoost={gameState?.productionBoost} />
+                <div className="flex items-center gap-1.5">
+                  <FillButton />
+                  <BoostButton currentBoost={gameState?.productionBoost} />
+                </div>
               </div>
               <div className="grid grid-cols-1 gap-1.5">
                 {[
@@ -377,13 +381,13 @@ const PlayerSwitcher: FC<{ nickname: string; civilizationLevel: number; cityGold
         onClick={() => account && setOpen(!open)}
         className={`w-full flex items-center justify-between ${account ? 'cursor-pointer' : 'cursor-default'}`}
       >
-        <div className="flex items-center gap-2">
-          <Castle size={14} className="text-[var(--color-accent)]" />
-          <span className="text-sm font-semibold text-[var(--color-text-primary)]">{nickname}</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent-light)] text-[var(--color-accent)] font-bold">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <Castle size={14} className="text-[var(--color-accent)] flex-shrink-0" />
+          <span className="text-sm font-semibold text-[var(--color-text-primary)] truncate max-w-[80px]">{nickname}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent-light)] text-[var(--color-accent)] font-bold whitespace-nowrap flex-shrink-0">
             文明度 {civilizationLevel}
           </span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-bold">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 font-bold whitespace-nowrap flex-shrink-0">
             🪙 {cityGold.toLocaleString()}
           </span>
         </div>
