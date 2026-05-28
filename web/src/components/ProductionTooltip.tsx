@@ -1,23 +1,6 @@
 import { useState, useRef, type FC, type ReactNode } from 'react'
 import type { ModifierBreakdownItem } from '@/types/game'
 
-/** Modifier key 到中文名的映射 */
-const KEY_LABELS: Record<string, string> = {
-  productionBonus: '全资源产量',
-  woodProductionBonus: '木材产量',
-  stoneProductionBonus: '石料产量',
-  ironProductionBonus: '铁矿产量',
-  foodProductionBonus: '粮食产量',
-  capacityBonus: '仓库容量',
-  attackBonus: '攻击力',
-  defenseBonus: '防御力',
-  infantryDefenseBonus: '步兵防御',
-  cavalryDefenseBonus: '骑兵防御',
-  buildSpeedBonus: '建筑速度',
-  recruitSpeedBonus: '征兵速度',
-  marchSpeedBonus: '行军速度',
-}
-
 /** Mode 到展示格式 */
 function formatModValue(value: number, mode: string): string {
   switch (mode) {

@@ -48,7 +48,6 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
   const handleQuickAction = async (e: React.MouseEvent, mode: 'attack' | 'plunder' | 'scout') => {
     e.stopPropagation()
     const playerId = useGameStore.getState().activePlayerId
-    const army = useGameStore.getState().state?.army ?? []
     if (!playerId || busy) return
 
     // 大型/金色 NPC 攻击/掠夺前弹确认
