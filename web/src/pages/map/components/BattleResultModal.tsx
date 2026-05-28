@@ -142,10 +142,10 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
             详细情报请前往
             <button
               type="button"
-              onClick={() => { handleClose(); navigate('/news') }}
+              onClick={() => { handleClose(); navigate(`/report/${report.id}`) }}
               className="text-[var(--color-accent)] font-medium hover:underline cursor-pointer mx-0.5"
             >
-              军情
+              战报详情
             </button>
             查看
           </p>

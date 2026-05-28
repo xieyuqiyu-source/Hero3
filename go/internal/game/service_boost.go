@@ -84,9 +84,10 @@ func (s *Service) PurchaseBoost(playerID string, multiplier int, hours int) (Gam
 	state.ProductionBoostEnd = now.Add(time.Duration(hours) * time.Hour).UTC().Format(resourceDateLayout)
 	state.ServerTime = now.UTC().Format(resourceDateLayout)
 
-	// 重新计算产量（含加成）
+	// 通过 Modifier 管线重新计算产量（含加成）
+	modSources := CollectModifierSources(&state)
 	production := calculateResourceProduction(state.Buildings, state.General)
-	production = calculateBoostedProduction(production, multiplier)
+	production = applyProductionModifiers(production, now, modSources)
 	state.ResourceProduction = production
 	state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
 
@@ -143,11 +144,10 @@ func (s *Service) PurchaseCapacityBoost(playerID string, multiplier int, hours i
 	state.CapacityBoostEnd = now.Add(time.Duration(hours) * time.Hour).UTC().Format(resourceDateLayout)
 	state.ServerTime = now.UTC().Format(resourceDateLayout)
 
-	// 重新计算容量（含加成）
+	// 通过 Modifier 管线重新计算容量（含加成）
+	modSources := CollectModifierSources(&state)
 	capacity := calculateResourceCapacity(state.Buildings)
-	for k, v := range capacity {
-		capacity[k] = v * multiplier
-	}
+	capacity = applyCapacityModifiers(capacity, now, modSources)
 	state.Resources.Capacity = capacity
 	state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
 

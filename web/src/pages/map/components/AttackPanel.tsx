@@ -1,5 +1,5 @@
 import { useState, useEffect, type FC } from 'react'
-import { Swords, ShieldAlert, Search, X } from 'lucide-react'
+import { Swords, ShieldAlert, Search, X, AlertTriangle } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
 import { gameApi } from '@/api/game'
@@ -26,6 +26,12 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
   const [battleReport, setBattleReport] = useState<BattleReport | null>(null)
   const [scoutReport, setScoutReport] = useState<BattleReport | null>(null)
   const [visible, setVisible] = useState(false)
+  const [showWarning, setShowWarning] = useState(false)
+  const [dismissToday, setDismissToday] = useState(() => {
+    return sessionStorage.getItem('npc_warn_dismissed') === 'true'
+  })
+
+  const needsWarning = (city.tier === 'large' || city.tier === 'golden') && !dismissToday
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true))
@@ -186,7 +192,11 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
             )}
             <button
               type="button"
-              onClick={mode === 'scout' ? handleScout : handleDispatch}
+              onClick={() => {
+                if (mode === 'scout') { handleScout(); return }
+                if (needsWarning) { setShowWarning(true); return }
+                handleDispatch()
+              }}
               disabled={mode !== 'scout' && (totalSelected <= 0 || dispatching)}
               className="px-5 py-2 rounded-xl text-xs font-bold bg-[var(--color-accent)] text-white hover:opacity-90 cursor-pointer transition-opacity disabled:opacity-50"
             >
@@ -195,6 +205,55 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
           </div>
         </div>
       </div>
+
+      {/* 大型/金色 NPC 攻击确认弹窗 */}
+      {showWarning && (
+        <div className="fixed inset-0 z-[9500] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] transition-opacity duration-200 opacity-100"
+            onClick={() => setShowWarning(false)}
+          />
+          <div className="relative w-full max-w-xs rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xl p-4 space-y-3 animate-[fadeScaleIn_200ms_ease-out]">
+            <div className="flex items-center gap-2 text-amber-500">
+              <AlertTriangle size={18} />
+              <span className="text-sm font-bold">强力副本提醒</span>
+            </div>
+            <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+              该 NPC 属于<span className="font-bold text-[var(--color-text-primary)]">强力副本</span>，建议侦查之后再进攻。是否继续{mode === 'attack' ? '攻击' : '掠夺'}？
+            </p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={dismissToday}
+                onChange={(e) => {
+                  const checked = e.target.checked
+                  setDismissToday(checked)
+                  if (checked) sessionStorage.setItem('npc_warn_dismissed', 'true')
+                  else sessionStorage.removeItem('npc_warn_dismissed')
+                }}
+                className="w-3.5 h-3.5 rounded border-[var(--color-border)] accent-[var(--color-accent)]"
+              />
+              <span className="text-[10px] text-[var(--color-text-muted)]">今日不再提醒</span>
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowWarning(false)}
+                className="flex-1 px-3 py-2 rounded-xl text-xs font-medium bg-[var(--color-surface-dim)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-dim)]/80 cursor-pointer transition-colors"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowWarning(false); handleDispatch() }}
+                className="flex-1 px-3 py-2 rounded-xl text-xs font-bold bg-red-500 text-white hover:bg-red-600 cursor-pointer transition-colors"
+              >
+                确认{mode === 'attack' ? '攻击' : '掠夺'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Battle Result */}
       {battleReport && (

@@ -113,7 +113,17 @@ export interface GameState {
   mapTargets: MapTarget[]
   recentBattleReports: BattleReport[]
   unreadMessageCount: number
+  /** 当前生效的加成明细（用于 tooltip 展示） */
+  activeModifiers?: ModifierBreakdownItem[]
   serverTime: string
+}
+
+/** 加成明细条目 */
+export interface ModifierBreakdownItem {
+  source: string   // 来源名称，如 "将领", "购买加成"
+  key: string      // 属性键名，如 "productionBonus"
+  value: number    // 数值
+  mode: string     // "flat" | "percentAdd" | "percentMultiply"
 }
 
 // --- NPC 城池类型 ---

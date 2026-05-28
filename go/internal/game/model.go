@@ -138,6 +138,7 @@ type GameState struct {
 	MapTargets          []MapTarget        `json:"mapTargets"`
 	RecentBattleReports []BattleReport     `json:"recentBattleReports"`
 	UnreadMessageCount  int                `json:"unreadMessageCount"`
+	ActiveModifiers     []ModifierBreakdownItem `json:"activeModifiers,omitempty"`
 	ServerTime          string             `json:"serverTime"`
 }
 

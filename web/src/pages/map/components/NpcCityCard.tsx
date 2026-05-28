@@ -1,5 +1,6 @@
 import { useState, type FC } from 'react'
-import { LoaderCircle, CircleCheck, Swords, ShieldAlert, Search } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { LoaderCircle, CircleCheck, Swords, ShieldAlert, Search, AlertTriangle } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { gameApi } from '@/api/game'
 import { FACTION_LABELS, FACTION_COLORS } from '@/utils/faction'
@@ -35,13 +36,34 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
   const tier = TIER_CONFIG[city.tier] ?? TIER_CONFIG.small
   const recovering = isRecovering(city)
   const [busy, setBusy] = useState<string | null>(null)
+  const [confirmAction, setConfirmAction] = useState<'attack' | 'plunder' | null>(null)
+  const [dismissToday, setDismissToday] = useState(() => {
+    const stored = sessionStorage.getItem('npc_warn_dismissed')
+    return stored === 'true'
+  })
   const activeTraits = city.traits.filter(t => t.id !== 'none')
+
+  const needsWarning = (city.tier === 'large' || city.tier === 'golden') && !dismissToday && !recovering
 
   const handleQuickAction = async (e: React.MouseEvent, mode: 'attack' | 'plunder' | 'scout') => {
     e.stopPropagation()
     const playerId = useGameStore.getState().activePlayerId
     const army = useGameStore.getState().state?.army ?? []
     if (!playerId || busy) return
+
+    // 大型/金色 NPC 攻击/掠夺前弹确认
+    if ((mode === 'attack' || mode === 'plunder') && needsWarning) {
+      setConfirmAction(mode)
+      return
+    }
+
+    await executeAction(mode)
+  }
+
+  const executeAction = async (mode: 'attack' | 'plunder' | 'scout') => {
+    const playerId = useGameStore.getState().activePlayerId
+    const army = useGameStore.getState().state?.army ?? []
+    if (!playerId) return
 
     if (mode === 'scout') {
       setBusy('scout')
@@ -67,6 +89,18 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
       onBattleResult(result.battleReport)
     } catch { /* global handler */ }
     finally { setBusy(null) }
+  }
+
+  const handleConfirmAttack = () => {
+    if (confirmAction) {
+      executeAction(confirmAction)
+    }
+    setConfirmAction(null)
+  }
+
+  const handleDismissToday = () => {
+    setDismissToday(true)
+    sessionStorage.setItem('npc_warn_dismissed', 'true')
   }
 
   return (
@@ -138,6 +172,57 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
           <Swords size={10} />{busy === 'attack' ? '...' : '一键攻击'}
         </button>
       </div>
+
+      {/* 大型/金色 NPC 攻击确认弹窗 */}
+      {confirmAction && createPortal(
+        <div className="fixed inset-0 z-[9500] flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] transition-opacity duration-200 opacity-100"
+            onClick={() => setConfirmAction(null)}
+          />
+          <div className="relative w-full max-w-xs rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xl p-4 space-y-3 animate-[fadeScaleIn_200ms_ease-out]">
+            <div className="flex items-center gap-2 text-amber-500">
+              <AlertTriangle size={18} />
+              <span className="text-sm font-bold">强力副本提醒</span>
+            </div>
+            <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+              该 NPC 属于<span className="font-bold text-[var(--color-text-primary)]">强力副本</span>，建议侦查之后再进攻。是否继续{confirmAction === 'attack' ? '攻击' : '掠夺'}？
+            </p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={dismissToday}
+                onChange={(e) => {
+                  if (e.target.checked) handleDismissToday()
+                  else {
+                    setDismissToday(false)
+                    sessionStorage.removeItem('npc_warn_dismissed')
+                  }
+                }}
+                className="w-3.5 h-3.5 rounded border-[var(--color-border)] accent-[var(--color-accent)]"
+              />
+              <span className="text-[10px] text-[var(--color-text-muted)]">今日不再提醒</span>
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmAction(null)}
+                className="flex-1 px-3 py-2 rounded-xl text-xs font-medium bg-[var(--color-surface-dim)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-dim)]/80 cursor-pointer transition-colors"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAttack}
+                className="flex-1 px-3 py-2 rounded-xl text-xs font-bold bg-red-500 text-white hover:bg-red-600 cursor-pointer transition-colors"
+              >
+                确认{confirmAction === 'attack' ? '攻击' : '掠夺'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

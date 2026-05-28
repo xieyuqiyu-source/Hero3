@@ -45,11 +45,11 @@ const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, ow
   useEffect(() => {
     if (open) {
       requestAnimationFrame(() => setVisible(true))
-      setAmount(0)
+      setAmount(maxAmount)
     } else {
       setVisible(false)
     }
-  }, [open])
+  }, [open, maxAmount])
 
   const handleClose = () => {
     setVisible(false)

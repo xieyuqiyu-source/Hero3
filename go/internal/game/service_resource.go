@@ -190,21 +190,14 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 		resources := copyResourceMap(state.Resources.Items)
 		capacity := calculateResourceCapacity(state.Buildings)
 
-		// 获取当前加成倍率
-		boost := getActiveBoost(&state, now)
-		capBoost := getActiveCapacityBoost(&state, now)
-		if capBoost > 1 {
-			for k, v := range capacity {
-				capacity[k] = v * capBoost
-			}
-		}
+		// 通过 Modifier 管线计算容量加成
+		modSources := CollectModifierSources(&state)
+		capacity = applyCapacityModifiers(capacity, now, modSources)
 
 		for _, event := range events {
-			// 用当前建筑等级（升级前）算这段时间的产出
+			// 用当前建筑等级（升级前）算这段时间的产出（含所有加成）
 			production := calculateResourceProduction(state.Buildings, state.General)
-			if boost > 1 {
-				production = calculateBoostedProduction(production, boost)
-			}
+			production = applyProductionModifiers(production, now, modSources)
 			elapsed := event.endsAt.Sub(sliceStart).Seconds()
 			if elapsed > 0 {
 				for resType, perHour := range production {
@@ -221,14 +214,13 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 
 			// 升级后容量可能变化
 			capacity = calculateResourceCapacity(state.Buildings)
+			capacity = applyCapacityModifiers(capacity, now, modSources)
 			sliceStart = event.endsAt
 		}
 
 		// 最后一段：从最后一个升级完成时间到 now
 		production := calculateResourceProduction(state.Buildings, state.General)
-		if boost > 1 {
-			production = calculateBoostedProduction(production, boost)
-		}
+		production = applyProductionModifiers(production, now, modSources)
 		elapsed := now.Sub(sliceStart).Seconds()
 		if elapsed > 0 {
 			for resType, perHour := range production {
@@ -245,25 +237,19 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 		}
 	}
 
-	// 检查加成是否过期
-	boost := getActiveBoost(&state, now)
+	// 清理过期加成
+	cleanExpiredBoosts(&state, now)
 
-	// 更新产量和容量（反映最终建筑等级 + 加成）
+	// 通过 Modifier 管线更新产量和容量（反映最终建筑等级 + 所有加成）
+	modSources := CollectModifierSources(&state)
 	production := calculateResourceProduction(state.Buildings, state.General)
-	if boost > 1 {
-		production = calculateBoostedProduction(production, boost)
-	}
+	production = applyProductionModifiers(production, now, modSources)
 	if !reflect.DeepEqual(state.ResourceProduction, production) {
 		state.ResourceProduction = production
 		changed = true
 	}
 	capacity := calculateResourceCapacity(state.Buildings)
-	capBoost := getActiveCapacityBoost(&state, now)
-	if capBoost > 1 {
-		for k, v := range capacity {
-			capacity[k] = v * capBoost
-		}
-	}
+	capacity = applyCapacityModifiers(capacity, now, modSources)
 	if !reflect.DeepEqual(state.Resources.Capacity, capacity) {
 		state.Resources.Capacity = capacity
 		changed = true
@@ -337,63 +323,48 @@ func calculateResourceProduction(buildings []Building, general *General) Resourc
 		production[config.ResourceType] += valueByLevel(config.ProductionByLevel, building.Level)
 	}
 
-	// 应用将军产量加成
-	if general != nil && general.Buffs != nil {
-		if bonus, ok := general.Buffs["productionBonus"]; ok && bonus != 0 {
-			for resType, value := range production {
-				production[resType] = int(float64(value) * (1 + bonus))
-			}
-		}
-	}
-
+	// 注意：将领加成不在这里应用，统一由 applyProductionModifiers 通过 Modifier 管线处理
 	return production
 }
 
-// calculateBoostedProduction 返回应用了产量加成后的产量（用于实际结算和 UI 展示）
-func calculateBoostedProduction(production ResourceProduction, boost int) ResourceProduction {
-	if boost <= 1 {
-		return production
-	}
-	boosted := ResourceProduction{}
+// --- Modifier 管线辅助函数 ---
+
+// applyProductionModifiers 通过 Modifier 管线对产量应用所有加成
+func applyProductionModifiers(production ResourceProduction, now time.Time, sources []ModifierSource) ResourceProduction {
+	result := ResourceProduction{}
 	for resType, value := range production {
-		boosted[resType] = value * boost
+		// 先检查资源专属加成（如 "woodProductionBonus"）
+		specific := ComputeIntAttributeAt(value, resType+"ProductionBonus", now, sources...)
+		// 再应用通用产量加成（"productionBonus"）
+		final := ComputeIntAttributeAt(specific, "productionBonus", now, sources...)
+		result[resType] = final
 	}
-	return boosted
+	return result
 }
 
-// getActiveBoost 返回当前有效的加成倍率（过期返回 0）
-func getActiveBoost(state *GameState, now time.Time) int {
-	if state.ProductionBoost <= 1 || state.ProductionBoostEnd == "" {
-		return 0
+// applyCapacityModifiers 通过 Modifier 管线对容量应用所有加成
+func applyCapacityModifiers(capacity map[string]int, now time.Time, sources []ModifierSource) map[string]int {
+	result := make(map[string]int, len(capacity))
+	for resType, value := range capacity {
+		result[resType] = ComputeIntAttributeAt(value, "capacityBonus", now, sources...)
 	}
-	expiresAt, err := time.Parse(resourceDateLayout, state.ProductionBoostEnd)
-	if err != nil {
-		return 0
-	}
-	if now.After(expiresAt) {
-		// 已过期，清除
-		state.ProductionBoost = 0
-		state.ProductionBoostEnd = ""
-		return 0
-	}
-	return state.ProductionBoost
+	return result
 }
 
-// getActiveCapacityBoost 返回当前有效的容量加成倍率（过期返回 0）
-func getActiveCapacityBoost(state *GameState, now time.Time) int {
-	if state.CapacityBoost <= 1 || state.CapacityBoostEnd == "" {
-		return 0
+// cleanExpiredBoosts 清理过期的加成字段
+func cleanExpiredBoosts(state *GameState, now time.Time) {
+	if state.ProductionBoost > 1 && state.ProductionBoostEnd != "" {
+		if expiresAt, err := time.Parse(resourceDateLayout, state.ProductionBoostEnd); err == nil && now.After(expiresAt) {
+			state.ProductionBoost = 0
+			state.ProductionBoostEnd = ""
+		}
 	}
-	expiresAt, err := time.Parse(resourceDateLayout, state.CapacityBoostEnd)
-	if err != nil {
-		return 0
+	if state.CapacityBoost > 1 && state.CapacityBoostEnd != "" {
+		if expiresAt, err := time.Parse(resourceDateLayout, state.CapacityBoostEnd); err == nil && now.After(expiresAt) {
+			state.CapacityBoost = 0
+			state.CapacityBoostEnd = ""
+		}
 	}
-	if now.After(expiresAt) {
-		state.CapacityBoost = 0
-		state.CapacityBoostEnd = ""
-		return 0
-	}
-	return state.CapacityBoost
 }
 
 func calculateResourceCapacity(buildings []Building) map[string]int {

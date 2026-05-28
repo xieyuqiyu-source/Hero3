@@ -18,6 +18,7 @@ import ResourceBar from './ResourceBar'
 import BoostButton from './BoostButton'
 import FillButton from './FillButton'
 import CapacityBoostButton from './CapacityBoostButton'
+import ProductionTooltip from './ProductionTooltip'
 import { useGameStore } from '@/store/gameStore'
 import { useAccountStore } from '@/store/accountStore'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
@@ -239,18 +240,20 @@ const MobileSidebarContent: FC<{
             </div>
           </div>
           <div className="grid grid-cols-1 gap-1.5">
-            {[
-              ['木材', gameState?.resourceProduction?.wood],
-              ['石料', gameState?.resourceProduction?.stone],
-              ['铁矿', gameState?.resourceProduction?.iron],
-              ['粮食', gameState?.resourceProduction?.food],
-            ].map(([label, value]) => (
-              <div key={label} className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
-                <span className="text-xs">{label}</span>
-                <span className="text-xs font-semibold text-[var(--color-accent)] ml-auto">
-                  +{typeof value === 'number' ? value.toLocaleString() : '--'}/h
-                </span>
-              </div>
+            {([
+              ['木材', 'wood', gameState?.resourceProduction?.wood],
+              ['石料', 'stone', gameState?.resourceProduction?.stone],
+              ['铁矿', 'iron', gameState?.resourceProduction?.iron],
+              ['粮食', 'food', gameState?.resourceProduction?.food],
+            ] as const).map(([label, resType, value]) => (
+              <ProductionTooltip key={label} resourceType={resType} modifiers={gameState?.activeModifiers}>
+                <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
+                  <span className="text-xs">{label}</span>
+                  <span className="text-xs font-semibold text-[var(--color-accent)] ml-auto">
+                    +{typeof value === 'number' ? value.toLocaleString() : '--'}/h
+                  </span>
+                </div>
+              </ProductionTooltip>
             ))}
             <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
               <span className="text-xs">口粮</span>

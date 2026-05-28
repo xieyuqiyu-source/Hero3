@@ -275,6 +275,9 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 if listErr != nil { slog.Warn("list reports failed", "error", listErr) }
 	state.RecentBattleReports = reports
 
+	// 填充当前生效的加成明细（供前端 tooltip 展示）
+	state.ActiveModifiers = GetModifierBreakdown(&state, time.Now())
+
 	return state, nil
 }
 
