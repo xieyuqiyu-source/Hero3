@@ -83,8 +83,8 @@ jobs:
           chmod 700 ~/.ssh
           printf '%s\n' "$HERO3_SSH_PRIVATE_KEY" > ~/.ssh/hero3_deploy_key
           chmod 600 ~/.ssh/hero3_deploy_key
-          ssh-keyscan -T 10 -t ed25519 -p "$HERO3_SSH_PORT" -H "$HERO3_SSH_HOST" >> ~/.ssh/known_hosts
-          test -s ~/.ssh/known_hosts
+          ssh-keyscan -T 10 -t ed25519 -p "$HERO3_SSH_PORT" -H "$HERO3_SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          touch ~/.ssh/known_hosts
 
       - name: Upload release
         env:
@@ -97,6 +97,8 @@ jobs:
           timeout 120s scp \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=accept-new \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
             -o ConnectTimeout=15 \
             -o ServerAliveInterval=10 \
             -o ServerAliveCountMax=3 \
@@ -115,6 +117,8 @@ jobs:
           timeout 300s ssh \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=accept-new \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
             -o ConnectTimeout=15 \
             -o ServerAliveInterval=10 \
             -o ServerAliveCountMax=6 \
