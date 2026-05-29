@@ -94,7 +94,15 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$HERO3_SSH_USER"
-          scp -o BatchMode=yes -o IdentitiesOnly=yes -i ~/.ssh/hero3_deploy_key -P "$HERO3_SSH_PORT" hero3-release.tgz "$HERO3_SSH_USER@$HERO3_SSH_HOST:/tmp/hero3-release.$GITHUB_SHA.tgz"
+          timeout 120s scp \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=3 \
+            -i ~/.ssh/hero3_deploy_key \
+            -P "$HERO3_SSH_PORT" \
+            hero3-release.tgz "$HERO3_SSH_USER@$HERO3_SSH_HOST:/tmp/hero3-release.$GITHUB_SHA.tgz"
 
       - name: Deploy on server
         env:
@@ -104,7 +112,15 @@ jobs:
         run: |
           set -euo pipefail
           REMOTE_RELEASE="/tmp/hero3-release.$GITHUB_SHA.tgz"
-          ssh -o BatchMode=yes -o IdentitiesOnly=yes -i ~/.ssh/hero3_deploy_key -p "$HERO3_SSH_PORT" "$HERO3_SSH_USER@$HERO3_SSH_HOST" "REMOTE_RELEASE='$REMOTE_RELEASE' bash -s" <<'EOF'
+          timeout 300s ssh \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=6 \
+            -i ~/.ssh/hero3_deploy_key \
+            -p "$HERO3_SSH_PORT" \
+            "$HERO3_SSH_USER@$HERO3_SSH_HOST" "REMOTE_RELEASE='$REMOTE_RELEASE' bash -s" <<'EOF'
           set -euo pipefail
 
           STAMP="$(date +%Y%m%d%H%M%S)"
