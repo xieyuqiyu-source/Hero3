@@ -165,8 +165,8 @@ export const gameApi = {
   },
 
   /** 上报小游戏记录（钓鱼/赌博） */
-  saveMiniGameRecord(playerId: string, gameType: string, resultName: string, rarity: string, rewardUnit: string, rewardAmount: number) {
-    return api.post<{ id: string }>('/minigame/record', { playerId, gameType, resultName, rarity, rewardUnit, rewardAmount })
+  saveMiniGameRecord(playerId: string, gameType: string, resultName: string, rarity: string, rewardUnit: string, rewardAmount: number, betUnit?: string, betAmount?: number) {
+    return api.post<{ id: string }>('/minigame/record', { playerId, gameType, resultName, rarity, rewardUnit, rewardAmount, betUnit: betUnit ?? '', betAmount: betAmount ?? 0 })
   },
 
 }

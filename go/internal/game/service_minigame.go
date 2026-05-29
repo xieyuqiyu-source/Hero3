@@ -10,10 +10,12 @@ type MiniGameRecord struct {
 	ID           string `json:"id"`
 	PlayerID     string `json:"playerId"`
 	GameType     string `json:"gameType"`     // "fishing" | "gambling"
-	ResultName   string `json:"resultName"`   // "金龙鱼" / "大赢"
+	ResultName   string `json:"resultName"`   // "金龙鱼" / "猜大 赢 ×2"
 	Rarity       string `json:"rarity"`       // "common" | "rare" | "epic" | "legendary"
-	RewardUnit   string `json:"rewardUnit"`   // 可兑换的兵种名称
-	RewardAmount int    `json:"rewardAmount"` // 可兑换数量
+	RewardUnit   string `json:"rewardUnit"`   // 赢得的兵种名称
+	RewardAmount int    `json:"rewardAmount"` // 赢得的数量
+	BetUnit      string `json:"betUnit,omitempty"`   // 押注的兵种名称（赌博用）
+	BetAmount    int    `json:"betAmount,omitempty"` // 押注的数量（赌博用）
 	CreatedAt    string `json:"createdAt"`
 }
 
@@ -25,7 +27,7 @@ type MiniGameSummary struct {
 }
 
 // SaveMiniGameRecord 保存一条小游戏记录
-func (s *Service) SaveMiniGameRecord(playerID string, gameType string, resultName string, rarity string, rewardUnit string, rewardAmount int) (MiniGameRecord, error) {
+func (s *Service) SaveMiniGameRecord(playerID string, gameType string, resultName string, rarity string, rewardUnit string, rewardAmount int, betUnit string, betAmount int) (MiniGameRecord, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
 		return MiniGameRecord{}, ErrPlayerNotFound
@@ -40,6 +42,8 @@ func (s *Service) SaveMiniGameRecord(playerID string, gameType string, resultNam
 		Rarity:       rarity,
 		RewardUnit:   rewardUnit,
 		RewardAmount: rewardAmount,
+		BetUnit:      betUnit,
+		BetAmount:    betAmount,
 		CreatedAt:    now.UTC().Format(resourceDateLayout),
 	}
 

@@ -222,7 +222,7 @@ const GamblingGame: FC = () => {
     if (activePlayerId) {
       const resultName = won ? `${betLabel} 赢 ×${multiplier}` : `${betLabel} 输`
       const rarity = won && multiplier >= 30 ? 'legendary' : won && multiplier >= 10 ? 'epic' : won ? 'rare' : 'common'
-      gameApi.saveMiniGameRecord(activePlayerId, 'gambling', resultName, rarity, won ? selectedUnit!.name : '', winAmount).catch(() => {})
+      gameApi.saveMiniGameRecord(activePlayerId, 'gambling', resultName, rarity, won ? selectedUnit!.name : '', winAmount, selectedUnit!.name, actualBet).catch(() => {})
     }
 
     setPhase('result')

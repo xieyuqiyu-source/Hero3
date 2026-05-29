@@ -78,6 +78,8 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			rarity VARCHAR(32) NOT NULL,
 			reward_unit VARCHAR(64) NOT NULL DEFAULT '',
 			reward_amount INT NOT NULL DEFAULT 0,
+			bet_unit VARCHAR(64) NOT NULL DEFAULT '',
+			bet_amount INT NOT NULL DEFAULT 0,
 			created_at DATETIME(6) NOT NULL,
 			INDEX idx_minigame_player (player_id, created_at DESC),
 			INDEX idx_minigame_type (player_id, game_type, created_at DESC)
@@ -676,8 +678,8 @@ func (r *MySQLRepository) SaveMiniGameRecord(record game.MiniGameRecord) error {
 	}
 
 	_, err := r.db.Exec(
-		`INSERT INTO minigame_records (id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO minigame_records (id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, bet_unit, bet_amount, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		record.ID,
 		record.PlayerID,
 		record.GameType,
@@ -685,6 +687,8 @@ func (r *MySQLRepository) SaveMiniGameRecord(record game.MiniGameRecord) error {
 		record.Rarity,
 		record.RewardUnit,
 		record.RewardAmount,
+		record.BetUnit,
+		record.BetAmount,
 		createdAt.UTC(),
 	)
 	return err
@@ -692,7 +696,7 @@ func (r *MySQLRepository) SaveMiniGameRecord(record game.MiniGameRecord) error {
 
 func (r *MySQLRepository) ListMiniGameRecords(playerID string, limit int) ([]game.MiniGameRecord, error) {
 	rows, err := r.db.Query(
-		`SELECT id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, created_at
+		`SELECT id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, bet_unit, bet_amount, created_at
 		 FROM minigame_records
 		 WHERE player_id = ?
 		 ORDER BY created_at DESC
@@ -708,7 +712,7 @@ func (r *MySQLRepository) ListMiniGameRecords(playerID string, limit int) ([]gam
 	for rows.Next() {
 		var r game.MiniGameRecord
 		var createdAt time.Time
-		if err := rows.Scan(&r.ID, &r.PlayerID, &r.GameType, &r.ResultName, &r.Rarity, &r.RewardUnit, &r.RewardAmount, &createdAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.PlayerID, &r.GameType, &r.ResultName, &r.Rarity, &r.RewardUnit, &r.RewardAmount, &r.BetUnit, &r.BetAmount, &createdAt); err != nil {
 			return nil, err
 		}
 		r.CreatedAt = createdAt.UTC().Format(time.RFC3339)

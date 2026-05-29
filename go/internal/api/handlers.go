@@ -988,6 +988,8 @@ func (h *Handlers) SaveMiniGameRecord(w http.ResponseWriter, r *http.Request) {
 		Rarity       string `json:"rarity"`
 		RewardUnit   string `json:"rewardUnit"`
 		RewardAmount int    `json:"rewardAmount"`
+		BetUnit      string `json:"betUnit"`
+		BetAmount    int    `json:"betAmount"`
 	}
 	if !decodeJSON(w, r, &payload) {
 		return
@@ -1001,6 +1003,7 @@ func (h *Handlers) SaveMiniGameRecord(w http.ResponseWriter, r *http.Request) {
 	record, err := h.gameService.SaveMiniGameRecord(
 		payload.PlayerID, payload.GameType, payload.ResultName,
 		payload.Rarity, payload.RewardUnit, payload.RewardAmount,
+		payload.BetUnit, payload.BetAmount,
 	)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
