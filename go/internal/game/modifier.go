@@ -60,7 +60,10 @@ type Modifier struct {
 // ModifierSource 所有能提供加成的来源都实现此接口
 type ModifierSource interface {
 	Modifiers(now time.Time) []Modifier
-	SourceName() string // 来源名称，用于前端展示加成明细
+	SourceName() string
+	// ExpiresAt 返回该来源所有加成的到期时间点（用于时间切片结算）
+	// 永久加成返回空切片
+	ExpiresAt() []time.Time
 }
 
 // ComputeAttribute 根据所有来源计算最终属性值
@@ -121,6 +124,8 @@ type GeneralModifierSource struct {
 
 func (g *GeneralModifierSource) SourceName() string { return "将领" }
 
+func (g *GeneralModifierSource) ExpiresAt() []time.Time { return nil }
+
 func (g *GeneralModifierSource) Modifiers(now time.Time) []Modifier {
 	if g.General == nil || g.General.Buffs == nil {
 		return nil
@@ -148,6 +153,21 @@ type PurchaseBoostSource struct {
 }
 
 func (p *PurchaseBoostSource) SourceName() string { return "购买加成" }
+
+func (p *PurchaseBoostSource) ExpiresAt() []time.Time {
+	var times []time.Time
+	if p.ProductionBoostEnd != "" {
+		if t, err := time.Parse(resourceDateLayout, p.ProductionBoostEnd); err == nil {
+			times = append(times, t)
+		}
+	}
+	if p.CapacityBoostEnd != "" {
+		if t, err := time.Parse(resourceDateLayout, p.CapacityBoostEnd); err == nil {
+			times = append(times, t)
+		}
+	}
+	return times
+}
 
 func (p *PurchaseBoostSource) Modifiers(now time.Time) []Modifier {
 	var mods []Modifier
@@ -193,8 +213,63 @@ type StaticModifierSource struct {
 
 func (s *StaticModifierSource) SourceName() string { return s.Name }
 
+func (s *StaticModifierSource) ExpiresAt() []time.Time { return nil }
+
 func (s *StaticModifierSource) Modifiers(now time.Time) []Modifier {
 	return s.Mods
+}
+
+// --- Buff 通用加成记录（GM 发放 / 活动 / 任务 / 购买 等） ---
+
+// Buff 表示一条加成记录，所有动态加成统一用此结构存储
+type Buff struct {
+	ID        string  `json:"id"`                  // 唯一标识
+	Source    string  `json:"source"`              // 来源："gm", "event", "purchase", "quest", "system"
+	Key       string  `json:"key"`                 // 属性键名，如 "productionBonus"
+	Value     float64 `json:"value"`               // 数值
+	Mode      string  `json:"mode"`                // "flat" | "percentAdd" | "percentMultiply"
+	ExpiresAt string  `json:"expiresAt,omitempty"` // 到期时间（空 = 永久）
+	CreatedAt string  `json:"createdAt"`           // 创建时间
+	Note      string  `json:"note,omitempty"`      // GM 备注
+}
+
+// BuffListSource 通用 Buff 列表加成来源
+// 从 GameState.Buffs 中读取所有动态 buff，自动过滤过期的
+type BuffListSource struct {
+	Buffs []Buff
+}
+
+func (b *BuffListSource) SourceName() string { return "活动/GM" }
+
+func (b *BuffListSource) ExpiresAt() []time.Time {
+	var times []time.Time
+	for _, buff := range b.Buffs {
+		if buff.ExpiresAt == "" {
+			continue
+		}
+		if t, err := time.Parse(resourceDateLayout, buff.ExpiresAt); err == nil {
+			times = append(times, t)
+		}
+	}
+	return times
+}
+
+func (b *BuffListSource) Modifiers(now time.Time) []Modifier {
+	var mods []Modifier
+	for _, buff := range b.Buffs {
+		// 检查是否过期
+		if buff.ExpiresAt != "" {
+			if t, err := time.Parse(resourceDateLayout, buff.ExpiresAt); err == nil && now.After(t) {
+				continue // 已过期，跳过
+			}
+		}
+		mods = append(mods, Modifier{
+			Key:   buff.Key,
+			Value: buff.Value,
+			Mode:  buff.Mode,
+		})
+	}
+	return mods
 }
 
 // CollectModifierSources 从 GameState 中收集所有当前生效的加成来源
@@ -214,6 +289,11 @@ func CollectModifierSources(state *GameState) []ModifierSource {
 		CapacityBoost:      state.CapacityBoost,
 		CapacityBoostEnd:   state.CapacityBoostEnd,
 	})
+
+	// 来源3：通用 Buff 列表（GM 发放 / 活动 / 任务奖励等）
+	if len(state.Buffs) > 0 {
+		sources = append(sources, &BuffListSource{Buffs: state.Buffs})
+	}
 
 	// --- 后续扩展点（按需取消注释或新增） ---
 	// 来源3：装备加成（穿上生效，脱下失效）

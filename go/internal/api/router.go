@@ -71,6 +71,8 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/units-config", handlers.AdminUnitsConfig)
 	mux.HandleFunc("GET /api/v1/admin/units-config/{faction}", handlers.AdminFactionUnitsConfig)
 	mux.HandleFunc("PUT /api/v1/admin/units-config/{faction}", handlers.UpdateAdminFactionUnitsConfig)
+	mux.HandleFunc("POST /api/v1/admin/buff/grant", handlers.GrantBuff)
+	mux.HandleFunc("DELETE /api/v1/admin/buff/{buffId}", handlers.RevokeBuff)
 
 	return corsMiddleware(options.Config, mux)
 }

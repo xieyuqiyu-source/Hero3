@@ -53,6 +53,16 @@ export interface GameState {
     createdAt?: string
   }>
   unreadMessageCount: number
+  buffs?: Array<{
+    id: string
+    source: string
+    key: string
+    value: number
+    mode: string
+    expiresAt?: string
+    createdAt: string
+    note?: string
+  }>
   serverTime: string
 }
 

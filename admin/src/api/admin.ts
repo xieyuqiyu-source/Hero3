@@ -140,4 +140,16 @@ export const adminApi = {
       body: JSON.stringify({ playerId, amount, reason: 'GM补发' }),
     })
   },
+  grantBuff(playerId: string, key: string, value: number, mode: string, hours: number, note: string) {
+    return request<{ state: GameState }>(`${API_BASE}/admin/buff/grant`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, key, value, mode, hours, note }),
+    })
+  },
+  revokeBuff(playerId: string, buffId: string) {
+    return request<{ state: GameState }>(`${API_BASE}/admin/buff/${buffId}?playerId=${encodeURIComponent(playerId)}`, {
+      method: 'DELETE',
+    })
+  },
 }

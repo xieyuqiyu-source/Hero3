@@ -139,6 +139,7 @@ type GameState struct {
 	RecentBattleReports []BattleReport     `json:"recentBattleReports"`
 	UnreadMessageCount  int                `json:"unreadMessageCount"`
 	ActiveModifiers     []ModifierBreakdownItem `json:"activeModifiers,omitempty"`
+	Buffs               []Buff             `json:"buffs,omitempty"` // 通用加成列表（GM/活动/任务等）
 	ServerTime          string             `json:"serverTime"`
 }
 

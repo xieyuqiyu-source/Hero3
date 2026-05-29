@@ -151,12 +151,15 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 		changed = true
 	}
 
-	// 收集 settledAt 到 now 之间所有升级完成的时间点，作为切片边界
-	type upgradeEvent struct {
-		index  int
-		endsAt time.Time
+	// 收集 settledAt 到 now 之间所有状态变化时间点，作为切片边界
+	// 包括：建筑升级完成、加成到期等
+	type timeSliceEvent struct {
+		endsAt       time.Time
+		buildingIdx  int  // >=0 表示建筑升级完成事件，-1 表示非建筑事件
 	}
-	var events []upgradeEvent
+	var sliceEvents []timeSliceEvent
+
+	// 建筑升级完成事件
 	for i, b := range state.Buildings {
 		if b.UpgradeEndsAt == nil {
 			continue
@@ -166,7 +169,7 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 			continue
 		}
 		if (now.After(endsAt) || now.Equal(endsAt)) && endsAt.After(settledAt) {
-			events = append(events, upgradeEvent{index: i, endsAt: endsAt.UTC()})
+			sliceEvents = append(sliceEvents, timeSliceEvent{endsAt: endsAt.UTC(), buildingIdx: i})
 		} else if now.After(endsAt) || now.Equal(endsAt) {
 			// 升级在 settledAt 之前就完成了，直接完成
 			state.Buildings[i].Level++
@@ -175,29 +178,43 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 		}
 	}
 
-	// 按完成时间排序
-	for i := 0; i < len(events)-1; i++ {
-		for j := i + 1; j < len(events); j++ {
-			if events[j].endsAt.Before(events[i].endsAt) {
-				events[i], events[j] = events[j], events[i]
+	// 加成到期事件（从所有 ModifierSource 自动收集到期时间作为切片边界）
+	allModSources := CollectModifierSources(&state)
+	for _, src := range allModSources {
+		for _, t := range src.ExpiresAt() {
+			if t.After(settledAt) && (now.After(t) || now.Equal(t)) {
+				sliceEvents = append(sliceEvents, timeSliceEvent{endsAt: t.UTC(), buildingIdx: -1})
+			}
+		}
+	}
+
+	// 按时间排序
+	for i := 0; i < len(sliceEvents)-1; i++ {
+		for j := i + 1; j < len(sliceEvents); j++ {
+			if sliceEvents[j].endsAt.Before(sliceEvents[i].endsAt) {
+				sliceEvents[i], sliceEvents[j] = sliceEvents[j], sliceEvents[i]
 			}
 		}
 	}
 
 	// 时间切片结算：settledAt → event1 → event2 → ... → now
+	// 每个切片用 sliceStart 时间点判断加成是否生效，确保离线期间加成中途过期时正确结算
 	if now.After(settledAt) {
 		sliceStart := settledAt
 		resources := copyResourceMap(state.Resources.Items)
 		capacity := calculateResourceCapacity(state.Buildings)
 
-		// 通过 Modifier 管线计算容量加成
+		// 用 sliceStart 判断加成是否生效
 		modSources := CollectModifierSources(&state)
-		capacity = applyCapacityModifiers(capacity, now, modSources)
+		capacity = applyCapacityModifiers(capacity, sliceStart, modSources)
 
-		for _, event := range events {
-			// 用当前建筑等级（升级前）算这段时间的产出（含所有加成）
+		for _, event := range sliceEvents {
+			// 用 sliceStart 时间点计算该切片的产出（加成是否生效取决于 sliceStart）
 			production := calculateResourceProduction(state.Buildings, state.General)
-			production = applyProductionModifiers(production, now, modSources)
+			production = applyProductionModifiers(production, sliceStart, modSources)
+			capacity = calculateResourceCapacity(state.Buildings)
+			capacity = applyCapacityModifiers(capacity, sliceStart, modSources)
+
 			elapsed := event.endsAt.Sub(sliceStart).Seconds()
 			if elapsed > 0 {
 				for resType, perHour := range production {
@@ -207,20 +224,22 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 				}
 			}
 
-			// 完成升级
-			state.Buildings[event.index].Level++
-			state.Buildings[event.index].UpgradeEndsAt = nil
-			changed = true
+			// 如果是建筑升级完成事件，执行升级
+			if event.buildingIdx >= 0 {
+				state.Buildings[event.buildingIdx].Level++
+				state.Buildings[event.buildingIdx].UpgradeEndsAt = nil
+				changed = true
+			}
 
-			// 升级后容量可能变化
-			capacity = calculateResourceCapacity(state.Buildings)
-			capacity = applyCapacityModifiers(capacity, now, modSources)
 			sliceStart = event.endsAt
 		}
 
-		// 最后一段：从最后一个升级完成时间到 now
+		// 最后一段：从最后一个事件到 now
 		production := calculateResourceProduction(state.Buildings, state.General)
-		production = applyProductionModifiers(production, now, modSources)
+		production = applyProductionModifiers(production, sliceStart, modSources)
+		capacity = calculateResourceCapacity(state.Buildings)
+		capacity = applyCapacityModifiers(capacity, sliceStart, modSources)
+
 		elapsed := now.Sub(sliceStart).Seconds()
 		if elapsed > 0 {
 			for resType, perHour := range production {
@@ -230,7 +249,7 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 			}
 		}
 
-		if !reflect.DeepEqual(resources, state.Resources.Items) || len(events) > 0 {
+		if !reflect.DeepEqual(resources, state.Resources.Items) || len(sliceEvents) > 0 {
 			state.Resources.Items = resources
 			state.ResourceSettledAt = now.Format(resourceDateLayout)
 			changed = true
@@ -239,6 +258,7 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 
 	// 清理过期加成
 	cleanExpiredBoosts(&state, now)
+	cleanExpiredBuffs(&state, now)
 
 	// 通过 Modifier 管线更新产量和容量（反映最终建筑等级 + 所有加成）
 	modSources := CollectModifierSources(&state)
