@@ -92,8 +92,15 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 		}
 	}
 
-	// 增量迁移：为已有的 accounts 表添加 gold 列
-	_, _ = db.ExecContext(ctx, `ALTER TABLE accounts ADD COLUMN gold INT NOT NULL DEFAULT 0`)
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE accounts ADD COLUMN gold INT NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE minigame_records ADD COLUMN bet_unit VARCHAR(64) NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE minigame_records ADD COLUMN bet_amount INT NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -528,6 +535,19 @@ func (r *MySQLRepository) SaveState(state game.GameState, updatedAt time.Time) e
 func isDuplicateEntry(err error) bool {
 	var mysqlErr *mysql.MySQLError
 	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
+}
+
+func addColumnIfMissing(ctx context.Context, db *sql.DB, statement string) error {
+	_, err := db.ExecContext(ctx, statement)
+	if err == nil || isDuplicateColumn(err) {
+		return nil
+	}
+	return err
+}
+
+func isDuplicateColumn(err error) bool {
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1060
 }
 
 // --- Battle Report Methods ---
