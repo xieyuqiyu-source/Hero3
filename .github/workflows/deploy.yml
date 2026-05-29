@@ -17,7 +17,7 @@ jobs:
   deploy:
     name: Build and deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
 
     env:
       HERO3_HEALTH_URL: https://hero3.ccoos.cn/healthz
@@ -94,7 +94,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$HERO3_SSH_USER"
-          timeout 120s scp \
+          scp \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=accept-new \
@@ -114,7 +114,7 @@ jobs:
         run: |
           set -euo pipefail
           REMOTE_RELEASE="/tmp/hero3-release.$GITHUB_SHA.tgz"
-          timeout 300s ssh \
+          ssh \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=accept-new \
