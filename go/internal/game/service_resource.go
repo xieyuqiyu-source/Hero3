@@ -349,6 +349,20 @@ func calculateResourceProduction(buildings []Building, general *General) Resourc
 
 // --- Modifier 管线辅助函数 ---
 
+// applySpeedBonus 通过 Modifier 管线计算速度加成后的实际时间
+// 速度加成越高时间越短：实际时间 = 原始时间 / (1 + bonus)
+func applySpeedBonus(baseSeconds int, key string, now time.Time, sources []ModifierSource) int {
+	bonus := ComputeAttributeAt(0, key, now, sources...) // 只取加成部分（base=0）
+	if bonus <= 0 {
+		return baseSeconds
+	}
+	result := float64(baseSeconds) / (1 + bonus)
+	if result < 1 {
+		return 1 // 最少 1 秒
+	}
+	return int(result)
+}
+
 // applyProductionModifiers 通过 Modifier 管线对产量应用所有加成
 func applyProductionModifiers(production ResourceProduction, now time.Time, sources []ModifierSource) ResourceProduction {
 	result := ResourceProduction{}

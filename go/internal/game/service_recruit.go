@@ -51,8 +51,10 @@ func (s *Service) Recruit(playerID string, unitID string, amount int) (GameState
 		state.Resources.Items[resType] -= costPer * amount
 	}
 
-	// 计算训练总时间（串行：基于队列最后一个任务的结束时间）
+	// 计算训练总时间（经过 recruitSpeedBonus 加成缩短，串行：基于队列最后一个任务的结束时间）
 	totalSeconds := unitConfig.TrainSeconds * amount
+	modSources := CollectModifierSources(&state)
+	totalSeconds = applySpeedBonus(totalSeconds, "recruitSpeedBonus", now, modSources)
 	queueStart := now
 	for _, q := range state.RecruitQueues {
 		if parsed, err := time.Parse(resourceDateLayout, q.EndsAt); err == nil && parsed.After(queueStart) {
@@ -113,11 +115,13 @@ func (s *Service) InstantCompleteRecruit(playerID string, queueID string) (GameS
 
 	queue := state.RecruitQueues[queueIdx]
 
-	// 计算该队列自身的训练时长（不含排队等待时间）
+	// 计算该队列自身的训练时长（不含排队等待时间，经过 recruitSpeedBonus 缩短）
 	unitCfg, unitExists := GetUnitConfig(state.Player.Faction, queue.UnitType)
 	trainSeconds := 0
 	if unitExists {
 		trainSeconds = unitCfg.TrainSeconds * queue.Amount
+		instantModSources := CollectModifierSources(&state)
+		trainSeconds = applySpeedBonus(trainSeconds, "recruitSpeedBonus", now, instantModSources)
 	}
 
 	// 计算城金花费并扣除

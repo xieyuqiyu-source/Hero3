@@ -352,6 +352,10 @@ func validateAndConsumeArmy(state *GameState, units map[string]int) ([]combat.Un
 	faction := state.Player.Faction
 	var combatUnits []combat.Unit
 
+	// 收集加成来源，用于攻防加成计算
+	now := time.Now()
+	modSources := CollectModifierSources(state)
+
 	for unitType, count := range units {
 		if count <= 0 {
 			continue
@@ -379,13 +383,18 @@ func validateAndConsumeArmy(state *GameState, units map[string]int) ([]combat.Un
 			return nil, ErrUnitNotFound
 		}
 
+		// 通过 Modifier 管线应用攻防加成
+		baseAttack := unitCfg.Stats["attack"]
+		baseInfDef := unitCfg.Stats["infantryDefense"]
+		baseCavDef := unitCfg.Stats["cavalryDefense"]
+
 		combatUnits = append(combatUnits, combat.Unit{
 			ID:              unitType,
 			Category:        unitCfg.Category,
 			Count:           count,
-			Attack:          unitCfg.Stats["attack"],
-			InfantryDefense: unitCfg.Stats["infantryDefense"],
-			CavalryDefense:  unitCfg.Stats["cavalryDefense"],
+			Attack:          ComputeIntAttributeAt(baseAttack, "attackBonus", now, modSources...),
+			InfantryDefense: ComputeIntAttributeAt(baseInfDef, "infantryDefenseBonus", now, modSources...),
+			CavalryDefense:  ComputeIntAttributeAt(baseCavDef, "cavalryDefenseBonus", now, modSources...),
 			CarryCapacity:   unitCfg.Stats["carryCapacity"],
 		})
 	}

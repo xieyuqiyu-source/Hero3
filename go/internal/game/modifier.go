@@ -50,6 +50,49 @@ import "time"
 //
 // =============================================================================
 
+// --- StatKey 常量注册表 ---
+// 所有合法的加成属性 key。新增 key 时必须在此注册，否则 GM 发放时会被拒绝。
+
+const (
+	StatProductionBonus     = "productionBonus"
+	StatWoodProductionBonus = "woodProductionBonus"
+	StatStoneProductionBonus = "stoneProductionBonus"
+	StatIronProductionBonus = "ironProductionBonus"
+	StatFoodProductionBonus = "foodProductionBonus"
+	StatCapacityBonus       = "capacityBonus"
+	StatAttackBonus         = "attackBonus"
+	StatDefenseBonus        = "defenseBonus"
+	StatInfantryDefenseBonus = "infantryDefenseBonus"
+	StatCavalryDefenseBonus = "cavalryDefenseBonus"
+	StatBuildSpeedBonus     = "buildSpeedBonus"
+	StatRecruitSpeedBonus   = "recruitSpeedBonus"
+	StatMarchSpeedBonus     = "marchSpeedBonus"
+	StatExchangeRateBonus   = "exchangeRateBonus"
+)
+
+// ValidStatKeys 所有已注册的合法 key 集合
+var ValidStatKeys = map[string]bool{
+	StatProductionBonus:      true,
+	StatWoodProductionBonus:  true,
+	StatStoneProductionBonus: true,
+	StatIronProductionBonus:  true,
+	StatFoodProductionBonus:  true,
+	StatCapacityBonus:        true,
+	StatAttackBonus:          true,
+	StatDefenseBonus:         true,
+	StatInfantryDefenseBonus: true,
+	StatCavalryDefenseBonus:  true,
+	StatBuildSpeedBonus:      true,
+	StatRecruitSpeedBonus:    true,
+	StatMarchSpeedBonus:      true,
+	StatExchangeRateBonus:    true,
+}
+
+// IsValidStatKey 校验 key 是否已注册
+func IsValidStatKey(key string) bool {
+	return ValidStatKeys[key]
+}
+
 // Modifier 表示一个属性修改器（所有加成的统一表达）
 type Modifier struct {
 	Key   string  `json:"key"`   // 属性键名，如 "productionBonus", "attackBonus", "buildSpeedBonus"

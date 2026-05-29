@@ -66,11 +66,13 @@ func (s *Service) UpgradeBuilding(playerID string, buildingID string) (GameState
 		state.Resources.Items[resType] -= cost
 	}
 
-	// 设置升级倒计时
+	// 设置升级倒计时（经过 buildSpeedBonus 加成缩短）
 	upgradeSeconds := 60 // 默认
 	if seconds, ok := config.UpgradeSecondsByLevel[currentLevel]; ok {
 		upgradeSeconds = seconds
 	}
+	modSources := CollectModifierSources(&state)
+	upgradeSeconds = applySpeedBonus(upgradeSeconds, "buildSpeedBonus", now, modSources)
 	endsAt := now.Add(time.Duration(upgradeSeconds) * time.Second).UTC().Format(resourceDateLayout)
 	building.UpgradeEndsAt = &endsAt
 
@@ -130,6 +132,7 @@ func (s *Service) UpgradeBuildingBatch(playerID string) (GameState, int, error) 
 	}
 
 	upgraded := 0
+	batchModSources := CollectModifierSources(&state)
 	for _, c := range candidates {
 		building := &state.Buildings[c.index]
 		config, _ := getBuildingConfig(building.Type)
@@ -152,11 +155,12 @@ func (s *Service) UpgradeBuildingBatch(playerID string) (GameState, int, error) 
 			state.Resources.Items[resType] -= cost
 		}
 
-		// 设置升级倒计时
+		// 设置升级倒计时（经过 buildSpeedBonus 加成缩短）
 		upgradeSeconds := 60
 		if seconds, ok := config.UpgradeSecondsByLevel[building.Level]; ok {
 			upgradeSeconds = seconds
 		}
+		upgradeSeconds = applySpeedBonus(upgradeSeconds, "buildSpeedBonus", now, batchModSources)
 		endsAt := now.Add(time.Duration(upgradeSeconds) * time.Second).UTC().Format(resourceDateLayout)
 		building.UpgradeEndsAt = &endsAt
 		upgraded++

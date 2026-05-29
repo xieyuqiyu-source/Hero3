@@ -13,6 +13,16 @@ func (s *Service) GrantBuff(playerID string, key string, value float64, mode str
 		return GameState{}, ErrPlayerNotFound
 	}
 
+	// 校验 key 是否合法
+	if !IsValidStatKey(key) {
+		return GameState{}, errors.New("invalid stat key: " + key)
+	}
+
+	// 校验 mode 是否合法
+	if mode != "flat" && mode != "percentAdd" && mode != "percentMultiply" {
+		return GameState{}, errors.New("invalid mode: must be flat, percentAdd, or percentMultiply")
+	}
+
 	state, err := s.repo.GetState(playerID)
 	if err != nil {
 		return GameState{}, err
