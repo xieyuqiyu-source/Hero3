@@ -56,6 +56,11 @@ func (s *Service) PurchaseBoost(playerID string, multiplier int, hours int) (Gam
 		return GameState{}, ErrInvalidDuration
 	}
 
+	// 加锁防止并发重复购买
+	lock := s.getPlayerLock(playerID)
+	lock.Lock()
+	defer lock.Unlock()
+
 	state, err := s.repo.GetState(playerID)
 	if err != nil {
 		return GameState{}, err
@@ -115,6 +120,11 @@ func (s *Service) PurchaseCapacityBoost(playerID string, multiplier int, hours i
 	if !validBoostHours[hours] {
 		return GameState{}, ErrInvalidDuration
 	}
+
+	// 加锁防止并发重复购买
+	lock := s.getPlayerLock(playerID)
+	lock.Lock()
+	defer lock.Unlock()
 
 	state, err := s.repo.GetState(playerID)
 	if err != nil {

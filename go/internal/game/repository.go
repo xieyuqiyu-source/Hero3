@@ -39,6 +39,10 @@ type Repository interface {
 	DeleteReport(playerID string, reportID string) error
 	DeleteAllReports(playerID string) error
 	CountUnreadReports(playerID string) (int, error)
+
+	// MiniGame Records
+	SaveMiniGameRecord(record MiniGameRecord) error
+	ListMiniGameRecords(playerID string, limit int) ([]MiniGameRecord, error)
 }
 
 type MemoryRepository struct {
@@ -48,7 +52,8 @@ type MemoryRepository struct {
 	accountPlayers  map[string][]string
 	players         map[string]GameState
 	playerUpdatedAt map[string]time.Time
-	reports         map[string][]BattleReport // playerID → reports
+	reports         map[string][]BattleReport    // playerID → reports
+	miniGameRecords map[string][]MiniGameRecord // playerID → records
 }
 
 func NewMemoryRepository() *MemoryRepository {
@@ -62,6 +67,7 @@ func NewMemoryRepository() *MemoryRepository {
 		players:         map[string]GameState{demoState.Player.ID: demoState},
 		playerUpdatedAt: map[string]time.Time{demoState.Player.ID: now},
 		reports:         make(map[string][]BattleReport),
+		miniGameRecords: make(map[string][]MiniGameRecord),
 	}
 }
 
@@ -480,4 +486,29 @@ func (r *MemoryRepository) CountUnreadReports(playerID string) (int, error) {
 		}
 	}
 	return count, nil
+}
+
+// --- MiniGame Record Methods (MemoryRepository) ---
+
+func (r *MemoryRepository) SaveMiniGameRecord(record MiniGameRecord) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.miniGameRecords[record.PlayerID] = append([]MiniGameRecord{record}, r.miniGameRecords[record.PlayerID]...)
+	// 保留最多 500 条
+	if len(r.miniGameRecords[record.PlayerID]) > 500 {
+		r.miniGameRecords[record.PlayerID] = r.miniGameRecords[record.PlayerID][:500]
+	}
+	return nil
+}
+
+func (r *MemoryRepository) ListMiniGameRecords(playerID string, limit int) ([]MiniGameRecord, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	all := r.miniGameRecords[playerID]
+	if limit > 0 && len(all) > limit {
+		return all[:limit], nil
+	}
+	return all, nil
 }

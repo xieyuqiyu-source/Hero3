@@ -13,6 +13,7 @@ import UnitsConfigPanel from '@/components/UnitsConfigPanel'
 import OverviewPage from '@/components/OverviewPage'
 import { ResourceToolsPanel, SystemActionsPanel } from '@/components/OperationsPanel'
 import BuffPanel from '@/components/BuffPanel'
+import MiniGameRecordsPanel from '@/components/MiniGameRecordsPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
 import { Sliders, MapPin, Swords, Flag, Shield } from 'lucide-react'
@@ -72,6 +73,7 @@ function App() {
           <div className="grid gap-4 lg:grid-cols-2">
             <ResourceToolsPanel />
             <BuffPanel />
+            <MiniGameRecordsPanel />
             <SystemActionsPanel />
           </div>
         )

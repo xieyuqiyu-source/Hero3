@@ -164,4 +164,9 @@ export const gameApi = {
     return api.post<{ state: GameState; accountGold: number }>('/gold/reverse-exchange', { accountId, playerId, cityGoldAmount })
   },
 
+  /** 上报小游戏记录（钓鱼/赌博） */
+  saveMiniGameRecord(playerId: string, gameType: string, resultName: string, rarity: string, rewardUnit: string, rewardAmount: number) {
+    return api.post<{ id: string }>('/minigame/record', { playerId, gameType, resultName, rarity, rewardUnit, rewardAmount })
+  },
+
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"hero3/internal/combat"
@@ -33,11 +34,18 @@ const resourceDateLayout = time.RFC3339
 
 type Service struct {
 	repo          Repository
+	playerLocks   sync.Map // per-player 互斥锁，防止并发购买/兑换竞态
 	balancePath   string
 	factionsPath  string
 	unitsDir      string
 	npcConfigPath string
 	combatPath    string
+}
+
+// getPlayerLock 获取指定玩家的互斥锁（懒创建）
+func (s *Service) getPlayerLock(playerID string) *sync.Mutex {
+	val, _ := s.playerLocks.LoadOrStore(playerID, &sync.Mutex{})
+	return val.(*sync.Mutex)
 }
 
 type BootstrapResponse struct {

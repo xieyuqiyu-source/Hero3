@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type FC } from 'react'
 import { Dice5, Trophy, Skull, X, TrendingDown, Flame, History } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
+import { gameApi } from '@/api/game'
 
 /* ---------- Bet Types ---------- */
 interface BetOption {
@@ -90,6 +91,7 @@ const GamblingGame: FC = () => {
     })
 
   const [phase, setPhase] = useState<GamePhase>('betting')
+  const activePlayerId = useGameStore((s) => s.activePlayerId)
   const [selectedUnit, setSelectedUnit] = useState<PlayerUnit | null>(playerUnits[0] ?? null)
   const [betAmount, setBetAmount] = useState(BET_AMOUNTS[0])
   const [customBet, setCustomBet] = useState('')
@@ -215,6 +217,13 @@ const GamblingGame: FC = () => {
         totalLost: s.totalLost + (won ? 0 : actualBet),
       }
     })
+
+    // 上报赌博记录到后端
+    if (activePlayerId) {
+      const resultName = won ? `${betLabel} 赢 ×${multiplier}` : `${betLabel} 输`
+      const rarity = won && multiplier >= 30 ? 'legendary' : won && multiplier >= 10 ? 'epic' : won ? 'rare' : 'common'
+      gameApi.saveMiniGameRecord(activePlayerId, 'gambling', resultName, rarity, won ? selectedUnit!.name : '', winAmount).catch(() => {})
+    }
 
     setPhase('result')
   }

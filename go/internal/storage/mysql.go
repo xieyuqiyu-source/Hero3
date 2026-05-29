@@ -70,6 +70,18 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			created_at DATETIME(6) NOT NULL,
 			INDEX idx_reports_player (player_id, deleted_by_player, created_at DESC)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS minigame_records (
+			id VARCHAR(64) PRIMARY KEY,
+			player_id VARCHAR(64) NOT NULL,
+			game_type VARCHAR(32) NOT NULL,
+			result_name VARCHAR(64) NOT NULL,
+			rarity VARCHAR(32) NOT NULL,
+			reward_unit VARCHAR(64) NOT NULL DEFAULT '',
+			reward_amount INT NOT NULL DEFAULT 0,
+			created_at DATETIME(6) NOT NULL,
+			INDEX idx_minigame_player (player_id, created_at DESC),
+			INDEX idx_minigame_type (player_id, game_type, created_at DESC)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 	}
 
 	for _, statement := range statements {
@@ -653,4 +665,54 @@ func (r *MySQLRepository) CountUnreadReports(playerID string) (int, error) {
 		playerID,
 	).Scan(&count)
 	return count, err
+}
+
+// --- MiniGame Record Methods ---
+
+func (r *MySQLRepository) SaveMiniGameRecord(record game.MiniGameRecord) error {
+	createdAt, _ := time.Parse(time.RFC3339, record.CreatedAt)
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+
+	_, err := r.db.Exec(
+		`INSERT INTO minigame_records (id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		record.ID,
+		record.PlayerID,
+		record.GameType,
+		record.ResultName,
+		record.Rarity,
+		record.RewardUnit,
+		record.RewardAmount,
+		createdAt.UTC(),
+	)
+	return err
+}
+
+func (r *MySQLRepository) ListMiniGameRecords(playerID string, limit int) ([]game.MiniGameRecord, error) {
+	rows, err := r.db.Query(
+		`SELECT id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, created_at
+		 FROM minigame_records
+		 WHERE player_id = ?
+		 ORDER BY created_at DESC
+		 LIMIT ?`,
+		playerID, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []game.MiniGameRecord
+	for rows.Next() {
+		var r game.MiniGameRecord
+		var createdAt time.Time
+		if err := rows.Scan(&r.ID, &r.PlayerID, &r.GameType, &r.ResultName, &r.Rarity, &r.RewardUnit, &r.RewardAmount, &createdAt); err != nil {
+			return nil, err
+		}
+		r.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+		records = append(records, r)
+	}
+	return records, rows.Err()
 }

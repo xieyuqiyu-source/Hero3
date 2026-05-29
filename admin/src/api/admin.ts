@@ -152,4 +152,9 @@ export const adminApi = {
       method: 'DELETE',
     })
   },
+  getMiniGameRecords(playerId: string) {
+    return request<{ totalRecords: number; records: Array<{ id: string; playerId: string; gameType: string; resultName: string; rarity: string; rewardUnit: string; rewardAmount: number; createdAt: string }>; rewardTotals: Record<string, number> }>(
+      `${API_BASE}/admin/minigame/records?playerId=${encodeURIComponent(playerId)}`,
+    )
+  },
 }

@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, type FC } from 'react'
 import { X, Award, TrendingUp, Anchor, ChevronDown } from 'lucide-react'
+import { useGameStore } from '@/store/gameStore'
+import { gameApi } from '@/api/game'
 
 interface FishCatch {
   name: string
@@ -65,6 +67,7 @@ interface FishingStats {
 
 const FishingGame: FC = () => {
   const [phase, setPhase] = useState<GamePhase>('idle')
+  const activePlayerId = useGameStore((s) => s.activePlayerId)
   const [catchResult, setCatchResult] = useState<FishCatch | null>(null)
   const [showResult, setShowResult] = useState(false)
   const [castPower, setCastPower] = useState(0)
@@ -236,6 +239,10 @@ const FishingGame: FC = () => {
           legendaryCount: s.legendaryCount + (fish.rarity === 'legendary' ? 1 : 0),
           epicCount: s.epicCount + (fish.rarity === 'epic' ? 1 : 0),
         }))
+        // 上报钓鱼记录到后端
+        if (activePlayerId) {
+          gameApi.saveMiniGameRecord(activePlayerId, 'fishing', fish.name, fish.rarity, fish.reward, fish.rewardAmount).catch(() => {})
+        }
       } else {
         setPhase('escaped')
         setStats(s => ({ ...s, combo: 0 }))

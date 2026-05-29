@@ -977,3 +977,51 @@ func (h *Handlers) RevokeBuff(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{"state": state})
 }
+
+// --- MiniGame Records ---
+
+func (h *Handlers) SaveMiniGameRecord(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID     string `json:"playerId"`
+		GameType     string `json:"gameType"`
+		ResultName   string `json:"resultName"`
+		Rarity       string `json:"rarity"`
+		RewardUnit   string `json:"rewardUnit"`
+		RewardAmount int    `json:"rewardAmount"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	if payload.PlayerID == "" || payload.GameType == "" || payload.ResultName == "" {
+		writeError(w, http.StatusBadRequest, "playerId, gameType, and resultName are required")
+		return
+	}
+
+	record, err := h.gameService.SaveMiniGameRecord(
+		payload.PlayerID, payload.GameType, payload.ResultName,
+		payload.Rarity, payload.RewardUnit, payload.RewardAmount,
+	)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, record)
+}
+
+func (h *Handlers) AdminMiniGameRecords(w http.ResponseWriter, r *http.Request) {
+	playerID := r.URL.Query().Get("playerId")
+	if playerID == "" {
+		writeError(w, http.StatusBadRequest, "playerId is required")
+		return
+	}
+
+	summary, err := h.gameService.GetMiniGameRecords(playerID, 200)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, summary)
+}

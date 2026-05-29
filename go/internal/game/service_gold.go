@@ -125,6 +125,11 @@ func (s *Service) ExchangeGoldToCityGold(accountID string, playerID string, gold
 		return GameState{}, ErrInvalidGoldAmount
 	}
 
+	// 加锁防止并发兑换绕过冷却
+	lock := s.getPlayerLock(playerID)
+	lock.Lock()
+	defer lock.Unlock()
+
 	// 检查冷却
 	state, err := s.repo.GetState(playerID)
 	if err != nil {
@@ -169,6 +174,11 @@ func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, city
 	if cityGoldAmount < reverseExchangeRate() {
 		return GameState{}, ErrInvalidGoldAmount
 	}
+
+	// 加锁防止并发兑换绕过冷却
+	lock := s.getPlayerLock(playerID)
+	lock.Lock()
+	defer lock.Unlock()
 
 	// 检查冷却
 	state, err := s.repo.GetState(playerID)
