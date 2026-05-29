@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Package, Zap, Coins, Gift } from 'lucide-react'
 import { adminApi } from '@/api/admin'
+import PlayerSelector from './PlayerSelector'
 
 export function ResourceToolsPanel() {
   const [playerId, setPlayerId] = useState('')
@@ -72,12 +73,10 @@ export function ResourceToolsPanel() {
           placeholder="账户 ID (acc_xxx)"
           className="px-3 py-2 rounded-xl text-xs border border-[var(--color-border)] bg-[var(--color-surface-dim)] text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] outline-none focus:border-[var(--color-accent-border)]"
         />
-        <input
-          type="text"
+        <PlayerSelector
           value={playerId}
-          onChange={(e) => setPlayerId(e.target.value)}
-          placeholder="玩家 ID (plr_xxx)"
-          className="px-3 py-2 rounded-xl text-xs border border-[var(--color-border)] bg-[var(--color-surface-dim)] text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] outline-none focus:border-[var(--color-accent-border)]"
+          onChange={(pid, aid) => { setPlayerId(pid); setAccountId(aid) }}
+          placeholder="选择玩家存档"
         />
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-[var(--color-text-muted)]">数量</span>

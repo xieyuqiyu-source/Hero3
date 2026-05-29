@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Sparkles, Trash2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
+import PlayerSelector from './PlayerSelector'
 
 /** 预设的加成属性选项 */
 const BUFF_KEY_OPTIONS = [
@@ -111,16 +112,16 @@ export default function BuffPanel() {
         <h2 className="text-base font-bold text-[var(--color-text-primary)]">加成管理</h2>
       </div>
 
-      {/* 玩家 ID */}
+      {/* 玩家选择 */}
       <div className="grid gap-2 mb-4">
         <div className="flex gap-2">
-          <input
-            type="text"
-            value={playerId}
-            onChange={(e) => setPlayerId(e.target.value)}
-            placeholder="玩家 ID (player_xxx)"
-            className="flex-1 px-3 py-2 rounded-xl text-xs border border-[var(--color-border)] bg-[var(--color-surface-dim)] text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] outline-none focus:border-[var(--color-accent-border)]"
-          />
+          <div className="flex-1">
+            <PlayerSelector
+              value={playerId}
+              onChange={(pid) => { setPlayerId(pid); setPlayerBuffs([]) }}
+              placeholder="选择玩家存档"
+            />
+          </div>
           <button
             type="button"
             onClick={handleLoadBuffs}
