@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { adminApi } from '@/api/admin'
-import type { AccountSummary } from '@/types'
 
 interface PlayerOption {
   playerId: string
@@ -25,8 +24,7 @@ interface PlayerSelectorProps {
   onAccountChange?: (accountId: string) => void
 }
 
-export default function PlayerSelector({ value, onChange, placeholder = '选择玩家存档', showAccountId, onAccountChange }: PlayerSelectorProps) {
-  const [accounts, setAccounts] = useState<AccountSummary[]>([])
+export default function PlayerSelector({ value, onChange, placeholder = '选择玩家存档', onAccountChange }: PlayerSelectorProps) {
   const [options, setOptions] = useState<PlayerOption[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
@@ -40,7 +38,6 @@ export default function PlayerSelector({ value, onChange, placeholder = '选择�
     setLoading(true)
     try {
       const result = await adminApi.getAccounts()
-      setAccounts(result.accounts)
       const opts: PlayerOption[] = []
       for (const acc of result.accounts) {
         for (const player of acc.players) {
