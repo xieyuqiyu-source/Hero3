@@ -80,36 +80,25 @@ const LoginPage: FC = () => {
     e.preventDefault()
     if (!canSubmit || !faction) return
 
-    // If not logged in, show sync reminder first
-    if (!account && !showSyncReminder) {
+    // 必须登录后才能进入游戏
+    if (!account) {
       setShowSyncReminder(true)
       return
     }
 
     setCreating(true)
     try {
-      if (account) {
-        const result = await gameApi.createPlayer(account.accountId, nickname, faction, selectedGeneral ?? undefined)
-        setActivePlayer(result.playerId)
-        setGameState(result.state)
-        navigate('/city')
-      } else {
-        // Local mode - create local player ID
-        const localId = `local_${Date.now()}`
-        setActivePlayer(localId)
-        navigate('/city')
-      }
+      const result = await gameApi.createPlayer(account.accountId, nickname, faction, selectedGeneral ?? undefined)
+      setActivePlayer(result.playerId)
+      setGameState(result.state)
+      navigate('/city')
     } finally {
       setCreating(false)
     }
   }
 
-  const handleSkipSync = () => {
+  const handleCloseSyncReminder = () => {
     setShowSyncReminder(false)
-    // Create a local-only player ID
-    const localId = `local_${Date.now()}`
-    setActivePlayer(localId)
-    navigate('/city')
   }
 
   return (
@@ -282,7 +271,7 @@ const LoginPage: FC = () => {
                   {/* Sync reminder */}
                   {showSyncReminder && !account && isActive && (
                     <div className="mb-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
-                      <p className="text-xs text-amber-200 mb-2">是否登录同步云存档？登录后可多设备同步进度。</p>
+                      <p className="text-xs text-amber-200 mb-2">需要先登录才能开始游戏，登录后可云端同步进度。</p>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -293,10 +282,10 @@ const LoginPage: FC = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); handleSkipSync() }}
+                          onClick={(e) => { e.stopPropagation(); handleCloseSyncReminder() }}
                           className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer transition-colors"
                         >
-                          暂不登录，直接进入
+                          稍后
                         </button>
                       </div>
                     </div>

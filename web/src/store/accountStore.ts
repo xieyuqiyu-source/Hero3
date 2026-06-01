@@ -2,6 +2,11 @@ import { create } from 'zustand'
 import { gameApi } from '@/api/game'
 import type { AccountSession, PlayerSummary } from '@/types/game'
 
+function clearActivePlayerSession() {
+  localStorage.removeItem('hero3_active_player_id')
+  window.dispatchEvent(new Event('hero3:clear-active-player'))
+}
+
 interface AccountStore {
   /** 当前登录的账号 */
   account: AccountSession | null
@@ -35,6 +40,7 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
       const session = await gameApi.loginAccount(username, password)
       localStorage.setItem('hero3_account_id', session.accountId)
       localStorage.setItem('hero3_account_name', session.username)
+      if (session.token) localStorage.setItem('hero3_token', session.token)
       set({ account: session, loading: false })
       // Auto-load players after login
       await get().loadPlayers()
@@ -50,6 +56,7 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
       const session = await gameApi.registerAccount(username, password)
       localStorage.setItem('hero3_account_id', session.accountId)
       localStorage.setItem('hero3_account_name', session.username)
+      if (session.token) localStorage.setItem('hero3_token', session.token)
       set({ account: session, loading: false })
     } catch {
       set({ loading: false })
@@ -60,6 +67,8 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
   logout: () => {
     localStorage.removeItem('hero3_account_id')
     localStorage.removeItem('hero3_account_name')
+    localStorage.removeItem('hero3_token')
+    clearActivePlayerSession()
     set({ account: null, players: [] })
   },
 
@@ -84,18 +93,30 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
   restore: () => {
     const accountId = localStorage.getItem('hero3_account_id')
     const username = localStorage.getItem('hero3_account_name')
-    if (accountId && username) {
-      // 先用本地标识恢复会话（gold 暂时为 0）
-      set({ account: { accountId, username, gold: 0 } })
-      // 异步从服务端拉取最新金币
-      setTimeout(async () => {
-        try {
-          const info = await gameApi.getAccountInfo(accountId)
-          set({ account: { accountId, username, gold: info.gold ?? 0 } })
-        } catch { /* 网络失败时保持 0，下次操作会刷新 */ }
-        get().loadPlayers()
-      }, 0)
+    const token = localStorage.getItem('hero3_token')
+
+    // 没有账号信息直接结束
+    if (!accountId || !username) return
+
+    // 升级到 JWT 版本后老 session 没有 token，引导用户重新登录
+    // 直接清掉本地 session，让 RequirePlayer 把用户带去登录页
+    if (!token) {
+      localStorage.removeItem('hero3_account_id')
+      localStorage.removeItem('hero3_account_name')
+      clearActivePlayerSession()
+      return
     }
+
+    // 先用本地标识恢复会话（gold 暂时为 0）
+    set({ account: { accountId, username, gold: 0 } })
+    // 异步从服务端拉取最新金币
+    setTimeout(async () => {
+      try {
+        const info = await gameApi.getAccountInfo(accountId)
+        set({ account: { accountId, username, gold: info.gold ?? 0 } })
+      } catch { /* 网络失败时保持 0，下次操作会刷新 */ }
+      get().loadPlayers()
+    }, 0)
   },
 }))
 

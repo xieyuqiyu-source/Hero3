@@ -18,7 +18,7 @@ export const gameApi = {
   },
 
   /** 获取完整游戏状态 */
-  getState(playerId = 'demo-player') {
+  getState(playerId: string) {
     return api.get<GameState>(`/game/state?playerId=${playerId}`)
   },
 

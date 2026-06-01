@@ -4,7 +4,15 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1'
 const ROOT_BASE = API_BASE.replace(/\/api\/v1$/, '')
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init)
+  const adminToken = localStorage.getItem('hero3_admin_token') ?? import.meta.env.VITE_ADMIN_TOKEN ?? ''
+  const headers: Record<string, string> = {
+    ...(init?.headers as Record<string, string> ?? {}),
+  }
+  if (adminToken) {
+    headers['X-Admin-Token'] = adminToken
+  }
+
+  const response = await fetch(url, { ...init, headers })
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`)
   }
@@ -15,9 +23,6 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export const adminApi = {
   getHealth() {
     return request<HealthState>(`${ROOT_BASE}/healthz`)
-  },
-  getGameState() {
-    return request<GameState>(`${API_BASE}/game/state`)
   },
   getAccounts() {
     return request<{ accounts: AccountSummary[] }>(`${API_BASE}/admin/accounts`)

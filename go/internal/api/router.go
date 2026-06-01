@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"slices"
 
+	"hero3/internal/auth"
 	"hero3/internal/config"
 	"hero3/internal/game"
 )
@@ -76,7 +77,28 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("POST /api/v1/minigame/record", handlers.SaveMiniGameRecord)
 	mux.HandleFunc("GET /api/v1/admin/minigame/records", handlers.AdminMiniGameRecords)
 
-	return corsMiddleware(options.Config, mux)
+	// 公开路径白名单（不需要认证）
+	publicPaths := []string{
+		"/healthz",
+		"/api/v1/meta",
+		"/api/v1/game/bootstrap",
+		"/api/v1/accounts/register",
+		"/api/v1/accounts/login",
+		"/api/v1/city/boost/prices",
+	}
+
+	authCfg := auth.Config{
+		JWTSecret:  options.Config.JWTSecret,
+		AdminToken: options.Config.AdminToken,
+		TokenTTL:   options.Config.TokenTTL,
+	}
+
+	if authCfg.JWTSecret == "" {
+		options.Logger.Error("HERO3_JWT_SECRET not set, player authentication will reject protected requests")
+	}
+
+	authed := auth.AuthMiddleware(authCfg, publicPaths)(mux)
+	return corsMiddleware(options.Config, authed)
 }
 
 func corsMiddleware(cfg config.Config, next http.Handler) http.Handler {
@@ -88,7 +110,7 @@ func corsMiddleware(cfg config.Config, next http.Handler) http.Handler {
 		}
 
 		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Admin-Token")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

@@ -60,14 +60,21 @@ async function request<T>(
 ): Promise<T> {
   const url = `${BASE_URL}${path}`
 
+  // 自动注入 JWT token（如果已登录）
+  const token = localStorage.getItem('hero3_token')
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> ?? {}),
+  }
+  if (token && !headers['Authorization']) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
   let res: Response
   try {
     res = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
       ...options,
+      headers,
     })
   } catch {
     toast.error('网络连接失败，请检查网络')
@@ -76,6 +83,17 @@ async function request<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => null)
+
+    // 401 单独处理：版本升级或 token 失效，给友好提示并清理 session
+    if (res.status === 401) {
+      const hadToken = localStorage.getItem('hero3_token') !== null
+      // logout 内部会清掉 hero3_token / hero3_account_* 以及活跃玩家
+      useAccountStore.getState().logout()
+      // 之前有 token 才提示「重新登录」，否则按普通未授权处理
+      toast.error(hadToken ? '登录已过期，请重新登录' : '系统已更新，请重新登录以继续游戏')
+      throw new ApiError(res.status, body)
+    }
+
     const message = extractMessage(res.status, body)
     toast.error(message)
 

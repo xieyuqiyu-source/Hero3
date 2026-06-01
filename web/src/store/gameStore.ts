@@ -74,3 +74,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ state: result.state, stateReceivedAt: Date.now(), error: null })
   },
 }))
+
+window.addEventListener('hero3:clear-active-player', () => {
+  useGameStore.getState().clearActivePlayer()
+})

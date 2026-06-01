@@ -237,23 +237,20 @@ func (s *Service) DeleteAccount(accountID string) error {
 
 func (s *Service) DeletePlayer(playerID string) error {
 	playerID = strings.TrimSpace(playerID)
-	if playerID == "" || playerID == "demo-player" {
+	if playerID == "" {
 		return ErrPlayerNotFound
 	}
 	return s.repo.DeletePlayer(playerID)
 }
 
 func (s *Service) GetState(playerID string) (GameState, error) {
-	if strings.TrimSpace(playerID) == "" {
-		playerID = "demo-player"
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return GameState{}, ErrPlayerNotFound
 	}
 
 	state, err := s.repo.GetState(playerID)
 	if err != nil {
-		if errors.Is(err, ErrPlayerNotFound) && playerID == "demo-player" {
-			state = newDemoState(time.Now())
-			return state, nil
-		}
 		return GameState{}, err
 	}
 
@@ -280,7 +277,9 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 
 	// 从独立存储加载战报
 	reports, listErr := s.repo.ListReports(playerID, 50)
-if listErr != nil { slog.Warn("list reports failed", "error", listErr) }
+	if listErr != nil {
+		slog.Warn("list reports failed", "error", listErr)
+	}
 	state.RecentBattleReports = reports
 
 	// 填充当前生效的加成明细（供前端 tooltip 展示）
@@ -322,4 +321,29 @@ func randomID(bytesCount int) string {
 		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(bytes)
+}
+
+// OwnsPlayer 校验指定 accountID 是否拥有指定 playerID
+// 用于认证中间件的归属校验
+func (s *Service) OwnsPlayer(accountID string, playerID string) (bool, error) {
+	accountID = strings.TrimSpace(accountID)
+	playerID = strings.TrimSpace(playerID)
+	if accountID == "" || playerID == "" {
+		return false, nil
+	}
+
+	players, err := s.repo.ListPlayers(accountID)
+	if err != nil {
+		if errors.Is(err, ErrAccountNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	for _, p := range players {
+		if p.ID == playerID {
+			return true, nil
+		}
+	}
+	return false, nil
 }

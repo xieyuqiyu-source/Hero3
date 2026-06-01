@@ -72,8 +72,8 @@ paths:
       parameters:
       - name: playerId
         in: query
-        required: false
-        description: 玩家存档 ID；不传时返回 demo-player。
+        required: true
+        description: 玩家存档 ID。
         schema:
           type: string
           example: player_47f23e0eeb08ab50402fedfc
@@ -86,6 +86,12 @@ paths:
                 $ref: '#/components/schemas/GameState'
         '404':
           description: 玩家存档不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: 缺少玩家存档 ID
           content:
             application/json:
               schema:
@@ -993,7 +999,7 @@ components:
       properties:
         id:
           type: string
-          example: demo-player
+          example: player_47f23e0eeb08ab50402fedfc
         nickname:
           type: string
           example: 主公

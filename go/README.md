@@ -54,7 +54,7 @@ HERO3_ENV=development
 HERO3_PORT=8080
 HERO3_VERSION=0.1.0
 HERO3_LOG_LEVEL=info
-HERO3_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+HERO3_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
 # HERO3_DATABASE_DSN=hero3_user:hero3_password@tcp(127.0.0.1:3306)/hero3?parseTime=true&charset=utf8mb4&loc=UTC
 ```
 

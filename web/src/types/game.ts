@@ -10,6 +10,7 @@ export interface AccountSession {
   accountId: string
   username: string
   gold: number
+  token?: string
 }
 
 export interface PlayerSummary {

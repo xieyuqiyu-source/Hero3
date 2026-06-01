@@ -48,8 +48,9 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
   const resources = useProjectedResources()
   const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
   const unreadMessageCount = gameState?.unreadMessageCount ?? 0
+  const newsHasNotify = gameState?.recentBattleReports?.some(r => !r.read) ?? false
   const quickActions = [
-    { key: 'news', label: '军情', hasNotify: (gameState?.recentBattleReports?.some(r => !r.read) ?? false) },
+    { key: 'news', label: '军情', hasNotify: newsHasNotify },
     { key: 'mail', label: '信函', hasNotify: unreadMessageCount > 0 },
     { key: 'notice', label: '公告', hasNotify: true },
     { key: 'account', label: '账户', hasNotify: false },

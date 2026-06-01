@@ -147,7 +147,7 @@ export const apiDocs: ApiDocItem[] = [
     desc: '消耗资源创建征兵队列。',
     usedBy: 'web 军事征兵页面',
     status: '已实现',
-    sampleBody: { playerId: 'demo-player', unitId: 'infantry', amount: 1 },
+    sampleBody: { playerId: 'player_47f23e0e', unitId: 'infantry', amount: 1 },
   },
   {
     id: 'recruit-instant',
@@ -158,12 +158,12 @@ export const apiDocs: ApiDocItem[] = [
     usedBy: 'admin 玩家详情、开发调试',
     status: '已实现',
     destructive: true,
-    sampleBody: { playerId: 'demo-player', queueId: 'recruit_xxxxxxxx' },
+    sampleBody: { playerId: 'player_47f23e0e', queueId: 'recruit_xxxxxxxx' },
   },
   {
     id: 'npc-cities',
     method: 'GET',
-    path: '/api/v1/map/npc-cities?playerId=demo-player',
+    path: '/api/v1/map/npc-cities?playerId=player_47f23e0e',
     title: 'NPC 城池列表',
     desc: '读取玩家的 NPC 城池状态，必要时由后端自动生成。',
     usedBy: 'web 地图 NPC 页、admin NPC 操作面板',
@@ -178,7 +178,7 @@ export const apiDocs: ApiDocItem[] = [
     usedBy: 'admin NPC 操作面板、web 后续刷新入口',
     status: '已实现',
     destructive: true,
-    sampleBody: { playerId: 'demo-player' },
+    sampleBody: { playerId: 'player_47f23e0e' },
   },
   {
     id: 'npc-attack',
@@ -190,7 +190,7 @@ export const apiDocs: ApiDocItem[] = [
     status: '已实现',
     destructive: true,
     sampleBody: {
-      playerId: 'demo-player',
+      playerId: 'player_47f23e0e',
       npcId: 'npc_xxxxxxxx',
       mode: 'attack',
       units: { infantry: 1 },
@@ -205,6 +205,6 @@ export const apiDocs: ApiDocItem[] = [
     usedBy: 'web 地图侦查入口',
     status: '已实现',
     destructive: true,
-    sampleBody: { playerId: 'demo-player', npcId: 'npc_xxxxxxxx' },
+    sampleBody: { playerId: 'player_47f23e0e', npcId: 'npc_xxxxxxxx' },
   },
 ]

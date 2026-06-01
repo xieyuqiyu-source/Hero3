@@ -177,9 +177,11 @@ const MobileSidebarContent: FC<{
     { key: 'settings', label: '设置', icon: Settings },
   ]
 
+  const unreadMessageCount = gameState?.unreadMessageCount ?? 0
+  const newsHasNotify = gameState?.recentBattleReports?.some(r => !r.read) ?? false
   const quickActions = [
-    { key: 'news', label: '军情', hasNotify: (gameState?.recentBattleReports?.some(r => !r.read) ?? false) },
-    { key: 'mail', label: '信函', hasNotify: (gameState?.unreadMessageCount ?? 0) > 0 },
+    { key: 'news', label: '军情', hasNotify: newsHasNotify },
+    { key: 'mail', label: '信函', hasNotify: unreadMessageCount > 0 },
     { key: 'notice', label: '公告', hasNotify: true },
     { key: 'account', label: '账户', hasNotify: false },
   ]

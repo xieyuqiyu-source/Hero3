@@ -63,14 +63,20 @@ body {
 @keyframes text-blink-red {
   0%, 100% {
     color: #ef4444;
+    text-shadow: 0 0 8px rgba(239, 68, 68, 0.7), 0 0 2px rgba(239, 68, 68, 0.9);
+    font-weight: 800;
+    letter-spacing: 0.04em;
   }
   50% {
-    color: var(--color-text-secondary);
+    color: #fff;
+    text-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
+    font-weight: 600;
+    letter-spacing: 0;
   }
 }
 
 .animate-text-blink {
-  animation: text-blink-red 1s ease-in-out infinite;
+  animation: text-blink-red 0.7s ease-in-out infinite;
 }
 
 /* Slide-in animation for page transitions */

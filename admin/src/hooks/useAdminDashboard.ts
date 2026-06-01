@@ -16,11 +16,12 @@ export function useAdminDashboard() {
     setError(null)
 
     try {
-      const [nextHealth, nextGameState, accountResult] = await Promise.all([
+      const [nextHealth, accountResult] = await Promise.all([
         adminApi.getHealth(),
-        adminApi.getGameState(),
         adminApi.getAccounts(),
       ])
+      const firstPlayerId = accountResult.accounts.flatMap((account) => account.players)[0]?.id
+      const nextGameState = firstPlayerId ? await adminApi.getPlayerState(firstPlayerId) : null
       if (!active) return
       setHealth(nextHealth)
       setGameState(nextGameState)

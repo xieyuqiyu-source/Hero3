@@ -1,7 +1,7 @@
 import { ShieldCheck, Lock } from 'lucide-react'
 
 const auditLogs = [
-  { time: '15:20', action: 'admin 调整 demo-player 粮食 +5000' },
+  { time: '15:20', action: 'admin 调整 player_47f23e0e 粮食 +5000' },
   { time: '15:06', action: 'system 生成测试地图目标' },
   { time: '14:48', action: 'admin 刷新战斗规则配置' },
 ]

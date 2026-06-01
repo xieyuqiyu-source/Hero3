@@ -14,6 +14,7 @@ import OverviewPage from '@/components/OverviewPage'
 import { ResourceToolsPanel, SystemActionsPanel } from '@/components/OperationsPanel'
 import BuffPanel from '@/components/BuffPanel'
 import MiniGameRecordsPanel from '@/components/MiniGameRecordsPanel'
+import AdminTokenPanel from '@/components/AdminTokenPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
 import { Sliders, MapPin, Swords, Flag, Shield } from 'lucide-react'
@@ -71,6 +72,7 @@ function App() {
       case 'operations':
         return (
           <div className="grid gap-4 lg:grid-cols-2">
+            <AdminTokenPanel />
             <ResourceToolsPanel />
             <BuffPanel />
             <MiniGameRecordsPanel />

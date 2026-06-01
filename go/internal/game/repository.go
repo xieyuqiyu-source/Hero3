@@ -52,20 +52,17 @@ type MemoryRepository struct {
 	accountPlayers  map[string][]string
 	players         map[string]GameState
 	playerUpdatedAt map[string]time.Time
-	reports         map[string][]BattleReport    // playerID → reports
+	reports         map[string][]BattleReport   // playerID → reports
 	miniGameRecords map[string][]MiniGameRecord // playerID → records
 }
 
 func NewMemoryRepository() *MemoryRepository {
-	now := time.Now()
-	demoState := newDemoState(now)
-
 	return &MemoryRepository{
 		accounts:        make(map[string]Account),
 		accountByName:   make(map[string]string),
 		accountPlayers:  make(map[string][]string),
-		players:         map[string]GameState{demoState.Player.ID: demoState},
-		playerUpdatedAt: map[string]time.Time{demoState.Player.ID: now},
+		players:         make(map[string]GameState),
+		playerUpdatedAt: make(map[string]time.Time),
 		reports:         make(map[string][]BattleReport),
 		miniGameRecords: make(map[string][]MiniGameRecord),
 	}

@@ -112,35 +112,35 @@ type BattleReport struct {
 	DefenderRevealed  bool           `json:"defenderRevealed"`
 	DefenderResources map[string]int `json:"defenderResources"`
 	Rewards           map[string]int `json:"rewards"`
-	Overflow          map[string]int `json:"overflow,omitempty"`    // 各资源溢出量
-	OverflowCityGold  int            `json:"overflowCityGold"`     // 溢出转换获得的城金
+	Overflow          map[string]int `json:"overflow,omitempty"` // 各资源溢出量
+	OverflowCityGold  int            `json:"overflowCityGold"`   // 溢出转换获得的城金
 	Read              bool           `json:"read"`
 	DeletedByPlayer   bool           `json:"deletedByPlayer,omitempty"`
 	CreatedAt         string         `json:"createdAt"`
 }
 
 type GameState struct {
-	Player              Player             `json:"player"`
-	Resources           ResourceState      `json:"resources"`
-	ResourceProduction  ResourceProduction `json:"resourceProduction"`
-	ResourceSettledAt   string             `json:"resourceSettledAt"`
-	CityGold            FlexInt            `json:"cityGold"`
-	LastExchangeAt      string             `json:"lastExchangeAt,omitempty"`
-	ProductionBoost     int                `json:"productionBoost,omitempty"`          // 产量加成倍率（1=无，2/4/8/16）
-	ProductionBoostEnd  string             `json:"productionBoostEnd,omitempty"`       // 加成到期时间
-	CapacityBoost       int                `json:"capacityBoost,omitempty"`            // 仓库容量加成倍率（1=无，2/4/8/16）
-	CapacityBoostEnd    string             `json:"capacityBoostEnd,omitempty"`         // 容量加成到期时间
-	Buildings           []Building         `json:"buildings"`
-	General             *General           `json:"general"`
-	Army                []ArmyUnit         `json:"army"`
-	RecruitQueues       []RecruitQueue     `json:"recruitQueues"`
-	NpcState            *NpcState          `json:"npcState,omitempty"`
-	MapTargets          []MapTarget        `json:"mapTargets"`
-	RecentBattleReports []BattleReport     `json:"recentBattleReports"`
-	UnreadMessageCount  int                `json:"unreadMessageCount"`
+	Player              Player                  `json:"player"`
+	Resources           ResourceState           `json:"resources"`
+	ResourceProduction  ResourceProduction      `json:"resourceProduction"`
+	ResourceSettledAt   string                  `json:"resourceSettledAt"`
+	CityGold            FlexInt                 `json:"cityGold"`
+	LastExchangeAt      string                  `json:"lastExchangeAt,omitempty"`
+	ProductionBoost     int                     `json:"productionBoost,omitempty"`    // 产量加成倍率（1=无，2/4/8/16）
+	ProductionBoostEnd  string                  `json:"productionBoostEnd,omitempty"` // 加成到期时间
+	CapacityBoost       int                     `json:"capacityBoost,omitempty"`      // 仓库容量加成倍率（1=无，2/4/8/16）
+	CapacityBoostEnd    string                  `json:"capacityBoostEnd,omitempty"`   // 容量加成到期时间
+	Buildings           []Building              `json:"buildings"`
+	General             *General                `json:"general"`
+	Army                []ArmyUnit              `json:"army"`
+	RecruitQueues       []RecruitQueue          `json:"recruitQueues"`
+	NpcState            *NpcState               `json:"npcState,omitempty"`
+	MapTargets          []MapTarget             `json:"mapTargets"`
+	RecentBattleReports []BattleReport          `json:"recentBattleReports"`
+	UnreadMessageCount  int                     `json:"unreadMessageCount"`
 	ActiveModifiers     []ModifierBreakdownItem `json:"activeModifiers,omitempty"`
-	Buffs               []Buff             `json:"buffs,omitempty"` // 通用加成列表（GM/活动/任务等）
-	ServerTime          string             `json:"serverTime"`
+	Buffs               []Buff                  `json:"buffs,omitempty"` // 通用加成列表（GM/活动/任务等）
+	ServerTime          string                  `json:"serverTime"`
 }
 
 func newPlayerState(id string, nickname string, faction string, generalID string, now time.Time) GameState {
@@ -226,10 +226,6 @@ func newPlayerState(id string, nickname string, faction string, generalID string
 	state.ResourceProduction = calculateResourceProduction(state.Buildings, state.General)
 	state.Resources.Capacity = calculateResourceCapacity(state.Buildings)
 	return state
-}
-
-func newDemoState(now time.Time) GameState {
-	return newPlayerState("demo-player", "主公", "wei", "caocao", now)
 }
 
 func newGeneral(faction string, generalID string) *General {
