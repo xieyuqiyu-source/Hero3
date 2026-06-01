@@ -26,6 +26,9 @@ type Config struct {
 	UnitsDir       string
 	NpcConfigPath  string
 	CombatPath     string
+	JWTSecret      string
+	AdminToken     string
+	TokenTTL       time.Duration
 	ReadTimeout    time.Duration
 	WriteTimeout   time.Duration
 	IdleTimeout    time.Duration
@@ -47,6 +50,9 @@ func Load() Config {
 		UnitsDir:       getEnv("HERO3_UNITS_DIR", "config/units"),
 		NpcConfigPath:  getEnv("HERO3_NPC_CONFIG_PATH", "config/npc.json"),
 		CombatPath:     getEnv("HERO3_COMBAT_PATH", "config/combat.json"),
+		JWTSecret:      getEnv("HERO3_JWT_SECRET", ""),
+		AdminToken:     getEnv("HERO3_ADMIN_TOKEN", ""),
+		TokenTTL:       getDurationEnv("HERO3_TOKEN_TTL", 7*24*time.Hour),
 		ReadTimeout:    getDurationEnv("HERO3_READ_TIMEOUT", 5*time.Second),
 		WriteTimeout:   getDurationEnv("HERO3_WRITE_TIMEOUT", 10*time.Second),
 		IdleTimeout:    getDurationEnv("HERO3_IDLE_TIMEOUT", 60*time.Second),

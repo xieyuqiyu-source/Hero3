@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"hero3/internal/auth"
 	"hero3/internal/combat"
 	"hero3/internal/config"
 	"hero3/internal/game"
@@ -65,7 +66,21 @@ func (h *Handlers) GameBootstrap(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) GameState(w http.ResponseWriter, r *http.Request) {
-	state, err := h.gameService.GetState(r.URL.Query().Get("playerId"))
+	playerID := r.URL.Query().Get("playerId")
+	// 空 playerId 返回 demo 状态（不登录本地玩）
+	if playerID == "" {
+		state, err := h.gameService.GetState("")
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, state)
+		return
+	}
+	if !h.requireOwnership(w, r, playerID) {
+		return
+	}
+	state, err := h.gameService.GetState(playerID)
 	if err != nil {
 		if errors.Is(err, game.ErrPlayerNotFound) {
 			writeError(w, http.StatusNotFound, "player not found")
@@ -93,10 +108,17 @@ func (h *Handlers) RegisterAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 签发 JWT token
+	token, _ := auth.IssueToken(auth.Config{
+		JWTSecret: h.cfg.JWTSecret,
+		TokenTTL:  h.cfg.TokenTTL,
+	}, account.ID)
+
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"accountId": account.ID,
 		"username":  account.Username,
 		"gold":      account.Gold,
+		"token":     token,
 	})
 }
 
@@ -112,15 +134,26 @@ func (h *Handlers) LoginAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 签发 JWT token
+	token, _ := auth.IssueToken(auth.Config{
+		JWTSecret: h.cfg.JWTSecret,
+		TokenTTL:  h.cfg.TokenTTL,
+	}, account.ID)
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"accountId": account.ID,
 		"username":  account.Username,
 		"gold":      account.Gold,
+		"token":     token,
 	})
 }
 
 func (h *Handlers) AccountPlayers(w http.ResponseWriter, r *http.Request) {
-	players, err := h.gameService.ListPlayers(r.PathValue("accountId"))
+	accountID := r.PathValue("accountId")
+	if !h.requireAccount(w, r, accountID) {
+		return
+	}
+	players, err := h.gameService.ListPlayers(accountID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "account not found")
 		return
@@ -130,7 +163,11 @@ func (h *Handlers) AccountPlayers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) AccountInfo(w http.ResponseWriter, r *http.Request) {
-	account, err := h.gameService.GetAccountByID(r.PathValue("accountId"))
+	accountID := r.PathValue("accountId")
+	if !h.requireAccount(w, r, accountID) {
+		return
+	}
+	account, err := h.gameService.GetAccountByID(accountID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "account not found")
 		return
@@ -144,7 +181,11 @@ func (h *Handlers) AccountInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) DeleteAccount(w http.ResponseWriter, r *http.Request) {
-	if err := h.gameService.DeleteAccount(r.PathValue("accountId")); err != nil {
+	accountID := r.PathValue("accountId")
+	if !h.requireAccount(w, r, accountID) {
+		return
+	}
+	if err := h.gameService.DeleteAccount(accountID); err != nil {
 		writeError(w, http.StatusNotFound, "account not found")
 		return
 	}
@@ -305,6 +346,10 @@ func (h *Handlers) CreatePlayer(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &payload) {
 		return
 	}
+	// 创建玩家时校验 accountId 归属
+	if !h.requireAccount(w, r, payload.AccountID) {
+		return
+	}
 
 	playerID, state, err := h.gameService.CreatePlayer(payload.AccountID, payload.Nickname, payload.Faction, payload.GeneralID)
 	if err != nil {
@@ -326,7 +371,11 @@ func (h *Handlers) CreatePlayer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) DeletePlayer(w http.ResponseWriter, r *http.Request) {
-	if err := h.gameService.DeletePlayer(r.PathValue("playerId")); err != nil {
+	playerID := r.PathValue("playerId")
+	if !h.requireOwnership(w, r, playerID) {
+		return
+	}
+	if err := h.gameService.DeletePlayer(playerID); err != nil {
 		writeError(w, http.StatusNotFound, "player not found")
 		return
 	}
@@ -339,6 +388,9 @@ func (h *Handlers) FillResources(w http.ResponseWriter, r *http.Request) {
 		PlayerID string `json:"playerId"`
 	}
 	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
 		return
 	}
 
@@ -356,6 +408,9 @@ func (h *Handlers) FillResourcesPaid(w http.ResponseWriter, r *http.Request) {
 		PlayerID string `json:"playerId"`
 	}
 	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
 		return
 	}
 
@@ -382,6 +437,9 @@ func (h *Handlers) Recruit(w http.ResponseWriter, r *http.Request) {
 		Amount   int    `json:"amount"`
 	}
 	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
 		return
 	}
 
@@ -415,6 +473,9 @@ func (h *Handlers) InstantCompleteRecruit(w http.ResponseWriter, r *http.Request
 	if !decodeJSON(w, r, &payload) {
 		return
 	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
 
 	state, err := h.gameService.InstantCompleteRecruit(payload.PlayerID, payload.QueueID)
 	if err != nil {
@@ -440,6 +501,9 @@ func (h *Handlers) InstantCompleteBuilding(w http.ResponseWriter, r *http.Reques
 	if !decodeJSON(w, r, &payload) {
 		return
 	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
 
 	state, err := h.gameService.InstantCompleteBuilding(payload.PlayerID, payload.BuildingID)
 	if err != nil {
@@ -463,6 +527,13 @@ func (h *Handlers) InstantCompleteBuilding(w http.ResponseWriter, r *http.Reques
 
 func (h *Handlers) NpcCities(w http.ResponseWriter, r *http.Request) {
 	playerID := r.URL.Query().Get("playerId")
+	if playerID == "" {
+		writeError(w, http.StatusBadRequest, "playerId is required")
+		return
+	}
+	if !h.requireOwnership(w, r, playerID) {
+		return
+	}
 	npcState, err := h.gameService.GetNpcCities(playerID)
 	if err != nil {
 		status := http.StatusBadRequest
@@ -483,6 +554,9 @@ func (h *Handlers) RefreshNpcCities(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &payload) {
 		return
 	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
 
 	npcState, err := h.gameService.RefreshNpcCities(payload.PlayerID)
 	if err != nil {
@@ -500,6 +574,9 @@ func (h *Handlers) RefreshNpcCities(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) AttackNpc(w http.ResponseWriter, r *http.Request) {
 	var payload game.AttackNpcRequest
 	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
 		return
 	}
 
@@ -526,6 +603,9 @@ func (h *Handlers) AttackNpc(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) ScoutNpc(w http.ResponseWriter, r *http.Request) {
 	var payload game.ScoutNpcRequest
 	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
 		return
 	}
 
@@ -571,6 +651,9 @@ func (h *Handlers) MarkReportsRead(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &payload) {
 		return
 	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
 
 	var state game.GameState
 	var err error
@@ -599,6 +682,9 @@ func (h *Handlers) DeleteReport(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &payload) {
 		return
 	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
 
 	state, err := h.gameService.DeleteReport(payload.PlayerID, payload.ReportID)
 	if err != nil {
@@ -616,6 +702,9 @@ func (h *Handlers) DeleteAllReports(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &payload) {
 		return
 	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
 
 	state, err := h.gameService.DeleteAllReports(payload.PlayerID)
 	if err != nil {
@@ -629,6 +718,9 @@ func (h *Handlers) DeleteAllReports(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) UpgradeBuilding(w http.ResponseWriter, r *http.Request) {
 	var payload upgradeBuildingRequest
 	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
 		return
 	}
 
@@ -663,6 +755,9 @@ func (h *Handlers) PurchaseBoost(w http.ResponseWriter, r *http.Request) {
 		Hours      int    `json:"hours"`      // 1, 6, 12, 24
 	}
 	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
 		return
 	}
 
@@ -712,6 +807,9 @@ func (h *Handlers) PurchaseCapacityBoost(w http.ResponseWriter, r *http.Request)
 	if !decodeJSON(w, r, &payload) {
 		return
 	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
 
 	state, err := h.gameService.PurchaseCapacityBoost(payload.PlayerID, payload.Multiplier, payload.Hours)
 	if err != nil {
@@ -740,6 +838,9 @@ func (h *Handlers) UpgradeBuildingBatch(w http.ResponseWriter, r *http.Request) 
 		PlayerID string `json:"playerId"`
 	}
 	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
 		return
 	}
 
@@ -868,6 +969,14 @@ func (h *Handlers) ExchangeGold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 校验账户归属和玩家归属
+	if !h.requireAccount(w, r, payload.AccountID) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+
 	state, err := h.gameService.ExchangeGoldToCityGold(payload.AccountID, payload.PlayerID, payload.Amount)
 	if err != nil {
 		status := http.StatusBadRequest
@@ -899,6 +1008,14 @@ func (h *Handlers) ReverseExchangeGold(w http.ResponseWriter, r *http.Request) {
 		CityGoldAmount int  `json:"cityGoldAmount"` // 要消耗的城金数量
 	}
 	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	// 校验账户归属和玩家归属
+	if !h.requireAccount(w, r, payload.AccountID) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
 		return
 	}
 
@@ -999,6 +1116,9 @@ func (h *Handlers) SaveMiniGameRecord(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "playerId, gameType, and resultName are required")
 		return
 	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
 
 	record, err := h.gameService.SaveMiniGameRecord(
 		payload.PlayerID, payload.GameType, payload.ResultName,
@@ -1027,4 +1147,62 @@ func (h *Handlers) AdminMiniGameRecords(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, summary)
+}
+
+
+// --- 归属校验辅助函数 ---
+
+// requireOwnership 校验当前请求的 accountID 是否拥有 playerID
+// admin 请求直接通过，否则需要 JWT 中的 accountID 拥有该 playerID
+// 返回 false 时已经写入了错误响应
+func (h *Handlers) requireOwnership(w http.ResponseWriter, r *http.Request, playerID string) bool {
+	if auth.IsAdminFromContext(r.Context()) {
+		return true
+	}
+
+	accountID, ok := auth.AccountIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return false
+	}
+
+	owns, err := h.gameService.OwnsPlayer(accountID, playerID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "ownership check failed")
+		return false
+	}
+	if !owns {
+		writeError(w, http.StatusForbidden, "you don't own this player")
+		return false
+	}
+	return true
+}
+
+// requireAccount 校验当前请求的 accountID 是否匹配指定 accountID
+// admin 请求直接通过
+func (h *Handlers) requireAccount(w http.ResponseWriter, r *http.Request, accountID string) bool {
+	if auth.IsAdminFromContext(r.Context()) {
+		return true
+	}
+
+	ctxAccountID, ok := auth.AccountIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return false
+	}
+
+	if ctxAccountID != accountID {
+		writeError(w, http.StatusForbidden, "account mismatch")
+		return false
+	}
+	return true
+}
+
+// decodeAndCheckOwnership 解析 payload 并校验 playerId 归属
+// 一站式封装：JSON 解析失败或归属校验失败时返回 false（已写入错误响应）
+func (h *Handlers) decodeAndCheckOwnership(w http.ResponseWriter, r *http.Request, target any, getPlayerID func() string) bool {
+	if !decodeJSON(w, r, target) {
+		return false
+	}
+	return h.requireOwnership(w, r, getPlayerID())
 }

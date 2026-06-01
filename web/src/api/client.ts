@@ -60,14 +60,21 @@ async function request<T>(
 ): Promise<T> {
   const url = `${BASE_URL}${path}`
 
+  // 自动注入 JWT token（如果已登录）
+  const token = localStorage.getItem('hero3_token')
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> ?? {}),
+  }
+  if (token && !headers['Authorization']) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
   let res: Response
   try {
     res = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
       ...options,
+      headers,
     })
   } catch {
     toast.error('网络连接失败，请检查网络')
@@ -79,8 +86,12 @@ async function request<T>(
     const message = extractMessage(res.status, body)
     toast.error(message)
 
-    // 账号不存在时清除本地登录状态
+    // 账号不存在或未授权时清除本地登录状态
     if (body && typeof body === 'object' && 'error' in body && (body as { error: string }).error === 'account not found') {
+      useAccountStore.getState().logout()
+    }
+    if (res.status === 401) {
+      localStorage.removeItem('hero3_token')
       useAccountStore.getState().logout()
     }
 

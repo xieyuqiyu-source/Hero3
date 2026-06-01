@@ -337,3 +337,51 @@ func getProductionAtLevel(buildingType string, level int) int {
 	}
 	return config.ProductionByLevel[level]
 }
+
+
+func TestOwnsPlayer(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+
+	// 直接创建账号和玩家（绕过 faction 校验）
+	now := time.Now()
+	aliceAccount := Account{ID: "acc_alice", Username: "alice", PasswordHash: "x", CreatedAt: now}
+	bobAccount := Account{ID: "acc_bob", Username: "bob", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(aliceAccount); err != nil {
+		t.Fatalf("create alice: %v", err)
+	}
+	if err := repo.CreateAccount(bobAccount); err != nil {
+		t.Fatalf("create bob: %v", err)
+	}
+
+	aliceState := newPlayerState("player_alice_1", "Alice", "wei", "caocao", now)
+	if err := repo.CreatePlayer(aliceAccount.ID, aliceState, now); err != nil {
+		t.Fatalf("create alice player: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		accountID string
+		playerID  string
+		expected  bool
+	}{
+		{"owner matches", aliceAccount.ID, "player_alice_1", true},
+		{"different account", bobAccount.ID, "player_alice_1", false},
+		{"empty account", "", "player_alice_1", false},
+		{"empty player", aliceAccount.ID, "", false},
+		{"non-existent account", "acc_fake", "player_alice_1", false},
+		{"non-existent player", aliceAccount.ID, "player_fake", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			owns, err := svc.OwnsPlayer(tt.accountID, tt.playerID)
+			if err != nil {
+				t.Fatalf("OwnsPlayer error: %v", err)
+			}
+			if owns != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, owns)
+			}
+		})
+	}
+}

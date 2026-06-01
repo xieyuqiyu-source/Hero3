@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"slices"
 
+	"hero3/internal/auth"
 	"hero3/internal/config"
 	"hero3/internal/game"
 )
@@ -76,7 +77,31 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("POST /api/v1/minigame/record", handlers.SaveMiniGameRecord)
 	mux.HandleFunc("GET /api/v1/admin/minigame/records", handlers.AdminMiniGameRecords)
 
-	return corsMiddleware(options.Config, mux)
+	// 公开路径白名单（不需要认证）
+	publicPaths := []string{
+		"/healthz",
+		"/api/v1/meta",
+		"/api/v1/game/bootstrap",
+		"/api/v1/game/state",       // 支持不登录本地玩（空 playerId 返回 demo）
+		"/api/v1/accounts/register",
+		"/api/v1/accounts/login",
+		"/api/v1/city/boost/prices",
+	}
+
+	authCfg := auth.Config{
+		JWTSecret:  options.Config.JWTSecret,
+		AdminToken: options.Config.AdminToken,
+		TokenTTL:   options.Config.TokenTTL,
+	}
+
+	// 如果未配置 JWTSecret（开发环境），跳过认证（向后兼容）
+	if authCfg.JWTSecret == "" {
+		options.Logger.Warn("HERO3_JWT_SECRET not set, authentication disabled")
+		return corsMiddleware(options.Config, mux)
+	}
+
+	authed := auth.AuthMiddleware(authCfg, publicPaths)(mux)
+	return corsMiddleware(options.Config, authed)
 }
 
 func corsMiddleware(cfg config.Config, next http.Handler) http.Handler {

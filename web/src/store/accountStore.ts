@@ -35,6 +35,7 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
       const session = await gameApi.loginAccount(username, password)
       localStorage.setItem('hero3_account_id', session.accountId)
       localStorage.setItem('hero3_account_name', session.username)
+      if (session.token) localStorage.setItem('hero3_token', session.token)
       set({ account: session, loading: false })
       // Auto-load players after login
       await get().loadPlayers()
@@ -50,6 +51,7 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
       const session = await gameApi.registerAccount(username, password)
       localStorage.setItem('hero3_account_id', session.accountId)
       localStorage.setItem('hero3_account_name', session.username)
+      if (session.token) localStorage.setItem('hero3_token', session.token)
       set({ account: session, loading: false })
     } catch {
       set({ loading: false })
@@ -60,6 +62,7 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
   logout: () => {
     localStorage.removeItem('hero3_account_id')
     localStorage.removeItem('hero3_account_name')
+    localStorage.removeItem('hero3_token')
     set({ account: null, players: [] })
   },
 

@@ -323,3 +323,28 @@ func randomID(bytesCount int) string {
 	}
 	return hex.EncodeToString(bytes)
 }
+
+// OwnsPlayer 校验指定 accountID 是否拥有指定 playerID
+// 用于认证中间件的归属校验
+func (s *Service) OwnsPlayer(accountID string, playerID string) (bool, error) {
+	accountID = strings.TrimSpace(accountID)
+	playerID = strings.TrimSpace(playerID)
+	if accountID == "" || playerID == "" {
+		return false, nil
+	}
+
+	players, err := s.repo.ListPlayers(accountID)
+	if err != nil {
+		if errors.Is(err, ErrAccountNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	for _, p := range players {
+		if p.ID == playerID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
