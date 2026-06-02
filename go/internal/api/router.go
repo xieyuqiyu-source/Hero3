@@ -41,6 +41,7 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("POST /api/v1/city/resources/fill-paid", handlers.FillResourcesPaid)
 	mux.HandleFunc("POST /api/v1/military/recruit", handlers.Recruit)
 	mux.HandleFunc("POST /api/v1/military/recruit/instant", handlers.InstantCompleteRecruit)
+	mux.HandleFunc("POST /api/v1/military/general/stat", handlers.AllocateGeneralStat)
 	mux.HandleFunc("POST /api/v1/city/buildings/instant", handlers.InstantCompleteBuilding)
 	mux.HandleFunc("POST /api/v1/city/boost", handlers.PurchaseBoost)
 	mux.HandleFunc("POST /api/v1/city/capacity-boost", handlers.PurchaseCapacityBoost)
@@ -76,6 +77,9 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("DELETE /api/v1/admin/buff/{buffId}", handlers.RevokeBuff)
 	mux.HandleFunc("POST /api/v1/minigame/record", handlers.SaveMiniGameRecord)
 	mux.HandleFunc("GET /api/v1/admin/minigame/records", handlers.AdminMiniGameRecords)
+	mux.HandleFunc("GET /api/v1/admin/generals-config", handlers.AdminGeneralsConfig)
+	mux.HandleFunc("PUT /api/v1/admin/generals-config", handlers.UpdateAdminGeneralsConfig)
+	mux.HandleFunc("GET /api/v1/admin/general-traits", handlers.AdminGeneralTraitRegistry)
 
 	// 公开路径白名单（不需要认证）
 	publicPaths := []string{

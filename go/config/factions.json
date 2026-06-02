@@ -11,6 +11,7 @@
     "generals": [
       { "id": "caocao", "name": "曹操", "title": "魏武帝" },
       { "id": "simayi", "name": "司马懿", "title": "冢虎" },
+      { "id": "zhenmi", "name": "甄宓", "title": "洛水美人" },
       { "id": "xiahouyuan", "name": "夏侯渊", "title": "虎步关右" },
       { "id": "zhangliao", "name": "张辽", "title": "威震逍遥津" },
       { "id": "xuchu", "name": "许褚", "title": "虎痴" },

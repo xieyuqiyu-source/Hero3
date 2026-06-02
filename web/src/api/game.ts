@@ -84,6 +84,11 @@ export const gameApi = {
     return api.post<{ state: GameState }>('/military/recruit/instant', { playerId, queueId })
   },
 
+  /** 将领四维加点 */
+  allocateGeneralStat(playerId: string, statKey: string) {
+    return api.post<{ state: GameState }>('/military/general/stat', { playerId, statKey })
+  },
+
   /** 极速完成建筑升级 */
   instantCompleteBuilding(playerId: string, buildingId: string) {
     return api.post<{ state: GameState }>('/city/buildings/instant', { playerId, buildingId })

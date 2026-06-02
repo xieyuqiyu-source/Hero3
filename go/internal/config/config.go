@@ -26,6 +26,7 @@ type Config struct {
 	UnitsDir       string
 	NpcConfigPath  string
 	CombatPath     string
+	GeneralsPath   string
 	JWTSecret      string
 	AdminToken     string
 	TokenTTL       time.Duration
@@ -50,6 +51,7 @@ func Load() Config {
 		UnitsDir:       getEnv("HERO3_UNITS_DIR", "config/units"),
 		NpcConfigPath:  getEnv("HERO3_NPC_CONFIG_PATH", "config/npc.json"),
 		CombatPath:     getEnv("HERO3_COMBAT_PATH", "config/combat.json"),
+		GeneralsPath:   getEnv("HERO3_GENERALS_PATH", "config/generals.json"),
 		JWTSecret:      getEnv("HERO3_JWT_SECRET", ""),
 		AdminToken:     getEnv("HERO3_ADMIN_TOKEN", ""),
 		TokenTTL:       getDurationEnv("HERO3_TOKEN_TTL", 7*24*time.Hour),

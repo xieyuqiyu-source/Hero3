@@ -1,10 +1,55 @@
-import { type FC } from 'react'
+import { type FC, useState } from 'react'
 import { useGameStore } from '@/store/gameStore'
+import { getTraitMeta, formatParamLabel, formatParamValue } from '@/utils/traits'
 
 const INVENTORY_SLOTS = 20
+const ATTRIBUTE_LABELS: Record<string, string> = {
+  productionBonus: '资源产量',
+  woodProductionBonus: '木材产量',
+  stoneProductionBonus: '石料产量',
+  ironProductionBonus: '铁矿产量',
+  foodProductionBonus: '粮食产量',
+  capacityBonus: '仓库容量',
+  attackBonus: '部队攻击',
+  defenseBonus: '部队防御',
+  infantryDefenseBonus: '步兵防御',
+  cavalryDefenseBonus: '骑兵防御',
+  buildSpeedBonus: '建造速度',
+  recruitSpeedBonus: '征兵速度',
+  marchSpeedBonus: '行军速度',
+  exchangeRateBonus: '兑换收益',
+}
+
+const ATTRIBUTE_ORDER = [
+  'attackBonus',
+  'defenseBonus',
+  'infantryDefenseBonus',
+  'cavalryDefenseBonus',
+  'productionBonus',
+  'woodProductionBonus',
+  'stoneProductionBonus',
+  'ironProductionBonus',
+  'foodProductionBonus',
+  'capacityBonus',
+  'buildSpeedBonus',
+  'recruitSpeedBonus',
+  'marchSpeedBonus',
+  'exchangeRateBonus',
+]
+
+const formatAttributeValue = (value: number) => `${value >= 0 ? '+' : ''}${Math.round(value * 100)}%`
+const STAT_LABELS: Record<string, string> = {
+  force: '武力',
+  intelligence: '智谋',
+  politics: '内政',
+  command: '统率',
+}
+const STAT_ORDER = ['force', 'intelligence', 'politics', 'command']
 
 const GeneralPanel: FC = () => {
   const general = useGameStore((s) => s.state?.general)
+  const allocateGeneralStat = useGameStore((s) => s.allocateGeneralStat)
+  const [allocatingStat, setAllocatingStat] = useState<string | null>(null)
 
   if (!general) {
     return (
@@ -12,6 +57,31 @@ const GeneralPanel: FC = () => {
         <span className="text-sm text-[var(--color-text-muted)]">暂无将领，请重新创建存档选择将领</span>
       </div>
     )
+  }
+
+  const traits = general.traits ?? []
+  const attributes = general.attributes ?? general.buffs ?? {}
+  const attributeEntries = Object.entries(attributes)
+    .filter(([, value]) => value !== 0)
+    .sort(([a], [b]) => {
+      const ai = ATTRIBUTE_ORDER.indexOf(a)
+      const bi = ATTRIBUTE_ORDER.indexOf(b)
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+    })
+  const nextLevelExp = general.nextLevelExp ?? 0
+  const expToNext = nextLevelExp > 0 ? Math.max(nextLevelExp - general.exp, 0) : 0
+  const expProgress = nextLevelExp > 0 ? Math.min(100, Math.round((general.exp / nextLevelExp) * 100)) : 100
+  const statEntries = STAT_ORDER.map((key) => [key, general.stats?.[key] ?? 0] as const)
+  const availableStatPoints = general.availableStatPoints ?? 0
+
+  const handleAllocateStat = async (statKey: string) => {
+    if (availableStatPoints <= 0 || allocatingStat) return
+    setAllocatingStat(statKey)
+    try {
+      await allocateGeneralStat(statKey)
+    } finally {
+      setAllocatingStat(null)
+    }
   }
 
   return (
@@ -32,45 +102,93 @@ const GeneralPanel: FC = () => {
           </div>
         </div>
 
-        {/* Attributes */}
+        <div className="mb-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2">
+          <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)] mb-1.5">
+            <span>当前累计经验 {general.exp.toLocaleString()}</span>
+            <span>{nextLevelExp > 0 ? `下级还需 ${expToNext.toLocaleString()}` : '已满级'}</span>
+          </div>
+          <div className="h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-amber-500 transition-all"
+              style={{ width: `${expProgress}%` }}
+            />
+          </div>
+        </div>
+
         <div className="mb-4">
-          <h3 className="text-xs font-semibold text-[var(--color-text-primary)] mb-2">属性</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-semibold text-[var(--color-text-primary)]">四维</h3>
+            <span className="text-[10px] text-[var(--color-text-muted)]">可用点数 {availableStatPoints}</span>
+          </div>
           <div className="grid grid-cols-2 gap-2">
-            {[
-              ['武力', '—'],
-              ['智力', '—'],
-              ['政治', '—'],
-              ['统率', '—'],
-            ].map(([label, value]) => (
-              <div key={label} className="flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
-                <span className="text-[11px] text-[var(--color-text-secondary)]">{label}</span>
-                <span className="text-xs font-bold text-[var(--color-text-primary)]">{value}</span>
+            {statEntries.map(([key, value]) => (
+              <div key={key} className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
+                <div className="min-w-0">
+                  <span className="block text-[11px] text-[var(--color-text-secondary)]">{STAT_LABELS[key]}</span>
+                  <span className="block text-xs font-bold text-[var(--color-text-primary)]">{value}/100</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleAllocateStat(key)}
+                  disabled={availableStatPoints <= 0 || value >= 100 || allocatingStat !== null}
+                  className="h-7 w-7 flex-shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-bold text-amber-600 disabled:opacity-40 disabled:cursor-not-allowed enabled:hover:bg-amber-500/10 transition-colors"
+                  title={`提升${STAT_LABELS[key]}`}
+                >
+                  {allocatingStat === key ? '…' : '+'}
+                </button>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Buffs */}
+        {/* Attributes */}
         <div className="mb-4">
-          <h3 className="text-xs font-semibold text-[var(--color-text-primary)] mb-2">加成效果</h3>
-          {Object.keys(general.buffs).length > 0 ? (
-            <div className="space-y-1.5">
-              {Object.entries(general.buffs).map(([key, val]) => (
-                <div key={key} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
-                  <span className="text-[10px] text-[var(--color-text-secondary)]">{key}</span>
-                  <span className="text-[10px] font-bold text-green-500">+{Math.round((val - 1) * 100)}%</span>
+          <h3 className="text-xs font-semibold text-[var(--color-text-primary)] mb-2">属性</h3>
+          {attributeEntries.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2">
+              {attributeEntries.map(([key, value]) => (
+                <div key={key} className="flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
+                  <span className="text-[11px] text-[var(--color-text-secondary)]">{ATTRIBUTE_LABELS[key] ?? key}</span>
+                  <span className="text-xs font-bold text-green-500">{formatAttributeValue(value)}</span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-[11px] text-[var(--color-text-muted)]">暂无加成，升级将领解锁</p>
+            <p className="text-[11px] text-[var(--color-text-muted)]">暂无属性加成，升级或配置将领后生效</p>
           )}
         </div>
 
-        {/* Skills placeholder */}
+        {/* Traits */}
         <div className="flex-1">
-          <h3 className="text-xs font-semibold text-[var(--color-text-primary)] mb-2">技能</h3>
-          <p className="text-[11px] text-[var(--color-text-muted)]">将领技能系统开发中</p>
+          <h3 className="text-xs font-semibold text-[var(--color-text-primary)] mb-2">将领特性</h3>
+          {traits.length > 0 ? (
+            <div className="space-y-2">
+              {traits.map((trait) => {
+                const meta = getTraitMeta(trait.traitId)
+                return (
+                  <div key={trait.traitId} className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-base">{meta.icon}</span>
+                      <span className="text-sm font-bold text-amber-600">{meta.name}</span>
+                      <span className="text-[10px] text-amber-600/70 ml-auto">{meta.trigger}</span>
+                    </div>
+                    <p className="text-[11px] text-[var(--color-text-secondary)] mb-2">{meta.description}</p>
+                    {Object.keys(trait.params).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(trait.params).map(([key, val]) => (
+                          <span key={key} className="text-[10px] px-2 py-0.5 rounded bg-white/60 dark:bg-white/5 border border-amber-500/20 text-[var(--color-text-secondary)]">
+                            {formatParamLabel(key)}: <span className="font-bold text-amber-600">{formatParamValue(key, val)}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-[11px] text-[var(--color-text-muted)]">该将领暂无特性</p>
+          )}
         </div>
       </div>
 

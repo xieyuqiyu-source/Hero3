@@ -28,6 +28,10 @@ var (
 	ErrInvalidAmount      = errors.New("invalid recruit amount")
 	ErrQueueFull          = errors.New("recruit queue is full")
 	ErrInvalidGeneral     = errors.New("invalid general for faction")
+	ErrGeneralNotFound    = errors.New("general not found")
+	ErrInvalidStatKey     = errors.New("invalid general stat")
+	ErrNoStatPoints       = errors.New("no general stat points available")
+	ErrStatMaxLevel       = errors.New("general stat is at max level")
 )
 
 const resourceDateLayout = time.RFC3339
@@ -40,6 +44,7 @@ type Service struct {
 	unitsDir      string
 	npcConfigPath string
 	combatPath    string
+	generalsPath  string
 }
 
 // getPlayerLock 获取指定玩家的互斥锁（懒创建）
@@ -83,6 +88,19 @@ func (s *Service) SetUnitsDir(dir string) error {
 func (s *Service) SetCombatPath(path string) error {
 	s.combatPath = path
 	return combat.LoadCombatConfig(path)
+}
+
+func (s *Service) SetGeneralsPath(path string) error {
+	s.generalsPath = path
+	return LoadGeneralsConfig(path)
+}
+
+func (s *Service) GetGeneralsConfig() GeneralsConfig {
+	return GetGeneralsConfig()
+}
+
+func (s *Service) UpdateGeneralsConfig(cfg GeneralsConfig) error {
+	return SaveGeneralsConfig(s.generalsPath, cfg)
 }
 
 func (s *Service) GetCombatConfig() combat.CombatConfig {
@@ -254,6 +272,10 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 		return GameState{}, err
 	}
 
+	if state.General != nil {
+		applyHeroConfigToGeneral(state.General)
+	}
+
 	state, changed := settleResources(state, time.Now())
 
 	// 旧存档没有将领数据时，根据阵营分配默认将领
@@ -273,6 +295,11 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 		if err := s.repo.SaveState(state, time.Now()); err != nil {
 			return GameState{}, err
 		}
+	}
+
+	// 总是重新应用 GeneralsConfig（GM 可能修改了配置，运行时同步生效）
+	if state.General != nil {
+		applyHeroConfigToGeneral(state.General)
 	}
 
 	// 从独立存储加载战报

@@ -10,6 +10,8 @@ import { useConfigStore } from '@/store/configStore'
 import heroBg from '@/assets/hero3background.webp'
 import { FACTION_UI } from './data/factions'
 import type { Faction } from './types'
+import { getGeneralTraits, type TraitMeta } from '@/utils/traits'
+import TraitDetailModal from '@/components/TraitDetailModal'
 
 // 极小的模糊占位图（112 bytes webp）
 const BG_PLACEHOLDER = 'data:image/webp;base64,UklGRmgAAABXRUJQVlA4IFwAAAAwBACdASoUAAsAPzmEuVOvKKWisAgB4CcJYwCdACLKCmWJ6Pdw43v4S4AA/rvqQrUD2UJiHN wrOTDEqMVex056iFRlKJ3FVgyuxcy8zTd9ta7nZoEQFTcly74AAA=='
@@ -19,6 +21,7 @@ const LoginPage: FC = () => {
   const [faction, setFaction] = useState<Faction | null>(null)
   const [selectedGeneral, setSelectedGeneral] = useState<string | null>(null)
   const [cloudSyncOpen, setCloudSyncOpen] = useState(false)
+  const [shownTrait, setShownTrait] = useState<TraitMeta | null>(null)
   const account = useAccountStore((s) => s.account)
   const [creating, setCreating] = useState(false)
   const [showSyncReminder, setShowSyncReminder] = useState(false)
@@ -220,20 +223,43 @@ const LoginPage: FC = () => {
                     <p className={`text-sm leading-relaxed ${isActive ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-muted)]'} transition-colors duration-200`}>
                       {f.desc}
                     </p>
-                    <div className="flex flex-wrap gap-2 mt-4">
-                      {f.traits.map((trait) => (
-                        <span
-                          key={trait}
-                          className={`
-                            px-3 py-1 rounded-lg text-xs font-medium
-                            ${isActive ? 'bg-[var(--color-accent-light)] text-[var(--color-text-primary)] border border-[var(--color-border)]' : 'bg-[var(--color-surface-dim)]/50 text-[var(--color-text-muted)] border border-[var(--color-border)]'}
-                            transition-colors duration-200
-                          `}
-                        >
-                          {trait}
-                        </span>
-                      ))}
-                    </div>
+                    {/* 当前选中将领的特性 tag —— 点击查看详情 */}
+                    {isActive && selectedGeneral && (() => {
+                      const traits = getGeneralTraits(selectedGeneral)
+                      if (traits.length === 0) return null
+                      return (
+                        <div className="flex flex-wrap gap-2 mt-4">
+                          {traits.map((tm) => (
+                            <button
+                              key={tm.id}
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setShownTrait(tm) }}
+                              className="
+                                px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer
+                                bg-amber-400 text-slate-900 border border-amber-500
+                                hover:bg-amber-300 hover:shadow-[0_0_12px_rgba(251,191,36,0.5)]
+                                transition-all duration-200
+                              "
+                            >
+                              {tm.icon} {tm.name}
+                            </button>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                    {/* 未激活时显示阵营定位 tags（占位，引导玩家选阵营） */}
+                    {!isActive && (
+                      <div className="flex flex-wrap gap-2 mt-4">
+                        {f.traits.map((trait) => (
+                          <span
+                            key={trait}
+                            className="px-3 py-1 rounded-lg text-xs font-medium bg-[var(--color-surface-dim)]/50 text-[var(--color-text-muted)] border border-[var(--color-border)]"
+                          >
+                            {trait}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Generals - carousel in center area */}
@@ -342,6 +368,7 @@ const LoginPage: FC = () => {
         open={cloudSyncOpen}
         onClose={() => setCloudSyncOpen(false)}
       />
+      <TraitDetailModal trait={shownTrait} onClose={() => setShownTrait(null)} />
     </div>
   )
 }

@@ -39,6 +39,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   'insufficient city gold': '城金不足',
   'invalid gold amount': '数量无效',
   'exchange is on cooldown': '兑换冷却中，请稍后再试',
+  'general not found': '将领不存在',
+  'invalid general stat': '将领属性无效',
+  'no general stat points available': '没有可用属性点',
+  'general stat is at max level': '该属性已加满',
 }
 
 /** 从错误响应体中提取可读消息 */

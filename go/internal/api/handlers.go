@@ -11,6 +11,7 @@ import (
 	"hero3/internal/combat"
 	"hero3/internal/config"
 	"hero3/internal/game"
+	"hero3/internal/general"
 )
 
 type Handlers struct {
@@ -493,6 +494,36 @@ func (h *Handlers) InstantCompleteRecruit(w http.ResponseWriter, r *http.Request
 			status = http.StatusNotFound
 		case errors.Is(err, game.ErrInsufficientCityGold):
 			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
+func (h *Handlers) AllocateGeneralStat(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+		StatKey  string `json:"statKey"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+
+	state, err := h.gameService.AllocateGeneralStat(payload.PlayerID, payload.StatKey)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound), errors.Is(err, game.ErrGeneralNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrNoStatPoints), errors.Is(err, game.ErrStatMaxLevel):
+			status = http.StatusConflict
+		case errors.Is(err, game.ErrInvalidStatKey):
+			status = http.StatusBadRequest
 		}
 		writeError(w, status, err.Error())
 		return
@@ -1203,4 +1234,43 @@ func (h *Handlers) requireAccount(w http.ResponseWriter, r *http.Request, accoun
 		return false
 	}
 	return true
+}
+
+// --- Generals 配置（GM） ---
+
+func (h *Handlers) AdminGeneralsConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.gameService.GetGeneralsConfig())
+}
+
+func (h *Handlers) UpdateAdminGeneralsConfig(w http.ResponseWriter, r *http.Request) {
+	var payload game.GeneralsConfig
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if err := h.gameService.UpdateGeneralsConfig(payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, h.gameService.GetGeneralsConfig())
+}
+
+// AdminGeneralTraitRegistry 返回所有已注册的特性元信息（GM 后台用来选择特性）
+func (h *Handlers) AdminGeneralTraitRegistry(w http.ResponseWriter, r *http.Request) {
+	type traitMeta struct {
+		ID          string               `json:"id"`
+		Name        string               `json:"name"`
+		Description string               `json:"description"`
+		ParamSchema []general.ParamField `json:"paramSchema"`
+	}
+	traits := general.All()
+	out := make([]traitMeta, 0, len(traits))
+	for _, t := range traits {
+		out = append(out, traitMeta{
+			ID:          t.ID(),
+			Name:        t.Name(),
+			Description: t.Description(general.Params{}),
+			ParamSchema: t.ParamSchema(),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"traits": out})
 }

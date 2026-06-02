@@ -1,0 +1,388 @@
+{
+  "common": {
+    "expCurve": [
+      0,
+      100,
+      300,
+      600,
+      1000,
+      1500,
+      2200,
+      3000,
+      4000,
+      5500,
+      7500
+    ],
+    "levelBuffs": {
+      "1": {},
+      "10": {
+        "attackBonus": 0.12,
+        "defenseBonus": 0.1,
+        "productionBonus": 0.15
+      },
+      "2": {
+        "productionBonus": 0.02
+      },
+      "3": {
+        "attackBonus": 0.02,
+        "productionBonus": 0.04
+      },
+      "5": {
+        "attackBonus": 0.05,
+        "defenseBonus": 0.03,
+        "productionBonus": 0.08
+      }
+    }
+  },
+  "heroes": {
+    "caocao": {
+      "id": "caocao",
+      "name": "曹操",
+      "faction": "wei",
+      "title": "魏武帝",
+      "rarity": "legendary",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.1,
+        "defenseBonus": 0.04
+      },
+      "traits": []
+    },
+    "dianwei": {
+      "id": "dianwei",
+      "name": "典韦",
+      "faction": "wei",
+      "title": "古之恶来",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.08,
+        "infantryDefenseBonus": 0.06
+      },
+      "traits": []
+    },
+    "ganning": {
+      "id": "ganning",
+      "name": "甘宁",
+      "faction": "wu",
+      "title": "锦帆贼",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.07,
+        "marchSpeedBonus": 0.05
+      },
+      "traits": []
+    },
+    "guanyu": {
+      "id": "guanyu",
+      "name": "关羽",
+      "faction": "shu",
+      "title": "武圣",
+      "rarity": "legendary",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.12
+      },
+      "traits": []
+    },
+    "guojia": {
+      "id": "guojia",
+      "name": "郭嘉",
+      "faction": "wei",
+      "title": "鬼才",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "buildSpeedBonus": 0.05,
+        "recruitSpeedBonus": 0.05
+      },
+      "traits": []
+    },
+    "huanggai": {
+      "id": "huanggai",
+      "name": "黄盖",
+      "faction": "wu",
+      "title": "苦肉计",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "defenseBonus": 0.08
+      },
+      "traits": []
+    },
+    "huangzhong": {
+      "id": "huangzhong",
+      "name": "黄忠",
+      "faction": "shu",
+      "title": "老当益壮",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.08
+      },
+      "traits": []
+    },
+    "liubei": {
+      "id": "liubei",
+      "name": "刘备",
+      "faction": "shu",
+      "title": "仁主",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "defenseBonus": 0.1,
+        "productionBonus": 0.05
+      },
+      "traits": [
+        {
+          "traitId": "rende",
+          "enabled": true,
+          "params": {
+            "reviveRate": 0.5,
+            "triggerChance": 1
+          }
+        }
+      ]
+    },
+    "lvmeng": {
+      "id": "lvmeng",
+      "name": "吕蒙",
+      "faction": "wu",
+      "title": "白衣渡江",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "marchSpeedBonus": 0.08,
+        "attackBonus": 0.04
+      },
+      "traits": []
+    },
+    "luxun": {
+      "id": "luxun",
+      "name": "陆逊",
+      "faction": "wu",
+      "title": "火烧连营",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.06,
+        "productionBonus": 0.04
+      },
+      "traits": []
+    },
+    "machao": {
+      "id": "machao",
+      "name": "马超",
+      "faction": "shu",
+      "title": "锦马超",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.08,
+        "marchSpeedBonus": 0.05
+      },
+      "traits": []
+    },
+    "simayi": {
+      "id": "simayi",
+      "name": "司马懿",
+      "faction": "wei",
+      "title": "冢虎",
+      "rarity": "legendary",
+      "enabled": true,
+      "buffs": {
+        "defenseBonus": 0.08,
+        "buildSpeedBonus": 0.04
+      },
+      "traits": []
+    },
+    "sunce": {
+      "id": "sunce",
+      "name": "孙策",
+      "faction": "wu",
+      "title": "小霸王",
+      "rarity": "legendary",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.1,
+        "marchSpeedBonus": 0.04
+      },
+      "traits": []
+    },
+    "sunquan": {
+      "id": "sunquan",
+      "name": "孙权",
+      "faction": "wu",
+      "title": "大帝",
+      "rarity": "legendary",
+      "enabled": true,
+      "buffs": {
+        "defenseBonus": 0.1,
+        "capacityBonus": 0.05
+      },
+      "traits": []
+    },
+    "taishici": {
+      "id": "taishici",
+      "name": "太史慈",
+      "faction": "wu",
+      "title": "信义笃烈",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.06,
+        "defenseBonus": 0.04
+      },
+      "traits": []
+    },
+    "weiyan": {
+      "id": "weiyan",
+      "name": "魏延",
+      "faction": "shu",
+      "title": "踏破敌阵",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.07,
+        "recruitSpeedBonus": 0.04
+      },
+      "traits": []
+    },
+    "xiahouyuan": {
+      "id": "xiahouyuan",
+      "name": "夏侯渊",
+      "faction": "wei",
+      "title": "虎步关右",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "marchSpeedBonus": 0.08,
+        "attackBonus": 0.04
+      },
+      "traits": []
+    },
+    "xuchu": {
+      "id": "xuchu",
+      "name": "许褚",
+      "faction": "wei",
+      "title": "虎痴",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.08,
+        "defenseBonus": 0.05
+      },
+      "traits": []
+    },
+    "xunyu": {
+      "id": "xunyu",
+      "name": "荀彧",
+      "faction": "wei",
+      "title": "王佐之才",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "productionBonus": 0.06,
+        "buildSpeedBonus": 0.04
+      },
+      "traits": []
+    },
+    "zhenmi": {
+      "id": "zhenmi",
+      "name": "甄宓",
+      "faction": "wei",
+      "title": "美人",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "productionBonus": 0.1
+      },
+      "traits": [
+        {
+          "traitId": "meiren",
+          "enabled": true,
+          "params": {
+            "captureMax": 1000,
+            "captureRate": 0.1,
+            "triggerChance": 1
+          }
+        }
+      ]
+    },
+    "zhangfei": {
+      "id": "zhangfei",
+      "name": "张飞",
+      "faction": "shu",
+      "title": "万人敌",
+      "rarity": "legendary",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.1,
+        "infantryDefenseBonus": 0.05
+      },
+      "traits": []
+    },
+    "zhangliao": {
+      "id": "zhangliao",
+      "name": "张辽",
+      "faction": "wei",
+      "title": "威震逍遥津",
+      "rarity": "legendary",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.09,
+        "marchSpeedBonus": 0.05
+      },
+      "traits": []
+    },
+    "zhaoyun": {
+      "id": "zhaoyun",
+      "name": "赵云",
+      "faction": "shu",
+      "title": "常胜将军",
+      "rarity": "legendary",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.08,
+        "defenseBonus": 0.06
+      },
+      "traits": []
+    },
+    "zhugeliang": {
+      "id": "zhugeliang",
+      "name": "诸葛亮",
+      "faction": "shu",
+      "title": "卧龙",
+      "rarity": "legendary",
+      "enabled": true,
+      "buffs": {
+        "productionBonus": 0.06,
+        "buildSpeedBonus": 0.06
+      },
+      "traits": []
+    },
+    "zhouyu": {
+      "id": "zhouyu",
+      "name": "周瑜",
+      "faction": "wu",
+      "title": "美周郎",
+      "rarity": "epic",
+      "enabled": true,
+      "buffs": {
+        "attackBonus": 0.15
+      },
+      "traits": [
+        {
+          "traitId": "huogong",
+          "enabled": true,
+          "params": {
+            "damagePercent": 0.15,
+            "triggerChance": 0.6
+          }
+        }
+      ]
+    }
+  },
+  "enabled": true
+}

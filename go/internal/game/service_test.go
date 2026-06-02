@@ -2,10 +2,14 @@ package game
 
 import (
 	"encoding/json"
+	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"hero3/internal/combat"
 )
 
 func TestSettleResourcesAddsProducedResources(t *testing.T) {
@@ -153,6 +157,201 @@ func TestCalculateResourceCapacityUsesWarehouseConfig(t *testing.T) {
 	}
 	if capacity["food"] != 9200 {
 		t.Fatalf("expected level 3 warehouse food capacity to be 9200, got %d", capacity["food"])
+	}
+}
+
+func TestApplyHeroConfigCombinesLevelAndHeroAttributes(t *testing.T) {
+	original := GetGeneralsConfig()
+	t.Cleanup(func() {
+		if err := SetGeneralsConfig(original); err != nil {
+			t.Fatalf("restore generals config: %v", err)
+		}
+	})
+
+	err := SetGeneralsConfig(GeneralsConfig{
+		Enabled: true,
+		Common: GeneralsCommonConfig{
+			ExpCurve: []int{0, 100, 300},
+			LevelBuffs: map[int]map[string]float64{
+				1: {},
+				2: {"productionBonus": 0.02},
+			},
+		},
+		Heroes: map[string]GeneralHeroConfig{
+			"test_general": {
+				ID:      "test_general",
+				Name:    "测试将领",
+				Enabled: true,
+				Buffs:   map[string]float64{"productionBonus": 0.1, "attackBonus": 0.05},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("set generals config: %v", err)
+	}
+
+	general := &General{ID: "test_general", Name: "测试将领", Level: 2, Exp: 120}
+	applyHeroConfigToGeneral(general)
+
+	expectedLevelAttack := 2.0 / 99.0
+	if math.Abs(general.Attributes["productionBonus"]-0.1) > 1e-9 {
+		t.Fatalf("expected production bonus to combine level and hero attributes, got %.2f", general.Attributes["productionBonus"])
+	}
+	if math.Abs(general.Buffs["attackBonus"]-(0.05+expectedLevelAttack)) > 1e-9 {
+		t.Fatalf("expected attack bonus to sync into buffs, got %.2f", general.Buffs["attackBonus"])
+	}
+	if general.NextLevelExp != generalExpRequiredForLevelForTest(3) {
+		t.Fatalf("expected next level exp %d, got %d", generalExpRequiredForLevelForTest(3), general.NextLevelExp)
+	}
+}
+
+func TestApplyGeneralBattleExpPromotesLevel(t *testing.T) {
+	original := GetGeneralsConfig()
+	t.Cleanup(func() {
+		if err := SetGeneralsConfig(original); err != nil {
+			t.Fatalf("restore generals config: %v", err)
+		}
+	})
+
+	err := SetGeneralsConfig(GeneralsConfig{
+		Enabled: true,
+		Common: GeneralsCommonConfig{
+			ExpCurve: []int{0, 10, 30},
+			LevelBuffs: map[int]map[string]float64{
+				1: {},
+				2: {"attackBonus": 0.02},
+			},
+		},
+		Heroes: map[string]GeneralHeroConfig{
+			"test_general": {ID: "test_general", Name: "测试将领", Enabled: true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("set generals config: %v", err)
+	}
+
+	general := &General{ID: "test_general", Name: "测试将领", Level: 1, Exp: 9}
+	result := applyGeneralBattleExp(general, generalExpRequiredForLevelForTest(2))
+
+	if result.Gained != generalExpRequiredForLevelForTest(2) {
+		t.Fatalf("expected battle exp %d, got %d", generalExpRequiredForLevelForTest(2), result.Gained)
+	}
+	if result.LevelBefore != 1 || result.LevelAfter != 2 || general.Level != 2 {
+		t.Fatalf("expected general to level from 1 to 2, result=%+v general=%+v", result, general)
+	}
+	if math.Abs(general.Attributes["attackBonus"]-(2.0/99.0)) > 1e-9 {
+		t.Fatalf("expected level 2 attack bonus to apply, got %.2f", general.Attributes["attackBonus"])
+	}
+}
+
+func TestGeneralExpFormulaPreventsLevel90SingleHugeBattleLevelUp(t *testing.T) {
+	level90Exp := generalExpRequiredForLevelForTest(90)
+	level91Exp := generalExpRequiredForLevelForTest(91)
+	if level91Exp-level90Exp <= 1_200_000_000 {
+		t.Fatalf("expected Lv90->Lv91 to require more than 1.2B exp, got %d", level91Exp-level90Exp)
+	}
+
+	general := &General{ID: "test_general", Name: "测试将领", Level: 90, Exp: level90Exp}
+	result := applyGeneralBattleExp(general, 1_200_000_000)
+	if result.LevelAfter != 90 || general.Level != 90 {
+		t.Fatalf("expected 1.2B exp not to level Lv90 general, result=%+v general=%+v", result, general)
+	}
+}
+
+func TestGeneralBattleExpUsesKilledUnitUpkeep(t *testing.T) {
+	original := GetGeneralsConfig()
+	originalUnits := GetUnitsConfig()
+	t.Cleanup(func() {
+		if err := SetGeneralsConfig(original); err != nil {
+			t.Fatalf("restore generals config: %v", err)
+		}
+		unitsMu.Lock()
+		activeUnits = originalUnits
+		unitsMu.Unlock()
+	})
+
+	unitsMu.Lock()
+	activeUnits = UnitsConfig{
+		"shu": FactionUnits{
+			"southernElephant": UnitConfig{Stats: map[string]int{"upkeep": 4}},
+			"hanRoyalty":       UnitConfig{Stats: map[string]int{"upkeep": 6}},
+		},
+	}
+	unitsMu.Unlock()
+
+	exp := calculateGeneralBattleExpFromLosses("shu", []combat.UnitLoss{
+		{ID: "southernElephant", Losses: 10},
+		{ID: "hanRoyalty", Losses: 3},
+	})
+	if exp != 58 {
+		t.Fatalf("expected exp by killed upkeep to be 58, got %d", exp)
+	}
+}
+
+func TestAllocateGeneralStatUpdatesAttributes(t *testing.T) {
+	original := GetGeneralsConfig()
+	t.Cleanup(func() {
+		if err := SetGeneralsConfig(original); err != nil {
+			t.Fatalf("restore generals config: %v", err)
+		}
+	})
+
+	if err := SetGeneralsConfig(GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"test_general": {ID: "test_general", Name: "测试将领", Enabled: true},
+		},
+	}); err != nil {
+		t.Fatalf("set generals config: %v", err)
+	}
+
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	now := time.Date(2026, 6, 2, 10, 0, 0, 0, time.UTC)
+	if err := repo.CreateAccount(Account{ID: "account_stat", Username: "stat_user", PasswordHash: "hash", CreatedAt: now}); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_stat", "测试", "wei", "test_general", now)
+	state.General.Level = 2
+	state.General.Exp = generalExpRequiredForLevelForTest(2)
+	applyHeroConfigToGeneral(state.General)
+	if err := repo.CreatePlayer("account_stat", state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+	attackBefore := state.General.Attributes[StatAttackBonus]
+
+	next, err := service.AllocateGeneralStat("player_stat", "force")
+	if err != nil {
+		t.Fatalf("allocate general stat: %v", err)
+	}
+	if next.General.Stats["force"] != 1 {
+		t.Fatalf("expected force to become 1, got %d", next.General.Stats["force"])
+	}
+	if next.General.AvailableStatPoints != 1 {
+		t.Fatalf("expected 1 stat point remaining, got %d", next.General.AvailableStatPoints)
+	}
+	if next.General.Attributes[StatAttackBonus] <= attackBefore {
+		t.Fatalf("expected attack bonus to increase, before %.4f after %.4f", attackBefore, next.General.Attributes[StatAttackBonus])
+	}
+}
+
+func TestAllocateGeneralStatRejectsMaxedStat(t *testing.T) {
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	now := time.Date(2026, 6, 2, 10, 0, 0, 0, time.UTC)
+	if err := repo.CreateAccount(Account{ID: "account_stat_max", Username: "stat_max_user", PasswordHash: "hash", CreatedAt: now}); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_stat_max", "测试", "wei", "caocao", now)
+	state.General.Level = 100
+	state.General.Stats = map[string]int{"force": 100}
+	applyHeroConfigToGeneral(state.General)
+	if err := repo.CreatePlayer("account_stat_max", state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	if _, err := service.AllocateGeneralStat("player_stat_max", "force"); !errors.Is(err, ErrStatMaxLevel) {
+		t.Fatalf("expected ErrStatMaxLevel, got %v", err)
 	}
 }
 
@@ -337,7 +536,6 @@ func getProductionAtLevel(buildingType string, level int) int {
 	}
 	return config.ProductionByLevel[level]
 }
-
 
 func TestOwnsPlayer(t *testing.T) {
 	svc := NewService()

@@ -30,6 +30,8 @@ interface GameStore {
   loadGameState: (playerId?: string) => Promise<void>
   /** 升级建筑 */
   upgradeBuilding: (buildingId: string) => Promise<void>
+  /** 将领四维加点 */
+  allocateGeneralStat: (statKey: string) => Promise<void>
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -71,6 +73,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const playerId = get().activePlayerId
     if (!playerId) return
     const result = await gameApi.upgradeBuilding(playerId, buildingId)
+    set({ state: result.state, stateReceivedAt: Date.now(), error: null })
+  },
+  allocateGeneralStat: async (statKey: string) => {
+    const playerId = get().activePlayerId
+    if (!playerId) return
+    const result = await gameApi.allocateGeneralStat(playerId, statKey)
     set({ state: result.state, stateReceivedAt: Date.now(), error: null })
   },
 }))

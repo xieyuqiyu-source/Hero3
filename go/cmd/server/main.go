@@ -13,6 +13,7 @@ import (
 	"hero3/internal/api"
 	"hero3/internal/config"
 	"hero3/internal/game"
+	_ "hero3/internal/general/traits" // 触发将领特性自动注册
 	"hero3/internal/httpserver"
 	"hero3/internal/storage"
 )
@@ -45,6 +46,10 @@ func main() {
 	}
 	if err := gameService.SetCombatPath(cfg.CombatPath); err != nil {
 		logger.Error("combat config load failed", "path", cfg.CombatPath, "error", err)
+		os.Exit(1)
+	}
+	if err := gameService.SetGeneralsPath(cfg.GeneralsPath); err != nil {
+		logger.Error("generals config load failed", "path", cfg.GeneralsPath, "error", err)
 		os.Exit(1)
 	}
 	if cfg.DatabaseDSN != "" {
@@ -82,6 +87,10 @@ func main() {
 		}
 		if err := gameService.SetCombatPath(cfg.CombatPath); err != nil {
 			logger.Error("combat config load failed", "path", cfg.CombatPath, "error", err)
+			os.Exit(1)
+		}
+		if err := gameService.SetGeneralsPath(cfg.GeneralsPath); err != nil {
+			logger.Error("generals config load failed", "path", cfg.GeneralsPath, "error", err)
 			os.Exit(1)
 		}
 		logger.Info("database storage enabled")

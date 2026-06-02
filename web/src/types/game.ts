@@ -77,8 +77,26 @@ export interface BattleReport {
   rewards: Record<string, number>
   overflow?: Record<string, number>
   overflowCityGold?: number
+  generalExpGained?: number
+  generalLevelBefore?: number
+  generalLevelAfter?: number
+  capturedUnits?: Record<string, number>      // 美人计俘虏到军队
+  capturedToGarrison?: Record<string, number> // 美人计俘虏到驻防
+  revivedUnits?: Record<string, number>       // 仁德复活
+  traitTriggered?: string[]                   // 触发的特性 id 列表
+  traitOutcomes?: Record<string, {            // 特性触发结果详情
+    traitId: string
+    name?: string
+    detail?: Record<string, number | string>
+  }>
   read: boolean
   createdAt: string
+}
+
+export interface GeneralTraitInstance {
+  traitId: string
+  name: string
+  params: Record<string, number>
 }
 
 export interface General {
@@ -86,7 +104,12 @@ export interface General {
   name: string
   level: number
   exp: number
+  nextLevelExp?: number
+  availableStatPoints?: number
+  stats?: Record<string, number>
+  attributes?: Record<string, number>
   buffs: Record<string, number>
+  traits?: GeneralTraitInstance[]
 }
 
 export interface GameState {
