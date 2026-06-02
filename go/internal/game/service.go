@@ -33,13 +33,14 @@ var (
 const resourceDateLayout = time.RFC3339
 
 type Service struct {
-	repo          Repository
-	playerLocks   sync.Map // per-player 互斥锁，防止并发购买/兑换竞态
-	balancePath   string
-	factionsPath  string
-	unitsDir      string
-	npcConfigPath string
-	combatPath    string
+	repo            Repository
+	playerLocks     sync.Map // per-player 互斥锁，防止并发购买/兑换竞态
+	balancePath     string
+	factionsPath    string
+	unitsDir        string
+	npcConfigPath   string
+	combatPath      string
+	generalsPath    string
 }
 
 // getPlayerLock 获取指定玩家的互斥锁（懒创建）
@@ -83,6 +84,19 @@ func (s *Service) SetUnitsDir(dir string) error {
 func (s *Service) SetCombatPath(path string) error {
 	s.combatPath = path
 	return combat.LoadCombatConfig(path)
+}
+
+func (s *Service) SetGeneralsPath(path string) error {
+	s.generalsPath = path
+	return LoadGeneralsConfig(path)
+}
+
+func (s *Service) GetGeneralsConfig() GeneralsConfig {
+	return GetGeneralsConfig()
+}
+
+func (s *Service) UpdateGeneralsConfig(cfg GeneralsConfig) error {
+	return SaveGeneralsConfig(s.generalsPath, cfg)
 }
 
 func (s *Service) GetCombatConfig() combat.CombatConfig {
@@ -273,6 +287,11 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 		if err := s.repo.SaveState(state, time.Now()); err != nil {
 			return GameState{}, err
 		}
+	}
+
+	// 总是重新应用 GeneralsConfig（GM 可能修改了配置，运行时同步生效）
+	if state.General != nil {
+		applyHeroConfigToGeneral(state.General)
 	}
 
 	// 从独立存储加载战报

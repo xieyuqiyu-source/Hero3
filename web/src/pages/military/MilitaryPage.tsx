@@ -1,4 +1,5 @@
-import { useState, type FC } from 'react'
+import { useState, useEffect, type FC } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Swords, FlaskConical, Users } from 'lucide-react'
 import RecruitTab from './components/RecruitTab'
 import GeneralPanel from './components/GeneralPanel'
@@ -6,7 +7,23 @@ import GeneralPanel from './components/GeneralPanel'
 type MainTab = 'recruit' | 'generals' | 'tech'
 
 const MilitaryPage: FC = () => {
-  const [activeTab, setActiveTab] = useState<MainTab>('recruit')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialTab = (searchParams.get('tab') as MainTab) || 'recruit'
+  const [activeTab, setActiveTab] = useState<MainTab>(initialTab)
+
+  // URL ?tab=generals 变化时同步切换
+  useEffect(() => {
+    const t = searchParams.get('tab') as MainTab | null
+    if (t && t !== activeTab && (t === 'recruit' || t === 'generals' || t === 'tech')) {
+      setActiveTab(t)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  const handleTabChange = (key: MainTab) => {
+    setActiveTab(key)
+    setSearchParams(key === 'recruit' ? {} : { tab: key }, { replace: true })
+  }
 
   const tabs = [
     { key: 'recruit' as const, label: '征兵', icon: Swords },
@@ -25,7 +42,7 @@ const MilitaryPage: FC = () => {
             <button
               key={tab.key}
               type="button"
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => handleTabChange(tab.key)}
               className={`
                 flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer
                 transition-all duration-200

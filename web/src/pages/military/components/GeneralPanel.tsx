@@ -1,5 +1,6 @@
 import { type FC } from 'react'
 import { useGameStore } from '@/store/gameStore'
+import { getTraitMeta, formatParamLabel, formatParamValue } from '@/utils/traits'
 
 const INVENTORY_SLOTS = 20
 
@@ -13,6 +14,8 @@ const GeneralPanel: FC = () => {
       </div>
     )
   }
+
+  const traits = general.traits ?? []
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-220px)] min-h-[400px]">
@@ -58,7 +61,7 @@ const GeneralPanel: FC = () => {
               {Object.entries(general.buffs).map(([key, val]) => (
                 <div key={key} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
                   <span className="text-[10px] text-[var(--color-text-secondary)]">{key}</span>
-                  <span className="text-[10px] font-bold text-green-500">+{Math.round((val - 1) * 100)}%</span>
+                  <span className="text-[10px] font-bold text-green-500">+{Math.round(val * 100)}%</span>
                 </div>
               ))}
             </div>
@@ -67,10 +70,37 @@ const GeneralPanel: FC = () => {
           )}
         </div>
 
-        {/* Skills placeholder */}
+        {/* Traits */}
         <div className="flex-1">
-          <h3 className="text-xs font-semibold text-[var(--color-text-primary)] mb-2">技能</h3>
-          <p className="text-[11px] text-[var(--color-text-muted)]">将领技能系统开发中</p>
+          <h3 className="text-xs font-semibold text-[var(--color-text-primary)] mb-2">将领特性</h3>
+          {traits.length > 0 ? (
+            <div className="space-y-2">
+              {traits.map((trait) => {
+                const meta = getTraitMeta(trait.traitId)
+                return (
+                  <div key={trait.traitId} className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-base">{meta.icon}</span>
+                      <span className="text-sm font-bold text-amber-600">{meta.name}</span>
+                      <span className="text-[10px] text-amber-600/70 ml-auto">{meta.trigger}</span>
+                    </div>
+                    <p className="text-[11px] text-[var(--color-text-secondary)] mb-2">{meta.description}</p>
+                    {Object.keys(trait.params).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(trait.params).map(([key, val]) => (
+                          <span key={key} className="text-[10px] px-2 py-0.5 rounded bg-white/60 dark:bg-white/5 border border-amber-500/20 text-[var(--color-text-secondary)]">
+                            {formatParamLabel(key)}: <span className="font-bold text-amber-600">{formatParamValue(key, val)}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-[11px] text-[var(--color-text-muted)]">该将领暂无特性</p>
+          )}
         </div>
       </div>
 

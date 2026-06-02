@@ -11,6 +11,7 @@ import (
 	"hero3/internal/combat"
 	"hero3/internal/config"
 	"hero3/internal/game"
+	"hero3/internal/general"
 )
 
 type Handlers struct {
@@ -1203,4 +1204,44 @@ func (h *Handlers) requireAccount(w http.ResponseWriter, r *http.Request, accoun
 		return false
 	}
 	return true
+}
+
+
+// --- Generals 配置（GM） ---
+
+func (h *Handlers) AdminGeneralsConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.gameService.GetGeneralsConfig())
+}
+
+func (h *Handlers) UpdateAdminGeneralsConfig(w http.ResponseWriter, r *http.Request) {
+	var payload game.GeneralsConfig
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if err := h.gameService.UpdateGeneralsConfig(payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, h.gameService.GetGeneralsConfig())
+}
+
+// AdminGeneralTraitRegistry 返回所有已注册的特性元信息（GM 后台用来选择特性）
+func (h *Handlers) AdminGeneralTraitRegistry(w http.ResponseWriter, r *http.Request) {
+	type traitMeta struct {
+		ID          string                  `json:"id"`
+		Name        string                  `json:"name"`
+		Description string                  `json:"description"`
+		ParamSchema []general.ParamField    `json:"paramSchema"`
+	}
+	traits := general.All()
+	out := make([]traitMeta, 0, len(traits))
+	for _, t := range traits {
+		out = append(out, traitMeta{
+			ID:          t.ID(),
+			Name:        t.Name(),
+			Description: t.Description(general.Params{}),
+			ParamSchema: t.ParamSchema(),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"traits": out})
 }

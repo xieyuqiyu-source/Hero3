@@ -1,4 +1,5 @@
 import { useState, type FC } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Castle,
   Swords,
@@ -44,6 +45,7 @@ interface SidebarProps {
 }
 
 const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate, onToggle }) => {
+  const navigate = useNavigate()
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
   const resources = useProjectedResources()
   const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
@@ -268,7 +270,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
         {!collapsed && gameState?.general && (
           <button
             type="button"
-            onClick={() => onNavigate('military')}
+            onClick={() => navigate('/military?tab=generals')}
             className="
               w-full mb-2.5 rounded-2xl p-3
               bg-[var(--color-surface-dim)] border border-[var(--color-border)]

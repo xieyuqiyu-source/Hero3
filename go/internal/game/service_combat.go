@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"hero3/internal/combat"
+	"hero3/internal/general"
 )
 
 var (
@@ -66,6 +67,9 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 	if err != nil {
 		return AttackNpcResponse{}, err
 	}
+	if state.General != nil {
+		applyHeroConfigToGeneral(state.General)
+	}
 
 	now := time.Now()
 	state, _ = settleResources(state, now)
@@ -104,18 +108,79 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 		ruleID = "official_plunder"
 	}
 
+	attackerArmy := buildCombatArmy(state.Player.Faction, attackerUnits)
+	defenderArmy := buildNpcCombatArmy(npc)
+
+	// === 战斗前事件：触发 before_battle（如美人计俘虏） ===
+	activeTraits := buildActiveTraits(state.General)
+	beforeCtx := &general.BeforeBattleContext{
+		Attacker:          &attackerArmy,
+		Defender:          &defenderArmy,
+		AttackerOwnsTrait: true, // 进攻方就是当前玩家
+		DefenderOwnsTrait: false,
+		IsPvP:             false,
+		SameFaction:       true, // PvE 视为同阵营，俘虏入军队
+	}
+	general.Dispatch(beforeCtx, activeTraits)
+	// 应用美人计俘虏到玩家军队
+	for unitType, count := range beforeCtx.CapturedToArmy {
+		mergeIntoArmy(&state, unitType, count)
+	}
+
 	combatInput := combat.CombatInput{
-		RuleID:   ruleID,
-		Attacker: buildCombatArmy(state.Player.Faction, attackerUnits),
-		Defender: buildNpcCombatArmy(npc),
+		RuleID:    ruleID,
+		Attacker:  attackerArmy,
+		Defender:  defenderArmy,
 		WallLevel: 0, // NPC 无城墙
 	}
 
 	// 执行战斗
 	result := combat.Resolve(combatInput)
 
+	// === 战斗解算后事件：触发 after_combat_resolve（如周瑜火攻） ===
+	afterCombatCtx := &general.AfterCombatResolveContext{
+		Result:            &result,
+		Attacker:          &attackerArmy,
+		Defender:          &defenderArmy,
+		AttackerOwnsTrait: true,
+		DefenderOwnsTrait: false,
+		IsAttackerOnly:    true,
+	}
+	general.Dispatch(afterCombatCtx, activeTraits)
+
 	// 应用战斗结果
 	report := applyNpcBattleResult(&state, npc, result, attackerUnits, mode, now)
+
+	// 记录俘虏信息到战报
+	if len(beforeCtx.CapturedToArmy) > 0 {
+		report.CapturedUnits = beforeCtx.CapturedToArmy
+	}
+	// 把 before/afterCombat 的触发结果合并到战报
+	mergeTraitOutcomes(&report, beforeCtx.Triggered)
+	mergeTraitOutcomes(&report, afterCombatCtx.Triggered)
+
+	// === 战斗完成后事件：触发 after_battle（如刘备仁德） ===
+	playerArmyMap := armySliceToMap(state.Army)
+	playerLossesMap := report.LostUnits
+	afterBattleCtx := &general.AfterBattleContext{
+		PlayerArmy:   playerArmyMap,
+		PlayerLosses: playerLossesMap,
+		IsAttacker:   true,
+		Won:          report.Result == "attacker_victory",
+	}
+	general.Dispatch(afterBattleCtx, activeTraits)
+	// 应用复活到 state.Army
+	if len(afterBattleCtx.Revived) > 0 {
+		state.Army = armyMapToSlice(playerArmyMap)
+		// 战报记录复活信息
+		if report.RevivedUnits == nil {
+			report.RevivedUnits = map[string]int{}
+		}
+		for k, v := range afterBattleCtx.Revived {
+			report.RevivedUnits[k] = v
+		}
+	}
+	mergeTraitOutcomes(&report, afterBattleCtx.Triggered)
 
 	// 溢出城金通过原子操作写入（避免并发覆盖）
 	if report.OverflowCityGold > 0 {
@@ -797,4 +862,87 @@ func (s *Service) DeleteAllReports(playerID string) (GameState, error) {
 if listErr != nil { slog.Warn("list reports failed", "error", listErr) }
 	state.RecentBattleReports = reports
 	return state, nil
+}
+
+
+// --- Trait dispatch helpers ---
+
+// buildActiveTraits 从玩家的 General 构建当前激活的特性列表
+// 单将领模式下直接读 state.General.Traits
+func buildActiveTraits(g *General) []general.ActiveTrait {
+	if g == nil || len(g.Traits) == 0 {
+		return nil
+	}
+	out := make([]general.ActiveTrait, 0, len(g.Traits))
+	for _, t := range g.Traits {
+		params := general.Params(t.Params)
+		out = append(out, general.ActiveTrait{
+			TraitID: t.TraitID,
+			Params:  params,
+		})
+	}
+	return out
+}
+
+// mergeIntoArmy 把指定数量的某兵种合并进玩家军队
+func mergeIntoArmy(state *GameState, unitType string, count int) {
+	if count <= 0 {
+		return
+	}
+	for i := range state.Army {
+		if state.Army[i].UnitType == unitType {
+			state.Army[i].Amount += count
+			return
+		}
+	}
+	state.Army = append(state.Army, ArmyUnit{UnitType: unitType, Amount: count})
+}
+
+// armySliceToMap 把 []ArmyUnit 转 map[unitType]amount
+func armySliceToMap(army []ArmyUnit) map[string]int {
+	m := make(map[string]int, len(army))
+	for _, u := range army {
+		m[u.UnitType] = u.Amount
+	}
+	return m
+}
+
+// armyMapToSlice 把 map 转回 []ArmyUnit
+func armyMapToSlice(m map[string]int) []ArmyUnit {
+	out := make([]ArmyUnit, 0, len(m))
+	for unitType, amount := range m {
+		if amount > 0 {
+			out = append(out, ArmyUnit{UnitType: unitType, Amount: amount})
+		}
+	}
+	return out
+}
+
+
+// mergeTraitOutcomes 把 trait 触发结果合并到战报中
+func mergeTraitOutcomes(report *BattleReport, outcomes map[string]general.TraitOutcome) {
+	if len(outcomes) == 0 {
+		return
+	}
+	if report.TraitOutcomes == nil {
+		report.TraitOutcomes = map[string]TraitOutcomeReport{}
+	}
+	for traitID, outcome := range outcomes {
+		report.TraitOutcomes[traitID] = TraitOutcomeReport{
+			TraitID: outcome.TraitID,
+			Name:    outcome.Name,
+			Detail:  outcome.Detail,
+		}
+		// 同时记入 TraitTriggered（保持向后兼容）
+		alreadyIn := false
+		for _, id := range report.TraitTriggered {
+			if id == traitID {
+				alreadyIn = true
+				break
+			}
+		}
+		if !alreadyIn {
+			report.TraitTriggered = append(report.TraitTriggered, traitID)
+		}
+	}
 }

@@ -76,6 +76,9 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("DELETE /api/v1/admin/buff/{buffId}", handlers.RevokeBuff)
 	mux.HandleFunc("POST /api/v1/minigame/record", handlers.SaveMiniGameRecord)
 	mux.HandleFunc("GET /api/v1/admin/minigame/records", handlers.AdminMiniGameRecords)
+	mux.HandleFunc("GET /api/v1/admin/generals-config", handlers.AdminGeneralsConfig)
+	mux.HandleFunc("PUT /api/v1/admin/generals-config", handlers.UpdateAdminGeneralsConfig)
+	mux.HandleFunc("GET /api/v1/admin/general-traits", handlers.AdminGeneralTraitRegistry)
 
 	// 公开路径白名单（不需要认证）
 	publicPaths := []string{

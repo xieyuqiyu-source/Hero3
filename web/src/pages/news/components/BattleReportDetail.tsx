@@ -3,6 +3,7 @@ import { ArrowLeft, Share2, Check } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
 import type { BattleReport } from '@/types/game'
+import { getTraitMeta } from '@/utils/traits'
 
 interface BattleReportDetailProps {
   report: BattleReport
@@ -58,6 +59,23 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
       if (f[unitType]?.name) return f[unitType].name
     }
     return unitType
+  }
+
+  const formatOutcomeDetail = (key: string, value: number | string): string => {
+    const labels: Record<string, string> = {
+      totalCaptured: '俘虏',
+      totalRevived: '复活',
+      extraDamage: '额外伤害',
+      damagePercent: '伤害比例',
+    }
+    const label = labels[key] ?? key
+    if (typeof value === 'number') {
+      if (key.endsWith('Percent') || key.endsWith('Rate')) {
+        return `${label}: ${Math.round(value * 100)}%`
+      }
+      return `${label}: ${value.toLocaleString()}`
+    }
+    return `${label}: ${value}`
   }
 
   return (
@@ -230,6 +248,89 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
           </div>
         </div>
       </div>
+
+      {/* 将领特性结果 */}
+      {(
+        (report.traitTriggered && report.traitTriggered.length > 0) ||
+        (report.capturedUnits && Object.keys(report.capturedUnits).length > 0) ||
+        (report.capturedToGarrison && Object.keys(report.capturedToGarrison).length > 0) ||
+        (report.revivedUnits && Object.keys(report.revivedUnits).length > 0)
+      ) && (
+        <div className="rounded-2xl border border-amber-400/40 bg-amber-400/5 overflow-hidden">
+          <div className="px-4 py-2 border-b border-amber-400/30 bg-amber-400/10">
+            <span className="text-xs font-bold text-amber-600">将领特性结果</span>
+          </div>
+          <div className="p-4 space-y-3">
+            {report.traitTriggered && report.traitTriggered.length > 0 && (
+              <div className="space-y-1.5">
+                {report.traitTriggered.map((traitId) => {
+                  const meta = getTraitMeta(traitId)
+                  const outcome = report.traitOutcomes?.[traitId]
+                  return (
+                    <div key={traitId} className="flex items-start gap-2 px-2.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                      <span className="text-base">{meta.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-bold text-amber-600">{meta.name}</span>
+                          <span className="text-[10px] text-amber-600/70">{meta.trigger}</span>
+                        </div>
+                        {outcome?.detail && (
+                          <div className="mt-0.5 text-[10px] text-[var(--color-text-secondary)]">
+                            {Object.entries(outcome.detail).map(([k, v]) => (
+                              <span key={k} className="mr-2">
+                                {formatOutcomeDetail(k, v)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {report.capturedUnits && Object.keys(report.capturedUnits).length > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold text-pink-500 mb-1.5">美人计·俘虏归队</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(report.capturedUnits).filter(([, v]) => v > 0).map(([unitType, count]) => (
+                    <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-pink-500/10 text-pink-600 font-medium">
+                      {getUnitName(unitType)} +{count}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {report.capturedToGarrison && Object.keys(report.capturedToGarrison).length > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold text-pink-500 mb-1.5">美人计·俘虏驻防</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(report.capturedToGarrison).filter(([, v]) => v > 0).map(([unitType, count]) => (
+                    <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-pink-500/10 text-pink-600 font-medium">
+                      {getUnitName(unitType)} +{count}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {report.revivedUnits && Object.keys(report.revivedUnits).length > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold text-emerald-500 mb-1.5">仁德·复活归队</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(report.revivedUnits).filter(([, v]) => v > 0).map(([unitType, count]) => (
+                    <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 font-medium">
+                      {getUnitName(unitType)} +{count}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 防守方 */}
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">

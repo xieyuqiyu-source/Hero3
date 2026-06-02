@@ -71,11 +71,27 @@ type ArmyUnit struct {
 }
 
 type General struct {
-	ID    string             `json:"id"`
-	Name  string             `json:"name"`
-	Level int                `json:"level"`
-	Exp   int                `json:"exp"`
-	Buffs map[string]float64 `json:"buffs"`
+	ID     string             `json:"id"`
+	Name   string             `json:"name"`
+	Level  int                `json:"level"`
+	Exp    int                `json:"exp"`
+	Buffs  map[string]float64 `json:"buffs"`
+	Traits []GeneralTraitInstance `json:"traits,omitempty"` // 当前激活的特性（来自配置）
+}
+
+// GeneralTraitInstance 玩家身上激活的特性实例（trait id + 当前参数）
+// 在玩家创建/读取时根据 GeneralsConfig 填充
+type GeneralTraitInstance struct {
+	TraitID string             `json:"traitId"` // 对应 traits 注册中心
+	Name    string             `json:"name"`    // 显示名（冗余便于前端）
+	Params  map[string]float64 `json:"params"`  // GM 配置的当前参数
+}
+
+// TraitOutcomeReport 战报中单条特性触发结果
+type TraitOutcomeReport struct {
+	TraitID string                 `json:"traitId"`
+	Name    string                 `json:"name,omitempty"`
+	Detail  map[string]interface{} `json:"detail,omitempty"`
 }
 
 type RecruitQueue struct {
@@ -114,6 +130,11 @@ type BattleReport struct {
 	Rewards           map[string]int `json:"rewards"`
 	Overflow          map[string]int `json:"overflow,omitempty"` // 各资源溢出量
 	OverflowCityGold  int            `json:"overflowCityGold"`   // 溢出转换获得的城金
+	CapturedUnits     map[string]int `json:"capturedUnits,omitempty"` // 美人计俘虏到军队
+	CapturedToGarrison map[string]int `json:"capturedToGarrison,omitempty"` // 美人计俘虏到驻防
+	RevivedUnits      map[string]int `json:"revivedUnits,omitempty"`  // 仁德复活
+	TraitTriggered    []string       `json:"traitTriggered,omitempty"` // 触发了哪些特性（前端展示）
+	TraitOutcomes     map[string]TraitOutcomeReport `json:"traitOutcomes,omitempty"` // 每个触发特性的具体结果
 	Read              bool           `json:"read"`
 	DeletedByPlayer   bool           `json:"deletedByPlayer,omitempty"`
 	CreatedAt         string         `json:"createdAt"`
@@ -242,12 +263,55 @@ func newGeneral(faction string, generalID string) *General {
 			}
 		}
 	}
-	return &General{
+	g := &General{
 		ID:    generalID,
 		Name:  name,
 		Level: 1,
 		Exp:   0,
 		Buffs: map[string]float64{},
+	}
+	// 从 GeneralsConfig 注入 buffs 和特性
+	applyHeroConfigToGeneral(g)
+	return g
+}
+
+// applyHeroConfigToGeneral 根据 GeneralsConfig 把该将领的 buffs 和当前激活特性注入到 General 实例
+// 创建玩家时调用一次，读取存档时也调用一次（保证配置变化能生效）
+func applyHeroConfigToGeneral(g *General) {
+	if g == nil {
+		return
+	}
+	hero, ok := GetHeroConfig(g.ID)
+	if !ok || !hero.Enabled {
+		return
+	}
+
+	// 写入数值加成
+	if g.Buffs == nil {
+		g.Buffs = map[string]float64{}
+	}
+	for k, v := range hero.Buffs {
+		g.Buffs[k] = v
+	}
+
+	// 写入特性实例
+	g.Traits = nil
+	for _, tc := range hero.Traits {
+		if !tc.Enabled {
+			continue
+		}
+		params := make(map[string]float64, len(tc.Params))
+		for k, v := range tc.Params {
+			params[k] = v
+		}
+		// 显示名从代码注册中心取
+		displayName := tc.TraitID
+		// 这里不直接 import general 包以避免循环依赖，由前端展示时通过 GM API 拿到名字
+		g.Traits = append(g.Traits, GeneralTraitInstance{
+			TraitID: tc.TraitID,
+			Name:    displayName,
+			Params:  params,
+		})
 	}
 }
 
