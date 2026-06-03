@@ -38,11 +38,24 @@ const ATTRIBUTE_ORDER = [
 ]
 
 const formatAttributeValue = (value: number) => `${value >= 0 ? '+' : ''}${Math.round(value * 100)}%`
+const formatBreakdownTitle = (label: string, total: number, items: Array<{ source: string; value: number }>) => {
+  if (items.length === 0) return `${label} ${formatAttributeValue(total)}`
+  return [
+    `${label} ${formatAttributeValue(total)}`,
+    ...items.map((item) => `${item.source} ${formatAttributeValue(item.value)}`),
+  ].join('\n')
+}
 const STAT_LABELS: Record<string, string> = {
   force: '武力',
   intelligence: '智谋',
   politics: '内政',
   command: '统率',
+}
+const STAT_COLORS: Record<string, string> = {
+  force: 'text-amber-600',
+  intelligence: 'text-blue-500',
+  politics: 'text-green-500',
+  command: 'text-purple-500',
 }
 const STAT_ORDER = ['force', 'intelligence', 'politics', 'command']
 
@@ -61,6 +74,7 @@ const GeneralPanel: FC = () => {
 
   const traits = general.traits ?? []
   const attributes = general.attributes ?? general.buffs ?? {}
+  const attributeBreakdown = general.attributeBreakdown ?? {}
   const attributeEntries = Object.entries(attributes)
     .filter(([, value]) => value !== 0)
     .sort(([a], [b]) => {
@@ -120,12 +134,23 @@ const GeneralPanel: FC = () => {
             <h3 className="text-xs font-semibold text-[var(--color-text-primary)]">四维</h3>
             <span className="text-[10px] text-[var(--color-text-muted)]">可用点数 {availableStatPoints}</span>
           </div>
+          
+          {/* 四维属性说明 */}
+          <div className="mb-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2">
+            <p className="text-[10px] text-[var(--color-text-muted)] leading-relaxed">
+              <span className="text-amber-600 font-semibold">武力</span> 提升部队攻击 · 
+              <span className="text-blue-500 font-semibold"> 智谋</span> 提升征兵速度和行军速度 · 
+              <span className="text-green-500 font-semibold"> 内政</span> 提升资源产量和仓库容量 · 
+              <span className="text-purple-500 font-semibold"> 统率</span> 提升部队防御
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             {statEntries.map(([key, value]) => (
               <div key={key} className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
-                <div className="min-w-0">
-                  <span className="block text-[11px] text-[var(--color-text-secondary)]">{STAT_LABELS[key]}</span>
-                  <span className="block text-xs font-bold text-[var(--color-text-primary)]">{value}/100</span>
+                <div className="flex items-center gap-2 flex-1 justify-between">
+                  <span className={`text-xs font-semibold ${STAT_COLORS[key]}`}>{STAT_LABELS[key]}</span>
+                  <span className="text-xs font-bold text-[var(--color-text-primary)]">{value}/100</span>
                 </div>
                 <button
                   type="button"
@@ -147,9 +172,29 @@ const GeneralPanel: FC = () => {
           {attributeEntries.length > 0 ? (
             <div className="grid grid-cols-2 gap-2">
               {attributeEntries.map(([key, value]) => (
-                <div key={key} className="flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
+                <div
+                  key={key}
+                  className="group relative flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)]"
+                  title={formatBreakdownTitle(ATTRIBUTE_LABELS[key] ?? key, value, attributeBreakdown[key] ?? [])}
+                >
                   <span className="text-[11px] text-[var(--color-text-secondary)]">{ATTRIBUTE_LABELS[key] ?? key}</span>
                   <span className="text-xs font-bold text-green-500">{formatAttributeValue(value)}</span>
+                  {(attributeBreakdown[key]?.length ?? 0) > 0 && (
+                    <div className="pointer-events-none absolute left-2 right-2 bottom-[calc(100%+6px)] z-20 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 shadow-lg opacity-0 invisible translate-y-1 scale-95 transition-all duration-150 ease-out group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100">
+                      <div className="mb-1 flex items-center justify-between gap-3">
+                        <span className="text-[11px] font-semibold text-[var(--color-text-primary)]">{ATTRIBUTE_LABELS[key] ?? key}</span>
+                        <span className="text-[11px] font-bold text-green-500">{formatAttributeValue(value)}</span>
+                      </div>
+                      <div className="space-y-0.5">
+                        {(attributeBreakdown[key] ?? []).map((item, index) => (
+                          <div key={`${item.source}-${index}`} className="flex items-center justify-between gap-3 text-[10px]">
+                            <span className="text-[var(--color-text-secondary)]">{item.source}</span>
+                            <span className="font-semibold text-[var(--color-text-primary)]">{formatAttributeValue(item.value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

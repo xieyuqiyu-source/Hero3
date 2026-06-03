@@ -108,6 +108,7 @@ export interface General {
   availableStatPoints?: number
   stats?: Record<string, number>
   attributes?: Record<string, number>
+  attributeBreakdown?: Record<string, Array<{ source: string; value: number }>>
   buffs: Record<string, number>
   traits?: GeneralTraitInstance[]
 }

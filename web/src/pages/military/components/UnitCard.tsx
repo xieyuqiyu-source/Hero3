@@ -1,6 +1,8 @@
 import { type FC } from 'react'
 import { Clock, Swords, Shield, Zap, Package, Wheat, TreePine, Mountain, Gem } from 'lucide-react'
 import type { UnitConfig } from '@/store/configStore'
+import { useGameStore } from '@/store/gameStore'
+import { formatBaseFinal, formatModifierValue, formatUnitStatTitle, getEffectiveUnitStat, type EffectiveUnitStat } from '@/utils/unitStats'
 
 interface UnitCardProps {
   unitId: string
@@ -9,12 +11,49 @@ interface UnitCardProps {
   onClick: () => void
 }
 
+const StatValue: FC<{ label: string; stat: EffectiveUnitStat }> = ({ label, stat }) => {
+  const boosted = stat.final !== stat.base
+  return (
+    <span
+      className={`relative group text-[11px] font-bold ${boosted ? 'text-green-500' : 'text-[var(--color-text-primary)]'}`}
+      title={formatUnitStatTitle(label, stat)}
+    >
+      {formatBaseFinal(stat)}
+      {stat.breakdown.length > 0 && (
+        <div className="pointer-events-none absolute right-0 bottom-[calc(100%+6px)] z-20 w-44 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 shadow-lg opacity-0 invisible translate-y-1 scale-95 transition-all duration-150 ease-out group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-[var(--color-text-primary)]">{label}</span>
+            <span className="text-[11px] font-bold text-green-500">{formatBaseFinal(stat)}</span>
+          </div>
+          <div className="space-y-0.5">
+            <div className="flex items-center justify-between gap-2 text-[10px]">
+              <span className="text-[var(--color-text-secondary)]">基础</span>
+              <span className="font-semibold text-[var(--color-text-primary)]">{stat.base}</span>
+            </div>
+            {stat.breakdown.map((item, index) => (
+              <div key={`${item.source}-${index}`} className="flex items-center justify-between gap-2 text-[10px]">
+                <span className="text-[var(--color-text-secondary)]">{item.source}</span>
+                <span className="font-semibold text-[var(--color-text-primary)]">{formatModifierValue(item)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </span>
+  )
+}
+
 const UnitCard: FC<UnitCardProps> = ({ config, owned, onClick }) => {
+  const gameState = useGameStore((s) => s.state)
+  const attack = getEffectiveUnitStat(gameState, 'attack', config.stats.attack ?? 0)
+  const infantryDefense = getEffectiveUnitStat(gameState, 'infantryDefense', config.stats.infantryDefense ?? 0)
+  const cavalryDefense = getEffectiveUnitStat(gameState, 'cavalryDefense', config.stats.cavalryDefense ?? 0)
+
   return (
     <div
       className="
         flex flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]
-        overflow-hidden transition-all duration-200
+        overflow-visible transition-all duration-200
         hover:border-[var(--color-accent-border)] hover:shadow-[0_6px_20px_rgba(15,23,42,0.06)]
       "
     >
@@ -32,20 +71,25 @@ const UnitCard: FC<UnitCardProps> = ({ config, owned, onClick }) => {
         {/* Left: stats list */}
         <div className="flex-1 flex flex-col justify-between">
           {[
-            [Swords, '攻击', config.stats.attack],
-            [Shield, '步防', config.stats.infantryDefense],
-            [Shield, '骑防', config.stats.cavalryDefense],
+            [Swords, '攻击', attack],
+            [Shield, '步防', infantryDefense],
+            [Shield, '骑防', cavalryDefense],
             [Zap, '速度', config.stats.speed],
             [Package, '运载', config.stats.carryCapacity],
           ].map(([Icon, label, val]) => {
             const IconComp = Icon as FC<{ size?: number; className?: string }>
+            const stat = typeof val === 'object' ? val as EffectiveUnitStat : null
             return (
               <div key={label as string} className="flex items-center justify-between py-[3px] border-b border-[var(--color-border)] last:border-b-0">
                 <span className="flex items-center gap-1 text-[10px] text-[var(--color-text-secondary)]">
                   <IconComp size={10} className="text-[var(--color-text-muted)]" />
                   {label as string}
                 </span>
-                <span className="text-[11px] font-bold text-[var(--color-text-primary)]">{(val as number) ?? 0}</span>
+                {stat ? (
+                  <StatValue label={label as string} stat={stat} />
+                ) : (
+                  <span className="text-[11px] font-bold text-[var(--color-text-primary)]">{(val as number) ?? 0}</span>
+                )}
               </div>
             )
           })}

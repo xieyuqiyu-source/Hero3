@@ -4,6 +4,7 @@ import type { UnitConfig } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
 import { gameApi } from '@/api/game'
+import { formatBaseFinal, formatModifierValue, formatUnitStatTitle, getEffectiveUnitStat, type EffectiveUnitStat } from '@/utils/unitStats'
 
 interface RecruitModalProps {
   open: boolean
@@ -20,13 +21,50 @@ const RESOURCE_LABELS: Record<string, string> = {
   food: '粮',
 }
 
+const ModalStatValue: FC<{ label: string; stat: EffectiveUnitStat }> = ({ label, stat }) => {
+  const boosted = stat.final !== stat.base
+  return (
+    <div
+      className="group relative px-2 py-1.5 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)] text-center"
+      title={formatUnitStatTitle(label, stat)}
+    >
+      <div className="text-[9px] text-[var(--color-text-muted)]">{label}</div>
+      <div className={`text-xs font-bold ${boosted ? 'text-green-500' : 'text-[var(--color-text-primary)]'}`}>{formatBaseFinal(stat)}</div>
+      {stat.breakdown.length > 0 && (
+        <div className="pointer-events-none absolute left-0 right-0 bottom-[calc(100%+6px)] z-20 min-w-44 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 shadow-lg opacity-0 invisible translate-y-1 scale-95 transition-all duration-150 ease-out group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-[var(--color-text-primary)]">{label}</span>
+            <span className="text-[11px] font-bold text-green-500">{formatBaseFinal(stat)}</span>
+          </div>
+          <div className="space-y-0.5">
+            <div className="flex items-center justify-between gap-2 text-[10px]">
+              <span className="text-[var(--color-text-secondary)]">基础</span>
+              <span className="font-semibold text-[var(--color-text-primary)]">{stat.base}</span>
+            </div>
+            {stat.breakdown.map((item, index) => (
+              <div key={`${item.source}-${index}`} className="flex items-center justify-between gap-2 text-[10px]">
+                <span className="text-[var(--color-text-secondary)]">{item.source}</span>
+                <span className="font-semibold text-[var(--color-text-primary)]">{formatModifierValue(item)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, owned }) => {
   const [amount, setAmount] = useState(1)
   const [visible, setVisible] = useState(false)
   const [recruiting, setRecruiting] = useState(false)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const setState = useGameStore((s) => s.setState)
+  const gameState = useGameStore((s) => s.state)
   const resources = useProjectedResources()
+  const attack = getEffectiveUnitStat(gameState, 'attack', config.stats.attack ?? 0)
+  const infantryDefense = getEffectiveUnitStat(gameState, 'infantryDefense', config.stats.infantryDefense ?? 0)
+  const cavalryDefense = getEffectiveUnitStat(gameState, 'cavalryDefense', config.stats.cavalryDefense ?? 0)
 
   // 计算当前资源能征募的最大数量（任一资源不足则为0），上限 100000
   const maxAmount = (() => {
@@ -83,7 +121,7 @@ const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, ow
 
       {/* Modal */}
       <div className={`
-        relative w-full max-w-sm rounded-2xl overflow-hidden
+        relative w-full max-w-sm rounded-2xl overflow-visible
         bg-[var(--color-surface)] border border-[var(--color-border)]
         shadow-[0_24px_60px_rgba(15,23,42,0.25)]
         transition-all duration-200
@@ -109,10 +147,10 @@ const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, ow
         <div className="px-4 py-3 space-y-3">
           {/* Stats */}
           <div className="grid grid-cols-3 gap-1.5">
+            <ModalStatValue label="攻击" stat={attack} />
+            <ModalStatValue label="步防" stat={infantryDefense} />
+            <ModalStatValue label="骑防" stat={cavalryDefense} />
             {[
-              ['攻击', config.stats.attack],
-              ['步防', config.stats.infantryDefense],
-              ['骑防', config.stats.cavalryDefense],
               ['速度', config.stats.speed],
               ['运载', config.stats.carryCapacity],
               ['口粮', config.stats.upkeep],

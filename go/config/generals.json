@@ -42,10 +42,7 @@
       "title": "魏武帝",
       "rarity": "legendary",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.1,
-        "defenseBonus": 0.04
-      },
+      "buffs": {},
       "traits": []
     },
     "dianwei": {
@@ -55,10 +52,7 @@
       "title": "古之恶来",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.08,
-        "infantryDefenseBonus": 0.06
-      },
+      "buffs": {},
       "traits": []
     },
     "ganning": {
@@ -68,10 +62,7 @@
       "title": "锦帆贼",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.07,
-        "marchSpeedBonus": 0.05
-      },
+      "buffs": {},
       "traits": []
     },
     "guanyu": {
@@ -81,9 +72,7 @@
       "title": "武圣",
       "rarity": "legendary",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.12
-      },
+      "buffs": {},
       "traits": []
     },
     "guojia": {
@@ -93,10 +82,7 @@
       "title": "鬼才",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "buildSpeedBonus": 0.05,
-        "recruitSpeedBonus": 0.05
-      },
+      "buffs": {},
       "traits": []
     },
     "huanggai": {
@@ -106,9 +92,7 @@
       "title": "苦肉计",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "defenseBonus": 0.08
-      },
+      "buffs": {},
       "traits": []
     },
     "huangzhong": {
@@ -118,9 +102,7 @@
       "title": "老当益壮",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.08
-      },
+      "buffs": {},
       "traits": []
     },
     "liubei": {
@@ -130,10 +112,7 @@
       "title": "仁主",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "defenseBonus": 0.1,
-        "productionBonus": 0.05
-      },
+      "buffs": {},
       "traits": [
         {
           "traitId": "rende",
@@ -152,10 +131,7 @@
       "title": "白衣渡江",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "marchSpeedBonus": 0.08,
-        "attackBonus": 0.04
-      },
+      "buffs": {},
       "traits": []
     },
     "luxun": {
@@ -165,10 +141,7 @@
       "title": "火烧连营",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.06,
-        "productionBonus": 0.04
-      },
+      "buffs": {},
       "traits": []
     },
     "machao": {
@@ -178,10 +151,7 @@
       "title": "锦马超",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.08,
-        "marchSpeedBonus": 0.05
-      },
+      "buffs": {},
       "traits": []
     },
     "simayi": {
@@ -191,10 +161,7 @@
       "title": "冢虎",
       "rarity": "legendary",
       "enabled": true,
-      "buffs": {
-        "defenseBonus": 0.08,
-        "buildSpeedBonus": 0.04
-      },
+      "buffs": {},
       "traits": []
     },
     "sunce": {
@@ -204,10 +171,7 @@
       "title": "小霸王",
       "rarity": "legendary",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.1,
-        "marchSpeedBonus": 0.04
-      },
+      "buffs": {},
       "traits": []
     },
     "sunquan": {
@@ -217,10 +181,7 @@
       "title": "大帝",
       "rarity": "legendary",
       "enabled": true,
-      "buffs": {
-        "defenseBonus": 0.1,
-        "capacityBonus": 0.05
-      },
+      "buffs": {},
       "traits": []
     },
     "taishici": {
@@ -230,10 +191,7 @@
       "title": "信义笃烈",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.06,
-        "defenseBonus": 0.04
-      },
+      "buffs": {},
       "traits": []
     },
     "weiyan": {
@@ -243,10 +201,7 @@
       "title": "踏破敌阵",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.07,
-        "recruitSpeedBonus": 0.04
-      },
+      "buffs": {},
       "traits": []
     },
     "xiahouyuan": {
@@ -256,10 +211,7 @@
       "title": "虎步关右",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "marchSpeedBonus": 0.08,
-        "attackBonus": 0.04
-      },
+      "buffs": {},
       "traits": []
     },
     "xuchu": {
@@ -269,10 +221,7 @@
       "title": "虎痴",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.08,
-        "defenseBonus": 0.05
-      },
+      "buffs": {},
       "traits": []
     },
     "xunyu": {
@@ -282,10 +231,7 @@
       "title": "王佐之才",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "productionBonus": 0.06,
-        "buildSpeedBonus": 0.04
-      },
+      "buffs": {},
       "traits": []
     },
     "zhenmi": {
@@ -295,9 +241,7 @@
       "title": "美人",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "productionBonus": 0.1
-      },
+      "buffs": {},
       "traits": [
         {
           "traitId": "meiren",
@@ -317,10 +261,7 @@
       "title": "万人敌",
       "rarity": "legendary",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.1,
-        "infantryDefenseBonus": 0.05
-      },
+      "buffs": {},
       "traits": []
     },
     "zhangliao": {
@@ -330,10 +271,7 @@
       "title": "威震逍遥津",
       "rarity": "legendary",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.09,
-        "marchSpeedBonus": 0.05
-      },
+      "buffs": {},
       "traits": []
     },
     "zhaoyun": {
@@ -343,10 +281,7 @@
       "title": "常胜将军",
       "rarity": "legendary",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.08,
-        "defenseBonus": 0.06
-      },
+      "buffs": {},
       "traits": []
     },
     "zhugeliang": {
@@ -356,10 +291,7 @@
       "title": "卧龙",
       "rarity": "legendary",
       "enabled": true,
-      "buffs": {
-        "productionBonus": 0.06,
-        "buildSpeedBonus": 0.06
-      },
+      "buffs": {},
       "traits": []
     },
     "zhouyu": {
@@ -369,9 +301,7 @@
       "title": "美周郎",
       "rarity": "epic",
       "enabled": true,
-      "buffs": {
-        "attackBonus": 0.15
-      },
+      "buffs": {},
       "traits": [
         {
           "traitId": "huogong",

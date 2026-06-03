@@ -333,6 +333,13 @@ func TestAllocateGeneralStatUpdatesAttributes(t *testing.T) {
 	if next.General.Attributes[StatAttackBonus] <= attackBefore {
 		t.Fatalf("expected attack bonus to increase, before %.4f after %.4f", attackBefore, next.General.Attributes[StatAttackBonus])
 	}
+	attackBreakdown := next.General.AttributeBreakdown[StatAttackBonus]
+	if len(attackBreakdown) != 2 {
+		t.Fatalf("expected attack bonus breakdown from level and force, got %+v", attackBreakdown)
+	}
+	if attackBreakdown[0].Source != "等级成长" || attackBreakdown[1].Source != "武力" {
+		t.Fatalf("unexpected attack bonus breakdown sources: %+v", attackBreakdown)
+	}
 }
 
 func TestAllocateGeneralStatRejectsMaxedStat(t *testing.T) {

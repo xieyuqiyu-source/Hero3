@@ -71,16 +71,22 @@ type ArmyUnit struct {
 }
 
 type General struct {
-	ID                  string                 `json:"id"`
-	Name                string                 `json:"name"`
-	Level               int                    `json:"level"`
-	Exp                 int                    `json:"exp"`
-	NextLevelExp        int                    `json:"nextLevelExp,omitempty"`        // 下一等级所需累计经验；满级为 0
-	AvailableStatPoints int                    `json:"availableStatPoints,omitempty"` // 可分配四维点数
-	Stats               map[string]int         `json:"stats,omitempty"`               // 四维加点，单项上限 100
-	Attributes          map[string]float64     `json:"attributes,omitempty"`          // 展示用多维属性，来源于等级属性 + 四维加点 + 将领固定属性
-	Buffs               map[string]float64     `json:"buffs"`                         // 兼容旧字段，Modifier 管线仍从这里读取
-	Traits              []GeneralTraitInstance `json:"traits,omitempty"`              // 当前激活的特性（来自配置）
+	ID                  string                                     `json:"id"`
+	Name                string                                     `json:"name"`
+	Level               int                                        `json:"level"`
+	Exp                 int                                        `json:"exp"`
+	NextLevelExp        int                                        `json:"nextLevelExp,omitempty"`        // 下一等级所需累计经验；满级为 0
+	AvailableStatPoints int                                        `json:"availableStatPoints,omitempty"` // 可分配四维点数
+	Stats               map[string]int                             `json:"stats,omitempty"`               // 四维加点，单项上限 100
+	Attributes          map[string]float64                         `json:"attributes,omitempty"`          // 展示用多维属性，来源于等级属性 + 四维加点 + 将领固定属性
+	AttributeBreakdown  map[string][]GeneralAttributeBreakdownItem `json:"attributeBreakdown,omitempty"`  // 属性来源拆分，供前端 tooltip 展示
+	Buffs               map[string]float64                         `json:"buffs"`                         // 兼容旧字段，Modifier 管线仍从这里读取
+	Traits              []GeneralTraitInstance                     `json:"traits,omitempty"`              // 当前激活的特性（来自配置）
+}
+
+type GeneralAttributeBreakdownItem struct {
+	Source string  `json:"source"`
+	Value  float64 `json:"value"`
 }
 
 // GeneralTraitInstance 玩家身上激活的特性实例（trait id + 当前参数）
@@ -302,6 +308,7 @@ func applyHeroConfigToGeneral(g *General) {
 	g.Stats = normalizeGeneralStats(g.Stats)
 	g.AvailableStatPoints = availableGeneralStatPoints(g.Level, g.Stats)
 	g.Attributes = map[string]float64{}
+	g.AttributeBreakdown = map[string][]GeneralAttributeBreakdownItem{}
 	g.Buffs = map[string]float64{}
 	g.Traits = nil
 
@@ -314,14 +321,12 @@ func applyHeroConfigToGeneral(g *General) {
 	}
 
 	for k, v := range generalLevelAttributes(g.Level) {
-		addGeneralAttribute(g.Attributes, k, v)
+		addGeneralAttributeWithSource(g, k, v, "等级成长")
 	}
-	for k, v := range generalStatAttributes(g.Stats) {
-		addGeneralAttribute(g.Attributes, k, v)
-	}
+	addGeneralStatAttributesWithBreakdown(g)
 	// 将领固定属性叠加在等级属性之上。
 	for k, v := range hero.Buffs {
-		addGeneralAttribute(g.Attributes, k, v)
+		addGeneralAttributeWithSource(g, k, v, "将领固定")
 	}
 	for k, v := range g.Attributes {
 		g.Buffs[k] = v
@@ -345,6 +350,32 @@ func applyHeroConfigToGeneral(g *General) {
 			Params:  params,
 		})
 	}
+}
+
+func addGeneralAttributeWithSource(g *General, key string, value float64, source string) {
+	if g == nil || key == "" || value == 0 {
+		return
+	}
+	addGeneralAttribute(g.Attributes, key, value)
+	if g.AttributeBreakdown == nil {
+		g.AttributeBreakdown = map[string][]GeneralAttributeBreakdownItem{}
+	}
+	g.AttributeBreakdown[key] = append(g.AttributeBreakdown[key], GeneralAttributeBreakdownItem{
+		Source: source,
+		Value:  value,
+	})
+}
+
+func addGeneralStatAttributesWithBreakdown(g *General) {
+	if g == nil || len(g.Stats) == 0 {
+		return
+	}
+	addGeneralAttributeWithSource(g, StatAttackBonus, float64(g.Stats["force"])*GeneralStatPercentPerPoint, "武力")
+	addGeneralAttributeWithSource(g, StatRecruitSpeedBonus, float64(g.Stats["intelligence"])*GeneralStatPercentPerPoint, "智谋")
+	addGeneralAttributeWithSource(g, StatMarchSpeedBonus, float64(g.Stats["intelligence"])*GeneralStatPercentPerPoint, "智谋")
+	addGeneralAttributeWithSource(g, StatProductionBonus, float64(g.Stats["politics"])*GeneralStatPercentPerPoint, "内政")
+	addGeneralAttributeWithSource(g, StatCapacityBonus, float64(g.Stats["politics"])*GeneralStatPercentPerPoint, "内政")
+	addGeneralAttributeWithSource(g, StatDefenseBonus, float64(g.Stats["command"])*GeneralStatPercentPerPoint, "统率")
 }
 
 func addGeneralAttribute(attrs map[string]float64, key string, value float64) {
