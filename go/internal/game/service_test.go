@@ -160,15 +160,168 @@ func TestCalculateResourceCapacityUsesWarehouseConfig(t *testing.T) {
 	}
 }
 
-func TestApplyHeroConfigCombinesLevelAndHeroAttributes(t *testing.T) {
+func setTestGeneralsConfig(t *testing.T, cfg GeneralsConfig) {
+	t.Helper()
+	setTestFactionsAndGenerals(t, FactionsConfig{
+		"wei": {
+			Name:     "魏国",
+			Generals: []GeneralInfo{{ID: "test_general", Name: "测试将领", Title: "测试"}},
+		},
+	}, cfg)
+}
+
+func setTestFactionsAndGenerals(t *testing.T, factions FactionsConfig, cfg GeneralsConfig) {
+	t.Helper()
 	original := GetGeneralsConfig()
+	originalFactions := GetFactionsConfig()
+
+	factionsMu.Lock()
+	activeFactions = factions
+	factionsMu.Unlock()
+
+	if err := SetGeneralsConfig(cfg); err != nil {
+		t.Fatalf("set generals config: %v", err)
+	}
+
 	t.Cleanup(func() {
-		if err := SetGeneralsConfig(original); err != nil {
-			t.Fatalf("restore generals config: %v", err)
-		}
+		generalsMu.Lock()
+		activeGenerals = original
+		generalsMu.Unlock()
+		factionsMu.Lock()
+		activeFactions = originalFactions
+		factionsMu.Unlock()
+	})
+}
+
+func TestValidateGeneralsConfigRejectsUnsafeTraitParams(t *testing.T) {
+	factions := FactionsConfig{
+		"wei": {Generals: []GeneralInfo{{ID: "zhenmi", Name: "甄宓"}}},
+	}
+	cfg := GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"zhenmi": {
+				ID:      "zhenmi",
+				Name:    "甄宓",
+				Faction: "wei",
+				Enabled: true,
+				Traits: []GeneralTraitConfig{{
+					TraitID: "meiren",
+					Enabled: true,
+					Params:  map[string]float64{"captureRate": 2, "captureMax": 1000, "triggerChance": 1},
+				}},
+			},
+		},
+	}
+
+	originalFactions := GetFactionsConfig()
+	factionsMu.Lock()
+	activeFactions = factions
+	factionsMu.Unlock()
+	t.Cleanup(func() {
+		factionsMu.Lock()
+		activeFactions = originalFactions
+		factionsMu.Unlock()
 	})
 
-	err := SetGeneralsConfig(GeneralsConfig{
+	if err := ValidateGeneralsConfig(cfg); err == nil {
+		t.Fatalf("expected out-of-range trait param to be rejected")
+	}
+}
+
+func TestValidateGeneralsConfigRejectsUnknownBuffKey(t *testing.T) {
+	factions := FactionsConfig{
+		"wei": {Generals: []GeneralInfo{{ID: "zhenmi", Name: "甄宓"}}},
+	}
+	cfg := GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"zhenmi": {
+				ID:      "zhenmi",
+				Name:    "甄宓",
+				Faction: "wei",
+				Enabled: true,
+				Buffs:   map[string]float64{"cheatBonus": 999},
+			},
+		},
+	}
+
+	originalFactions := GetFactionsConfig()
+	factionsMu.Lock()
+	activeFactions = factions
+	factionsMu.Unlock()
+	t.Cleanup(func() {
+		factionsMu.Lock()
+		activeFactions = originalFactions
+		factionsMu.Unlock()
+	})
+
+	if err := ValidateGeneralsConfig(cfg); err == nil {
+		t.Fatalf("expected unknown buff key to be rejected")
+	}
+}
+
+func TestCreatePlayerRejectsDisabledGeneral(t *testing.T) {
+	setTestFactionsAndGenerals(t, FactionsConfig{
+		"wei": {Generals: []GeneralInfo{{ID: "zhenmi", Name: "甄宓"}}},
+	}, GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"zhenmi": {ID: "zhenmi", Name: "甄宓", Faction: "wei", Enabled: false},
+		},
+	})
+
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	now := time.Date(2026, 6, 4, 10, 0, 0, 0, time.UTC)
+	if err := repo.CreateAccount(Account{ID: "account_disabled_general", Username: "disabled_general", PasswordHash: "hash", CreatedAt: now}); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+
+	if _, _, err := service.CreatePlayer("account_disabled_general", "测试", "wei", "zhenmi"); !errors.Is(err, ErrInvalidGeneral) {
+		t.Fatalf("expected ErrInvalidGeneral for disabled general, got %v", err)
+	}
+}
+
+func TestCreatePlayerRejectsGeneralConfigFactionMismatch(t *testing.T) {
+	original := GetGeneralsConfig()
+	originalFactions := GetFactionsConfig()
+	factionsMu.Lock()
+	activeFactions = FactionsConfig{
+		"wei": {Generals: []GeneralInfo{{ID: "zhouyu", Name: "周瑜"}}},
+	}
+	factionsMu.Unlock()
+	generalsMu.Lock()
+	activeGenerals = GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"zhouyu": {ID: "zhouyu", Name: "周瑜", Faction: "wu", Enabled: true},
+		},
+	}
+	generalsMu.Unlock()
+	t.Cleanup(func() {
+		generalsMu.Lock()
+		activeGenerals = original
+		generalsMu.Unlock()
+		factionsMu.Lock()
+		activeFactions = originalFactions
+		factionsMu.Unlock()
+	})
+
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	now := time.Date(2026, 6, 4, 10, 0, 0, 0, time.UTC)
+	if err := repo.CreateAccount(Account{ID: "account_mismatch_general", Username: "mismatch_general", PasswordHash: "hash", CreatedAt: now}); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+
+	if _, _, err := service.CreatePlayer("account_mismatch_general", "测试", "wei", "zhouyu"); !errors.Is(err, ErrInvalidGeneral) {
+		t.Fatalf("expected ErrInvalidGeneral for mismatched general faction, got %v", err)
+	}
+}
+
+func TestApplyHeroConfigCombinesLevelAndHeroAttributes(t *testing.T) {
+	setTestGeneralsConfig(t, GeneralsConfig{
 		Enabled: true,
 		Common: GeneralsCommonConfig{
 			ExpCurve: []int{0, 100, 300},
@@ -181,14 +334,12 @@ func TestApplyHeroConfigCombinesLevelAndHeroAttributes(t *testing.T) {
 			"test_general": {
 				ID:      "test_general",
 				Name:    "测试将领",
+				Faction: "wei",
 				Enabled: true,
 				Buffs:   map[string]float64{"productionBonus": 0.1, "attackBonus": 0.05},
 			},
 		},
 	})
-	if err != nil {
-		t.Fatalf("set generals config: %v", err)
-	}
 
 	general := &General{ID: "test_general", Name: "测试将领", Level: 2, Exp: 120}
 	applyHeroConfigToGeneral(general)
@@ -206,14 +357,7 @@ func TestApplyHeroConfigCombinesLevelAndHeroAttributes(t *testing.T) {
 }
 
 func TestApplyGeneralBattleExpPromotesLevel(t *testing.T) {
-	original := GetGeneralsConfig()
-	t.Cleanup(func() {
-		if err := SetGeneralsConfig(original); err != nil {
-			t.Fatalf("restore generals config: %v", err)
-		}
-	})
-
-	err := SetGeneralsConfig(GeneralsConfig{
+	setTestGeneralsConfig(t, GeneralsConfig{
 		Enabled: true,
 		Common: GeneralsCommonConfig{
 			ExpCurve: []int{0, 10, 30},
@@ -223,12 +367,9 @@ func TestApplyGeneralBattleExpPromotesLevel(t *testing.T) {
 			},
 		},
 		Heroes: map[string]GeneralHeroConfig{
-			"test_general": {ID: "test_general", Name: "测试将领", Enabled: true},
+			"test_general": {ID: "test_general", Name: "测试将领", Faction: "wei", Enabled: true},
 		},
 	})
-	if err != nil {
-		t.Fatalf("set generals config: %v", err)
-	}
 
 	general := &General{ID: "test_general", Name: "测试将领", Level: 1, Exp: 9}
 	result := applyGeneralBattleExp(general, generalExpRequiredForLevelForTest(2))
@@ -262,9 +403,9 @@ func TestGeneralBattleExpUsesKilledUnitUpkeep(t *testing.T) {
 	original := GetGeneralsConfig()
 	originalUnits := GetUnitsConfig()
 	t.Cleanup(func() {
-		if err := SetGeneralsConfig(original); err != nil {
-			t.Fatalf("restore generals config: %v", err)
-		}
+		generalsMu.Lock()
+		activeGenerals = original
+		generalsMu.Unlock()
 		unitsMu.Lock()
 		activeUnits = originalUnits
 		unitsMu.Unlock()
@@ -289,21 +430,12 @@ func TestGeneralBattleExpUsesKilledUnitUpkeep(t *testing.T) {
 }
 
 func TestAllocateGeneralStatUpdatesAttributes(t *testing.T) {
-	original := GetGeneralsConfig()
-	t.Cleanup(func() {
-		if err := SetGeneralsConfig(original); err != nil {
-			t.Fatalf("restore generals config: %v", err)
-		}
-	})
-
-	if err := SetGeneralsConfig(GeneralsConfig{
+	setTestGeneralsConfig(t, GeneralsConfig{
 		Enabled: true,
 		Heroes: map[string]GeneralHeroConfig{
-			"test_general": {ID: "test_general", Name: "测试将领", Enabled: true},
+			"test_general": {ID: "test_general", Name: "测试将领", Faction: "wei", Enabled: true},
 		},
-	}); err != nil {
-		t.Fatalf("set generals config: %v", err)
-	}
+	})
 
 	repo := NewMemoryRepository()
 	service := NewServiceWithRepository(repo)

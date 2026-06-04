@@ -61,14 +61,16 @@ func (m *Meiren) beforeBattle(ctx general.EventContext, p general.Params) {
 		return
 	}
 
-	// 触发概率
-	chance := p.FloatOr("triggerChance", 1.0)
+	// 触发概率（限制在 0-1 之间）
+	chance := p.FloatWithBounds("triggerChance", 1.0, 0, 1)
 	if chance < 1.0 && rand.Float64() > chance {
 		return
 	}
 
-	rate := p.FloatOr("captureRate", 0.1)
-	maxPerType := p.IntOr("captureMax", 1000)
+	// 俘虏比例（限制在 0-1 之间）
+	rate := p.FloatWithBounds("captureRate", 0.1, 0, 1)
+	// 单兵种上限（限制在 0-100000 之间）
+	maxPerType := p.IntWithBounds("captureMax", 1000, 0, 100000)
 	if rate <= 0 {
 		return
 	}

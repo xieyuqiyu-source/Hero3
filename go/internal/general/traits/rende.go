@@ -51,12 +51,14 @@ func (r *Rende) afterBattle(ctx general.EventContext, p general.Params) {
 		return
 	}
 
-	chance := p.FloatOr("triggerChance", 0.5)
+	// 触发概率（限制在 0-1 之间）
+	chance := p.FloatWithBounds("triggerChance", 0.5, 0, 1)
 	if rand.Float64() > chance {
 		return
 	}
 
-	rate := p.FloatOr("reviveRate", 0.2)
+	// 复活比例（限制在 0-1 之间，防止复活超过 100%）
+	rate := p.FloatWithBounds("reviveRate", 0.2, 0, 1)
 	if rate <= 0 || len(c.PlayerLosses) == 0 {
 		return
 	}

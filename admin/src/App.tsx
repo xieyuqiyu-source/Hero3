@@ -15,9 +15,10 @@ import { ResourceToolsPanel, SystemActionsPanel } from '@/components/OperationsP
 import BuffPanel from '@/components/BuffPanel'
 import MiniGameRecordsPanel from '@/components/MiniGameRecordsPanel'
 import AdminTokenPanel from '@/components/AdminTokenPanel'
+import GeneralsConfigPanel from '@/components/GeneralsConfigPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
-import { Sliders, MapPin, Swords, Flag, Shield } from 'lucide-react'
+import { Sliders, MapPin, Swords, Flag, Shield, Users } from 'lucide-react'
 
 function App() {
   const [activePage, setActivePage] = useState<AdminPage>('overview')
@@ -96,6 +97,9 @@ function App() {
             </CollapsiblePanel>
             <CollapsiblePanel icon={<Shield size={16} className="text-[var(--color-accent)]" />} title="兵种配置">
               <UnitsConfigPanel />
+            </CollapsiblePanel>
+            <CollapsiblePanel icon={<Users size={16} className="text-[var(--color-accent)]" />} title="将领配置">
+              <GeneralsConfigPanel />
             </CollapsiblePanel>
           </div>
         )

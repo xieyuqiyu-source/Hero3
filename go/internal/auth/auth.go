@@ -4,8 +4,11 @@ package auth
 import (
 	"context"
 	"errors"
+	"log"
+	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -19,10 +22,11 @@ const (
 )
 
 var (
-	ErrMissingToken    = errors.New("missing token")
-	ErrInvalidToken    = errors.New("invalid token")
-	ErrExpiredToken    = errors.New("expired token")
+	ErrMissingToken     = errors.New("missing token")
+	ErrInvalidToken     = errors.New("invalid token")
+	ErrExpiredToken     = errors.New("expired token")
 	ErrPermissionDenied = errors.New("permission denied")
+	adminLimiter        = newAdminRateLimiter(60, time.Minute)
 )
 
 // Config 认证配置
@@ -115,12 +119,20 @@ func AuthMiddleware(cfg Config, publicPaths []string) func(http.Handler) http.Ha
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// 1. Admin token 优先（用于 GM 后台）
 			if adminToken := r.Header.Get("X-Admin-Token"); adminToken != "" {
+				ip := clientIP(r)
+				if !adminLimiter.Allow(ip) {
+					log.Printf("[ADMIN_AUDIT] ip=%s path=%s success=false reason=rate_limited", ip, r.URL.Path)
+					http.Error(w, "too many admin requests", http.StatusTooManyRequests)
+					return
+				}
 				if cfg.AdminToken != "" && adminToken == cfg.AdminToken {
+					log.Printf("[ADMIN_AUDIT] ip=%s path=%s success=true", ip, r.URL.Path)
 					ctx := context.WithValue(r.Context(), ctxIsAdmin, true)
 					next.ServeHTTP(w, r.WithContext(ctx))
 					return
 				}
 				// 提供了 admin token 但不匹配 → 拒绝
+				log.Printf("[ADMIN_AUDIT] ip=%s path=%s success=false reason=invalid_token", ip, r.URL.Path)
 				http.Error(w, "invalid admin token", http.StatusUnauthorized)
 				return
 			}
@@ -164,6 +176,58 @@ func AuthMiddleware(cfg Config, publicPaths []string) func(http.Handler) http.Ha
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+type adminRateLimiter struct {
+	mu       sync.Mutex
+	limit    int
+	window   time.Duration
+	attempts map[string][]time.Time
+}
+
+func newAdminRateLimiter(limit int, window time.Duration) *adminRateLimiter {
+	return &adminRateLimiter{
+		limit:    limit,
+		window:   window,
+		attempts: map[string][]time.Time{},
+	}
+}
+
+func (l *adminRateLimiter) Allow(ip string) bool {
+	if ip == "" {
+		ip = "unknown"
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := time.Now()
+	cutoff := now.Add(-l.window)
+	items := l.attempts[ip]
+	kept := items[:0]
+	for _, t := range items {
+		if t.After(cutoff) {
+			kept = append(kept, t)
+		}
+	}
+	if len(kept) >= l.limit {
+		l.attempts[ip] = kept
+		return false
+	}
+	kept = append(kept, now)
+	l.attempts[ip] = kept
+	return true
+}
+
+func clientIP(r *http.Request) string {
+	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
+		parts := strings.Split(forwarded, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 // isPublicPath 判断路径是否是公开的（不需要认证）

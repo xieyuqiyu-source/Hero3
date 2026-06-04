@@ -61,6 +61,30 @@ func (p Params) IntOr(key string, def int) int {
 	return def
 }
 
+// FloatWithBounds 获取参数并限制在指定范围内（防止 GM 配置极端值）
+func (p Params) FloatWithBounds(key string, def, min, max float64) float64 {
+	v := p.FloatOr(key, def)
+	if v < min {
+		return min
+	}
+	if v > max {
+		return max
+	}
+	return v
+}
+
+// IntWithBounds 获取整数参数并限制在指定范围内
+func (p Params) IntWithBounds(key string, def, min, max int) int {
+	v := p.IntOr(key, def)
+	if v < min {
+		return min
+	}
+	if v > max {
+		return max
+	}
+	return v
+}
+
 // EventContext 事件上下文（每个事件一个具体类型，实现此接口）
 type EventContext interface {
 	EventType() string

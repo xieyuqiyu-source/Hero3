@@ -3,32 +3,38 @@ package game
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"hero3/internal/general"
+	_ "hero3/internal/general/traits"
 )
+
+const maxGeneralAttributeBonus = 10.0
 
 // GeneralsConfig 将领系统总配置（GM 后台可编辑）
 type GeneralsConfig struct {
-	Common GeneralsCommonConfig         `json:"common"`              // 通用配置（顶部）
-	Heroes map[string]GeneralHeroConfig `json:"heroes"`              // 单将领配置 map[generalId]
-	Enabled bool                        `json:"enabled"`             // 全局开关
+	Common  GeneralsCommonConfig         `json:"common"`  // 通用配置（顶部）
+	Heroes  map[string]GeneralHeroConfig `json:"heroes"`  // 单将领配置 map[generalId]
+	Enabled bool                         `json:"enabled"` // 全局开关
 }
 
 // GeneralsCommonConfig 通用配置（所有将领共享）
 type GeneralsCommonConfig struct {
-	ExpCurve   []int                       `json:"expCurve"`   // 每级所需经验
-	LevelBuffs map[int]map[string]float64  `json:"levelBuffs"` // 每级提供的通用 buff
+	ExpCurve   []int                      `json:"expCurve"`   // 每级所需经验
+	LevelBuffs map[int]map[string]float64 `json:"levelBuffs"` // 每级提供的通用 buff
 }
 
 // GeneralHeroConfig 单将领配置
 type GeneralHeroConfig struct {
-	ID      string                  `json:"id"`
-	Name    string                  `json:"name"`
-	Faction string                  `json:"faction"`
-	Title   string                  `json:"title"`
-	Rarity  string                  `json:"rarity"`  // common | rare | epic | legendary
-	Enabled bool                    `json:"enabled"` // 该将领是否启用
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Faction string `json:"faction"`
+	Title   string `json:"title"`
+	Rarity  string `json:"rarity"`  // common | rare | epic | legendary
+	Enabled bool   `json:"enabled"` // 该将领是否启用
 
 	// 数值加成（叠加在通用 levelBuffs 之上）
 	Buffs map[string]float64 `json:"buffs"`
@@ -66,6 +72,10 @@ func GetHeroConfig(generalID string) (GeneralHeroConfig, bool) {
 }
 
 func SetGeneralsConfig(cfg GeneralsConfig) error {
+	// 校验配置一致性
+	if err := ValidateGeneralsConfig(cfg); err != nil {
+		return err
+	}
 	generalsMu.Lock()
 	activeGenerals = cloneGeneralsConfig(cfg)
 	generalsMu.Unlock()
@@ -198,4 +208,101 @@ func cloneHeroConfig(src GeneralHeroConfig) GeneralHeroConfig {
 		}
 	}
 	return dst
+}
+
+// ValidateGeneralsConfig 校验将领配置的一致性和数值边界。
+func ValidateGeneralsConfig(cfg GeneralsConfig) error {
+	// 获取阵营配置，构建 generalID -> faction 的映射
+	factions := GetFactionsConfig()
+	factionGenerals := make(map[string]string) // generalID -> faction
+
+	for faction, fc := range factions {
+		for _, g := range fc.Generals {
+			if existing, ok := factionGenerals[g.ID]; ok {
+				return errors.New("general " + g.ID + " appears in multiple factions: " + existing + " and " + faction)
+			}
+			factionGenerals[g.ID] = faction
+		}
+	}
+
+	if err := validateLevelBuffs(cfg.Common.LevelBuffs); err != nil {
+		return err
+	}
+
+	// 校验每个将领的 faction 字段、属性和特性参数。
+	for generalID, hero := range cfg.Heroes {
+		if hero.ID != "" && hero.ID != generalID {
+			return fmt.Errorf("general %s has mismatched id %s", generalID, hero.ID)
+		}
+		if hero.Faction == "" {
+			if hero.Enabled {
+				return fmt.Errorf("enabled general %s has empty faction", generalID)
+			}
+		} else {
+			// 检查该将领是否在阵营配置中
+			factionInConfig, exists := factionGenerals[generalID]
+			if !exists {
+				if hero.Enabled {
+					return fmt.Errorf("enabled general %s is not listed in factions config", generalID)
+				}
+			} else if hero.Faction != factionInConfig {
+				return fmt.Errorf("general %s has faction=%s but is listed in faction %s in factions config", generalID, hero.Faction, factionInConfig)
+			}
+		}
+
+		if err := validateGeneralBuffs("heroes."+generalID+".buffs", hero.Buffs); err != nil {
+			return err
+		}
+		if err := validateGeneralTraits(generalID, hero.Traits); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateLevelBuffs(levelBuffs map[int]map[string]float64) error {
+	for level, buffs := range levelBuffs {
+		if level <= 0 || level > GeneralMaxLevel {
+			return fmt.Errorf("common.levelBuffs contains invalid level %d", level)
+		}
+		if err := validateGeneralBuffs(fmt.Sprintf("common.levelBuffs.%d", level), buffs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateGeneralBuffs(label string, buffs map[string]float64) error {
+	for key, value := range buffs {
+		if !IsValidStatKey(key) {
+			return fmt.Errorf("%s contains unknown stat key %s", label, key)
+		}
+		if value < 0 || value > maxGeneralAttributeBonus {
+			return fmt.Errorf("%s.%s=%g out of range [0,%g]", label, key, value, maxGeneralAttributeBonus)
+		}
+	}
+	return nil
+}
+
+func validateGeneralTraits(generalID string, traits []GeneralTraitConfig) error {
+	for _, traitCfg := range traits {
+		trait, ok := general.Get(traitCfg.TraitID)
+		if !ok {
+			return fmt.Errorf("general %s uses unknown trait %s", generalID, traitCfg.TraitID)
+		}
+		schemaByKey := map[string]general.ParamField{}
+		for _, field := range trait.ParamSchema() {
+			schemaByKey[field.Key] = field
+			if value, ok := traitCfg.Params[field.Key]; ok && (value < field.Min || value > field.Max) {
+				return fmt.Errorf("general %s trait %s param %s=%g out of range [%g,%g]", generalID, traitCfg.TraitID, field.Key, value, field.Min, field.Max)
+			}
+		}
+		for key := range traitCfg.Params {
+			if _, ok := schemaByKey[key]; !ok {
+				return fmt.Errorf("general %s trait %s contains unknown param %s", generalID, traitCfg.TraitID, key)
+			}
+		}
+	}
+	return nil
 }

@@ -54,12 +54,14 @@ func (h *Huogong) afterCombat(ctx general.EventContext, p general.Params) {
 		return
 	}
 
-	chance := p.FloatOr("triggerChance", 0.6)
+	// 触发概率（限制在 0-1 之间）
+	chance := p.FloatWithBounds("triggerChance", 0.6, 0, 1)
 	if rand.Float64() > chance {
 		return
 	}
 
-	damagePct := p.FloatOr("damagePercent", 0.15)
+	// 伤害百分比（限制在 0-1 之间，防止超过 100% 伤害）
+	damagePct := p.FloatWithBounds("damagePercent", 0.15, 0, 1)
 	if damagePct <= 0 {
 		return
 	}

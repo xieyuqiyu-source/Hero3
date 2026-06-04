@@ -226,6 +226,10 @@ func (s *Service) CreatePlayer(accountID string, nickname string, faction string
 	if !valid {
 		return "", GameState{}, ErrInvalidGeneral
 	}
+	hero, ok := GetHeroConfig(generalID)
+	if !ok || !hero.Enabled || hero.Faction != faction {
+		return "", GameState{}, ErrInvalidGeneral
+	}
 
 	exists, err := s.repo.AccountExists(accountID)
 	if err != nil {

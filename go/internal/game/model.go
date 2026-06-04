@@ -383,6 +383,9 @@ func addGeneralAttribute(attrs map[string]float64, key string, value float64) {
 		return
 	}
 	attrs[key] += value
+	if attrs[key] > maxGeneralAttributeBonus {
+		attrs[key] = maxGeneralAttributeBonus
+	}
 }
 
 func buildPlayerSummary(state GameState, updatedAt time.Time) PlayerSummary {

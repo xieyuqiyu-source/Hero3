@@ -162,4 +162,17 @@ export const adminApi = {
       `${API_BASE}/admin/minigame/records?playerId=${encodeURIComponent(playerId)}`,
     )
   },
+  getGeneralsConfig() {
+    return request<object>(`${API_BASE}/admin/generals-config`)
+  },
+  updateGeneralsConfig(config: object) {
+    return request<object>(`${API_BASE}/admin/generals-config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+  },
+  getGeneralTraitRegistry() {
+    return request<object>(`${API_BASE}/admin/general-traits`)
+  },
 }
