@@ -4,6 +4,7 @@ import { Cloud, LogIn, UserPlus, ArrowLeft, Check, Trash2 } from 'lucide-react'
 import { Modal } from '@/components/ui'
 import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
+import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import type { PlayerSummary } from '@/types/game'
 
 type View = 'login' | 'register' | 'saves'
@@ -17,6 +18,7 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
   const navigate = useNavigate()
   const { account, players, login, register, loadPlayers, deletePlayer } = useAccountStore()
   const { setActivePlayer, loadGameState } = useGameStore()
+  const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
 
   const [view, setView] = useState<View>(account ? 'saves' : 'login')
 
@@ -76,7 +78,7 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
 
   const handleDeletePlayer = async (e: React.MouseEvent, player: PlayerSummary) => {
     e.stopPropagation()
-    if (!confirm(`确定删除存档「${player.nickname}」吗？此操作不可恢复。`)) return
+    if (!skipConfirmations && !confirm(`确定删除存档「${player.nickname}」吗？此操作不可恢复。`)) return
     try {
       await deletePlayer(player.id)
     } catch {

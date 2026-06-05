@@ -2,6 +2,7 @@ import { useState, type FC } from 'react'
 import { createPortal } from 'react-dom'
 import { LoaderCircle, CircleCheck, Swords, ShieldAlert, Search, AlertTriangle } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
+import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import { gameApi } from '@/api/game'
 import { FACTION_LABELS, FACTION_COLORS } from '@/utils/faction'
 import type { NpcCity, BattleReport } from '@/types/game'
@@ -41,9 +42,11 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
     const stored = sessionStorage.getItem('npc_warn_dismissed')
     return stored === 'true'
   })
+  const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
+  const setSkipConfirmations = useConfirmPreferenceStore((s) => s.setSkipConfirmations)
   const activeTraits = city.traits.filter(t => t.id !== 'none')
 
-  const needsWarning = (city.tier === 'large' || city.tier === 'golden') && !dismissToday && !recovering
+  const needsWarning = (city.tier === 'large' || city.tier === 'golden') && !dismissToday && !skipConfirmations && !recovering
 
   const handleQuickAction = async (e: React.MouseEvent, mode: 'attack' | 'plunder' | 'scout') => {
     e.stopPropagation()
@@ -188,20 +191,21 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
               该 NPC 属于<span className="font-bold text-[var(--color-text-primary)]">强力副本</span>，建议侦查之后再进攻。是否继续{confirmAction === 'attack' ? '攻击' : '掠夺'}？
             </p>
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={dismissToday}
-                onChange={(e) => {
-                  if (e.target.checked) handleDismissToday()
-                  else {
-                    setDismissToday(false)
-                    sessionStorage.removeItem('npc_warn_dismissed')
-                  }
-                }}
-                className="w-3.5 h-3.5 rounded border-[var(--color-border)] accent-[var(--color-accent)]"
-              />
-              <span className="text-[10px] text-[var(--color-text-muted)]">今日不再提醒</span>
-            </label>
+	              <input
+	                type="checkbox"
+	                checked={skipConfirmations}
+	                onChange={(e) => {
+	                  setSkipConfirmations(e.target.checked)
+	                  if (e.target.checked) handleDismissToday()
+	                  else {
+	                    setDismissToday(false)
+	                    sessionStorage.removeItem('npc_warn_dismissed')
+	                  }
+	                }}
+	                className="w-3.5 h-3.5 rounded border-[var(--color-border)] accent-[var(--color-accent)]"
+	              />
+	              <span className="text-[10px] text-[var(--color-text-muted)]">不再提醒，之后直接执行</span>
+	            </label>
             <div className="flex gap-2">
               <button
                 type="button"

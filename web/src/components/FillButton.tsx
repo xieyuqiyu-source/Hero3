@@ -2,6 +2,7 @@ import { useState, type FC } from 'react'
 import { Warehouse } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import { useGameStore } from '@/store/gameStore'
+import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import { toast } from '@/components/ui'
 import ConfirmCityGoldModal from './ConfirmCityGoldModal'
 
@@ -11,6 +12,7 @@ const FillButton: FC = () => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const setState = useGameStore((s) => s.setState)
   const resources = useGameStore((s) => s.state?.resources)
+  const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
 
   // 计算需要补充的总资源量和城金花费
   const totalNeeded = (() => {
@@ -51,7 +53,11 @@ const FillButton: FC = () => {
     <>
       <button
         type="button"
-        onClick={() => !isFull && setConfirmOpen(true)}
+        onClick={() => {
+          if (isFull) return
+          if (skipConfirmations) handleConfirm()
+          else setConfirmOpen(true)
+        }}
         disabled={isFull}
         className={`
           flex items-center gap-1 px-2 py-1 rounded-lg

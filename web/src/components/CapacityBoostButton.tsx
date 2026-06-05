@@ -3,6 +3,7 @@ import { Expand, Coins, Clock, Circle } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
+import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import { toast } from '@/components/ui'
 import ConfirmCityGoldModal from './ConfirmCityGoldModal'
 
@@ -29,6 +30,7 @@ const CapacityBoostButton: FC<CapacityBoostButtonProps> = ({ currentBoost = 1 })
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const setState = useGameStore((s) => s.setState)
   const balance = useConfigStore((s) => s.balance)
+  const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
   const boostEnd = useGameStore((s) => s.state?.capacityBoostEnd)
 
   const isActive = currentBoost > 1
@@ -73,14 +75,18 @@ const CapacityBoostButton: FC<CapacityBoostButtonProps> = ({ currentBoost = 1 })
 
   const handleSelectDuration = (hours: number) => {
     setPendingHours(hours)
+    if (skipConfirmations) {
+      handleConfirmPurchase(hours)
+      return
+    }
     setConfirmOpen(true)
   }
 
-  const handleConfirmPurchase = async () => {
+  const handleConfirmPurchase = async (hours = pendingHours) => {
     if (!activePlayerId || loading) return
     setLoading(true)
     try {
-      const result = await gameApi.purchaseCapacityBoost(activePlayerId, selectedMultiplier, pendingHours)
+      const result = await gameApi.purchaseCapacityBoost(activePlayerId, selectedMultiplier, hours)
       setState(result.state)
       toast.success(`仓库 ×${selectedMultiplier} 扩容已激活`)
       setOpen(false)

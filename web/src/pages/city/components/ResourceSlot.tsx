@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type FC } from 'react'
 import { ArrowUpCircle, LoaderCircle, Zap } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
+import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import { Tooltip, toast } from '@/components/ui'
 import { gameApi } from '@/api/game'
 import ConfirmCityGoldModal from '@/components/ConfirmCityGoldModal'
@@ -58,6 +59,7 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
   const refreshedUpgradeRef = useRef<string | null>(null)
   const upgrade = useGameStore((s) => s.upgradeBuilding)
   const balance = useConfigStore((s) => s.balance)
+  const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
   const cityGoldPerSecond = balance?.cityGoldPerSecond ?? 120
   const isUpgrading = upgradeEndsAt !== null
   const countdown = upgradeEndsAt ? getRemainingSeconds(upgradeEndsAt, now) : 0
@@ -168,7 +170,10 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
       {isUpgrading ? (
         <button
           type="button"
-          onClick={() => setConfirmOpen(true)}
+          onClick={() => {
+            if (skipConfirmations) handleInstantComplete()
+            else setConfirmOpen(true)
+          }}
           className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-mono font-medium text-amber-500 hover:bg-amber-500/10 cursor-pointer transition-colors"
           title="点击快速完成"
         >

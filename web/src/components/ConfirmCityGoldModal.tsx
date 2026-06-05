@@ -1,6 +1,7 @@
 import { useState, useEffect, type FC, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Coins } from 'lucide-react'
+import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 
 interface ConfirmCityGoldModalProps {
   open: boolean
@@ -22,6 +23,8 @@ const ConfirmCityGoldModal: FC<ConfirmCityGoldModalProps> = ({
   loading = false,
 }) => {
   const [visible, setVisible] = useState(false)
+  const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
+  const setSkipConfirmations = useConfirmPreferenceStore((s) => s.setSkipConfirmations)
 
   useEffect(() => {
     if (open) {
@@ -64,6 +67,16 @@ const ConfirmCityGoldModal: FC<ConfirmCityGoldModalProps> = ({
           <span className="text-sm font-bold text-amber-500">{cost}</span>
           <span className="text-[10px] text-[var(--color-text-muted)]">城金</span>
         </div>
+        <label className="mx-4 mb-3 flex items-center justify-center gap-1.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={skipConfirmations}
+            onChange={(e) => setSkipConfirmations(e.target.checked)}
+            disabled={loading}
+            className="w-3.5 h-3.5 rounded border-[var(--color-border)] accent-[var(--color-accent)]"
+          />
+          <span className="text-[10px] text-[var(--color-text-muted)]">不再提醒，之后直接执行</span>
+        </label>
         <div className="flex border-t border-[var(--color-border)]">
           <button
             type="button"

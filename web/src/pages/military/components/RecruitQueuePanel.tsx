@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type FC } from 'react'
 import { Clock, LoaderCircle, ChevronDown, ChevronRight, Zap } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
+import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import { toast } from '@/components/ui'
 import { gameApi } from '@/api/game'
 import ConfirmCityGoldModal from '@/components/ConfirmCityGoldModal'
@@ -89,6 +90,7 @@ const RecruitQueuePanel: FC = () => {
   const [confirmQueue, setConfirmQueue] = useState<string | null>(null)
 
   const balance = useConfigStore((s) => s.balance)
+  const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
   const cityGoldPerSecond = balance?.cityGoldPerSecond ?? 120
 
   const getInstantCost = (queueId: string): number => {
@@ -102,15 +104,19 @@ const RecruitQueuePanel: FC = () => {
   }
 
   const handleInstantClick = (queueId: string) => {
+    if (skipConfirmations) {
+      handleInstantComplete(queueId)
+      return
+    }
     setConfirmQueue(queueId)
   }
 
-  const handleInstantComplete = async () => {
+  const handleInstantComplete = async (queueId = confirmQueue) => {
     const playerId = useGameStore.getState().activePlayerId
-    if (!playerId || completing || !confirmQueue) return
-    setCompleting(confirmQueue)
+    if (!playerId || completing || !queueId) return
+    setCompleting(queueId)
     try {
-      const result = await gameApi.instantCompleteRecruit(playerId, confirmQueue)
+      const result = await gameApi.instantCompleteRecruit(playerId, queueId)
       useGameStore.getState().setState(result.state)
     } catch {
       // 错误由全局拦截器处理

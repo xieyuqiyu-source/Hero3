@@ -2,6 +2,7 @@ import { useState, useEffect, type FC } from 'react'
 import { Swords, ShieldAlert, Search, X, AlertTriangle } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
+import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import { gameApi } from '@/api/game'
 import type { NpcCity, BattleReport } from '@/types/game'
 import BattleResultModal from './BattleResultModal'
@@ -19,6 +20,8 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
   const faction = useGameStore((s) => s.state?.player.faction ?? 'wei')
   const setState = useGameStore((s) => s.setState)
   const units = useConfigStore((s) => s.units)
+  const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
+  const setSkipConfirmations = useConfirmPreferenceStore((s) => s.setSkipConfirmations)
 
   const [selections, setSelections] = useState<Record<string, number>>({})
   const [mode, setMode] = useState<'scout' | 'attack' | 'plunder'>('scout')
@@ -31,7 +34,7 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
     return sessionStorage.getItem('npc_warn_dismissed') === 'true'
   })
 
-  const needsWarning = (city.tier === 'large' || city.tier === 'golden') && !dismissToday
+  const needsWarning = (city.tier === 'large' || city.tier === 'golden') && !dismissToday && !skipConfirmations
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true))
@@ -222,19 +225,20 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
               该 NPC 属于<span className="font-bold text-[var(--color-text-primary)]">强力副本</span>，建议侦查之后再进攻。是否继续{mode === 'attack' ? '攻击' : '掠夺'}？
             </p>
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={dismissToday}
-                onChange={(e) => {
-                  const checked = e.target.checked
-                  setDismissToday(checked)
-                  if (checked) sessionStorage.setItem('npc_warn_dismissed', 'true')
-                  else sessionStorage.removeItem('npc_warn_dismissed')
-                }}
-                className="w-3.5 h-3.5 rounded border-[var(--color-border)] accent-[var(--color-accent)]"
-              />
-              <span className="text-[10px] text-[var(--color-text-muted)]">今日不再提醒</span>
-            </label>
+	              <input
+	                type="checkbox"
+	                checked={skipConfirmations}
+	                onChange={(e) => {
+	                  const checked = e.target.checked
+	                  setSkipConfirmations(checked)
+	                  setDismissToday(checked)
+	                  if (checked) sessionStorage.setItem('npc_warn_dismissed', 'true')
+	                  else sessionStorage.removeItem('npc_warn_dismissed')
+	                }}
+	                className="w-3.5 h-3.5 rounded border-[var(--color-border)] accent-[var(--color-accent)]"
+	              />
+	              <span className="text-[10px] text-[var(--color-text-muted)]">不再提醒，之后直接执行</span>
+	            </label>
             <div className="flex gap-2">
               <button
                 type="button"
