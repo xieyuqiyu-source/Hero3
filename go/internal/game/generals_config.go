@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -294,14 +295,41 @@ func validateGeneralTraits(generalID string, traits []GeneralTraitConfig) error 
 		schemaByKey := map[string]general.ParamField{}
 		for _, field := range trait.ParamSchema() {
 			schemaByKey[field.Key] = field
-			if value, ok := traitCfg.Params[field.Key]; ok && (value < field.Min || value > field.Max) {
-				return fmt.Errorf("general %s trait %s param %s=%g out of range [%g,%g]", generalID, traitCfg.TraitID, field.Key, value, field.Min, field.Max)
+			if value, ok := traitCfg.Params[field.Key]; ok {
+				if math.IsNaN(value) || math.IsInf(value, 0) {
+					return fmt.Errorf("general %s trait %s param %s must be finite", generalID, traitCfg.TraitID, field.Key)
+				}
+				if value < field.Min || value > field.Max {
+					return fmt.Errorf("general %s trait %s param %s=%g out of range [%g,%g]", generalID, traitCfg.TraitID, field.Key, value, field.Min, field.Max)
+				}
 			}
 		}
 		for key := range traitCfg.Params {
 			if _, ok := schemaByKey[key]; !ok {
 				return fmt.Errorf("general %s trait %s contains unknown param %s", generalID, traitCfg.TraitID, key)
 			}
+		}
+		if err := validateTraitParamConsistency(generalID, traitCfg.TraitID, traitCfg.Params, schemaByKey); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateTraitParamConsistency(generalID string, traitID string, params map[string]float64, fields map[string]general.ParamField) error {
+	valueOrDefault := func(key string) float64 {
+		if value, ok := params[key]; ok {
+			return value
+		}
+		return fields[key].Default
+	}
+	switch traitID {
+	case "weizhenxiaoyao":
+		if valueOrDefault("maxChance") < valueOrDefault("baseChance") {
+			return fmt.Errorf("general %s trait %s: maxChance must be >= baseChance", generalID, traitID)
+		}
+		if valueOrDefault("maxSuppressRate") < valueOrDefault("baseSuppressRate") {
+			return fmt.Errorf("general %s trait %s: maxSuppressRate must be >= baseSuppressRate", generalID, traitID)
 		}
 	}
 	return nil

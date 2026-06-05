@@ -25,6 +25,7 @@ var (
 	ErrNotUpgrading       = errors.New("building is not upgrading")
 	ErrMaxLevel           = errors.New("building is at max level")
 	ErrUnitNotFound       = errors.New("unit not found")
+	ErrNonCombatUnit      = errors.New("unit cannot participate in combat")
 	ErrInvalidAmount      = errors.New("invalid recruit amount")
 	ErrQueueFull          = errors.New("recruit queue is full")
 	ErrInvalidGeneral     = errors.New("invalid general for faction")

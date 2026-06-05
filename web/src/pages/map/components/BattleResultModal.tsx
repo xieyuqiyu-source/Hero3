@@ -35,22 +35,37 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
   const isDraw = report.result === 'draw'
 
   const getUnitName = (unitType: string): string => {
+    for (const f of Object.values(units ?? {})) {
+      if (f[unitType]?.name) return f[unitType].name
+    }
     return factionUnits[unitType]?.name ?? unitType
   }
 
-  const formatOutcomeDetail = (key: string, value: number | string): string => {
+  const formatOutcomeDetail = (key: string, value: number | string | Record<string, number>): string => {
     const labels: Record<string, string> = {
       totalCaptured: '俘虏',
       totalRevived: '复活',
       extraDamage: '额外伤害',
       damagePercent: '伤害比例',
+      foodRatio: '口粮比',
+      triggerChance: '触发概率',
+      suppressRate: '震慑比例',
+      totalSuppressed: '震慑兵力',
+      suppressedUnits: '震慑明细',
     }
     const label = labels[key] ?? key
     if (typeof value === 'number') {
-      if (key.endsWith('Percent') || key.endsWith('Rate')) {
+      if (key.endsWith('Percent') || key.endsWith('Rate') || key.endsWith('Chance')) {
         return `${label}: ${Math.round(value * 100)}%`
       }
       return `${label}: ${value.toLocaleString()}`
+    }
+    if (typeof value === 'object' && value !== null) {
+      const text = Object.entries(value)
+        .filter(([, amount]) => amount > 0)
+        .map(([unitType, amount]) => `${getUnitName(unitType)} ${amount.toLocaleString()}`)
+        .join('、')
+      return `${label}: ${text || '无'}`
     }
     return `${label}: ${value}`
   }

@@ -9,6 +9,7 @@ type Unit struct {
 	InfantryDefense int    `json:"infantryDefense"`
 	CavalryDefense  int    `json:"cavalryDefense"`
 	CarryCapacity   int    `json:"carryCapacity"`
+	Upkeep          int    `json:"upkeep"`
 }
 
 // Army 参战军队
@@ -19,10 +20,10 @@ type Army struct {
 
 // CombatInput 战斗引擎输入
 type CombatInput struct {
-	RuleID   string  `json:"ruleId"`
-	Attacker Army    `json:"attacker"`
-	Defender Army    `json:"defender"`
-	WallLevel int    `json:"wallLevel"` // 防守方城墙等级（PvE 传 0）
+	RuleID      string `json:"ruleId"`
+	Attacker    Army   `json:"attacker"`
+	Defender    Army   `json:"defender"`
+	WallLevel   int    `json:"wallLevel"`   // 防守方城墙等级（PvE 传 0）
 	WallFaction string `json:"wallFaction"` // 防守方阵营（用于城墙系数）
 }
 
@@ -41,7 +42,7 @@ type CombatResult struct {
 	DefenderLosses   []UnitLoss `json:"defenderLosses"`
 	AttackerLossRate float64    `json:"attackerLossRate"`
 	DefenderLossRate float64    `json:"defenderLossRate"`
-	AttackPower      float64    `json:"attackPower"`  // a 值
-	DefensePower     float64    `json:"defensePower"` // b 值（含城墙）
+	AttackPower      float64    `json:"attackPower"`    // a 值
+	DefensePower     float64    `json:"defensePower"`   // b 值（含城墙）
 	SurvivingCarry   int        `json:"survivingCarry"` // 存活部队总运载量
 }

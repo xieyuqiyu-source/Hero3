@@ -129,6 +129,7 @@
     "name": "蜀国商人",
     "description": "蜀国商贸人员，专门负责贸易运输",
     "category": "special",
+    "role": "transport",
     "icon": "shuMerchant",
     "stats": {
       "attack": 0,

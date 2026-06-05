@@ -629,6 +629,8 @@ func (h *Handlers) AttackNpc(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusNotFound
 		case errors.Is(err, game.ErrNoUnitsSelected):
 			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrNonCombatUnit):
+			status = http.StatusBadRequest
 		case errors.Is(err, game.ErrInsufficientArmy):
 			status = http.StatusUnprocessableEntity
 		}

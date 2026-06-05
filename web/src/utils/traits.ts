@@ -81,6 +81,22 @@ export const TRAIT_REGISTRY: Record<string, TraitMeta> = {
       ],
     },
   },
+  weizhenxiaoyao: {
+    id: 'weizhenxiaoyao',
+    name: '威震逍遥',
+    description: '以少打多时概率震慑守军',
+    trigger: '开战前',
+    icon: '⚔️',
+    details: {
+      summary: '张辽主动进攻且己方参战口粮少于敌方时，根据敌我口粮差距概率触发，让部分守军本场不参与防御。',
+      bullets: [
+        { label: '触发', text: '主动进攻时，己方参战口粮低于敌方守军口粮才会判定' },
+        { label: '概率', text: '敌我口粮差距越大，触发概率越高，但有上限' },
+        { label: '效果', text: '触发后敌方部分守军被震慑，不参与本场防御计算' },
+        { label: '说明', text: '被震慑的兵不会死亡，战后仍留在守军中' },
+      ],
+    },
+  },
 
   // === 蜀国 ===
   kongchengji: {
@@ -221,6 +237,7 @@ export const GENERAL_TRAITS: Record<string, string[]> = {
   simayi: ['yibing'],
   xuchu: ['huchi'],
   caocao: ['weiwuhaoling'],
+  zhangliao: ['weizhenxiaoyao'],
   // 蜀国
   zhugeliang: ['kongchengji'],
   liubei: ['rende'],
@@ -245,6 +262,12 @@ const PARAM_LABELS: Record<string, string> = {
   triggerChance: '触发概率',
   damagePercent: '额外伤害',
   reviveRate: '复活比例',
+  baseChance: '基础概率',
+  chancePerRatio: '每倍概率',
+  maxChance: '最高概率',
+  baseSuppressRate: '基础震慑',
+  suppressPerRatio: '每倍震慑',
+  maxSuppressRate: '最高震慑',
 }
 
 export function formatParamLabel(key: string): string {

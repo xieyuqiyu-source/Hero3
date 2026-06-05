@@ -272,7 +272,20 @@
       "rarity": "legendary",
       "enabled": true,
       "buffs": {},
-      "traits": []
+      "traits": [
+        {
+          "traitId": "weizhenxiaoyao",
+          "enabled": true,
+          "params": {
+            "baseChance": 0.08,
+            "baseSuppressRate": 0.08,
+            "chancePerRatio": 0.04,
+            "maxChance": 0.35,
+            "maxSuppressRate": 0.2,
+            "suppressPerRatio": 0.02
+          }
+        }
+      ]
     },
     "zhaoyun": {
       "id": "zhaoyun",

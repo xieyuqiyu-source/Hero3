@@ -199,3 +199,145 @@ func TestRende_TriggersOnLoss(t *testing.T) {
 		t.Errorf("expected 30 infantry revived on loss, got %d", playerArmy["infantry"])
 	}
 }
+
+// 威震逍遥：以少打多时震慑防守方部分兵力，不参与防御计算
+func TestWeizhenXiaoyao_SuppressesDefenderWhenOutnumbered(t *testing.T) {
+	rand.Seed(1)
+
+	attacker := combat.Army{
+		Faction: "wei",
+		Units: []combat.Unit{
+			{ID: "huBaoQi", Count: 10, Upkeep: 4},
+		},
+	}
+	defender := combat.Army{
+		Faction: "wu",
+		Units: []combat.Unit{
+			{ID: "infantry", Count: 100, Upkeep: 2},
+			{ID: "cavalry", Count: 50, Upkeep: 3},
+		},
+	}
+	ctx := &general.BeforeBattleContext{
+		Attacker:          &attacker,
+		Defender:          &defender,
+		AttackerOwnsTrait: true,
+	}
+
+	general.Dispatch(ctx, []general.ActiveTrait{
+		{TraitID: "weizhenxiaoyao", Params: general.Params{
+			"baseChance":       1.0,
+			"chancePerRatio":   0,
+			"maxChance":        1.0,
+			"baseSuppressRate": 0.10,
+			"suppressPerRatio": 0,
+			"maxSuppressRate":  0.10,
+		}},
+	})
+
+	if defender.Units[0].Count != 90 {
+		t.Errorf("expected 90 infantry participating after suppression, got %d", defender.Units[0].Count)
+	}
+	if defender.Units[1].Count != 45 {
+		t.Errorf("expected 45 cavalry participating after suppression, got %d", defender.Units[1].Count)
+	}
+	outcome, ok := ctx.Triggered["weizhenxiaoyao"]
+	if !ok {
+		t.Fatalf("expected weizhenxiaoyao outcome")
+	}
+	if outcome.Detail["totalSuppressed"] != 15 {
+		t.Errorf("expected totalSuppressed 15, got %v", outcome.Detail["totalSuppressed"])
+	}
+}
+
+// 威震逍遥：不是以少打多时不进入判定
+func TestWeizhenXiaoyao_DoesNothingWhenNotOutnumbered(t *testing.T) {
+	attacker := combat.Army{
+		Faction: "wei",
+		Units: []combat.Unit{
+			{ID: "huBaoQi", Count: 100, Upkeep: 4},
+		},
+	}
+	defender := combat.Army{
+		Faction: "wu",
+		Units: []combat.Unit{
+			{ID: "infantry", Count: 10, Upkeep: 2},
+		},
+	}
+	ctx := &general.BeforeBattleContext{
+		Attacker:          &attacker,
+		Defender:          &defender,
+		AttackerOwnsTrait: true,
+	}
+
+	general.Dispatch(ctx, []general.ActiveTrait{
+		{TraitID: "weizhenxiaoyao", Params: general.Params{
+			"baseChance":       1.0,
+			"baseSuppressRate": 0.50,
+			"maxSuppressRate":  0.50,
+		}},
+	})
+
+	if defender.Units[0].Count != 10 {
+		t.Errorf("expected defender unchanged, got %d", defender.Units[0].Count)
+	}
+	if len(ctx.Triggered) != 0 {
+		t.Errorf("expected no triggered traits, got %v", ctx.Triggered)
+	}
+}
+
+// 威震逍遥：极低震慑率按总兵力向下取整，不应按每个兵种保底 1 个放大
+func TestWeizhenXiaoyao_LowSuppressRateDoesNotSuppress(t *testing.T) {
+	attacker := combat.Army{Units: []combat.Unit{{ID: "huBaoQi", Count: 1, Upkeep: 1}}}
+	defender := combat.Army{Units: []combat.Unit{
+		{ID: "infantry", Count: 10, Upkeep: 1},
+		{ID: "cavalry", Count: 10, Upkeep: 1},
+	}}
+	ctx := &general.BeforeBattleContext{
+		Attacker:          &attacker,
+		Defender:          &defender,
+		AttackerOwnsTrait: true,
+	}
+
+	general.Dispatch(ctx, []general.ActiveTrait{
+		{TraitID: "weizhenxiaoyao", Params: general.Params{
+			"baseChance":       1.0,
+			"maxChance":        1.0,
+			"baseSuppressRate": 0.001,
+			"maxSuppressRate":  0.001,
+		}},
+	})
+
+	if defender.Units[0].Count != 10 || defender.Units[1].Count != 10 {
+		t.Fatalf("expected defender unchanged, got %+v", defender.Units)
+	}
+	if len(ctx.Triggered) != 0 {
+		t.Fatalf("expected no triggered trait when total suppressed is 0, got %v", ctx.Triggered)
+	}
+}
+
+// 威震逍遥：0 口粮单位不参与口粮比计算，己方只有 0 口粮单位时不触发
+func TestWeizhenXiaoyao_ZeroUpkeepAttackerDoesNotTrigger(t *testing.T) {
+	attacker := combat.Army{Units: []combat.Unit{{ID: "merchant", Count: 100, Upkeep: 0}}}
+	defender := combat.Army{Units: []combat.Unit{{ID: "infantry", Count: 100, Upkeep: 1}}}
+	ctx := &general.BeforeBattleContext{
+		Attacker:          &attacker,
+		Defender:          &defender,
+		AttackerOwnsTrait: true,
+	}
+
+	general.Dispatch(ctx, []general.ActiveTrait{
+		{TraitID: "weizhenxiaoyao", Params: general.Params{
+			"baseChance":       1.0,
+			"maxChance":        1.0,
+			"baseSuppressRate": 0.5,
+			"maxSuppressRate":  0.5,
+		}},
+	})
+
+	if defender.Units[0].Count != 100 {
+		t.Fatalf("expected defender unchanged, got %d", defender.Units[0].Count)
+	}
+	if len(ctx.Triggered) != 0 {
+		t.Fatalf("expected no triggered trait, got %v", ctx.Triggered)
+	}
+}

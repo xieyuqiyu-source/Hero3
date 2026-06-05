@@ -442,6 +442,15 @@ func validateAndConsumeArmy(state *GameState, units map[string]int) ([]combat.Un
 			continue
 		}
 
+		// 获取兵种配置，并拒绝商人 / 运输类等非战斗单位参战。
+		unitCfg, exists := GetUnitConfig(faction, unitType)
+		if !exists {
+			return nil, ErrUnitNotFound
+		}
+		if isNonCombatUnit(unitCfg) {
+			return nil, ErrNonCombatUnit
+		}
+
 		// 检查玩家是否有足够兵力
 		found := false
 		for i, armyUnit := range state.Army {
@@ -456,12 +465,6 @@ func validateAndConsumeArmy(state *GameState, units map[string]int) ([]combat.Un
 		}
 		if !found {
 			return nil, ErrInsufficientArmy
-		}
-
-		// 获取兵种配置
-		unitCfg, exists := GetUnitConfig(faction, unitType)
-		if !exists {
-			return nil, ErrUnitNotFound
 		}
 
 		// 通过 Modifier 管线应用攻防加成
@@ -481,6 +484,7 @@ func validateAndConsumeArmy(state *GameState, units map[string]int) ([]combat.Un
 			InfantryDefense: int(infDefense),
 			CavalryDefense:  int(cavDefense),
 			CarryCapacity:   unitCfg.Stats["carryCapacity"],
+			Upkeep:          unitCfg.Stats["upkeep"],
 		})
 	}
 
@@ -498,6 +502,13 @@ func validateAndConsumeArmy(state *GameState, units map[string]int) ([]combat.Un
 	state.Army = cleanArmy
 
 	return combatUnits, nil
+}
+
+func isNonCombatUnit(unitCfg UnitConfig) bool {
+	if unitCfg.Role == "transport" {
+		return true
+	}
+	return unitCfg.Stats["upkeep"] <= 0
 }
 
 func buildCombatArmy(faction string, units []combat.Unit) combat.Army {
@@ -528,6 +539,7 @@ func buildNpcCombatArmy(npc *NpcCity) combat.Army {
 			InfantryDefense: traitBuffs.applyInfantryDefense(unitCfg.Stats["infantryDefense"]),
 			CavalryDefense:  traitBuffs.applyCavalryDefense(unitCfg.Stats["cavalryDefense"]),
 			CarryCapacity:   unitCfg.Stats["carryCapacity"],
+			Upkeep:          unitCfg.Stats["upkeep"],
 		})
 	}
 

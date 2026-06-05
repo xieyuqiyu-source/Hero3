@@ -87,7 +87,7 @@ export interface BattleReport {
   traitOutcomes?: Record<string, {            // 特性触发结果详情
     traitId: string
     name?: string
-    detail?: Record<string, number | string>
+    detail?: Record<string, number | string | Record<string, number>>
   }>
   read: boolean
   createdAt: string

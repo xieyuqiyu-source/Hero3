@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"hero3/internal/combat"
+	_ "hero3/internal/general/traits"
 )
 
 func TestSettleResourcesAddsProducedResources(t *testing.T) {
@@ -356,6 +357,60 @@ func TestApplyHeroConfigCombinesLevelAndHeroAttributes(t *testing.T) {
 	}
 }
 
+func TestValidateGeneralsConfigRejectsInvalidTraitParams(t *testing.T) {
+	err := ValidateGeneralsConfig(GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"zhangliao": {
+				ID:      "zhangliao",
+				Name:    "张辽",
+				Enabled: true,
+				Traits: []GeneralTraitConfig{
+					{
+						TraitID: "weizhenxiaoyao",
+						Enabled: true,
+						Params: map[string]float64{
+							"baseChance":       0.08,
+							"maxChance":        0.35,
+							"baseSuppressRate": 0.08,
+							"maxSuppressRate":  1.5,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected invalid maxSuppressRate to be rejected")
+	}
+}
+
+func TestValidateGeneralsConfigRejectsUnknownTraitParam(t *testing.T) {
+	err := ValidateGeneralsConfig(GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"zhangliao": {
+				ID:      "zhangliao",
+				Name:    "张辽",
+				Enabled: true,
+				Traits: []GeneralTraitConfig{
+					{
+						TraitID: "weizhenxiaoyao",
+						Enabled: true,
+						Params: map[string]float64{
+							"baseChance": 0.08,
+							"badParam":   1,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected unknown trait param to be rejected")
+	}
+}
+
 func TestApplyGeneralBattleExpPromotesLevel(t *testing.T) {
 	setTestGeneralsConfig(t, GeneralsConfig{
 		Enabled: true,
@@ -426,6 +481,36 @@ func TestGeneralBattleExpUsesKilledUnitUpkeep(t *testing.T) {
 	})
 	if exp != 58 {
 		t.Fatalf("expected exp by killed upkeep to be 58, got %d", exp)
+	}
+}
+
+func TestValidateAndConsumeArmyRejectsTransportUnits(t *testing.T) {
+	originalUnits := GetUnitsConfig()
+	t.Cleanup(func() {
+		unitsMu.Lock()
+		activeUnits = originalUnits
+		unitsMu.Unlock()
+	})
+
+	unitsMu.Lock()
+	activeUnits = UnitsConfig{
+		"wei": FactionUnits{
+			"weiMerchant": UnitConfig{
+				Role:  "transport",
+				Stats: map[string]int{"attack": 0, "infantryDefense": 0, "cavalryDefense": 0, "carryCapacity": 1000, "upkeep": 0},
+			},
+		},
+	}
+	unitsMu.Unlock()
+
+	state := newPlayerState("player_transport", "测试", "wei", "caocao", time.Now())
+	state.Army = []ArmyUnit{{UnitType: "weiMerchant", Amount: 10}}
+	_, err := validateAndConsumeArmy(&state, map[string]int{"weiMerchant": 1})
+	if !errors.Is(err, ErrNonCombatUnit) {
+		t.Fatalf("expected ErrNonCombatUnit, got %v", err)
+	}
+	if state.Army[0].Amount != 10 {
+		t.Fatalf("expected transport unit amount unchanged, got %d", state.Army[0].Amount)
 	}
 }
 
