@@ -177,7 +177,7 @@ const BuildingCard: FC<BuildingCardProps> = ({
       <ConfirmCityGoldModal
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
-        onConfirm={handleInstantComplete}
+        onConfirm={() => handleInstantComplete()}
         title={`${name} 快速完成`}
         description={`立即完成升级到 Lv.${level + 1}`}
         cost={instantCost}

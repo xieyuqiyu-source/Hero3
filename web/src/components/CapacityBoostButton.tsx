@@ -201,7 +201,7 @@ const CapacityBoostButton: FC<CapacityBoostButtonProps> = ({ currentBoost = 1 })
       <ConfirmCityGoldModal
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
-        onConfirm={handleConfirmPurchase}
+        onConfirm={() => handleConfirmPurchase()}
         title="购买仓库扩容"
         description={`仓库容量 ×${selectedMultiplier}，持续 ${pendingHours} 小时`}
         cost={calcPrice(selectedMultiplier, pendingHours)}

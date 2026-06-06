@@ -77,7 +77,7 @@ const FillButton: FC = () => {
       <ConfirmCityGoldModal
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
-        onConfirm={handleConfirm}
+        onConfirm={() => handleConfirm()}
         title="一键爆仓"
         description="将所有资源填满到仓库上限"
         cost={cost}

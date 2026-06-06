@@ -201,7 +201,7 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
       <ConfirmCityGoldModal
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
-        onConfirm={handleConfirmPurchase}
+        onConfirm={() => handleConfirmPurchase()}
         title="购买产量加成"
         description={`全资源产量 ×${selectedMultiplier}，持续 ${pendingHours} 小时`}
         cost={calcPrice(selectedMultiplier, pendingHours)}

@@ -237,7 +237,7 @@ const RecruitQueuePanel: FC = () => {
       <ConfirmCityGoldModal
         open={confirmQueue !== null}
         onClose={() => setConfirmQueue(null)}
-        onConfirm={handleInstantComplete}
+        onConfirm={() => handleInstantComplete()}
         title="极速完成征兵"
         description="立即完成当前征兵队列"
         cost={confirmQueue ? getInstantCost(confirmQueue) : 0}

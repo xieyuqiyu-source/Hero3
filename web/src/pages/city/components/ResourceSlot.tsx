@@ -205,7 +205,7 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
       <ConfirmCityGoldModal
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
-        onConfirm={handleInstantComplete}
+        onConfirm={() => handleInstantComplete()}
         title="快速完成升级"
         description={`立即完成升级到 Lv.${level + 1}`}
         cost={instantCost}
