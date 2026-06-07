@@ -96,11 +96,8 @@ const RecruitQueuePanel: FC = () => {
   const getInstantCost = (queueId: string): number => {
     const queue = pendingQueues.find((q) => q.id === queueId)
     if (!queue) return 0
-    // 用队列自身训练时长计算（不含排队等待时间）
-    const factionUnits = units?.[faction]
-    const unitCfg = factionUnits?.[queue.unitType]
-    const trainSeconds = (unitCfg?.trainSeconds ?? 0) * queue.amount
-    return Math.max(1, Math.ceil(trainSeconds / cityGoldPerSecond))
+    const remainingSeconds = getRemainingSeconds(queue.endsAt)
+    return Math.max(1, Math.ceil(remainingSeconds / cityGoldPerSecond))
   }
 
   const handleInstantClick = (queueId: string) => {

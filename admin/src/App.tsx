@@ -16,6 +16,7 @@ import BuffPanel from '@/components/BuffPanel'
 import MiniGameRecordsPanel from '@/components/MiniGameRecordsPanel'
 import AdminTokenPanel from '@/components/AdminTokenPanel'
 import GeneralsConfigPanel from '@/components/GeneralsConfigPanel'
+import GoldLedgerPanel from '@/components/GoldLedgerPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
 import { Sliders, MapPin, Swords, Flag, Shield, Users } from 'lucide-react'
@@ -80,6 +81,8 @@ function App() {
             <SystemActionsPanel />
           </div>
         )
+      case 'ledger':
+        return <GoldLedgerPanel />
       case 'balance':
         return (
           <div className="grid gap-4">

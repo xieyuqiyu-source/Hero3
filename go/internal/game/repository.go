@@ -43,6 +43,11 @@ type Repository interface {
 	// MiniGame Records
 	SaveMiniGameRecord(record MiniGameRecord) error
 	ListMiniGameRecords(playerID string, limit int) ([]MiniGameRecord, error)
+
+	// Gold Ledger（货币流水，写入失败由调用方降级处理）
+	WriteGoldLedger(entry GoldLedgerEntry) error
+	ListGoldLedger(filter GoldLedgerFilter) ([]GoldLedgerEntry, error)
+	GetAccountIDByPlayerID(playerID string) (string, error)
 }
 
 type MemoryRepository struct {
@@ -54,6 +59,8 @@ type MemoryRepository struct {
 	playerUpdatedAt map[string]time.Time
 	reports         map[string][]BattleReport   // playerID → reports
 	miniGameRecords map[string][]MiniGameRecord // playerID → records
+	ledger          []GoldLedgerEntry
+	ledgerNextID    int64
 }
 
 func NewMemoryRepository() *MemoryRepository {
@@ -508,4 +515,74 @@ func (r *MemoryRepository) ListMiniGameRecords(playerID string, limit int) ([]Mi
 		return all[:limit], nil
 	}
 	return all, nil
+}
+
+// --- Gold Ledger Methods (MemoryRepository) ---
+
+func (r *MemoryRepository) WriteGoldLedger(entry GoldLedgerEntry) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.ledgerNextID++
+	entry.ID = r.ledgerNextID
+	if entry.CreatedAt == "" {
+		entry.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	r.ledger = append(r.ledger, entry)
+	return nil
+}
+
+func (r *MemoryRepository) ListGoldLedger(filter GoldLedgerFilter) ([]GoldLedgerEntry, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	limit := filter.Limit
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+
+	matches := make([]GoldLedgerEntry, 0, limit)
+	for i := len(r.ledger) - 1; i >= 0 && len(matches) < limit; i-- {
+		entry := r.ledger[i]
+		if filter.AccountID != "" && entry.AccountID != filter.AccountID {
+			continue
+		}
+		if filter.PlayerID != "" && entry.PlayerID != filter.PlayerID {
+			continue
+		}
+		if filter.Currency != "" && entry.Currency != filter.Currency {
+			continue
+		}
+		if filter.RefType != "" && entry.RefType != filter.RefType {
+			continue
+		}
+		if !filter.From.IsZero() || !filter.To.IsZero() {
+			createdAt, err := time.Parse(time.RFC3339, entry.CreatedAt)
+			if err != nil {
+				continue
+			}
+			if !filter.From.IsZero() && createdAt.Before(filter.From) {
+				continue
+			}
+			if !filter.To.IsZero() && createdAt.After(filter.To) {
+				continue
+			}
+		}
+		matches = append(matches, entry)
+	}
+	return matches, nil
+}
+
+func (r *MemoryRepository) GetAccountIDByPlayerID(playerID string) (string, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for accountID, playerIDs := range r.accountPlayers {
+		for _, id := range playerIDs {
+			if id == playerID {
+				return accountID, nil
+			}
+		}
+	}
+	return "", ErrPlayerNotFound
 }

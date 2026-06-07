@@ -55,6 +55,7 @@ func (s *Service) Recruit(playerID string, unitID string, amount int) (GameState
 	totalSeconds := unitConfig.TrainSeconds * amount
 	modSources := CollectModifierSources(&state)
 	totalSeconds = applySpeedBonus(totalSeconds, "recruitSpeedBonus", now, modSources)
+	totalSeconds = applyCategoryRecruitSpeedBonus(totalSeconds, unitConfig.Category, now, modSources)
 	queueStart := now
 	for _, q := range state.RecruitQueues {
 		if parsed, err := time.Parse(resourceDateLayout, q.EndsAt); err == nil && parsed.After(queueStart) {
@@ -114,22 +115,28 @@ func (s *Service) InstantCompleteRecruit(playerID string, queueID string) (GameS
 	}
 
 	queue := state.RecruitQueues[queueIdx]
-
-	// 计算该队列自身的训练时长（不含排队等待时间，经过 recruitSpeedBonus 缩短）
-	unitCfg, unitExists := GetUnitConfig(state.Player.Faction, queue.UnitType)
-	trainSeconds := 0
-	if unitExists {
-		trainSeconds = unitCfg.TrainSeconds * queue.Amount
-		instantModSources := CollectModifierSources(&state)
-		trainSeconds = applySpeedBonus(trainSeconds, "recruitSpeedBonus", now, instantModSources)
+	endsAt, err := time.Parse(resourceDateLayout, queue.EndsAt)
+	if err != nil {
+		return GameState{}, ErrQueueFull
 	}
+	remainingSecs := int(endsAt.Sub(now).Seconds())
 
 	// 计算城金花费并扣除
-	if trainSeconds > 0 {
-		cost := speedUpCost(trainSeconds)
-		if _, err := s.repo.DeductCityGold(playerID, cost); err != nil {
+	if remainingSecs > 0 {
+		cost := speedUpCost(remainingSecs)
+		newBalance, err := s.repo.DeductCityGold(playerID, cost)
+		if err != nil {
 			return GameState{}, err
 		}
+		s.recordLedger(GoldLedgerEntry{
+			PlayerID:     playerID,
+			Currency:     LedgerCurrencyCityGold,
+			Direction:    LedgerDirectionDebit,
+			Amount:       cost,
+			BalanceAfter: newBalance,
+			RefType:      LedgerRefInstantRecruit,
+			RefID:        queueID,
+		})
 		// 重新读取最新状态（城金已扣）
 		state, _ = s.repo.GetState(playerID)
 		state, _ = settleResources(state, now)
@@ -172,7 +179,11 @@ func (s *Service) InstantCompleteRecruit(playerID string, queueID string) (GameS
 					if !exists {
 						continue
 					}
-					duration := time.Duration(unitCfg.TrainSeconds*rq.Amount) * time.Second
+					durationSeconds := unitCfg.TrainSeconds * rq.Amount
+					queueModSources := CollectModifierSources(&state)
+					durationSeconds = applySpeedBonus(durationSeconds, "recruitSpeedBonus", now, queueModSources)
+					durationSeconds = applyCategoryRecruitSpeedBonus(durationSeconds, unitCfg.Category, now, queueModSources)
+					duration := time.Duration(durationSeconds) * time.Second
 					newEnd := prevEnd.Add(duration)
 					rq.EndsAt = newEnd.UTC().Format(resourceDateLayout)
 					prevEnd = newEnd
@@ -196,4 +207,15 @@ func (s *Service) InstantCompleteRecruit(playerID string, queueID string) (GameS
 	}
 
 	return state, nil
+}
+
+func applyCategoryRecruitSpeedBonus(baseSeconds int, category string, now time.Time, sources []ModifierSource) int {
+	switch category {
+	case "infantry":
+		return applySpeedBonus(baseSeconds, StatInfantryRecruitSpeedBonus, now, sources)
+	case "cavalry":
+		return applySpeedBonus(baseSeconds, StatCavalryRecruitSpeedBonus, now, sources)
+	default:
+		return baseSeconds
+	}
 }

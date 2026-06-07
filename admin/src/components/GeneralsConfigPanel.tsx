@@ -190,6 +190,21 @@ export default function GeneralsConfigPanel() {
     })
   }
 
+  const updateExpCurve = (value: string) => {
+    if (!config) return
+    const expCurve = value
+      .split(/[\s,，]+/)
+      .map((item) => parseInt(item, 10))
+      .filter((item) => Number.isFinite(item))
+    setConfig({
+      ...config,
+      common: {
+        ...config.common,
+        expCurve,
+      },
+    })
+  }
+
   if (loading) {
     return (
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
@@ -247,6 +262,23 @@ export default function GeneralsConfigPanel() {
       </div>
 
       {/* Faction Tabs */}
+      <div className="mb-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <span className="text-xs font-bold text-[var(--color-text-primary)]">经验曲线</span>
+          <span className="text-[10px] text-[var(--color-text-muted)]">{config.common.expCurve.length} 级配置</span>
+        </div>
+        <textarea
+          value={config.common.expCurve.join(', ')}
+          onChange={(e) => updateExpCurve(e.target.value)}
+          rows={2}
+          className="w-full px-2.5 py-2 rounded-lg text-xs font-mono border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent)] resize-y"
+          placeholder="0, 100, 300, 600"
+        />
+        <p className="mt-1.5 text-[10px] text-[var(--color-text-muted)]">
+          第 N 项表示升到 N 级所需累计经验；未配置的高等级使用默认公式。
+        </p>
+      </div>
+
       <div className="flex gap-2 mb-4 border-b border-[var(--color-border)]">
         {(['wei', 'shu', 'wu'] as const).map((faction) => (
           <button

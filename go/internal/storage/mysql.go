@@ -84,6 +84,23 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			INDEX idx_minigame_player (player_id, created_at DESC),
 			INDEX idx_minigame_type (player_id, game_type, created_at DESC)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS gold_ledger (
+			id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+			account_id VARCHAR(64) NOT NULL DEFAULT '',
+			player_id VARCHAR(64) NOT NULL DEFAULT '',
+			currency VARCHAR(16) NOT NULL,
+			direction VARCHAR(8) NOT NULL,
+			amount INT NOT NULL,
+			balance_after INT NOT NULL,
+			ref_type VARCHAR(64) NOT NULL DEFAULT '',
+			ref_id VARCHAR(128) NOT NULL DEFAULT '',
+			reason VARCHAR(255) NOT NULL DEFAULT '',
+			created_at DATETIME(6) NOT NULL,
+			INDEX idx_ledger_account (account_id, created_at),
+			INDEX idx_ledger_player (player_id, created_at),
+			INDEX idx_ledger_ref (ref_type, ref_id),
+			INDEX idx_ledger_currency (currency, created_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 	}
 
 	for _, statement := range statements {
@@ -739,4 +756,97 @@ func (r *MySQLRepository) ListMiniGameRecords(playerID string, limit int) ([]gam
 		records = append(records, r)
 	}
 	return records, rows.Err()
+}
+
+// --- Gold Ledger Methods ---
+
+func (r *MySQLRepository) WriteGoldLedger(entry game.GoldLedgerEntry) error {
+	createdAt, _ := time.Parse(time.RFC3339, entry.CreatedAt)
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+
+	_, err := r.db.Exec(
+		`INSERT INTO gold_ledger
+		 (account_id, player_id, currency, direction, amount, balance_after, ref_type, ref_id, reason, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		entry.AccountID,
+		entry.PlayerID,
+		entry.Currency,
+		entry.Direction,
+		entry.Amount,
+		entry.BalanceAfter,
+		entry.RefType,
+		entry.RefID,
+		entry.Reason,
+		createdAt.UTC(),
+	)
+	return err
+}
+
+func (r *MySQLRepository) ListGoldLedger(filter game.GoldLedgerFilter) ([]game.GoldLedgerEntry, error) {
+	limit := filter.Limit
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+
+	query := `SELECT id, account_id, player_id, currency, direction, amount, balance_after, ref_type, ref_id, reason, created_at
+		FROM gold_ledger WHERE 1=1`
+	args := []interface{}{}
+	if filter.AccountID != "" {
+		query += " AND account_id = ?"
+		args = append(args, filter.AccountID)
+	}
+	if filter.PlayerID != "" {
+		query += " AND player_id = ?"
+		args = append(args, filter.PlayerID)
+	}
+	if filter.Currency != "" {
+		query += " AND currency = ?"
+		args = append(args, filter.Currency)
+	}
+	if filter.RefType != "" {
+		query += " AND ref_type = ?"
+		args = append(args, filter.RefType)
+	}
+	if !filter.From.IsZero() {
+		query += " AND created_at >= ?"
+		args = append(args, filter.From.UTC())
+	}
+	if !filter.To.IsZero() {
+		query += " AND created_at <= ?"
+		args = append(args, filter.To.UTC())
+	}
+	query += " ORDER BY id DESC LIMIT ?"
+	args = append(args, limit)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []game.GoldLedgerEntry
+	for rows.Next() {
+		var e game.GoldLedgerEntry
+		var createdAt time.Time
+		if err := rows.Scan(
+			&e.ID, &e.AccountID, &e.PlayerID, &e.Currency, &e.Direction,
+			&e.Amount, &e.BalanceAfter, &e.RefType, &e.RefID, &e.Reason, &createdAt,
+		); err != nil {
+			return nil, err
+		}
+		e.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
+}
+
+func (r *MySQLRepository) GetAccountIDByPlayerID(playerID string) (string, error) {
+	var accountID string
+	err := r.db.QueryRow(`SELECT account_id FROM players WHERE id = ? LIMIT 1`, playerID).Scan(&accountID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", game.ErrPlayerNotFound
+	}
+	return accountID, err
 }

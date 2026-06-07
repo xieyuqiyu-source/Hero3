@@ -194,6 +194,46 @@ func setTestFactionsAndGenerals(t *testing.T, factions FactionsConfig, cfg Gener
 	})
 }
 
+func setTestCombatUnitsConfig(t *testing.T) {
+	t.Helper()
+	originalUnits := GetUnitsConfig()
+
+	unitsMu.Lock()
+	activeUnits = UnitsConfig{
+		"wei": FactionUnits{
+			"weiInfantry": UnitConfig{
+				Name:     "魏步兵",
+				Category: "infantry",
+				Stats: map[string]int{
+					"attack":          10,
+					"infantryDefense": 10,
+					"cavalryDefense":  8,
+					"carryCapacity":   5,
+					"upkeep":          1,
+				},
+			},
+			"weiCavalry": UnitConfig{
+				Name:     "魏骑兵",
+				Category: "cavalry",
+				Stats: map[string]int{
+					"attack":          14,
+					"infantryDefense": 8,
+					"cavalryDefense":  10,
+					"carryCapacity":   6,
+					"upkeep":          2,
+				},
+			},
+		},
+	}
+	unitsMu.Unlock()
+
+	t.Cleanup(func() {
+		unitsMu.Lock()
+		activeUnits = originalUnits
+		unitsMu.Unlock()
+	})
+}
+
 func TestValidateGeneralsConfigRejectsUnsafeTraitParams(t *testing.T) {
 	factions := FactionsConfig{
 		"wei": {Generals: []GeneralInfo{{ID: "zhenmi", Name: "甄宓"}}},
@@ -437,6 +477,42 @@ func TestApplyGeneralBattleExpPromotesLevel(t *testing.T) {
 	}
 	if math.Abs(general.Attributes["attackBonus"]-(2.0/99.0)) > 1e-9 {
 		t.Fatalf("expected level 2 attack bonus to apply, got %.2f", general.Attributes["attackBonus"])
+	}
+}
+
+func TestGeneralExpRequiredUsesConfiguredCurve(t *testing.T) {
+	setTestGeneralsConfig(t, GeneralsConfig{
+		Enabled: true,
+		Common: GeneralsCommonConfig{
+			ExpCurve:   []int{0, 10, 30, 80},
+			LevelBuffs: map[int]map[string]float64{1: {}},
+		},
+		Heroes: map[string]GeneralHeroConfig{
+			"test_general": {ID: "test_general", Name: "测试将领", Faction: "wei", Enabled: true},
+		},
+	})
+
+	if generalExpRequiredForLevelForTest(4) != 80 {
+		t.Fatalf("expected configured level 4 exp 80, got %d", generalExpRequiredForLevelForTest(4))
+	}
+
+	general := &General{ID: "test_general", Name: "测试将领", Level: 1, Exp: 29}
+	result := applyGeneralBattleExp(general, 1)
+	if result.LevelAfter != 3 || general.Level != 3 {
+		t.Fatalf("expected configured curve to promote general to level 3, result=%+v general=%+v", result, general)
+	}
+}
+
+func TestValidateGeneralsConfigRejectsInvalidExpCurve(t *testing.T) {
+	err := ValidateGeneralsConfig(GeneralsConfig{
+		Enabled: true,
+		Common: GeneralsCommonConfig{
+			ExpCurve: []int{0, 100, 90},
+		},
+		Heroes: map[string]GeneralHeroConfig{},
+	})
+	if err == nil {
+		t.Fatal("expected non-increasing exp curve to be rejected")
 	}
 }
 
@@ -759,6 +835,330 @@ func getProductionAtLevel(buildingType string, level int) int {
 		return config.ProductionByLevel[len(config.ProductionByLevel)-1]
 	}
 	return config.ProductionByLevel[level]
+}
+
+func TestInstantCompleteRecruitChargesRemainingTime(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+
+	now := time.Now()
+	account := Account{ID: "acc_recruit_speedup", Username: "speedup", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+
+	state := newPlayerState("player_recruit_speedup", "Speedup", "wei", "caocao", now)
+	state.CityGold = 100
+	state.RecruitQueues = []RecruitQueue{
+		{
+			ID:       "rq_remaining",
+			UnitType: "weiInfantry",
+			Amount:   10,
+			EndsAt:   now.Add(240 * time.Second).UTC().Format(resourceDateLayout),
+		},
+	}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	next, err := svc.InstantCompleteRecruit(state.Player.ID, "rq_remaining")
+	if err != nil {
+		t.Fatalf("InstantCompleteRecruit failed: %v", err)
+	}
+
+	if next.CityGold != 98 {
+		t.Fatalf("expected remaining-time cost 2 city gold, got balance %d", next.CityGold)
+	}
+	if len(next.RecruitQueues) != 0 {
+		t.Fatalf("expected queue to complete, got %d queues", len(next.RecruitQueues))
+	}
+}
+
+func TestInstantCompleteBuildingReturnsFreshModifiers(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+
+	now := time.Now()
+	account := Account{ID: "acc_building_modifiers", Username: "building_modifiers", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+
+	state := newPlayerState("player_building_modifiers", "Builder", "wei", "caocao", now)
+	state.CityGold = 100
+	for i := range state.Buildings {
+		if state.Buildings[i].Type == "weapon_bureau" {
+			endsAt := now.Add(60 * time.Second).UTC().Format(resourceDateLayout)
+			state.Buildings[i].UpgradeEndsAt = &endsAt
+			break
+		}
+	}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	next, err := svc.InstantCompleteBuilding(state.Player.ID, "weapon_bureau-1")
+	if err != nil {
+		t.Fatalf("InstantCompleteBuilding failed: %v", err)
+	}
+
+	var attackBonus float64
+	for _, item := range next.ActiveModifiers {
+		if item.Key == StatAttackBonus && item.Source == "军事建筑" {
+			attackBonus = item.Value
+			break
+		}
+	}
+	if math.Abs(attackBonus-0.02) > 1e-9 {
+		t.Fatalf("expected fresh weapon bureau attack bonus 0.02, got %.4f", attackBonus)
+	}
+}
+
+func TestSimulateBattleDoesNotConsumeArmy(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_sim_no_consume", Username: "sim_no_consume", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+
+	state := newPlayerState("player_sim_no_consume", "Simulator", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	_, err := svc.SimulateBattle(BattleSimulationRequest{
+		PlayerID:        state.Player.ID,
+		Mode:            "attack",
+		AttackerFaction: "wei",
+		DefenderFaction: "wei",
+		AttackerUnits:   map[string]int{"weiInfantry": 80},
+		DefenderUnits:   map[string]int{"weiInfantry": 80},
+	})
+	if err != nil {
+		t.Fatalf("SimulateBattle failed: %v", err)
+	}
+
+	stored, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("get state: %v", err)
+	}
+	if len(stored.Army) != 1 || stored.Army[0].Amount != 100 {
+		t.Fatalf("expected simulated battle not to consume army, got %+v", stored.Army)
+	}
+}
+
+func TestSimulateBattleAppliesCurrentPlayerBonuses(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	setTestGeneralsConfig(t, GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"test_general": {
+				ID:      "test_general",
+				Name:    "测试将领",
+				Faction: "wei",
+				Enabled: true,
+				Buffs:   map[string]float64{StatAttackBonus: 0.5},
+			},
+		},
+	})
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_sim_bonus", Username: "sim_bonus", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+
+	state := newPlayerState("player_sim_bonus", "Simulator", "wei", "test_general", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	base, err := svc.SimulateBattle(BattleSimulationRequest{
+		PlayerID:        state.Player.ID,
+		Mode:            "attack",
+		AttackerFaction: "wei",
+		DefenderFaction: "wei",
+		AttackerUnits:   map[string]int{"weiInfantry": 100},
+		DefenderUnits:   map[string]int{"weiInfantry": 100},
+	})
+	if err != nil {
+		t.Fatalf("base SimulateBattle failed: %v", err)
+	}
+	boosted, err := svc.SimulateBattle(BattleSimulationRequest{
+		PlayerID:             state.Player.ID,
+		Mode:                 "attack",
+		AttackerFaction:      "wei",
+		DefenderFaction:      "wei",
+		AttackerUnits:        map[string]int{"weiInfantry": 100},
+		DefenderUnits:        map[string]int{"weiInfantry": 100},
+		ApplyAttackerBonuses: true,
+	})
+	if err != nil {
+		t.Fatalf("boosted SimulateBattle failed: %v", err)
+	}
+
+	if boosted.Result.AttackPower <= base.Result.AttackPower {
+		t.Fatalf("expected attacker bonus to increase attack power, base %.2f boosted %.2f", base.Result.AttackPower, boosted.Result.AttackPower)
+	}
+	if boosted.Attacker.Units[0].Attack <= base.Attacker.Units[0].Attack {
+		t.Fatalf("expected attacker unit attack to increase, base %+v boosted %+v", base.Attacker.Units[0], boosted.Attacker.Units[0])
+	}
+}
+
+func TestAddAccountGoldAdminWritesLedger(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_gold_ledger", Username: "gold_ledger", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+
+	if err := svc.AddAccountGoldAdmin(account.ID, 25); err != nil {
+		t.Fatalf("AddAccountGoldAdmin failed: %v", err)
+	}
+
+	entries, err := svc.ListGoldLedger(GoldLedgerFilter{AccountID: account.ID})
+	if err != nil {
+		t.Fatalf("ListGoldLedger failed: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 ledger entry, got %d", len(entries))
+	}
+	entry := entries[0]
+	if entry.Currency != LedgerCurrencyGold || entry.Direction != LedgerDirectionCredit || entry.Amount != 25 || entry.BalanceAfter != 25 {
+		t.Fatalf("unexpected ledger entry: %+v", entry)
+	}
+	if entry.RefType != LedgerRefAdminAdjust {
+		t.Fatalf("expected admin adjust ref type, got %q", entry.RefType)
+	}
+}
+
+func TestExchangeGoldToCityGoldWritesLinkedLedgerEntries(t *testing.T) {
+	original := GetBalanceConfig()
+	t.Cleanup(func() {
+		if err := SetBalanceConfig(original); err != nil {
+			t.Fatalf("restore balance config: %v", err)
+		}
+	})
+	balance := GetBalanceConfig()
+	balance.ExchangeRate = 10
+	balance.ExchangeCooldownSecs = 0
+	if err := SetBalanceConfig(balance); err != nil {
+		t.Fatalf("set balance config: %v", err)
+	}
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_exchange_ledger", Username: "exchange_ledger", PasswordHash: "x", Gold: 50, CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_exchange_ledger", "Exchange", "wei", "caocao", now)
+	state.CityGold = 5
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	if _, err := svc.ExchangeGoldToCityGold(account.ID, state.Player.ID, 3); err != nil {
+		t.Fatalf("ExchangeGoldToCityGold failed: %v", err)
+	}
+
+	entries, err := svc.ListGoldLedger(GoldLedgerFilter{AccountID: account.ID, RefType: LedgerRefExchange})
+	if err != nil {
+		t.Fatalf("ListGoldLedger failed: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 ledger entries, got %d: %+v", len(entries), entries)
+	}
+	if entries[0].RefID == "" || entries[0].RefID != entries[1].RefID {
+		t.Fatalf("expected exchange ledger entries to share refId, got %+v", entries)
+	}
+
+	var goldDebit, cityGoldCredit *GoldLedgerEntry
+	for i := range entries {
+		entry := &entries[i]
+		if entry.Currency == LedgerCurrencyGold && entry.Direction == LedgerDirectionDebit {
+			goldDebit = entry
+		}
+		if entry.Currency == LedgerCurrencyCityGold && entry.Direction == LedgerDirectionCredit {
+			cityGoldCredit = entry
+		}
+	}
+	if goldDebit == nil || goldDebit.Amount != 3 || goldDebit.BalanceAfter != 47 {
+		t.Fatalf("unexpected gold debit entry: %+v", goldDebit)
+	}
+	if cityGoldCredit == nil || cityGoldCredit.Amount != 30 || cityGoldCredit.BalanceAfter != 35 {
+		t.Fatalf("unexpected city gold credit entry: %+v", cityGoldCredit)
+	}
+}
+
+func TestExchangeCityGoldToGoldWritesLinkedLedgerEntries(t *testing.T) {
+	original := GetBalanceConfig()
+	t.Cleanup(func() {
+		if err := SetBalanceConfig(original); err != nil {
+			t.Fatalf("restore balance config: %v", err)
+		}
+	})
+	balance := GetBalanceConfig()
+	balance.ReverseExchangeRate = 15
+	balance.ExchangeCooldownSecs = 0
+	if err := SetBalanceConfig(balance); err != nil {
+		t.Fatalf("set balance config: %v", err)
+	}
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_reverse_ledger", Username: "reverse_ledger", PasswordHash: "x", Gold: 2, CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_reverse_ledger", "Reverse", "wei", "caocao", now)
+	state.CityGold = 45
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	if _, err := svc.ExchangeCityGoldToGold(account.ID, state.Player.ID, 30); err != nil {
+		t.Fatalf("ExchangeCityGoldToGold failed: %v", err)
+	}
+
+	entries, err := svc.ListGoldLedger(GoldLedgerFilter{AccountID: account.ID, RefType: LedgerRefExchange})
+	if err != nil {
+		t.Fatalf("ListGoldLedger failed: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 ledger entries, got %d: %+v", len(entries), entries)
+	}
+	if entries[0].RefID == "" || entries[0].RefID != entries[1].RefID {
+		t.Fatalf("expected reverse exchange ledger entries to share refId, got %+v", entries)
+	}
+
+	var cityGoldDebit, goldCredit *GoldLedgerEntry
+	for i := range entries {
+		entry := &entries[i]
+		if entry.Currency == LedgerCurrencyCityGold && entry.Direction == LedgerDirectionDebit {
+			cityGoldDebit = entry
+		}
+		if entry.Currency == LedgerCurrencyGold && entry.Direction == LedgerDirectionCredit {
+			goldCredit = entry
+		}
+	}
+	if cityGoldDebit == nil || cityGoldDebit.Amount != 30 || cityGoldDebit.BalanceAfter != 15 {
+		t.Fatalf("unexpected city gold debit entry: %+v", cityGoldDebit)
+	}
+	if goldCredit == nil || goldCredit.Amount != 2 || goldCredit.BalanceAfter != 4 {
+		t.Fatalf("unexpected gold credit entry: %+v", goldCredit)
+	}
 }
 
 func TestOwnsPlayer(t *testing.T) {

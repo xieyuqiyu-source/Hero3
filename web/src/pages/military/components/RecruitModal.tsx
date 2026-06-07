@@ -4,7 +4,7 @@ import type { UnitConfig } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
 import { gameApi } from '@/api/game'
-import { formatBaseFinal, formatModifierValue, formatUnitStatTitle, getEffectiveUnitStat, type EffectiveUnitStat } from '@/utils/unitStats'
+import { formatBaseFinal, formatModifierValue, formatSecondsBaseFinal, formatUnitStatTitle, getEffectiveRecruitSeconds, getEffectiveUnitStat, type EffectiveUnitStat } from '@/utils/unitStats'
 
 interface RecruitModalProps {
   open: boolean
@@ -54,6 +54,35 @@ const ModalStatValue: FC<{ label: string; stat: EffectiveUnitStat }> = ({ label,
   )
 }
 
+const ModalTimeValue: FC<{ stat: EffectiveUnitStat }> = ({ stat }) => (
+  <span
+    className={`relative group flex items-center gap-0.5 ${stat.final !== stat.base ? 'text-green-500' : 'text-[var(--color-text-muted)]'}`}
+    title={formatUnitStatTitle('训练时间', stat)}
+  >
+    <Clock size={8} />{formatSecondsBaseFinal(stat)}
+    {stat.breakdown.length > 0 && (
+      <div className="pointer-events-none absolute right-0 bottom-[calc(100%+6px)] z-20 w-44 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 shadow-lg opacity-0 invisible translate-y-1 scale-95 transition-all duration-150 ease-out group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100">
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className="text-[11px] font-semibold text-[var(--color-text-primary)]">训练时间</span>
+          <span className="text-[11px] font-bold text-green-500">{formatSecondsBaseFinal(stat)}</span>
+        </div>
+        <div className="space-y-0.5">
+          <div className="flex items-center justify-between gap-2 text-[10px]">
+            <span className="text-[var(--color-text-secondary)]">基础</span>
+            <span className="font-semibold text-[var(--color-text-primary)]">{stat.base}s</span>
+          </div>
+          {stat.breakdown.map((item, index) => (
+            <div key={`${item.source}-${index}`} className="flex items-center justify-between gap-2 text-[10px]">
+              <span className="text-[var(--color-text-secondary)]">{item.source}</span>
+              <span className="font-semibold text-[var(--color-text-primary)]">{formatModifierValue(item)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+  </span>
+)
+
 const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, owned }) => {
   const [amount, setAmount] = useState(1)
   const [visible, setVisible] = useState(false)
@@ -65,6 +94,7 @@ const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, ow
   const attack = getEffectiveUnitStat(gameState, 'attack', config.stats.attack ?? 0)
   const infantryDefense = getEffectiveUnitStat(gameState, 'infantryDefense', config.stats.infantryDefense ?? 0)
   const cavalryDefense = getEffectiveUnitStat(gameState, 'cavalryDefense', config.stats.cavalryDefense ?? 0)
+  const recruitSeconds = getEffectiveRecruitSeconds(gameState, config.category, config.trainSeconds)
 
   // 计算当前资源能征募的最大数量（任一资源不足则为0），上限 100000
   const maxAmount = (() => {
@@ -171,9 +201,7 @@ const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, ow
                   {RESOURCE_LABELS[res]}<span className="font-semibold ml-0.5">{val}</span>
                 </span>
               ))}
-              <span className="flex items-center gap-0.5 text-[var(--color-text-muted)]">
-                <Clock size={8} />{config.trainSeconds}s
-              </span>
+              <ModalTimeValue stat={recruitSeconds} />
             </div>
           </div>
 

@@ -77,6 +77,10 @@ func generalExpRequiredForLevel(level int) int {
 	if level > GeneralMaxLevel {
 		level = GeneralMaxLevel
 	}
+	cfg := GetGeneralsConfig()
+	if idx := level - 1; idx >= 0 && idx < len(cfg.Common.ExpCurve) {
+		return cfg.Common.ExpCurve[idx]
+	}
 	n := level - 1
 	n2 := n * n
 	n4 := n2 * n2

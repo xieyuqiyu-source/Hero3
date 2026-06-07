@@ -2,6 +2,7 @@ package game
 
 import (
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 )
@@ -58,9 +59,20 @@ func (s *Service) AddGold(playerID string, amount int, reason string) (GameState
 	}
 
 	// 原子加城金
-	if _, err := s.repo.AddCityGold(playerID, amount); err != nil {
+	newBalance, err := s.repo.AddCityGold(playerID, amount)
+	if err != nil {
 		return GameState{}, err
 	}
+
+	s.recordLedger(GoldLedgerEntry{
+		PlayerID:     playerID,
+		Currency:     LedgerCurrencyCityGold,
+		Direction:    LedgerDirectionCredit,
+		Amount:       amount,
+		BalanceAfter: newBalance,
+		RefType:      LedgerRefAdminAdjust,
+		Reason:       reason,
+	})
 
 	// 读取最新状态返回
 	state, err := s.repo.GetState(playerID)
@@ -68,7 +80,6 @@ func (s *Service) AddGold(playerID string, amount int, reason string) (GameState
 		return GameState{}, err
 	}
 
-	_ = reason // TODO: 记录流水日志
 	return state, nil
 }
 
@@ -83,16 +94,26 @@ func (s *Service) DeductGold(playerID string, amount int, reason string) (GameSt
 	}
 
 	// 原子扣城金（余额不足会返回错误）
-	if _, err := s.repo.DeductCityGold(playerID, amount); err != nil {
+	newBalance, err := s.repo.DeductCityGold(playerID, amount)
+	if err != nil {
 		return GameState{}, err
 	}
+
+	s.recordLedger(GoldLedgerEntry{
+		PlayerID:     playerID,
+		Currency:     LedgerCurrencyCityGold,
+		Direction:    LedgerDirectionDebit,
+		Amount:       amount,
+		BalanceAfter: newBalance,
+		RefType:      LedgerRefAdminAdjust,
+		Reason:       reason,
+	})
 
 	state, err := s.repo.GetState(playerID)
 	if err != nil {
 		return GameState{}, err
 	}
 
-	_ = reason
 	return state, nil
 }
 
@@ -150,6 +171,33 @@ func (s *Service) ExchangeGoldToCityGold(accountID string, playerID string, gold
 		return GameState{}, err
 	}
 
+	refID := "exchange_" + randomID(10)
+
+	// 流水：金币支出
+	account, _ := s.repo.GetAccountByID(accountID)
+	s.recordLedger(GoldLedgerEntry{
+		AccountID:    accountID,
+		PlayerID:     playerID,
+		Currency:     LedgerCurrencyGold,
+		Direction:    LedgerDirectionDebit,
+		Amount:       goldAmount,
+		BalanceAfter: account.Gold,
+		RefType:      LedgerRefExchange,
+		RefID:        refID,
+	})
+	// 流水：城金收入
+	stateAfter, _ := s.repo.GetState(playerID)
+	s.recordLedger(GoldLedgerEntry{
+		AccountID:    accountID,
+		PlayerID:     playerID,
+		Currency:     LedgerCurrencyCityGold,
+		Direction:    LedgerDirectionCredit,
+		Amount:       cityGoldGain,
+		BalanceAfter: int(stateAfter.CityGold),
+		RefType:      LedgerRefExchange,
+		RefID:        refID,
+	})
+
 	// 更新冷却时间
 	state, _ = s.repo.GetState(playerID)
 	state.LastExchangeAt = now.UTC().Format(resourceDateLayout)
@@ -200,6 +248,33 @@ func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, city
 		return GameState{}, err
 	}
 
+	refID := "exchange_" + randomID(10)
+
+	// 流水：城金支出
+	stateAfter, _ := s.repo.GetState(playerID)
+	s.recordLedger(GoldLedgerEntry{
+		AccountID:    accountID,
+		PlayerID:     playerID,
+		Currency:     LedgerCurrencyCityGold,
+		Direction:    LedgerDirectionDebit,
+		Amount:       cityGoldAmount,
+		BalanceAfter: int(stateAfter.CityGold),
+		RefType:      LedgerRefExchange,
+		RefID:        refID,
+	})
+	// 流水：金币收入
+	account, _ := s.repo.GetAccountByID(accountID)
+	s.recordLedger(GoldLedgerEntry{
+		AccountID:    accountID,
+		PlayerID:     playerID,
+		Currency:     LedgerCurrencyGold,
+		Direction:    LedgerDirectionCredit,
+		Amount:       goldGain,
+		BalanceAfter: account.Gold,
+		RefType:      LedgerRefExchange,
+		RefID:        refID,
+	})
+
 	// 更新冷却时间
 	state, _ = s.repo.GetState(playerID)
 	state.LastExchangeAt = now.UTC().Format(resourceDateLayout)
@@ -209,4 +284,30 @@ func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, city
 	// 返回最新状态
 	state, _ = s.repo.GetState(playerID)
 	return state, nil
+}
+
+// recordLedger 写一条货币流水。失败时降级为 warn 日志，不影响业务流程。
+// 调用方在 repo 余额操作成功后调用，传入操作后的快照余额。
+func (s *Service) recordLedger(entry GoldLedgerEntry) {
+	if entry.CreatedAt == "" {
+		entry.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	// 城金流水若没传 AccountID 则反查（失败也忽略，只是流水缺一项关联信息）
+	if entry.Currency == LedgerCurrencyCityGold && entry.AccountID == "" && entry.PlayerID != "" {
+		if accountID, err := s.repo.GetAccountIDByPlayerID(entry.PlayerID); err == nil {
+			entry.AccountID = accountID
+		}
+	}
+	if err := s.repo.WriteGoldLedger(entry); err != nil {
+		slog.Warn("gold ledger write failed",
+			"error", err,
+			"currency", entry.Currency,
+			"direction", entry.Direction,
+			"amount", entry.Amount,
+			"playerId", entry.PlayerID,
+			"accountId", entry.AccountID,
+			"refType", entry.RefType,
+			"refId", entry.RefID,
+		)
+	}
 }

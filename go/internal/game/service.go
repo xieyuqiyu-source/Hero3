@@ -196,8 +196,36 @@ func (s *Service) GetAccountByID(accountID string) (Account, error) {
 	return s.repo.GetAccountByID(accountID)
 }
 
+func (s *Service) ListGoldLedger(filter GoldLedgerFilter) ([]GoldLedgerEntry, error) {
+	return s.repo.ListGoldLedger(filter)
+}
+
 func (s *Service) AddAccountGoldAdmin(accountID string, amount int) error {
-	return s.repo.AddAccountGold(accountID, amount)
+	accountID = strings.TrimSpace(accountID)
+	if accountID == "" {
+		return ErrAccountNotFound
+	}
+	if amount <= 0 {
+		return ErrInvalidGoldAmount
+	}
+
+	if err := s.repo.AddAccountGold(accountID, amount); err != nil {
+		return err
+	}
+	account, err := s.repo.GetAccountByID(accountID)
+	if err != nil {
+		return err
+	}
+	s.recordLedger(GoldLedgerEntry{
+		AccountID:    accountID,
+		Currency:     LedgerCurrencyGold,
+		Direction:    LedgerDirectionCredit,
+		Amount:       amount,
+		BalanceAfter: account.Gold,
+		RefType:      LedgerRefAdminAdjust,
+		Reason:       "admin_add_account_gold",
+	})
+	return nil
 }
 
 func (s *Service) CreatePlayer(accountID string, nickname string, faction string, generalID string) (string, GameState, error) {
@@ -282,6 +310,9 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 	}
 
 	state, changed := settleResources(state, time.Now())
+	if ensureCoreBuildings(&state) {
+		changed = true
+	}
 
 	// 旧存档没有将领数据时，根据阵营分配默认将领
 	if state.General == nil && state.Player.Faction != "" {
@@ -314,10 +345,44 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 	}
 	state.RecentBattleReports = reports
 
-	// 填充当前生效的加成明细（供前端 tooltip 展示）
-	state.ActiveModifiers = GetModifierBreakdown(&state, time.Now())
+	hydrateStateForResponse(&state, time.Now())
 
 	return state, nil
+}
+
+func hydrateStateForResponse(state *GameState, now time.Time) {
+	if state == nil {
+		return
+	}
+	state.ServerTime = now.UTC().Format(resourceDateLayout)
+	state.ActiveModifiers = GetModifierBreakdown(state, now)
+}
+
+func ensureCoreBuildings(state *GameState) bool {
+	if state == nil {
+		return false
+	}
+	required := []Building{
+		{ID: "infantry_camp-1", Type: "infantry_camp", Level: 1},
+		{ID: "cavalry_camp-1", Type: "cavalry_camp", Level: 1},
+		{ID: "weapon_bureau-1", Type: "weapon_bureau", Level: 1},
+		{ID: "armor_bureau-1", Type: "armor_bureau", Level: 1},
+	}
+	changed := false
+	for _, requiredBuilding := range required {
+		exists := false
+		for _, building := range state.Buildings {
+			if building.Type == requiredBuilding.Type {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			state.Buildings = append(state.Buildings, requiredBuilding)
+			changed = true
+		}
+	}
+	return changed
 }
 
 func (s *Service) Bootstrap() BootstrapResponse {

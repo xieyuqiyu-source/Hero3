@@ -184,3 +184,17 @@ export interface BalanceConfig {
   boostMultiplierFactor: Record<string, number>
   boostDurationFactor: Record<string, number>
 }
+
+export interface GoldLedgerEntry {
+  id: number
+  accountId?: string
+  playerId?: string
+  currency: 'gold' | 'cityGold'
+  direction: 'credit' | 'debit'
+  amount: number
+  balanceAfter: number
+  refType?: string
+  refId?: string
+  reason?: string
+  createdAt: string
+}

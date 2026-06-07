@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"hero3/internal/auth"
@@ -641,6 +642,35 @@ func (h *Handlers) AttackNpc(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *Handlers) SimulateBattle(w http.ResponseWriter, r *http.Request) {
+	var payload game.BattleSimulationRequest
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+
+	result, err := h.gameService.SimulateBattle(payload)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrNoUnitsSelected):
+			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrNonCombatUnit):
+			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrUnitNotFound):
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *Handlers) ScoutNpc(w http.ResponseWriter, r *http.Request) {
 	var payload game.ScoutNpcRequest
 	if !decodeJSON(w, r, &payload) {
@@ -946,6 +976,38 @@ func (h *Handlers) AddAccountGold(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"gold": account.Gold})
 }
 
+func (h *Handlers) AdminGoldLedger(w http.ResponseWriter, r *http.Request) {
+	limit := 200
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			limit = parsed
+		}
+	}
+	filter := game.GoldLedgerFilter{
+		AccountID: r.URL.Query().Get("accountId"),
+		PlayerID:  r.URL.Query().Get("playerId"),
+		Currency:  r.URL.Query().Get("currency"),
+		RefType:   r.URL.Query().Get("refType"),
+		Limit:     limit,
+	}
+	if raw := r.URL.Query().Get("from"); raw != "" {
+		if parsed, err := time.Parse(time.RFC3339, raw); err == nil {
+			filter.From = parsed
+		}
+	}
+	if raw := r.URL.Query().Get("to"); raw != "" {
+		if parsed, err := time.Parse(time.RFC3339, raw); err == nil {
+			filter.To = parsed
+		}
+	}
+	entries, err := h.gameService.ListGoldLedger(filter)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
+}
+
 func (h *Handlers) AddGold(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		PlayerID string `json:"playerId"`
@@ -988,7 +1050,7 @@ func (h *Handlers) DeductGold(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, game.ErrPlayerNotFound):
 			status = http.StatusNotFound
-		case errors.Is(err, game.ErrInsufficientGold):
+		case errors.Is(err, game.ErrInsufficientCityGold):
 			status = http.StatusUnprocessableEntity
 		case errors.Is(err, game.ErrInvalidGoldAmount):
 			status = http.StatusUnprocessableEntity

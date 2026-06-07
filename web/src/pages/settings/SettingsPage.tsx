@@ -2,6 +2,7 @@ import { type FC } from 'react'
 import { Sun, Moon, Monitor, BellOff } from 'lucide-react'
 import { useThemeStore } from '@/store/themeStore'
 import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
+import BattleSimulator from './components/BattleSimulator'
 
 const SettingsPage: FC = () => {
   const { mode, setMode } = useThemeStore()
@@ -16,6 +17,8 @@ const SettingsPage: FC = () => {
 
   return (
     <div className="space-y-5 max-w-3xl">
+      <BattleSimulator />
+
       {/* 外观 */}
       <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">

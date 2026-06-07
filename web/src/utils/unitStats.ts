@@ -40,6 +40,36 @@ export function getEffectiveUnitStat(state: GameState | null | undefined, statKe
   }
 }
 
+export function getEffectiveRecruitSeconds(state: GameState | null | undefined, category: string, baseSeconds: number): EffectiveUnitStat {
+  if (!state) {
+    return { base: baseSeconds, final: baseSeconds, breakdown: [] }
+  }
+
+  let seconds = baseSeconds
+  const breakdown: BreakdownItem[] = []
+
+  const globalModifiers = collectStatModifiers(state, 'recruitSpeedBonus')
+  breakdown.push(...globalModifiers)
+  seconds = applySpeedModifiers(seconds, globalModifiers)
+
+  const categoryKey = category === 'infantry'
+    ? 'infantryRecruitSpeedBonus'
+    : category === 'cavalry'
+      ? 'cavalryRecruitSpeedBonus'
+      : ''
+  if (categoryKey) {
+    const categoryModifiers = collectStatModifiers(state, categoryKey)
+    breakdown.push(...categoryModifiers)
+    seconds = applySpeedModifiers(seconds, categoryModifiers)
+  }
+
+  return {
+    base: baseSeconds,
+    final: Math.max(1, Math.floor(seconds)),
+    breakdown,
+  }
+}
+
 export function formatUnitStatTitle(label: string, stat: EffectiveUnitStat): string {
   const lines = [`${label}: ${formatBaseFinal(stat)}`]
   if (stat.breakdown.length > 0) {
@@ -53,6 +83,10 @@ export function formatUnitStatTitle(label: string, stat: EffectiveUnitStat): str
 
 export function formatBaseFinal(stat: EffectiveUnitStat): string {
   return stat.final === stat.base ? `${stat.base}` : `${stat.base} → ${stat.final}`
+}
+
+export function formatSecondsBaseFinal(stat: EffectiveUnitStat): string {
+  return stat.final === stat.base ? `${stat.base}s` : `${stat.base}s → ${stat.final}s`
 }
 
 export function formatModifierValue(item: BreakdownItem): string {
@@ -108,4 +142,21 @@ function applyModifiers(base: number, modifiers: BreakdownItem[]): number {
   }
 
   return (base + flatSum) * (1 + percentAddSum) * multiplier
+}
+
+function applySpeedModifiers(baseSeconds: number, modifiers: BreakdownItem[]): number {
+  let additive = 0
+  let multiplier = 1
+
+  for (const item of modifiers) {
+    if (item.mode === 'percentMultiply') {
+      multiplier *= 1 + item.value
+    } else {
+      additive += item.value
+    }
+  }
+
+  const speedFactor = (1 + additive) * multiplier
+  if (speedFactor <= 0) return baseSeconds
+  return baseSeconds / speedFactor
 }

@@ -79,9 +79,19 @@ func (s *Service) PurchaseBoost(playerID string, multiplier int, hours int) (Gam
 
 	// 计算费用并扣除城金
 	cost := boostCost(multiplier, hours)
-	if _, err := s.repo.DeductCityGold(playerID, cost); err != nil {
+	newBalance, err := s.repo.DeductCityGold(playerID, cost)
+	if err != nil {
 		return GameState{}, err
 	}
+	s.recordLedger(GoldLedgerEntry{
+		PlayerID:     playerID,
+		Currency:     LedgerCurrencyCityGold,
+		Direction:    LedgerDirectionDebit,
+		Amount:       cost,
+		BalanceAfter: newBalance,
+		RefType:      LedgerRefBoostPurchase,
+		Reason:       "production_boost",
+	})
 
 	// 设置加成
 	state, _ = s.repo.GetState(playerID) // 重新读取（城金已扣）
@@ -144,9 +154,19 @@ func (s *Service) PurchaseCapacityBoost(playerID string, multiplier int, hours i
 
 	// 计算费用并扣除城金
 	cost := boostCost(multiplier, hours)
-	if _, err := s.repo.DeductCityGold(playerID, cost); err != nil {
+	newBalance, err := s.repo.DeductCityGold(playerID, cost)
+	if err != nil {
 		return GameState{}, err
 	}
+	s.recordLedger(GoldLedgerEntry{
+		PlayerID:     playerID,
+		Currency:     LedgerCurrencyCityGold,
+		Direction:    LedgerDirectionDebit,
+		Amount:       cost,
+		BalanceAfter: newBalance,
+		RefType:      LedgerRefBoostPurchase,
+		Reason:       "capacity_boost",
+	})
 
 	// 设置容量加成
 	state, _ = s.repo.GetState(playerID)

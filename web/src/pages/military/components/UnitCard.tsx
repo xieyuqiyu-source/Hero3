@@ -2,7 +2,7 @@ import { type FC } from 'react'
 import { Clock, Swords, Shield, Zap, Package, Wheat, TreePine, Mountain, Gem } from 'lucide-react'
 import type { UnitConfig } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
-import { formatBaseFinal, formatModifierValue, formatUnitStatTitle, getEffectiveUnitStat, type EffectiveUnitStat } from '@/utils/unitStats'
+import { formatBaseFinal, formatModifierValue, formatSecondsBaseFinal, formatUnitStatTitle, getEffectiveRecruitSeconds, getEffectiveUnitStat, type EffectiveUnitStat } from '@/utils/unitStats'
 
 interface UnitCardProps {
   unitId: string
@@ -48,6 +48,7 @@ const UnitCard: FC<UnitCardProps> = ({ config, owned, onClick }) => {
   const attack = getEffectiveUnitStat(gameState, 'attack', config.stats.attack ?? 0)
   const infantryDefense = getEffectiveUnitStat(gameState, 'infantryDefense', config.stats.infantryDefense ?? 0)
   const cavalryDefense = getEffectiveUnitStat(gameState, 'cavalryDefense', config.stats.cavalryDefense ?? 0)
+  const recruitSeconds = getEffectiveRecruitSeconds(gameState, config.category, config.trainSeconds)
 
   return (
     <div
@@ -130,9 +131,32 @@ const UnitCard: FC<UnitCardProps> = ({ config, owned, onClick }) => {
           "
         >
           征 募
-          <span className="flex items-center gap-0.5 text-amber-200 font-semibold">
+          <span
+            className={`relative group flex items-center gap-0.5 font-semibold ${recruitSeconds.final !== recruitSeconds.base ? 'text-green-200' : 'text-amber-200'}`}
+            title={formatUnitStatTitle('训练时间', recruitSeconds)}
+          >
             <Clock size={10} />
-            {config.trainSeconds}s
+            {formatSecondsBaseFinal(recruitSeconds)}
+            {recruitSeconds.breakdown.length > 0 && (
+              <div className="pointer-events-none absolute right-0 bottom-[calc(100%+8px)] z-20 w-44 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[var(--color-text-primary)] shadow-lg opacity-0 invisible translate-y-1 scale-95 transition-all duration-150 ease-out group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold">训练时间</span>
+                  <span className="text-[11px] font-bold text-green-500">{formatSecondsBaseFinal(recruitSeconds)}</span>
+                </div>
+                <div className="space-y-0.5">
+                  <div className="flex items-center justify-between gap-2 text-[10px]">
+                    <span className="text-[var(--color-text-secondary)]">基础</span>
+                    <span className="font-semibold">{recruitSeconds.base}s</span>
+                  </div>
+                  {recruitSeconds.breakdown.map((item, index) => (
+                    <div key={`${item.source}-${index}`} className="flex items-center justify-between gap-2 text-[10px]">
+                      <span className="text-[var(--color-text-secondary)]">{item.source}</span>
+                      <span className="font-semibold">{formatModifierValue(item)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </span>
         </button>
       </div>

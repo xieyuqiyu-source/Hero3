@@ -107,9 +107,18 @@ func (s *Service) FillResourcesPaid(playerID string) (GameState, int, error) {
 	}
 
 	// 扣城金
-	if _, err := s.repo.DeductCityGold(playerID, cost); err != nil {
+	newBalance, err := s.repo.DeductCityGold(playerID, cost)
+	if err != nil {
 		return GameState{}, 0, err
 	}
+	s.recordLedger(GoldLedgerEntry{
+		PlayerID:     playerID,
+		Currency:     LedgerCurrencyCityGold,
+		Direction:    LedgerDirectionDebit,
+		Amount:       cost,
+		BalanceAfter: newBalance,
+		RefType:      "resource_fill",
+	})
 
 	// 重新读取状态（城金已扣）
 	state, _ = s.repo.GetState(playerID)
@@ -154,8 +163,8 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 	// 收集 settledAt 到 now 之间所有状态变化时间点，作为切片边界
 	// 包括：建筑升级完成、加成到期等
 	type timeSliceEvent struct {
-		endsAt       time.Time
-		buildingIdx  int  // >=0 表示建筑升级完成事件，-1 表示非建筑事件
+		endsAt      time.Time
+		buildingIdx int // >=0 表示建筑升级完成事件，-1 表示非建筑事件
 	}
 	var sliceEvents []timeSliceEvent
 
@@ -349,18 +358,42 @@ func calculateResourceProduction(buildings []Building, general *General) Resourc
 
 // --- Modifier 管线辅助函数 ---
 
-// applySpeedBonus 通过 Modifier 管线计算速度加成后的实际时间
-// 速度加成越高时间越短：实际时间 = 原始时间 / (1 + bonus)
+// applySpeedBonus 通过 Modifier 管线计算速度加成后的实际时间。
+// 速度类 modifier 表示“速度倍率加成”：flat +11 => 12 倍速，percentAdd +0.2 => 1.2 倍速。
 func applySpeedBonus(baseSeconds int, key string, now time.Time, sources []ModifierSource) int {
-	bonus := ComputeAttributeAt(0, key, now, sources...) // 只取加成部分（base=0）
-	if bonus <= 0 {
+	speedFactor := computeSpeedFactor(key, now, sources)
+	if speedFactor <= 0 {
 		return baseSeconds
 	}
-	result := float64(baseSeconds) / (1 + bonus)
+	result := float64(baseSeconds) / speedFactor
 	if result < 1 {
 		return 1 // 最少 1 秒
 	}
 	return int(result)
+}
+
+func computeSpeedFactor(key string, now time.Time, sources []ModifierSource) float64 {
+	var additive float64
+	multiplier := 1.0
+
+	for _, src := range sources {
+		if src == nil {
+			continue
+		}
+		for _, mod := range src.Modifiers(now) {
+			if mod.Key != key {
+				continue
+			}
+			switch mod.Mode {
+			case "flat", "percentAdd":
+				additive += mod.Value
+			case "percentMultiply":
+				multiplier *= 1 + mod.Value
+			}
+		}
+	}
+
+	return (1 + additive) * multiplier
 }
 
 // applyProductionModifiers 通过 Modifier 管线对产量应用所有加成

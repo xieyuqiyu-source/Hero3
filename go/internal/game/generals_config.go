@@ -229,6 +229,9 @@ func ValidateGeneralsConfig(cfg GeneralsConfig) error {
 	if err := validateLevelBuffs(cfg.Common.LevelBuffs); err != nil {
 		return err
 	}
+	if err := validateExpCurve(cfg.Common.ExpCurve); err != nil {
+		return err
+	}
 
 	// 校验每个将领的 faction 字段、属性和特性参数。
 	for generalID, hero := range cfg.Heroes {
@@ -259,6 +262,25 @@ func ValidateGeneralsConfig(cfg GeneralsConfig) error {
 		}
 	}
 
+	return nil
+}
+
+func validateExpCurve(expCurve []int) error {
+	if len(expCurve) > GeneralMaxLevel {
+		return fmt.Errorf("common.expCurve has %d entries, max is %d", len(expCurve), GeneralMaxLevel)
+	}
+	for i, value := range expCurve {
+		level := i + 1
+		if value < 0 {
+			return fmt.Errorf("common.expCurve level %d must be >= 0", level)
+		}
+		if level == 1 && value != 0 {
+			return fmt.Errorf("common.expCurve level 1 must be 0")
+		}
+		if i > 0 && value <= expCurve[i-1] {
+			return fmt.Errorf("common.expCurve level %d must be greater than level %d", level, level-1)
+		}
+	}
 	return nil
 }
 

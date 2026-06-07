@@ -1,4 +1,4 @@
-import type { AccountSummary, BalanceConfig, GameState, HealthState, NpcConfig, NpcState } from '@/types'
+import type { AccountSummary, BalanceConfig, GameState, GoldLedgerEntry, HealthState, NpcConfig, NpcState } from '@/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1'
 const ROOT_BASE = API_BASE.replace(/\/api\/v1$/, '')
@@ -144,6 +144,22 @@ export const adminApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId, amount, reason: 'GM补发' }),
     })
+  },
+  getGoldLedger(filter: {
+    accountId?: string
+    playerId?: string
+    currency?: 'gold' | 'cityGold'
+    refType?: string
+    from?: string
+    to?: string
+    limit?: number
+  } = {}) {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(filter)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    const query = params.toString()
+    return request<{ entries: GoldLedgerEntry[] }>(`${API_BASE}/admin/gold/ledger${query ? `?${query}` : ''}`)
   },
   grantBuff(playerId: string, key: string, value: number, mode: string, hours: number, note: string) {
     return request<{ state: GameState }>(`${API_BASE}/admin/buff/grant`, {

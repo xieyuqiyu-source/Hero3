@@ -44,6 +44,7 @@ import "time"
 //   产量类:  "productionBonus", "woodProductionBonus", "stoneProductionBonus" 等
 //   容量类:  "capacityBonus"
 //   军事类:  "attackBonus", "defenseBonus", "infantryDefenseBonus", "cavalryDefenseBonus"
+//            "infantryRecruitSpeedBonus", "cavalryRecruitSpeedBonus"
 //   速度类:  "buildSpeedBonus", "recruitSpeedBonus", "marchSpeedBonus"
 //   经济类:  "exchangeRateBonus"
 //   其他:    按需添加，命名规范为 camelCase + "Bonus" 后缀
@@ -54,43 +55,57 @@ import "time"
 // 所有合法的加成属性 key。新增 key 时必须在此注册，否则 GM 发放时会被拒绝。
 
 const (
-	StatProductionBonus     = "productionBonus"
-	StatWoodProductionBonus = "woodProductionBonus"
-	StatStoneProductionBonus = "stoneProductionBonus"
-	StatIronProductionBonus = "ironProductionBonus"
-	StatFoodProductionBonus = "foodProductionBonus"
-	StatCapacityBonus       = "capacityBonus"
-	StatAttackBonus         = "attackBonus"
-	StatDefenseBonus        = "defenseBonus"
-	StatInfantryDefenseBonus = "infantryDefenseBonus"
-	StatCavalryDefenseBonus = "cavalryDefenseBonus"
-	StatBuildSpeedBonus     = "buildSpeedBonus"
-	StatRecruitSpeedBonus   = "recruitSpeedBonus"
-	StatMarchSpeedBonus     = "marchSpeedBonus"
-	StatExchangeRateBonus   = "exchangeRateBonus"
+	StatProductionBonus           = "productionBonus"
+	StatWoodProductionBonus       = "woodProductionBonus"
+	StatStoneProductionBonus      = "stoneProductionBonus"
+	StatIronProductionBonus       = "ironProductionBonus"
+	StatFoodProductionBonus       = "foodProductionBonus"
+	StatCapacityBonus             = "capacityBonus"
+	StatAttackBonus               = "attackBonus"
+	StatDefenseBonus              = "defenseBonus"
+	StatInfantryDefenseBonus      = "infantryDefenseBonus"
+	StatCavalryDefenseBonus       = "cavalryDefenseBonus"
+	StatInfantryRecruitSpeedBonus = "infantryRecruitSpeedBonus"
+	StatCavalryRecruitSpeedBonus  = "cavalryRecruitSpeedBonus"
+	StatBuildSpeedBonus           = "buildSpeedBonus"
+	StatRecruitSpeedBonus         = "recruitSpeedBonus"
+	StatMarchSpeedBonus           = "marchSpeedBonus"
+	StatExchangeRateBonus         = "exchangeRateBonus"
 )
 
 // ValidStatKeys 所有已注册的合法 key 集合
 var ValidStatKeys = map[string]bool{
-	StatProductionBonus:      true,
-	StatWoodProductionBonus:  true,
-	StatStoneProductionBonus: true,
-	StatIronProductionBonus:  true,
-	StatFoodProductionBonus:  true,
-	StatCapacityBonus:        true,
-	StatAttackBonus:          true,
-	StatDefenseBonus:         true,
-	StatInfantryDefenseBonus: true,
-	StatCavalryDefenseBonus:  true,
-	StatBuildSpeedBonus:      true,
-	StatRecruitSpeedBonus:    true,
-	StatMarchSpeedBonus:      true,
-	StatExchangeRateBonus:    true,
+	StatProductionBonus:           true,
+	StatWoodProductionBonus:       true,
+	StatStoneProductionBonus:      true,
+	StatIronProductionBonus:       true,
+	StatFoodProductionBonus:       true,
+	StatCapacityBonus:             true,
+	StatAttackBonus:               true,
+	StatDefenseBonus:              true,
+	StatInfantryDefenseBonus:      true,
+	StatCavalryDefenseBonus:       true,
+	StatInfantryRecruitSpeedBonus: true,
+	StatCavalryRecruitSpeedBonus:  true,
+	StatBuildSpeedBonus:           true,
+	StatRecruitSpeedBonus:         true,
+	StatMarchSpeedBonus:           true,
+	StatExchangeRateBonus:         true,
 }
 
 // IsValidStatKey 校验 key 是否已注册
 func IsValidStatKey(key string) bool {
 	return ValidStatKeys[key]
+}
+
+// IsValidModifierMode 校验 modifier mode 是否为统一管线支持的模式。
+func IsValidModifierMode(mode string) bool {
+	switch mode {
+	case "flat", "percentAdd", "percentMultiply":
+		return true
+	default:
+		return false
+	}
 }
 
 // Modifier 表示一个属性修改器（所有加成的统一表达）
@@ -315,6 +330,35 @@ func (b *BuffListSource) Modifiers(now time.Time) []Modifier {
 	return mods
 }
 
+// BuildingBonusSource 功能建筑加成来源。
+type BuildingBonusSource struct {
+	Buildings []Building
+}
+
+func (b *BuildingBonusSource) SourceName() string { return "军事建筑" }
+
+func (b *BuildingBonusSource) ExpiresAt() []time.Time { return nil }
+
+func (b *BuildingBonusSource) Modifiers(now time.Time) []Modifier {
+	mods := make([]Modifier, 0, len(b.Buildings))
+	for _, building := range b.Buildings {
+		if building.Level <= 0 {
+			continue
+		}
+		config, exists := getBuildingConfig(building.Type)
+		if !exists {
+			continue
+		}
+		for _, mod := range config.ModifiersByLevel[building.Level] {
+			if mod.Value == 0 {
+				continue
+			}
+			mods = append(mods, mod)
+		}
+	}
+	return mods
+}
+
 // CollectModifierSources 从 GameState 中收集所有当前生效的加成来源
 //
 // 新增加成来源时，在此函数中 append 即可自动参与所有属性计算。
@@ -338,6 +382,11 @@ func CollectModifierSources(state *GameState) []ModifierSource {
 		sources = append(sources, &BuffListSource{Buffs: state.Buffs})
 	}
 
+	// 来源4：军事/功能建筑加成（按建筑等级永久生效）
+	if len(state.Buildings) > 0 {
+		sources = append(sources, &BuildingBonusSource{Buildings: state.Buildings})
+	}
+
 	// --- 后续扩展点（按需取消注释或新增） ---
 	// 来源3：装备加成（穿上生效，脱下失效）
 	// sources = append(sources, &EquipmentModifierSource{Equipment: state.Equipment})
@@ -347,9 +396,6 @@ func CollectModifierSources(state *GameState) []ModifierSource {
 	//
 	// 来源5：联盟科技（联盟全员共享，永久生效）
 	// sources = append(sources, &AllianceTechSource{Tech: state.AllianceTech})
-	//
-	// 来源6：功能建筑加成（建造司/内政厅/兵器司等，按等级提供加成）
-	// sources = append(sources, &BuildingBonusSource{Buildings: state.Buildings})
 	//
 	// 来源7：活动 buff（运营配置的限时全服加成）
 	// sources = append(sources, &EventBuffSource{Events: activeEvents})

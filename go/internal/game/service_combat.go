@@ -30,6 +30,25 @@ type AttackNpcResponse struct {
 	State        GameState    `json:"state"`
 }
 
+// BattleSimulationRequest 战斗模拟请求：只计算战果，不扣兵、不保存战报。
+type BattleSimulationRequest struct {
+	PlayerID             string         `json:"playerId"`
+	Mode                 string         `json:"mode"` // "attack" or "plunder"
+	AttackerFaction      string         `json:"attackerFaction"`
+	DefenderFaction      string         `json:"defenderFaction"`
+	AttackerUnits        map[string]int `json:"attackerUnits"`
+	DefenderUnits        map[string]int `json:"defenderUnits"`
+	ApplyAttackerBonuses bool           `json:"applyAttackerBonuses"`
+	ApplyDefenderBonuses bool           `json:"applyDefenderBonuses"`
+}
+
+// BattleSimulationResponse 战斗模拟结果。
+type BattleSimulationResponse struct {
+	Result   combat.CombatResult `json:"result"`
+	Attacker combat.Army         `json:"attacker"`
+	Defender combat.Army         `json:"defender"`
+}
+
 // ScoutNpcRequest 侦查 NPC 请求
 type ScoutNpcRequest struct {
 	PlayerID string `json:"playerId"`
@@ -194,6 +213,15 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 	if report.OverflowCityGold > 0 {
 		if newBalance, err := s.repo.AddCityGold(state.Player.ID, report.OverflowCityGold); err == nil {
 			state.CityGold = FlexInt(newBalance)
+			s.recordLedger(GoldLedgerEntry{
+				PlayerID:     state.Player.ID,
+				Currency:     LedgerCurrencyCityGold,
+				Direction:    LedgerDirectionCredit,
+				Amount:       report.OverflowCityGold,
+				BalanceAfter: newBalance,
+				RefType:      LedgerRefBattleOverflow,
+				RefID:        report.ID,
+			})
 		}
 	}
 
@@ -218,6 +246,75 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 	return AttackNpcResponse{
 		BattleReport: report,
 		State:        state,
+	}, nil
+}
+
+// SimulateBattle 使用和 NPC 进攻一致的战斗规则计算结果，但不改变任何玩家状态。
+func (s *Service) SimulateBattle(req BattleSimulationRequest) (BattleSimulationResponse, error) {
+	playerID := strings.TrimSpace(req.PlayerID)
+	if playerID == "" {
+		return BattleSimulationResponse{}, ErrPlayerNotFound
+	}
+
+	state, err := s.repo.GetState(playerID)
+	if err != nil {
+		return BattleSimulationResponse{}, err
+	}
+	if state.General != nil {
+		applyHeroConfigToGeneral(state.General)
+	}
+
+	mode := strings.TrimSpace(req.Mode)
+	if mode != "attack" && mode != "plunder" {
+		mode = "attack"
+	}
+	attackerFaction := strings.TrimSpace(req.AttackerFaction)
+	if attackerFaction == "" {
+		attackerFaction = state.Player.Faction
+	}
+	defenderFaction := strings.TrimSpace(req.DefenderFaction)
+	if defenderFaction == "" {
+		defenderFaction = attackerFaction
+	}
+
+	now := time.Now()
+	modSources := CollectModifierSources(&state)
+	attackerSources := []ModifierSource(nil)
+	if req.ApplyAttackerBonuses {
+		attackerSources = modSources
+	}
+	defenderSources := []ModifierSource(nil)
+	if req.ApplyDefenderBonuses {
+		defenderSources = modSources
+	}
+
+	attackerUnits, err := buildSimulatedCombatUnits(attackerFaction, req.AttackerUnits, now, attackerSources...)
+	if err != nil {
+		return BattleSimulationResponse{}, err
+	}
+	defenderUnits, err := buildSimulatedCombatUnits(defenderFaction, req.DefenderUnits, now, defenderSources...)
+	if err != nil {
+		return BattleSimulationResponse{}, err
+	}
+
+	ruleID := "official_attack"
+	if mode == "plunder" {
+		ruleID = "official_plunder"
+	}
+
+	attackerArmy := buildCombatArmy(attackerFaction, attackerUnits)
+	defenderArmy := buildCombatArmy(defenderFaction, defenderUnits)
+	result := combat.Resolve(combat.CombatInput{
+		RuleID:    ruleID,
+		Attacker:  attackerArmy,
+		Defender:  defenderArmy,
+		WallLevel: 0,
+	})
+
+	return BattleSimulationResponse{
+		Result:   result,
+		Attacker: attackerArmy,
+		Defender: defenderArmy,
 	}, nil
 }
 
@@ -509,6 +606,51 @@ func isNonCombatUnit(unitCfg UnitConfig) bool {
 		return true
 	}
 	return unitCfg.Stats["upkeep"] <= 0
+}
+
+func buildSimulatedCombatUnits(faction string, units map[string]int, now time.Time, modSources ...ModifierSource) ([]combat.Unit, error) {
+	if len(units) == 0 {
+		return nil, ErrNoUnitsSelected
+	}
+
+	var combatUnits []combat.Unit
+	for unitType, count := range units {
+		if count <= 0 {
+			continue
+		}
+
+		unitCfg, exists := GetUnitConfig(faction, unitType)
+		if !exists {
+			return nil, ErrUnitNotFound
+		}
+		if isNonCombatUnit(unitCfg) {
+			return nil, ErrNonCombatUnit
+		}
+
+		baseAttack := unitCfg.Stats["attack"]
+		baseInfDef := unitCfg.Stats["infantryDefense"]
+		baseCavDef := unitCfg.Stats["cavalryDefense"]
+		infDefense := ComputeAttributeAt(float64(baseInfDef), StatDefenseBonus, now, modSources...)
+		infDefense = ComputeAttributeAt(infDefense, StatInfantryDefenseBonus, now, modSources...)
+		cavDefense := ComputeAttributeAt(float64(baseCavDef), StatDefenseBonus, now, modSources...)
+		cavDefense = ComputeAttributeAt(cavDefense, StatCavalryDefenseBonus, now, modSources...)
+
+		combatUnits = append(combatUnits, combat.Unit{
+			ID:              unitType,
+			Category:        unitCfg.Category,
+			Count:           count,
+			Attack:          ComputeIntAttributeAt(baseAttack, StatAttackBonus, now, modSources...),
+			InfantryDefense: int(infDefense),
+			CavalryDefense:  int(cavDefense),
+			CarryCapacity:   unitCfg.Stats["carryCapacity"],
+			Upkeep:          unitCfg.Stats["upkeep"],
+		})
+	}
+
+	if len(combatUnits) == 0 {
+		return nil, ErrNoUnitsSelected
+	}
+	return combatUnits, nil
 }
 
 func buildCombatArmy(faction string, units []combat.Unit) combat.Army {
@@ -928,6 +1070,7 @@ func mergeIntoArmy(state *GameState, unitType string, count int) {
 	if count <= 0 {
 		return
 	}
+	// TODO: 玩家军队容量系统上线后，俘虏入军队也要走统一容量检查，避免绕过总兵力上限。
 	for i := range state.Army {
 		if state.Army[i].UnitType == unitType {
 			state.Army[i].Amount += count

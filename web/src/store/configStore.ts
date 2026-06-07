@@ -7,6 +7,7 @@ export interface BuildingConfig {
   resourceType?: string
   productionByLevel?: number[]
   capacityByLevel?: number[]
+  modifiersByLevel?: Record<number, Array<{ key: string; value: number; mode: string }>>
   upgradeCostByLevel?: Record<number, Record<string, number>>
   upgradeSecondsByLevel?: Record<number, number>
 }

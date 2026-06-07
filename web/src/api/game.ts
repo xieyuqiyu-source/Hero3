@@ -4,6 +4,46 @@ import { api } from './client'
 import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity } from '@/types/game'
 import type { BalanceConfig, FactionConfig, UnitConfig } from '@/store/configStore'
 
+export interface CombatUnit {
+  id: string
+  category: string
+  count: number
+  attack: number
+  infantryDefense: number
+  cavalryDefense: number
+  carryCapacity: number
+  upkeep: number
+}
+
+export interface CombatArmy {
+  faction: string
+  units: CombatUnit[]
+}
+
+export interface CombatUnitLoss {
+  id: string
+  count: number
+  losses: number
+}
+
+export interface CombatResult {
+  winner: 'attacker' | 'defender' | 'draw'
+  mode: 'attack' | 'plunder'
+  attackerLosses: CombatUnitLoss[]
+  defenderLosses: CombatUnitLoss[]
+  attackerLossRate: number
+  defenderLossRate: number
+  attackPower: number
+  defensePower: number
+  survivingCarry: number
+}
+
+export interface BattleSimulationResponse {
+  result: CombatResult
+  attacker: CombatArmy
+  defender: CombatArmy
+}
+
 export const gameApi = {
   /** 获取游戏启动配置（含 balance、factions、units） */
   bootstrap() {
@@ -142,6 +182,20 @@ export const gameApi = {
   /** 侦查 NPC 城池 */
   scoutNpc(playerId: string, npcId: string) {
     return api.post<{ success: boolean; battleReport: BattleReport; npcCity: NpcCity | null; state: GameState }>('/map/npc-cities/scout', { playerId, npcId })
+  },
+
+  /** 战斗模拟：只计算，不扣兵不保存战报 */
+  simulateBattle(payload: {
+    playerId: string
+    mode: 'attack' | 'plunder'
+    attackerFaction: string
+    defenderFaction: string
+    attackerUnits: Record<string, number>
+    defenderUnits: Record<string, number>
+    applyAttackerBonuses: boolean
+    applyDefenderBonuses: boolean
+  }) {
+    return api.post<BattleSimulationResponse>('/combat/simulate', payload)
   },
 
   /** 标记军情已读（传 reportId 标记单条，不传标记全部） */

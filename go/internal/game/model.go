@@ -222,6 +222,8 @@ func newPlayerState(id string, nickname string, faction string, generalID string
 			{ID: "warehouse-1", Type: "warehouse", Level: 1},
 			{ID: "infantry_camp-1", Type: "infantry_camp", Level: 1},
 			{ID: "cavalry_camp-1", Type: "cavalry_camp", Level: 1},
+			{ID: "weapon_bureau-1", Type: "weapon_bureau", Level: 1},
+			{ID: "armor_bureau-1", Type: "armor_bureau", Level: 1},
 		},
 		Army:          []ArmyUnit{},
 		General:       newGeneral(faction, generalID),

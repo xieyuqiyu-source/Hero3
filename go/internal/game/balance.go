@@ -3,6 +3,8 @@ package game
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -14,6 +16,7 @@ type BuildingConfig struct {
 	ResourceType          string              `json:"resourceType,omitempty"`
 	ProductionByLevel     []int               `json:"productionByLevel,omitempty"`
 	CapacityByLevel       []int               `json:"capacityByLevel,omitempty"`
+	ModifiersByLevel      map[int][]Modifier  `json:"modifiersByLevel,omitempty"`
 	UpgradeCostByLevel    map[int]ResourceMap `json:"upgradeCostByLevel,omitempty"`
 	UpgradeSecondsByLevel map[int]int         `json:"upgradeSecondsByLevel,omitempty"`
 }
@@ -45,12 +48,12 @@ var defaultBalance = BalanceConfig{
 		"iron":  0,
 		"food":  0,
 	},
-	OverflowToCityGold:   200,  // 200 溢出资源 = 1 城金
-	ExchangeRate:         10,   // 1 金币 = 10 城金
-	ReverseExchangeRate:  15,   // 15 城金 = 1 金币（反向有损耗）
-	ExchangeCooldownSecs: 3600, // 兑换冷却 1 小时
-	CityGoldPerSecond:    120,  // 1 城金折抵 120 秒（2分钟）
-	BoostBaseCost:        30,   // 产量加成基础价格
+	OverflowToCityGold:    200,  // 200 溢出资源 = 1 城金
+	ExchangeRate:          10,   // 1 金币 = 10 城金
+	ReverseExchangeRate:   15,   // 15 城金 = 1 金币（反向有损耗）
+	ExchangeCooldownSecs:  3600, // 兑换冷却 1 小时
+	CityGoldPerSecond:     120,  // 1 城金折抵 120 秒（2分钟）
+	BoostBaseCost:         30,   // 产量加成基础价格
 	BoostMultiplierFactor: map[int]int{2: 1, 4: 3, 8: 8, 16: 20},
 	BoostDurationFactor:   map[int]int{1: 1, 6: 5, 12: 9, 24: 16},
 	Buildings: map[string]BuildingConfig{
@@ -198,6 +201,34 @@ var defaultBalance = BalanceConfig{
 			},
 			UpgradeSecondsByLevel: map[int]int{0: 85, 1: 120, 2: 168, 3: 235, 4: 329, 5: 460, 6: 645, 7: 903, 8: 1264, 9: 1770, 10: 2479, 11: 3471, 12: 4859, 13: 6803, 14: 9524, 15: 13334, 16: 18668, 17: 26135, 18: 36589, 19: 51225},
 		},
+		"infantry_camp": {
+			Type:                  "infantry_camp",
+			Name:                  "步兵营",
+			ModifiersByLevel:      recruitSpeedCurveModifierTable([]string{StatInfantryRecruitSpeedBonus}, 60, 5, 20),
+			UpgradeCostByLevel:    militaryUpgradeCostTable(180, 140, 160, 180, 20),
+			UpgradeSecondsByLevel: militaryUpgradeSecondsTable(60, 20),
+		},
+		"cavalry_camp": {
+			Type:                  "cavalry_camp",
+			Name:                  "骑兵营",
+			ModifiersByLevel:      recruitSpeedCurveModifierTable([]string{StatCavalryRecruitSpeedBonus}, 60, 5, 20),
+			UpgradeCostByLevel:    militaryUpgradeCostTable(160, 180, 180, 220, 20),
+			UpgradeSecondsByLevel: militaryUpgradeSecondsTable(72, 20),
+		},
+		"weapon_bureau": {
+			Type:                  "weapon_bureau",
+			Name:                  "兵器司",
+			ModifiersByLevel:      militaryModifierTable([]string{StatAttackBonus}, 0.01, "percentAdd", 20),
+			UpgradeCostByLevel:    militaryUpgradeCostTable(220, 180, 260, 120, 20),
+			UpgradeSecondsByLevel: militaryUpgradeSecondsTable(80, 20),
+		},
+		"armor_bureau": {
+			Type:                  "armor_bureau",
+			Name:                  "防具司",
+			ModifiersByLevel:      militaryModifierTable([]string{StatDefenseBonus}, 0.01, "percentAdd", 20),
+			UpgradeCostByLevel:    militaryUpgradeCostTable(180, 260, 220, 140, 20),
+			UpgradeSecondsByLevel: militaryUpgradeSecondsTable(80, 20),
+		},
 	},
 }
 
@@ -275,19 +306,31 @@ func validateBalance(config BalanceConfig) error {
 	if _, exists := config.Buildings["warehouse"]; !exists {
 		return errors.New("warehouse config is required")
 	}
+	for buildingKey, building := range config.Buildings {
+		for level, modifiers := range building.ModifiersByLevel {
+			for i, modifier := range modifiers {
+				if !IsValidStatKey(modifier.Key) {
+					return fmt.Errorf("buildings.%s.modifiersByLevel.%d[%d].key is invalid: %s", buildingKey, level, i, modifier.Key)
+				}
+				if !IsValidModifierMode(modifier.Mode) {
+					return fmt.Errorf("buildings.%s.modifiersByLevel.%d[%d].mode is invalid: %s", buildingKey, level, i, modifier.Mode)
+				}
+			}
+		}
+	}
 	return nil
 }
 
 func cloneBalance(source BalanceConfig) BalanceConfig {
 	next := BalanceConfig{
-		BaseProduction:       cloneResourceMap(source.BaseProduction),
-		Buildings:            make(map[string]BuildingConfig, len(source.Buildings)),
-		OverflowToCityGold:   source.OverflowToCityGold,
-		ExchangeRate:         source.ExchangeRate,
-		ReverseExchangeRate:  source.ReverseExchangeRate,
-		ExchangeCooldownSecs: source.ExchangeCooldownSecs,
-		CityGoldPerSecond:    source.CityGoldPerSecond,
-		BoostBaseCost:        source.BoostBaseCost,
+		BaseProduction:        cloneResourceMap(source.BaseProduction),
+		Buildings:             make(map[string]BuildingConfig, len(source.Buildings)),
+		OverflowToCityGold:    source.OverflowToCityGold,
+		ExchangeRate:          source.ExchangeRate,
+		ReverseExchangeRate:   source.ReverseExchangeRate,
+		ExchangeCooldownSecs:  source.ExchangeCooldownSecs,
+		CityGoldPerSecond:     source.CityGoldPerSecond,
+		BoostBaseCost:         source.BoostBaseCost,
 		BoostMultiplierFactor: cloneIntMap(source.BoostMultiplierFactor),
 		BoostDurationFactor:   cloneIntMap(source.BoostDurationFactor),
 	}
@@ -304,6 +347,7 @@ func cloneBuildingConfig(source BuildingConfig) BuildingConfig {
 		ResourceType:          source.ResourceType,
 		ProductionByLevel:     append([]int(nil), source.ProductionByLevel...),
 		CapacityByLevel:       append([]int(nil), source.CapacityByLevel...),
+		ModifiersByLevel:      cloneModifierLevelMap(source.ModifiersByLevel),
 		UpgradeCostByLevel:    make(map[int]ResourceMap, len(source.UpgradeCostByLevel)),
 		UpgradeSecondsByLevel: make(map[int]int, len(source.UpgradeSecondsByLevel)),
 	}
@@ -312,6 +356,17 @@ func cloneBuildingConfig(source BuildingConfig) BuildingConfig {
 	}
 	for level, seconds := range source.UpgradeSecondsByLevel {
 		next.UpgradeSecondsByLevel[level] = seconds
+	}
+	return next
+}
+
+func cloneModifierLevelMap(source map[int][]Modifier) map[int][]Modifier {
+	if source == nil {
+		return nil
+	}
+	next := make(map[int][]Modifier, len(source))
+	for level, modifiers := range source {
+		next[level] = append([]Modifier(nil), modifiers...)
 	}
 	return next
 }
@@ -346,4 +401,77 @@ func valueByLevel(values []int, level int) int {
 		return values[level]
 	}
 	return values[len(values)-1]
+}
+
+func militaryModifierTable(keys []string, perLevel float64, mode string, maxLevel int) map[int][]Modifier {
+	table := make(map[int][]Modifier, maxLevel+1)
+	for level := 0; level <= maxLevel; level++ {
+		mods := make([]Modifier, 0, len(keys))
+		for _, key := range keys {
+			mods = append(mods, Modifier{
+				Key:   key,
+				Value: float64(level) * perLevel,
+				Mode:  mode,
+			})
+		}
+		table[level] = mods
+	}
+	return table
+}
+
+func recruitSpeedCurveModifierTable(keys []string, baseSeconds int, finalSeconds int, maxLevel int) map[int][]Modifier {
+	table := make(map[int][]Modifier, maxLevel+1)
+	for level := 0; level <= maxLevel; level++ {
+		mods := make([]Modifier, 0, len(keys))
+		value := recruitSpeedBonusForLevel(level, baseSeconds, finalSeconds, maxLevel)
+		for _, key := range keys {
+			mods = append(mods, Modifier{
+				Key:   key,
+				Value: value,
+				Mode:  "flat",
+			})
+		}
+		table[level] = mods
+	}
+	return table
+}
+
+func recruitSpeedBonusForLevel(level int, baseSeconds int, finalSeconds int, maxLevel int) float64 {
+	if level <= 1 || baseSeconds <= 0 || finalSeconds <= 0 || maxLevel <= 1 {
+		return 0
+	}
+	if level > maxLevel {
+		level = maxLevel
+	}
+	targetSeconds := float64(baseSeconds) * math.Pow(float64(finalSeconds)/float64(baseSeconds), float64(level-1)/float64(maxLevel-1))
+	return float64(baseSeconds)/targetSeconds - 1
+}
+
+func militaryUpgradeCostTable(wood int, stone int, iron int, food int, maxLevel int) map[int]ResourceMap {
+	table := make(map[int]ResourceMap, maxLevel)
+	for level := 0; level < maxLevel; level++ {
+		multiplier := 1.0
+		for i := 0; i < level; i++ {
+			multiplier *= 1.28
+		}
+		table[level] = ResourceMap{
+			"wood":  int(float64(wood) * multiplier),
+			"stone": int(float64(stone) * multiplier),
+			"iron":  int(float64(iron) * multiplier),
+			"food":  int(float64(food) * multiplier),
+		}
+	}
+	return table
+}
+
+func militaryUpgradeSecondsTable(base int, maxLevel int) map[int]int {
+	table := make(map[int]int, maxLevel)
+	for level := 0; level < maxLevel; level++ {
+		multiplier := 1.0
+		for i := 0; i < level; i++ {
+			multiplier *= 1.25
+		}
+		table[level] = int(float64(base) * multiplier)
+	}
+	return table
 }

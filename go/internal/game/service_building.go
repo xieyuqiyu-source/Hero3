@@ -85,6 +85,7 @@ func (s *Service) UpgradeBuilding(playerID string, buildingID string) (GameState
 		return GameState{}, err
 	}
 
+	hydrateStateForResponse(&state, now)
 	return state, nil
 }
 
@@ -177,6 +178,7 @@ func (s *Service) UpgradeBuildingBatch(playerID string) (GameState, int, error) 
 		return GameState{}, 0, err
 	}
 
+	hydrateStateForResponse(&state, now)
 	return state, upgraded, nil
 }
 
@@ -229,14 +231,25 @@ func (s *Service) InstantCompleteBuilding(playerID string, buildingID string) (G
 		state, _ = settleResources(state, now)
 		state.ServerTime = now.UTC().Format(resourceDateLayout)
 		_ = s.repo.SaveState(state, now)
+		hydrateStateForResponse(&state, now)
 		return state, nil
 	}
 
 	// 计算城金花费并扣除
 	cost := speedUpCost(remainingSecs)
-	if _, err := s.repo.DeductCityGold(playerID, cost); err != nil {
+	newBalance, err := s.repo.DeductCityGold(playerID, cost)
+	if err != nil {
 		return GameState{}, err
 	}
+	s.recordLedger(GoldLedgerEntry{
+		PlayerID:     playerID,
+		Currency:     LedgerCurrencyCityGold,
+		Direction:    LedgerDirectionDebit,
+		Amount:       cost,
+		BalanceAfter: newBalance,
+		RefType:      LedgerRefInstantBuilding,
+		RefID:        buildingID,
+	})
 
 	// 立即完成升级
 	building.Level++
@@ -259,5 +272,6 @@ func (s *Service) InstantCompleteBuilding(playerID string, buildingID string) (G
 	state.ServerTime = now.UTC().Format(resourceDateLayout)
 	_ = s.repo.SaveState(state, now)
 
+	hydrateStateForResponse(&state, now)
 	return state, nil
 }
