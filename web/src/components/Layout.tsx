@@ -181,7 +181,7 @@ const MobileSidebarContent: FC<{
   const newsHasNotify = unreadMessageCount > 0
   const quickActions = [
     { key: 'news', label: '军情', hasNotify: newsHasNotify },
-    { key: 'mail', label: '信函', hasNotify: unreadMessageCount > 0 },
+    { key: 'mail', label: '信函', hasNotify: false },
     { key: 'notice', label: '公告', hasNotify: true },
     { key: 'account', label: '账户', hasNotify: false },
   ]
@@ -208,6 +208,7 @@ const MobileSidebarContent: FC<{
             onClick={() => {
               if (action.key === 'account') onNavigate('account')
               if (action.key === 'news') onNavigate('news')
+              if (action.key === 'mail') onNavigate('mail')
             }}
             className={`
               px-2.5 py-1.5 rounded-lg

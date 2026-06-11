@@ -111,6 +111,36 @@ body {
   animation: fade-in-up 0.35s ease-out;
 }
 
+@keyframes mail-backdrop-in {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(6px);
+  }
+}
+
+.animate-mail-backdrop-in {
+  animation: mail-backdrop-in 0.18s ease-out both;
+}
+
+@keyframes mail-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-mail-dialog-in {
+  animation: mail-dialog-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 @keyframes fadeScaleIn {
   from {
     opacity: 0;
