@@ -160,6 +160,42 @@ type BattleReportPage struct {
 	Total    int            `json:"total"`
 }
 
+type MailAttachment struct {
+	Type     string                 `json:"type"`
+	ItemID   string                 `json:"itemId"`
+	Amount   int                    `json:"amount"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+}
+
+type Mail struct {
+	ID              string           `json:"id"`
+	PlayerID        string           `json:"playerId"`
+	MailType        string           `json:"mailType"`
+	SenderType      string           `json:"senderType"`
+	SenderID        string           `json:"senderId,omitempty"`
+	SenderName      string           `json:"senderName"`
+	Title           string           `json:"title"`
+	Content         string           `json:"content"`
+	Attachments     []MailAttachment `json:"attachments,omitempty"`
+	SourceType      string           `json:"sourceType,omitempty"`
+	SourceID        string           `json:"sourceId,omitempty"`
+	IsRead          bool             `json:"isRead"`
+	IsClaimed       bool             `json:"isClaimed"`
+	DeletedByPlayer bool             `json:"deletedByPlayer,omitempty"`
+	ExpiresAt       string           `json:"expiresAt,omitempty"`
+	CreatedAt       string           `json:"createdAt"`
+	ReadAt          string           `json:"readAt,omitempty"`
+	ClaimedAt       string           `json:"claimedAt,omitempty"`
+}
+
+type MailPage struct {
+	Mails    []Mail `json:"mails"`
+	Page     int    `json:"page"`
+	PageSize int    `json:"pageSize"`
+	Total    int    `json:"total"`
+	Unread   int    `json:"unread"`
+}
+
 type GameState struct {
 	Player              Player                  `json:"player"`
 	Resources           ResourceState           `json:"resources"`
@@ -179,6 +215,7 @@ type GameState struct {
 	MapTargets          []MapTarget             `json:"mapTargets"`
 	RecentBattleReports []BattleReport          `json:"recentBattleReports"`
 	UnreadMessageCount  int                     `json:"unreadMessageCount"`
+	UnreadMailCount     int                     `json:"unreadMailCount"`
 	ActiveModifiers     []ModifierBreakdownItem `json:"activeModifiers,omitempty"`
 	Buffs               []Buff                  `json:"buffs,omitempty"` // 通用加成列表（GM/活动/任务等）
 	ServerTime          string                  `json:"serverTime"`

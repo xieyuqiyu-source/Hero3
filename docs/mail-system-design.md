@@ -329,13 +329,15 @@ type Repository interface {
     GetMailByID(mailID string) (Mail, error)
     ListMails(playerID string, limit int, offset int) ([]Mail, int, error)
     CountUnreadMails(playerID string) (int, error)
-    MarkMailRead(playerID string, mailID string) error
+    MarkMailRead(playerID string, mailID string, readAt time.Time) error
     DeleteMail(playerID string, mailID string) error
     ClaimMailAttachments(playerID string, mailID string, apply func(Mail) error) error
 }
 ```
 
 第一阶段不实现 `ClaimMailAttachments` 也可以，但接口设计时要考虑未来事务边界。
+
+第一阶段删除接口只返回删除状态，删除后停留第几页由前端自己重新拉取，避免 Service 层把分页固定成第 1 页。
 
 ## 8. Service 设计
 

@@ -93,6 +93,34 @@ export interface BattleReport {
   createdAt: string
 }
 
+export interface MailAttachment {
+  type: string
+  itemId: string
+  amount: number
+  metadata?: Record<string, unknown>
+}
+
+export interface Mail {
+  id: string
+  playerId: string
+  mailType: 'gm_notice' | 'compensation' | 'reward' | 'event_reward' | 'system_notice' | 'player_message'
+  senderType: 'system' | 'gm' | 'player'
+  senderId?: string
+  senderName: string
+  title: string
+  content: string
+  attachments?: MailAttachment[]
+  sourceType?: string
+  sourceId?: string
+  isRead: boolean
+  isClaimed: boolean
+  deletedByPlayer?: boolean
+  expiresAt?: string
+  createdAt: string
+  readAt?: string
+  claimedAt?: string
+}
+
 export interface GeneralTraitInstance {
   traitId: string
   name: string
@@ -138,6 +166,7 @@ export interface GameState {
   mapTargets: MapTarget[]
   recentBattleReports: BattleReport[]
   unreadMessageCount: number
+  unreadMailCount: number
   /** 当前生效的加成明细（用于 tooltip 展示） */
   activeModifiers?: ModifierBreakdownItem[]
   serverTime: string

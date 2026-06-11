@@ -23,6 +23,8 @@ tags:
   description: 地图、NPC 城池与战斗
 - name: News
   description: 军情与战报
+- name: Mail
+  description: 信函系统
 - name: Admin
   description: GM 后台接口
 paths:
@@ -66,6 +68,16 @@ paths:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1scout
   /api/v1/news/reports:
     $ref: ./paths/news.yaml#/~1api~1v1~1news~1reports
+  /api/v1/mails:
+    $ref: ./paths/mail.yaml#/~1api~1v1~1mails
+  /api/v1/mails/{mailId}:
+    $ref: ./paths/mail.yaml#/~1api~1v1~1mails~1{mailId}
+  /api/v1/mails/{mailId}/delete:
+    $ref: ./paths/mail.yaml#/~1api~1v1~1mails~1{mailId}~1delete
+  /api/v1/admin/mails/send:
+    $ref: ./paths/mail.yaml#/~1api~1v1~1admin~1mails~1send
+  /api/v1/admin/players/{playerId}/mails:
+    $ref: ./paths/mail.yaml#/~1api~1v1~1admin~1players~1{playerId}~1mails
   /api/v1/admin/accounts:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1accounts
   /api/v1/admin/players/{playerId}/state:
@@ -114,6 +126,14 @@ components:
       $ref: ./schemas/game-state.yaml#/BattleReport
     BattleReportPage:
       $ref: ./schemas/game-state.yaml#/BattleReportPage
+    Mail:
+      $ref: ./schemas/mail.yaml#/Mail
+    MailAttachment:
+      $ref: ./schemas/mail.yaml#/MailAttachment
+    MailPage:
+      $ref: ./schemas/mail.yaml#/MailPage
+    SendMailRequest:
+      $ref: ./schemas/mail.yaml#/SendMailRequest
     BalanceConfig:
       $ref: ./schemas/game-state.yaml#/BalanceConfig
     BuildingConfig:

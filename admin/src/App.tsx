@@ -17,6 +17,7 @@ import MiniGameRecordsPanel from '@/components/MiniGameRecordsPanel'
 import AdminTokenPanel from '@/components/AdminTokenPanel'
 import GeneralsConfigPanel from '@/components/GeneralsConfigPanel'
 import GoldLedgerPanel from '@/components/GoldLedgerPanel'
+import MailAdminPanel from '@/components/MailAdminPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
 import { Sliders, MapPin, Swords, Flag, Shield, Users } from 'lucide-react'
@@ -83,6 +84,8 @@ function App() {
         )
       case 'ledger':
         return <GoldLedgerPanel />
+      case 'mails':
+        return <MailAdminPanel />
       case 'balance':
         return (
           <div className="grid gap-4">

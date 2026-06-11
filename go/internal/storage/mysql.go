@@ -70,6 +70,29 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			created_at DATETIME(6) NOT NULL,
 			INDEX idx_reports_player (player_id, deleted_by_player, created_at DESC)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS mails (
+			id VARCHAR(64) PRIMARY KEY,
+			player_id VARCHAR(64) NOT NULL,
+			mail_type VARCHAR(32) NOT NULL,
+			sender_type VARCHAR(32) NOT NULL,
+			sender_id VARCHAR(64) NOT NULL DEFAULT '',
+			sender_name VARCHAR(64) NOT NULL DEFAULT '',
+			title VARCHAR(120) NOT NULL,
+			content TEXT NOT NULL,
+			attachments_json JSON NULL,
+			source_type VARCHAR(32) NOT NULL DEFAULT '',
+			source_id VARCHAR(64) NOT NULL DEFAULT '',
+			is_read TINYINT(1) NOT NULL DEFAULT 0,
+			is_claimed TINYINT(1) NOT NULL DEFAULT 0,
+			deleted_by_player TINYINT(1) NOT NULL DEFAULT 0,
+			expires_at DATETIME(6) NULL,
+			created_at DATETIME(6) NOT NULL,
+			read_at DATETIME(6) NULL,
+			claimed_at DATETIME(6) NULL,
+			INDEX idx_mails_player_list (player_id, deleted_by_player, created_at DESC),
+			INDEX idx_mails_player_unread (player_id, deleted_by_player, is_read),
+			INDEX idx_mails_source (source_type, source_id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS minigame_records (
 			id VARCHAR(64) PRIMARY KEY,
 			player_id VARCHAR(64) NOT NULL,
@@ -468,6 +491,27 @@ func (r *MySQLRepository) CreatePlayer(accountID string, state game.GameState, u
 }
 
 func (r *MySQLRepository) DeleteAccount(accountID string) error {
+	rows, err := r.db.Query(`SELECT id FROM players WHERE account_id = ?`, accountID)
+	if err != nil {
+		return err
+	}
+	playerIDs := []string{}
+	for rows.Next() {
+		var playerID string
+		if err := rows.Scan(&playerID); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		playerIDs = append(playerIDs, playerID)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, playerID := range playerIDs {
+		_, _ = r.db.Exec(`DELETE FROM battle_reports WHERE player_id = ?`, playerID)
+		_, _ = r.db.Exec(`DELETE FROM mails WHERE player_id = ?`, playerID)
+	}
+
 	result, err := r.db.Exec(`DELETE FROM accounts WHERE id = ?`, accountID)
 	if err != nil {
 		return err
@@ -484,8 +528,9 @@ func (r *MySQLRepository) DeleteAccount(accountID string) error {
 }
 
 func (r *MySQLRepository) DeletePlayer(playerID string) error {
-	// 先删战报
+	// 先删独立存储
 	_, _ = r.db.Exec(`DELETE FROM battle_reports WHERE player_id = ?`, playerID)
+	_, _ = r.db.Exec(`DELETE FROM mails WHERE player_id = ?`, playerID)
 
 	result, err := r.db.Exec(`DELETE FROM players WHERE id = ?`, playerID)
 	if err != nil {
@@ -720,6 +765,198 @@ func (r *MySQLRepository) CountUnreadReports(playerID string) (int, error) {
 		playerID, threeDaysAgo,
 	).Scan(&count)
 	return count, err
+}
+
+// --- Mail Methods ---
+
+func (r *MySQLRepository) SaveMail(mail game.Mail) error {
+	attachmentsJSON, err := json.Marshal(mail.Attachments)
+	if err != nil {
+		return err
+	}
+
+	createdAt, _ := time.Parse(time.RFC3339, mail.CreatedAt)
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+
+	var expiresAt any
+	if mail.ExpiresAt != "" {
+		if parsed, err := time.Parse(time.RFC3339, mail.ExpiresAt); err == nil {
+			expiresAt = parsed.UTC()
+		}
+	}
+
+	_, err = r.db.Exec(
+		`INSERT INTO mails (
+			id, player_id, mail_type, sender_type, sender_id, sender_name,
+			title, content, attachments_json, source_type, source_id,
+			is_read, is_claimed, deleted_by_player, expires_at, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		mail.ID,
+		mail.PlayerID,
+		mail.MailType,
+		mail.SenderType,
+		mail.SenderID,
+		mail.SenderName,
+		mail.Title,
+		mail.Content,
+		attachmentsJSON,
+		mail.SourceType,
+		mail.SourceID,
+		mail.IsRead,
+		mail.IsClaimed,
+		false,
+		expiresAt,
+		createdAt.UTC(),
+	)
+	return err
+}
+
+func (r *MySQLRepository) GetMailByID(mailID string) (game.Mail, error) {
+	row := r.db.QueryRow(
+		`SELECT id, player_id, mail_type, sender_type, sender_id, sender_name,
+			title, content, attachments_json, source_type, source_id,
+			is_read, is_claimed, deleted_by_player, expires_at, created_at, read_at, claimed_at
+		 FROM mails WHERE id = ? LIMIT 1`,
+		mailID,
+	)
+	return scanMail(row)
+}
+
+func (r *MySQLRepository) ListMails(playerID string, limit int, offset int) ([]game.Mail, int, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var total int
+	if err := r.db.QueryRow(
+		`SELECT COUNT(*) FROM mails WHERE player_id = ? AND deleted_by_player = 0`,
+		playerID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.db.Query(
+		`SELECT id, player_id, mail_type, sender_type, sender_id, sender_name,
+			title, content, attachments_json, source_type, source_id,
+			is_read, is_claimed, deleted_by_player, expires_at, created_at, read_at, claimed_at
+		 FROM mails
+		 WHERE player_id = ? AND deleted_by_player = 0
+		 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		playerID, limit, offset,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	mails := []game.Mail{}
+	for rows.Next() {
+		mail, err := scanMail(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		mails = append(mails, mail)
+	}
+	return mails, total, rows.Err()
+}
+
+func (r *MySQLRepository) CountUnreadMails(playerID string) (int, error) {
+	var count int
+	err := r.db.QueryRow(
+		`SELECT COUNT(*) FROM mails WHERE player_id = ? AND is_read = 0 AND deleted_by_player = 0`,
+		playerID,
+	).Scan(&count)
+	return count, err
+}
+
+func (r *MySQLRepository) MarkMailRead(playerID string, mailID string, readAt time.Time) error {
+	result, err := r.db.Exec(
+		`UPDATE mails
+		 SET is_read = 1, read_at = COALESCE(read_at, ?)
+		 WHERE id = ? AND player_id = ? AND deleted_by_player = 0`,
+		readAt.UTC(), mailID, playerID,
+	)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err == nil && affected == 0 {
+		return errors.New("mail not found")
+	}
+	return err
+}
+
+func (r *MySQLRepository) DeleteMail(playerID string, mailID string) error {
+	result, err := r.db.Exec(
+		`UPDATE mails SET deleted_by_player = 1 WHERE id = ? AND player_id = ?`,
+		mailID, playerID,
+	)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err == nil && affected == 0 {
+		return errors.New("mail not found")
+	}
+	return err
+}
+
+type mailScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanMail(scanner mailScanner) (game.Mail, error) {
+	var mail game.Mail
+	var attachmentsJSON []byte
+	var expiresAt sql.NullTime
+	var createdAt time.Time
+	var readAt sql.NullTime
+	var claimedAt sql.NullTime
+
+	err := scanner.Scan(
+		&mail.ID,
+		&mail.PlayerID,
+		&mail.MailType,
+		&mail.SenderType,
+		&mail.SenderID,
+		&mail.SenderName,
+		&mail.Title,
+		&mail.Content,
+		&attachmentsJSON,
+		&mail.SourceType,
+		&mail.SourceID,
+		&mail.IsRead,
+		&mail.IsClaimed,
+		&mail.DeletedByPlayer,
+		&expiresAt,
+		&createdAt,
+		&readAt,
+		&claimedAt,
+	)
+	if err != nil {
+		return game.Mail{}, err
+	}
+
+	if len(attachmentsJSON) > 0 {
+		_ = json.Unmarshal(attachmentsJSON, &mail.Attachments)
+	}
+	if expiresAt.Valid {
+		mail.ExpiresAt = expiresAt.Time.UTC().Format(time.RFC3339)
+	}
+	mail.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+	if readAt.Valid {
+		mail.ReadAt = readAt.Time.UTC().Format(time.RFC3339)
+	}
+	if claimedAt.Valid {
+		mail.ClaimedAt = claimedAt.Time.UTC().Format(time.RFC3339)
+	}
+
+	return mail, nil
 }
 
 // --- MiniGame Record Methods ---

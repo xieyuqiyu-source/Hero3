@@ -1,4 +1,4 @@
-import type { AccountSummary, BalanceConfig, GameState, GoldLedgerEntry, HealthState, NpcConfig, NpcState } from '@/types'
+import type { AccountSummary, BalanceConfig, GameState, GoldLedgerEntry, HealthState, Mail, MailPage, NpcConfig, NpcState } from '@/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1'
 const ROOT_BASE = API_BASE.replace(/\/api\/v1$/, '')
@@ -190,5 +190,21 @@ export const adminApi = {
   },
   getGeneralTraitRegistry() {
     return request<object>(`${API_BASE}/admin/general-traits`)
+  },
+  sendMail(payload: {
+    playerId: string
+    mailType: string
+    title: string
+    content: string
+    expiresAt?: string
+  }) {
+    return request<Mail>(`${API_BASE}/admin/mails/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  },
+  getPlayerMails(playerId: string, page = 1, pageSize = 10) {
+    return request<MailPage>(`${API_BASE}/admin/players/${playerId}/mails?page=${page}&pageSize=${pageSize}`)
   },
 }

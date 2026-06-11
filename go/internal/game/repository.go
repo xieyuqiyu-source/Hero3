@@ -40,6 +40,14 @@ type Repository interface {
 	DeleteAllReports(playerID string) error
 	CountUnreadReports(playerID string) (int, error)
 
+	// Mails
+	SaveMail(mail Mail) error
+	GetMailByID(mailID string) (Mail, error)
+	ListMails(playerID string, limit int, offset int) ([]Mail, int, error)
+	CountUnreadMails(playerID string) (int, error)
+	MarkMailRead(playerID string, mailID string, readAt time.Time) error
+	DeleteMail(playerID string, mailID string) error
+
 	// MiniGame Records
 	SaveMiniGameRecord(record MiniGameRecord) error
 	ListMiniGameRecords(playerID string, limit int) ([]MiniGameRecord, error)
@@ -58,6 +66,7 @@ type MemoryRepository struct {
 	players         map[string]GameState
 	playerUpdatedAt map[string]time.Time
 	reports         map[string][]BattleReport   // playerID → reports
+	mails           map[string][]Mail           // playerID → mails
 	miniGameRecords map[string][]MiniGameRecord // playerID → records
 	ledger          []GoldLedgerEntry
 	ledgerNextID    int64
@@ -71,6 +80,7 @@ func NewMemoryRepository() *MemoryRepository {
 		players:         make(map[string]GameState),
 		playerUpdatedAt: make(map[string]time.Time),
 		reports:         make(map[string][]BattleReport),
+		mails:           make(map[string][]Mail),
 		miniGameRecords: make(map[string][]MiniGameRecord),
 	}
 }
@@ -316,6 +326,7 @@ func (r *MemoryRepository) DeleteAccount(accountID string) error {
 		delete(r.players, playerID)
 		delete(r.playerUpdatedAt, playerID)
 		delete(r.reports, playerID)
+		delete(r.mails, playerID)
 	}
 	delete(r.accountPlayers, accountID)
 	delete(r.accountByName, account.Username)
@@ -334,6 +345,7 @@ func (r *MemoryRepository) DeletePlayer(playerID string) error {
 	delete(r.players, playerID)
 	delete(r.playerUpdatedAt, playerID)
 	delete(r.reports, playerID)
+	delete(r.mails, playerID)
 	for accountID, playerIDs := range r.accountPlayers {
 		nextPlayerIDs := playerIDs[:0]
 		for _, currentID := range playerIDs {
@@ -501,6 +513,100 @@ func (r *MemoryRepository) CountUnreadReports(playerID string) (int, error) {
 		}
 	}
 	return count, nil
+}
+
+// --- Mail Methods (MemoryRepository) ---
+
+func (r *MemoryRepository) SaveMail(mail Mail) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.mails[mail.PlayerID] = append([]Mail{mail}, r.mails[mail.PlayerID]...)
+	if len(r.mails[mail.PlayerID]) > 1000 {
+		r.mails[mail.PlayerID] = r.mails[mail.PlayerID][:1000]
+	}
+	return nil
+}
+
+func (r *MemoryRepository) GetMailByID(mailID string) (Mail, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, mails := range r.mails {
+		for _, mail := range mails {
+			if mail.ID == mailID {
+				return mail, nil
+			}
+		}
+	}
+	return Mail{}, errors.New("mail not found")
+}
+
+func (r *MemoryRepository) ListMails(playerID string, limit int, offset int) ([]Mail, int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	all := r.mails[playerID]
+	total := 0
+	result := []Mail{}
+	for _, mail := range all {
+		if mail.DeletedByPlayer {
+			continue
+		}
+		total++
+		if offset > 0 {
+			offset--
+			continue
+		}
+		result = append(result, mail)
+		if limit > 0 && len(result) >= limit {
+			break
+		}
+	}
+	return result, total, nil
+}
+
+func (r *MemoryRepository) CountUnreadMails(playerID string) (int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	count := 0
+	for _, mail := range r.mails[playerID] {
+		if !mail.IsRead && !mail.DeletedByPlayer {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (r *MemoryRepository) MarkMailRead(playerID string, mailID string, readAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	readAtText := readAt.UTC().Format(resourceDateLayout)
+	for i := range r.mails[playerID] {
+		if r.mails[playerID][i].ID == mailID {
+			r.mails[playerID][i].IsRead = true
+			if r.mails[playerID][i].ReadAt == "" {
+				r.mails[playerID][i].ReadAt = readAtText
+			}
+			return nil
+		}
+	}
+	return errors.New("mail not found")
+}
+
+func (r *MemoryRepository) DeleteMail(playerID string, mailID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i := range r.mails[playerID] {
+		if r.mails[playerID][i].ID == mailID {
+			r.mails[playerID][i].DeletedByPlayer = true
+			return nil
+		}
+	}
+	return errors.New("mail not found")
 }
 
 // --- MiniGame Record Methods (MemoryRepository) ---

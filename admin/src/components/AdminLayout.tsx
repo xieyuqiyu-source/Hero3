@@ -6,15 +6,17 @@ import {
   Sliders,
   Coins,
   FileText,
+  Mail,
   Shield,
 } from 'lucide-react'
 
-export type AdminPage = 'overview' | 'accounts' | 'operations' | 'ledger' | 'balance' | 'api' | 'audit'
+export type AdminPage = 'overview' | 'accounts' | 'operations' | 'mails' | 'ledger' | 'balance' | 'api' | 'audit'
 
 const navItems: Array<{ key: AdminPage; label: string; icon: typeof LayoutDashboard }> = [
   { key: 'overview', label: '总览', icon: LayoutDashboard },
   { key: 'accounts', label: '玩家', icon: Users },
   { key: 'operations', label: '操作', icon: Wrench },
+  { key: 'mails', label: '信函', icon: Mail },
   { key: 'ledger', label: '流水', icon: Coins },
   { key: 'balance', label: '配置', icon: Sliders },
   { key: 'api', label: '接口', icon: FileText },

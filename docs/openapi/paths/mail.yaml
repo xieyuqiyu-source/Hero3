@@ -1,0 +1,137 @@
+/api/v1/mails:
+  get:
+    tags:
+    - Mail
+    summary: 分页获取信函
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    - name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    - name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 10
+    responses:
+      '200':
+        description: 信函分页结果
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MailPage'
+/api/v1/mails/{mailId}:
+  get:
+    tags:
+    - Mail
+    summary: 获取信函详情并标记已读
+    parameters:
+    - name: mailId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 信函详情
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Mail'
+      '404':
+        description: 信函不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/mails/{mailId}/delete:
+  post:
+    tags:
+    - Mail
+    summary: 删除单封信函
+    parameters:
+    - name: mailId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId]
+            properties:
+              playerId:
+                type: string
+    responses:
+      '200':
+        description: 删除成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteResponse'
+/api/v1/admin/mails/send:
+  post:
+    tags:
+    - Admin
+    summary: GM 给指定玩家发送信函
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SendMailRequest'
+    responses:
+      '201':
+        description: 已创建的信函
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Mail'
+/api/v1/admin/players/{playerId}/mails:
+  get:
+    tags:
+    - Admin
+    summary: GM 查看指定玩家信函
+    parameters:
+    - name: playerId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    - name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 10
+    responses:
+      '200':
+        description: 信函分页结果
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MailPage'

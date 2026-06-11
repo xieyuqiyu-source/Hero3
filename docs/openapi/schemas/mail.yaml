@@ -1,0 +1,144 @@
+MailAttachment:
+  type: object
+  required:
+  - type
+  - itemId
+  - amount
+  properties:
+    type:
+      type: string
+      enum: [resource, city_gold, gold]
+      example: resource
+    itemId:
+      type: string
+      enum: [wood, stone, iron, food, city_gold, gold]
+      example: wood
+    amount:
+      type: integer
+      minimum: 1
+      example: 1000
+    metadata:
+      type: object
+      additionalProperties: true
+Mail:
+  type: object
+  required:
+  - id
+  - playerId
+  - mailType
+  - senderType
+  - senderName
+  - title
+  - content
+  - isRead
+  - isClaimed
+  - createdAt
+  properties:
+    id:
+      type: string
+      example: mail_47f23e0eeb08ab50402fedfc
+    playerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+    mailType:
+      type: string
+      enum: [gm_notice, compensation, reward, event_reward, system_notice, player_message]
+    senderType:
+      type: string
+      enum: [system, gm, player]
+    senderId:
+      type: string
+    senderName:
+      type: string
+      example: Hero3 GM
+    title:
+      type: string
+      example: GM 通知
+    content:
+      type: string
+      example: 这里是信函正文。
+    attachments:
+      type: array
+      items:
+        $ref: '#/components/schemas/MailAttachment'
+    sourceType:
+      type: string
+      enum: [manual, compensation, activity, system, player]
+      example: manual
+    sourceId:
+      type: string
+    isRead:
+      type: boolean
+    isClaimed:
+      type: boolean
+    deletedByPlayer:
+      type: boolean
+    expiresAt:
+      type: string
+      format: date-time
+    createdAt:
+      type: string
+      format: date-time
+    readAt:
+      type: string
+      format: date-time
+    claimedAt:
+      type: string
+      format: date-time
+MailPage:
+  type: object
+  required:
+  - mails
+  - page
+  - pageSize
+  - total
+  - unread
+  properties:
+    mails:
+      type: array
+      items:
+        $ref: '#/components/schemas/Mail'
+    page:
+      type: integer
+      example: 1
+    pageSize:
+      type: integer
+      example: 10
+    total:
+      type: integer
+      example: 12
+    unread:
+      type: integer
+      example: 2
+SendMailRequest:
+  type: object
+  required:
+  - playerId
+  - title
+  - content
+  properties:
+    playerId:
+      type: string
+    mailType:
+      type: string
+      enum: [gm_notice, compensation, reward, event_reward, system_notice]
+      default: gm_notice
+    title:
+      type: string
+      maxLength: 60
+    content:
+      type: string
+      maxLength: 5000
+    attachments:
+      type: array
+      items:
+        $ref: '#/components/schemas/MailAttachment'
+    sourceType:
+      type: string
+      enum: [manual, compensation, activity, system, player]
+      default: manual
+    sourceId:
+      type: string
+    expiresAt:
+      type: string
+      format: date-time

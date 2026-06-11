@@ -53,6 +53,7 @@ export interface GameState {
     createdAt?: string
   }>
   unreadMessageCount: number
+  unreadMailCount: number
   buffs?: Array<{
     id: string
     source: string
@@ -64,6 +65,38 @@ export interface GameState {
     note?: string
   }>
   serverTime: string
+}
+
+export interface MailAttachment {
+  type: string
+  itemId: string
+  amount: number
+}
+
+export interface Mail {
+  id: string
+  playerId: string
+  mailType: string
+  senderType: string
+  senderName: string
+  title: string
+  content: string
+  attachments?: MailAttachment[]
+  sourceType?: string
+  sourceId?: string
+  isRead: boolean
+  isClaimed: boolean
+  expiresAt?: string
+  createdAt: string
+  readAt?: string
+}
+
+export interface MailPage {
+  mails: Mail[]
+  page: number
+  pageSize: number
+  total: number
+  unread: number
 }
 
 export interface PlayerSummary {

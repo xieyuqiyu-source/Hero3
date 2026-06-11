@@ -33,6 +33,8 @@ var (
 	ErrInvalidStatKey     = errors.New("invalid general stat")
 	ErrNoStatPoints       = errors.New("no general stat points available")
 	ErrStatMaxLevel       = errors.New("general stat is at max level")
+	ErrMailNotFound       = errors.New("mail not found")
+	ErrInvalidMail        = errors.New("invalid mail")
 )
 
 const resourceDateLayout = time.RFC3339
@@ -339,6 +341,7 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 	}
 
 	s.attachReportSummary(&state, playerID)
+	s.attachMailSummary(&state, playerID)
 
 	hydrateStateForResponse(&state, time.Now())
 
@@ -350,13 +353,8 @@ func (s *Service) attachReportSummary(state *GameState, playerID string) {
 		return
 	}
 
-	// 状态响应只带少量最近战报，用于未读提示和旧页面兼容；完整军情列表走分页接口。
-	reports, _, listErr := s.repo.ListReports(playerID, 10, 0)
-	if listErr != nil {
-		slog.Warn("list reports failed", "error", listErr)
-	} else {
-		state.RecentBattleReports = reports
-	}
+	// 军情列表已经由 /news/reports 分页接口承载，状态入口只保留未读数量。
+	state.RecentBattleReports = []BattleReport{}
 
 	unreadCount, countErr := s.repo.CountUnreadReports(playerID)
 	if countErr != nil {
@@ -364,6 +362,18 @@ func (s *Service) attachReportSummary(state *GameState, playerID string) {
 		return
 	}
 	state.UnreadMessageCount = unreadCount
+}
+
+func (s *Service) attachMailSummary(state *GameState, playerID string) {
+	if state == nil {
+		return
+	}
+	unreadCount, err := s.repo.CountUnreadMails(playerID)
+	if err != nil {
+		slog.Warn("count unread mails failed", "error", err)
+		return
+	}
+	state.UnreadMailCount = unreadCount
 }
 
 func hydrateStateForResponse(state *GameState, now time.Time) {

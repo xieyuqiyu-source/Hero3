@@ -185,3 +185,125 @@
 - 目前军情列表仍然只展示最近 3 天战报，这是原有业务口径。后续如果要做长期战报归档，需要增加时间范围筛选。
 - 删除和标记已读接口目前仍返回 `GameState`，为了兼容现有前端暂时保留。后续如果继续优化服务器压力，可以把这些接口改成只返回操作结果和最新未读数。
 - `BattleReport` 的 OpenAPI schema 仍然偏简化，后续战报详情字段稳定后可以补完整。
+
+---
+
+## 2026-06-11 - `待提交 feat: implement mail system backend`
+
+### 改动目标
+
+在已完成信函 UI 基础版之后，补齐信函系统第一版真实数据闭环：后端可存储信函、玩家端可分页查看和删除、GM 后台可向指定玩家发信，同时维护 OpenAPI 文档，避免接口和前端继续依赖 mock 数据。
+
+### 后端改动
+
+- 新增信函核心模型：
+  - `Mail`
+  - `MailAttachment`
+  - `MailPage`
+  - `SendMailRequest`
+- `GameState` 增加 `unreadMailCount`，用于信函入口和侧边栏红点。
+- Repository 增加信函相关方法：
+  - `SaveMail`
+  - `GetMailByID`
+  - `ListMails`
+  - `CountUnreadMails`
+  - `MarkMailRead`
+  - `DeleteMail`
+- MySQL 新增 `mails` 表：
+  - 支持信函类型、发件人、标题、正文、附件 JSON、来源、已读、已领取、玩家删除、过期时间、创建时间、读取时间、领取时间。
+  - 增加玩家列表索引、未读统计索引、来源索引。
+- 删除账号和删除存档时同步清理该玩家信函，避免孤儿数据残留。
+- 新增信函 Service：
+  - 玩家分页查看信函。
+  - 查看详情时自动标记已读。
+  - 玩家删除信函。
+  - GM 发送信函。
+- 增加信函数据校验：
+  - 标题、正文、玩家 ID 必填。
+  - 标题最长 60 字符，正文最长 5000 字符。
+  - `mailType`、`senderType`、`sourceType` 归一化。
+  - 附件限制为 `resource`、`city_gold`、`gold`。
+  - 资源附件只允许 `wood`、`stone`、`iron`、`food`。
+  - 附件数量必须大于 0。
+- 新增玩家接口：
+  - `GET /api/v1/mails`
+  - `GET /api/v1/mails/{mailId}`
+  - `POST /api/v1/mails/{mailId}/delete`
+- 新增 GM 接口：
+  - `POST /api/v1/admin/mails/send`
+  - `GET /api/v1/admin/players/{playerId}/mails`
+- 删除信函接口改为只返回删除状态，由前端自行决定重新加载哪一页，避免 Service 层硬编码删除后回到第 1 页。
+
+### Web 改动
+
+- 信函页从 mock 数据改为真实接口：
+  - 分页拉取信函。
+  - 加载中状态。
+  - 请求失败提示。
+  - 点击详情后自动已读。
+  - 删除信函后刷新当前页。
+- 信函分类配置改为基于真实 `Mail.mailType`。
+- 信函详情弹窗展示真实字段：
+  - 发件人
+  - 信函类型
+  - 创建时间
+  - 过期时间
+  - 正文
+  - 附件列表
+- 全局布局和侧边栏的信函红点改为使用 `unreadMailCount`。
+- 保留信函弹窗动画和移动端适配。
+
+### Admin 改动
+
+- GM 后台新增“信函管理”页面。
+- 后台导航新增信函入口。
+- GM 可填写：
+  - 玩家 `playerId`
+  - 信函类型
+  - 标题
+  - 正文
+  - 过期时间
+- GM 发信前保留二次确认。
+- GM 可查看指定玩家信函。
+- GM 信函列表增加分页，避免只能查看前 10 封。
+
+### OpenAPI 和文档改动
+
+- 新增 `docs/openapi/paths/mail.yaml`。
+- 新增 `docs/openapi/schemas/mail.yaml`。
+- 主 OpenAPI 挂载信函相关路径和 schema。
+- `GameState` schema 增加 `unreadMailCount`。
+- 信函附件 schema 增加枚举和最小数量限制。
+- 信函设计文档同步 Repository 签名和删除接口行为。
+- 新增 `问题排查/信函问题.md`，保留本轮信函系统审核问题记录。
+
+### 性能和状态入口优化
+
+- 军情页面已经通过 `/api/v1/news/reports` 独立分页获取列表。
+- `game/state` 不再填充最近 10 条军情，`recentBattleReports` 作为兼容字段返回空数组。
+- `game/state` 仍保留 `unreadMessageCount`，用于侧边栏军情红点。
+- OpenAPI 标注 `recentBattleReports` 已拆到军情分页接口。
+- NPC 城池暂时不从 `game/state` 响应里拆出，避免当前阶段引入额外风险；后续单独评估。
+
+### 资源改动
+
+- 纳入魏国将领头像资源，避免远端构建缺失：
+  - `web/src/assets/generals/wei/xiahouyuan.png`
+  - `web/src/assets/generals/wei/xiahouyuan.webp`
+  - `web/src/assets/generals/wei/xuchu.png`
+  - `web/src/assets/generals/wei/xuchu.webp`
+  - `web/src/assets/generals/wei/zhangliao.png`
+  - `web/src/assets/generals/wei/zhangliao.webp`
+
+### 验证结果
+
+- `go test ./...` 通过。
+- `web npm run build` 通过。
+- `admin npm run build` 通过。
+
+### 后续注意事项
+
+- 第一版信函只实现发送、列表、详情已读、删除；附件领取暂不实现。
+- `expiresAt` 第一阶段只存储和展示，不做自动清理和过期过滤。
+- 批量发信暂不实现，后续等运营需求明确后再设计。
+- 后续如果继续优化 `game/state`，优先评估 NPC 城池响应瘦身，但不要直接迁移存储结构。

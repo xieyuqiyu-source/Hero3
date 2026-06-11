@@ -56,6 +56,9 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("POST /api/v1/news/delete-report", handlers.DeleteReport)
 	mux.HandleFunc("POST /api/v1/news/delete-all-reports", handlers.DeleteAllReports)
 	mux.HandleFunc("GET /api/v1/reports/{reportId}", handlers.GetReport)
+	mux.HandleFunc("GET /api/v1/mails", handlers.ListMails)
+	mux.HandleFunc("GET /api/v1/mails/{mailId}", handlers.GetMail)
+	mux.HandleFunc("POST /api/v1/mails/{mailId}/delete", handlers.DeleteMail)
 	mux.HandleFunc("POST /api/v1/gold/exchange", handlers.ExchangeGold)
 	mux.HandleFunc("POST /api/v1/gold/reverse-exchange", handlers.ReverseExchangeGold)
 	mux.HandleFunc("GET /api/v1/admin/accounts", handlers.AdminAccounts)
@@ -83,6 +86,8 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/generals-config", handlers.AdminGeneralsConfig)
 	mux.HandleFunc("PUT /api/v1/admin/generals-config", handlers.UpdateAdminGeneralsConfig)
 	mux.HandleFunc("GET /api/v1/admin/general-traits", handlers.AdminGeneralTraitRegistry)
+	mux.HandleFunc("POST /api/v1/admin/mails/send", handlers.AdminSendMail)
+	mux.HandleFunc("GET /api/v1/admin/players/{playerId}/mails", handlers.AdminPlayerMails)
 
 	// 公开路径白名单（不需要认证）
 	publicPaths := []string{

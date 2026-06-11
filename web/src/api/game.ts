@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail } from '@/types/game'
 import type { BalanceConfig, FactionConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -49,6 +49,14 @@ export interface BattleReportPage {
   page: number
   pageSize: number
   total: number
+}
+
+export interface MailPage {
+  mails: Mail[]
+  page: number
+  pageSize: number
+  total: number
+  unread: number
 }
 
 export const gameApi = {
@@ -223,6 +231,21 @@ export const gameApi = {
   /** 一键删除所有战报 */
   deleteAllReports(playerId: string) {
     return api.post<{ state: GameState }>('/news/delete-all-reports', { playerId })
+  },
+
+  /** 分页获取信函 */
+  listMails(playerId: string, page: number, pageSize: number) {
+    return api.get<MailPage>(`/mails?playerId=${playerId}&page=${page}&pageSize=${pageSize}`)
+  },
+
+  /** 获取信函详情并标记已读 */
+  getMail(playerId: string, mailId: string) {
+    return api.get<Mail>(`/mails/${mailId}?playerId=${playerId}`)
+  },
+
+  /** 删除单封信函 */
+  deleteMail(playerId: string, mailId: string) {
+    return api.post<MailPage>(`/mails/${mailId}/delete`, { playerId })
   },
 
   /** 金币兑换城金（1金币=10城金，有冷却） */

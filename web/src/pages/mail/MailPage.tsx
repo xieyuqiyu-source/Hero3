@@ -1,31 +1,108 @@
-import { useMemo, useState, type FC } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FC } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
+  Loader2,
   Mail,
   MailOpen,
   X,
 } from 'lucide-react'
+import { gameApi } from '@/api/game'
+import { useGameStore } from '@/store/gameStore'
+import type { Mail as PlayerMail } from '@/types/game'
 import MailDetail from './components/MailDetail'
-import { MOCK_MAILS, PAGE_SIZE, TYPE_CONFIG, TYPE_OPTIONS, type MailType, type MockMail } from './data'
+import { PAGE_SIZE, TYPE_CONFIG, TYPE_OPTIONS, type MailType } from './data'
 
 const MailPage: FC = () => {
   const [activeType, setActiveType] = useState<MailType>('all')
   const [currentPage, setCurrentPage] = useState(1)
-  const [selectedMail, setSelectedMail] = useState<MockMail | null>(null)
+  const [selectedMail, setSelectedMail] = useState<PlayerMail | null>(null)
+  const [mails, setMails] = useState<PlayerMail[]>([])
+  const [totalMails, setTotalMails] = useState(0)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState('')
+  const [hasLoaded, setHasLoaded] = useState(false)
+  const activePlayerId = useGameStore((s) => s.activePlayerId)
+  const patchState = useGameStore((s) => s.patchState)
 
   const filteredMails = useMemo(() => {
-    const items = activeType === 'all' ? MOCK_MAILS : MOCK_MAILS.filter((mail) => mail.type === activeType)
-    return items
-  }, [activeType])
+    return activeType === 'all' ? mails : mails.filter((mail) => mail.mailType === activeType)
+  }, [activeType, mails])
 
-  const totalPages = Math.max(1, Math.ceil(filteredMails.length / PAGE_SIZE))
-  const pageMails = filteredMails.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
-  const unreadCount = MOCK_MAILS.filter((mail) => !mail.read).length
+  const totalPages = Math.max(1, Math.ceil(totalMails / PAGE_SIZE))
+
+  const loadMails = useCallback(async (page: number) => {
+    if (!activePlayerId) {
+      setMails([])
+      setTotalMails(0)
+      setUnreadCount(0)
+      setHasLoaded(true)
+      return
+    }
+    setLoading(true)
+    setLoadError('')
+    try {
+      const result = await gameApi.listMails(activePlayerId, page, PAGE_SIZE)
+      setMails(result.mails)
+      setTotalMails(result.total)
+      setUnreadCount(result.unread)
+      patchState({ unreadMailCount: result.unread })
+      const nextTotalPages = Math.max(1, Math.ceil(result.total / PAGE_SIZE))
+      if (page > nextTotalPages) setCurrentPage(nextTotalPages)
+    } catch (error) {
+      setMails([])
+      setTotalMails(0)
+      setLoadError(error instanceof Error ? error.message : '信函加载失败')
+    } finally {
+      setLoading(false)
+      setHasLoaded(true)
+    }
+  }, [activePlayerId, patchState])
+
+  useEffect(() => {
+    void loadMails(currentPage)
+  }, [currentPage, loadMails])
 
   const handleTypeChange = (type: MailType) => {
     setActiveType(type)
     setCurrentPage(1)
+  }
+
+  const handleSelectMail = async (mail: PlayerMail) => {
+    if (!activePlayerId) return
+    setSelectedMail(mail)
+    if (!mail.isRead) {
+      const nextUnreadCount = Math.max(0, unreadCount - 1)
+      setMails((items) => items.map((item) => item.id === mail.id ? { ...item, isRead: true } : item))
+      setUnreadCount(nextUnreadCount)
+      patchState({ unreadMailCount: nextUnreadCount })
+    }
+    try {
+      const detail = await gameApi.getMail(activePlayerId, mail.id)
+      setSelectedMail(detail)
+      void loadMails(currentPage)
+    } catch {
+      setSelectedMail(mail)
+    }
+  }
+
+  const handleDeleteMail = async (mailId: string) => {
+    if (!activePlayerId) return
+    await gameApi.deleteMail(activePlayerId, mailId)
+    setSelectedMail(null)
+    await loadMails(currentPage)
+  }
+
+  if (!hasLoaded || (loading && mails.length === 0)) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <span className="inline-flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
+          <Loader2 size={16} className="animate-spin text-[var(--color-accent)]" />
+          信函加载中...
+        </span>
+      </div>
+    )
   }
 
   return (
@@ -66,14 +143,24 @@ const MailPage: FC = () => {
         </div>
 
         <div className="space-y-2 p-3">
-          {pageMails.map((mail, index) => {
-            const config = TYPE_CONFIG[mail.type]
-            const Icon = mail.read ? MailOpen : config.icon
+          {loadError && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-3 py-3 text-xs text-red-600">
+              {loadError}
+            </div>
+          )}
+          {filteredMails.length === 0 && (
+            <div className="flex items-center justify-center py-12 text-sm text-[var(--color-text-muted)]">
+              暂无信函
+            </div>
+          )}
+          {filteredMails.map((mail, index) => {
+            const config = TYPE_CONFIG[mail.mailType]
+            const Icon = mail.isRead ? MailOpen : config.icon
             return (
               <button
                 key={mail.id}
                 type="button"
-                onClick={() => setSelectedMail(mail)}
+                onClick={() => void handleSelectMail(mail)}
                 className={`
                   w-full rounded-2xl border px-3 py-3 text-left cursor-pointer
                   border-[var(--color-border)] bg-[var(--color-surface-dim)]
@@ -91,12 +178,12 @@ const MailPage: FC = () => {
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">
                       <span className="truncate text-sm font-semibold text-[var(--color-text-primary)]">{mail.title}</span>
-                      {!mail.read && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />}
+                      {!mail.isRead && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />}
                     </span>
                     <span className="mt-1 flex items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
                       <span>{config.label}</span>
-                      <span>{mail.sender}</span>
-                      <span className="ml-auto">{mail.createdAt}</span>
+                      <span>{mail.senderName}</span>
+                      <span className="ml-auto">{formatMailTime(mail.createdAt)}</span>
                     </span>
                     <span className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
                       {mail.content}
@@ -120,7 +207,7 @@ const MailPage: FC = () => {
           </button>
           <div className="text-xs text-[var(--color-text-muted)]">
             第 <span className="font-semibold text-[var(--color-text-primary)]">{currentPage}</span> / {totalPages} 页
-            <span className="ml-2">共 {filteredMails.length} 封</span>
+            <span className="ml-2">共 {totalMails} 封</span>
           </div>
           <button
             type="button"
@@ -152,13 +239,19 @@ const MailPage: FC = () => {
               <X size={16} />
             </button>
             <div className="overflow-y-auto scrollbar-none">
-              <MailDetail mail={selectedMail} />
+              <MailDetail mail={selectedMail} onDelete={() => void handleDeleteMail(selectedMail.id)} />
             </div>
           </div>
         </div>
       )}
     </div>
   )
+}
+
+function formatMailTime(dateStr: string): string {
+  const date = new Date(dateStr)
+  if (Number.isNaN(date.getTime())) return dateStr
+  return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 export default MailPage

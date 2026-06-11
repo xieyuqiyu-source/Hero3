@@ -11,6 +11,7 @@ GameState:
   - mapTargets
   - recentBattleReports
   - unreadMessageCount
+  - unreadMailCount
   - serverTime
   properties:
     player:
@@ -45,9 +46,13 @@ GameState:
         $ref: '#/components/schemas/MapTarget'
     recentBattleReports:
       type: array
+      description: 兼容字段。军情列表已拆到 /api/v1/news/reports 分页接口，game/state 默认返回空数组。
       items:
         $ref: '#/components/schemas/BattleReport'
     unreadMessageCount:
+      type: integer
+      example: 0
+    unreadMailCount:
       type: integer
       example: 0
     serverTime:
