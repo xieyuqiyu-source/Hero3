@@ -11,7 +11,7 @@
 
 ---
 
-## 2026-06-11 - `待提交 feat: add mail attachments and player mail`
+## 2026-06-11 - `a7327c9 feat: add mail attachments and player messaging`
 
 ### 改动目标
 
