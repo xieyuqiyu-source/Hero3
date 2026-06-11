@@ -607,17 +607,32 @@ func (r *MySQLRepository) GetReportByID(reportID string) (game.BattleReport, err
 	return report, nil
 }
 
-func (r *MySQLRepository) ListReports(playerID string, limit int) ([]game.BattleReport, error) {
+func (r *MySQLRepository) ListReports(playerID string, limit int, offset int) ([]game.BattleReport, int, error) {
 	threeDaysAgo := time.Now().Add(-3 * 24 * time.Hour).UTC()
+	if limit <= 0 {
+		limit = 10
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var total int
+	if err := r.db.QueryRow(
+		`SELECT COUNT(*) FROM battle_reports
+		 WHERE player_id = ? AND deleted_by_player = 0 AND created_at > ?`,
+		playerID, threeDaysAgo,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
 
 	rows, err := r.db.Query(
 		`SELECT report_json, is_read FROM battle_reports
 		 WHERE player_id = ? AND deleted_by_player = 0 AND created_at > ?
-		 ORDER BY created_at DESC LIMIT ?`,
-		playerID, threeDaysAgo, limit,
+		 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		playerID, threeDaysAgo, limit, offset,
 	)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -626,7 +641,7 @@ func (r *MySQLRepository) ListReports(playerID string, limit int) ([]game.Battle
 		var reportJSON []byte
 		var isRead bool
 		if err := rows.Scan(&reportJSON, &isRead); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		var report game.BattleReport
 		if err := json.Unmarshal(reportJSON, &report); err != nil {
@@ -635,7 +650,7 @@ func (r *MySQLRepository) ListReports(playerID string, limit int) ([]game.Battle
 		report.Read = isRead
 		reports = append(reports, report)
 	}
-	return reports, rows.Err()
+	return reports, total, rows.Err()
 }
 
 func (r *MySQLRepository) ListAllReports(playerID string) ([]game.BattleReport, error) {
@@ -698,10 +713,11 @@ func (r *MySQLRepository) DeleteAllReports(playerID string) error {
 }
 
 func (r *MySQLRepository) CountUnreadReports(playerID string) (int, error) {
+	threeDaysAgo := time.Now().Add(-3 * 24 * time.Hour).UTC()
 	var count int
 	err := r.db.QueryRow(
-		`SELECT COUNT(*) FROM battle_reports WHERE player_id = ? AND is_read = 0 AND deleted_by_player = 0`,
-		playerID,
+		`SELECT COUNT(*) FROM battle_reports WHERE player_id = ? AND is_read = 0 AND deleted_by_player = 0 AND created_at > ?`,
+		playerID, threeDaysAgo,
 	).Scan(&count)
 	return count, err
 }

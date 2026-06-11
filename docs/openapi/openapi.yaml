@@ -21,6 +21,8 @@ tags:
   description: 军事与征兵
 - name: Map
   description: 地图、NPC 城池与战斗
+- name: News
+  description: 军情与战报
 - name: Admin
   description: GM 后台接口
 paths:
@@ -62,6 +64,8 @@ paths:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1attack
   /api/v1/map/npc-cities/scout:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1scout
+  /api/v1/news/reports:
+    $ref: ./paths/news.yaml#/~1api~1v1~1news~1reports
   /api/v1/admin/accounts:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1accounts
   /api/v1/admin/players/{playerId}/state:
@@ -108,6 +112,8 @@ components:
       $ref: ./schemas/game-state.yaml#/MapTarget
     BattleReport:
       $ref: ./schemas/game-state.yaml#/BattleReport
+    BattleReportPage:
+      $ref: ./schemas/game-state.yaml#/BattleReportPage
     BalanceConfig:
       $ref: ./schemas/game-state.yaml#/BalanceConfig
     BuildingConfig:

@@ -32,7 +32,7 @@ type Repository interface {
 	// Battle Reports
 	SaveReport(report BattleReport) error
 	GetReportByID(reportID string) (BattleReport, error)
-	ListReports(playerID string, limit int) ([]BattleReport, error)
+	ListReports(playerID string, limit int, offset int) ([]BattleReport, int, error)
 	ListAllReports(playerID string) ([]BattleReport, error)
 	MarkReportsRead(playerID string) error
 	MarkSingleReportRead(playerID string, reportID string) error
@@ -399,18 +399,16 @@ func (r *MemoryRepository) GetReportByID(reportID string) (BattleReport, error) 
 	return BattleReport{}, errors.New("report not found")
 }
 
-func (r *MemoryRepository) ListReports(playerID string, limit int) ([]BattleReport, error) {
+func (r *MemoryRepository) ListReports(playerID string, limit int, offset int) ([]BattleReport, int, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	all := r.reports[playerID]
 	var result []BattleReport
+	total := 0
 	threeDaysAgo := time.Now().Add(-3 * 24 * time.Hour)
 
 	for _, report := range all {
-		if report.Read && report.DeletedByPlayer {
-			continue
-		}
 		if report.DeletedByPlayer {
 			continue
 		}
@@ -418,12 +416,17 @@ func (r *MemoryRepository) ListReports(playerID string, limit int) ([]BattleRepo
 		if err == nil && createdAt.Before(threeDaysAgo) {
 			continue
 		}
+		total++
+		if offset > 0 {
+			offset--
+			continue
+		}
 		result = append(result, report)
 		if limit > 0 && len(result) >= limit {
 			break
 		}
 	}
-	return result, nil
+	return result, total, nil
 }
 
 func (r *MemoryRepository) ListAllReports(playerID string) ([]BattleReport, error) {
@@ -484,7 +487,15 @@ func (r *MemoryRepository) CountUnreadReports(playerID string) (int, error) {
 	defer r.mu.RUnlock()
 
 	count := 0
+	threeDaysAgo := time.Now().Add(-3 * 24 * time.Hour)
 	for _, report := range r.reports[playerID] {
+		if report.Read || report.DeletedByPlayer {
+			continue
+		}
+		createdAt, err := time.Parse(time.RFC3339, report.CreatedAt)
+		if err == nil && createdAt.Before(threeDaysAgo) {
+			continue
+		}
 		if !report.Read && !report.DeletedByPlayer {
 			count++
 		}

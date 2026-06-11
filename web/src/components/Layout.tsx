@@ -178,7 +178,7 @@ const MobileSidebarContent: FC<{
   ]
 
   const unreadMessageCount = gameState?.unreadMessageCount ?? 0
-  const newsHasNotify = gameState?.recentBattleReports?.some(r => !r.read) ?? false
+  const newsHasNotify = unreadMessageCount > 0
   const quickActions = [
     { key: 'news', label: '军情', hasNotify: newsHasNotify },
     { key: 'mail', label: '信函', hasNotify: unreadMessageCount > 0 },

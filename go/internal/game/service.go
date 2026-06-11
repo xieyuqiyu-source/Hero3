@@ -338,16 +338,32 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 		applyHeroConfigToGeneral(state.General)
 	}
 
-	// 从独立存储加载战报
-	reports, listErr := s.repo.ListReports(playerID, 50)
-	if listErr != nil {
-		slog.Warn("list reports failed", "error", listErr)
-	}
-	state.RecentBattleReports = reports
+	s.attachReportSummary(&state, playerID)
 
 	hydrateStateForResponse(&state, time.Now())
 
 	return state, nil
+}
+
+func (s *Service) attachReportSummary(state *GameState, playerID string) {
+	if state == nil {
+		return
+	}
+
+	// 状态响应只带少量最近战报，用于未读提示和旧页面兼容；完整军情列表走分页接口。
+	reports, _, listErr := s.repo.ListReports(playerID, 10, 0)
+	if listErr != nil {
+		slog.Warn("list reports failed", "error", listErr)
+	} else {
+		state.RecentBattleReports = reports
+	}
+
+	unreadCount, countErr := s.repo.CountUnreadReports(playerID)
+	if countErr != nil {
+		slog.Warn("count unread reports failed", "error", countErr)
+		return
+	}
+	state.UnreadMessageCount = unreadCount
 }
 
 func hydrateStateForResponse(state *GameState, now time.Time) {

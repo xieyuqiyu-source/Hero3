@@ -236,12 +236,7 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 		return AttackNpcResponse{}, err
 	}
 
-	// 加载战报列表用于返回
-	reports, listErr := s.repo.ListReports(state.Player.ID, 50)
-	if listErr != nil {
-		slog.Warn("list reports failed", "error", listErr)
-	}
-	state.RecentBattleReports = reports
+	s.attachReportSummary(&state, state.Player.ID)
 
 	return AttackNpcResponse{
 		BattleReport: report,
@@ -500,12 +495,7 @@ func (s *Service) ScoutNpc(req ScoutNpcRequest) (ScoutNpcResponse, error) {
 		return ScoutNpcResponse{}, err
 	}
 
-	// 加载战报列表
-	reports, listErr := s.repo.ListReports(state.Player.ID, 50)
-	if listErr != nil {
-		slog.Warn("list reports failed", "error", listErr)
-	}
-	state.RecentBattleReports = reports
+	s.attachReportSummary(&state, state.Player.ID)
 
 	// 返回结果
 	response := ScoutNpcResponse{
@@ -945,6 +935,36 @@ func (s *Service) GetReportByID(reportID string) (BattleReport, error) {
 	return s.repo.GetReportByID(reportID)
 }
 
+// ListReports 分页获取玩家军情战报。
+func (s *Service) ListReports(playerID string, page int, pageSize int) (BattleReportPage, error) {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return BattleReportPage{}, ErrPlayerNotFound
+	}
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 10
+	}
+	if pageSize > 50 {
+		pageSize = 50
+	}
+
+	offset := (page - 1) * pageSize
+	reports, total, err := s.repo.ListReports(playerID, pageSize, offset)
+	if err != nil {
+		return BattleReportPage{}, err
+	}
+
+	return BattleReportPage{
+		Reports:  reports,
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+	}, nil
+}
+
 // MarkReportsRead 标记所有战报为已读
 func (s *Service) MarkReportsRead(playerID string) (GameState, error) {
 	playerID = strings.TrimSpace(playerID)
@@ -961,11 +981,7 @@ func (s *Service) MarkReportsRead(playerID string) (GameState, error) {
 		return GameState{}, err
 	}
 
-	reports, listErr := s.repo.ListReports(playerID, 50)
-	if listErr != nil {
-		slog.Warn("list reports failed", "error", listErr)
-	}
-	state.RecentBattleReports = reports
+	s.attachReportSummary(&state, playerID)
 	return state, nil
 }
 
@@ -986,11 +1002,7 @@ func (s *Service) MarkSingleReportRead(playerID string, reportID string) (GameSt
 		return GameState{}, err
 	}
 
-	reports, listErr := s.repo.ListReports(playerID, 50)
-	if listErr != nil {
-		slog.Warn("list reports failed", "error", listErr)
-	}
-	state.RecentBattleReports = reports
+	s.attachReportSummary(&state, playerID)
 	return state, nil
 }
 
@@ -1014,11 +1026,7 @@ func (s *Service) DeleteReport(playerID string, reportID string) (GameState, err
 		return GameState{}, err
 	}
 
-	reports, listErr := s.repo.ListReports(playerID, 50)
-	if listErr != nil {
-		slog.Warn("list reports failed", "error", listErr)
-	}
-	state.RecentBattleReports = reports
+	s.attachReportSummary(&state, playerID)
 	return state, nil
 }
 
@@ -1038,11 +1046,7 @@ func (s *Service) DeleteAllReports(playerID string) (GameState, error) {
 		return GameState{}, err
 	}
 
-	reports, listErr := s.repo.ListReports(playerID, 50)
-	if listErr != nil {
-		slog.Warn("list reports failed", "error", listErr)
-	}
-	state.RecentBattleReports = reports
+	s.attachReportSummary(&state, playerID)
 	return state, nil
 }
 

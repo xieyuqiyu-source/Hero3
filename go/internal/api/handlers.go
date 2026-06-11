@@ -714,6 +714,48 @@ func (h *Handlers) GetReport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, report)
 }
 
+func (h *Handlers) ListReports(w http.ResponseWriter, r *http.Request) {
+	playerID := r.URL.Query().Get("playerId")
+	if playerID == "" {
+		writeError(w, http.StatusBadRequest, "playerId is required")
+		return
+	}
+	if !h.requireOwnership(w, r, playerID) {
+		return
+	}
+
+	page := 1
+	if raw := r.URL.Query().Get("page"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 {
+			writeError(w, http.StatusBadRequest, "page must be a positive integer")
+			return
+		}
+		page = parsed
+	}
+
+	pageSize := 10
+	if raw := r.URL.Query().Get("pageSize"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 {
+			writeError(w, http.StatusBadRequest, "pageSize must be a positive integer")
+			return
+		}
+		pageSize = parsed
+	}
+	if pageSize > 50 {
+		pageSize = 50
+	}
+
+	result, err := h.gameService.ListReports(playerID, page, pageSize)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *Handlers) MarkReportsRead(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		PlayerID string `json:"playerId"`

@@ -204,6 +204,28 @@ BattleReport:
     createdAt:
       type: string
       format: date-time
+BattleReportPage:
+  type: object
+  required:
+  - reports
+  - page
+  - pageSize
+  - total
+  properties:
+    reports:
+      type: array
+      items:
+        $ref: '#/components/schemas/BattleReport'
+    page:
+      type: integer
+      example: 1
+    pageSize:
+      type: integer
+      example: 10
+    total:
+      type: integer
+      description: 符合条件的战报总数。
+      example: 23
 BalanceConfig:
   type: object
   required:

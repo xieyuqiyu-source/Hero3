@@ -1,0 +1,51 @@
+/api/v1/news/reports:
+  get:
+    tags:
+    - News
+    summary: 分页获取军情战报
+    description: 获取玩家最近 3 天内未删除的军情战报。用于军情页分页展示，避免一次性拉取大量战报。
+    operationId: listBattleReports
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      description: 玩家存档 ID。
+      schema:
+        type: string
+        example: player_47f23e0eeb08ab50402fedfc
+    - name: page
+      in: query
+      required: false
+      description: 页码，从 1 开始。
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    - name: pageSize
+      in: query
+      required: false
+      description: 每页数量，最大 50。
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 10
+    responses:
+      '200':
+        description: 战报分页结果
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BattleReportPage'
+      '400':
+        description: 参数错误
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '403':
+        description: 无权访问该玩家存档
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

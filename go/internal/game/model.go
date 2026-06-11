@@ -153,6 +153,13 @@ type BattleReport struct {
 	CreatedAt          string                        `json:"createdAt"`
 }
 
+type BattleReportPage struct {
+	Reports  []BattleReport `json:"reports"`
+	Page     int            `json:"page"`
+	PageSize int            `json:"pageSize"`
+	Total    int            `json:"total"`
+}
+
 type GameState struct {
 	Player              Player                  `json:"player"`
 	Resources           ResourceState           `json:"resources"`

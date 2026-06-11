@@ -44,6 +44,13 @@ export interface BattleSimulationResponse {
   defender: CombatArmy
 }
 
+export interface BattleReportPage {
+  reports: BattleReport[]
+  page: number
+  pageSize: number
+  total: number
+}
+
 export const gameApi = {
   /** 获取游戏启动配置（含 balance、factions、units） */
   bootstrap() {
@@ -152,6 +159,11 @@ export const gameApi = {
   /** 获取单条战报（公开，用于分享） */
   getReport(reportId: string) {
     return api.get<BattleReport>(`/reports/${reportId}`)
+  },
+
+  /** 分页获取军情战报 */
+  listReports(playerId: string, page: number, pageSize: number) {
+    return api.get<BattleReportPage>(`/news/reports?playerId=${playerId}&page=${page}&pageSize=${pageSize}`)
   },
 
   /** 攻击地图目标 */
