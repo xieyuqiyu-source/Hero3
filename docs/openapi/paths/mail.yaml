@@ -22,6 +22,12 @@
         minimum: 1
         maximum: 50
         default: 10
+    - name: mailType
+      in: query
+      description: 按信函类型筛选；不传或传 all 时返回全部。
+      schema:
+        type: string
+        enum: [all, gm_notice, compensation, reward, event_reward, system_notice, player_message]
     responses:
       '200':
         description: 信函分页结果
@@ -86,6 +92,64 @@
           application/json:
             schema:
               $ref: '#/components/schemas/DeleteResponse'
+/api/v1/mails/{mailId}/claim:
+  post:
+    tags:
+    - Mail
+    summary: 领取信函附件
+    parameters:
+    - name: mailId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId]
+            properties:
+              playerId:
+                type: string
+    responses:
+      '200':
+        description: 领取成功，返回信函和更新后的局部游戏状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MailClaimResult'
+      '400':
+        description: 无附件、已领取、已过期或玩家信函不可领取
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/mails/send-player:
+  post:
+    tags:
+    - Mail
+    summary: 玩家向玩家发送信函
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SendPlayerMailRequest'
+    responses:
+      '201':
+        description: 已创建的玩家信函
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Mail'
+      '400':
+        description: 收件人格式错误、不能给自己发信或内容不合法
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
 /api/v1/admin/mails/send:
   post:
     tags:
@@ -128,6 +192,12 @@
         minimum: 1
         maximum: 50
         default: 10
+    - name: mailType
+      in: query
+      description: 按信函类型筛选；不传或传 all 时返回全部。
+      schema:
+        type: string
+        enum: [all, gm_notice, compensation, reward, event_reward, system_notice, player_message]
     responses:
       '200':
         description: 信函分页结果

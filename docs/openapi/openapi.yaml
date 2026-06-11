@@ -74,6 +74,10 @@ paths:
     $ref: ./paths/mail.yaml#/~1api~1v1~1mails~1{mailId}
   /api/v1/mails/{mailId}/delete:
     $ref: ./paths/mail.yaml#/~1api~1v1~1mails~1{mailId}~1delete
+  /api/v1/mails/{mailId}/claim:
+    $ref: ./paths/mail.yaml#/~1api~1v1~1mails~1{mailId}~1claim
+  /api/v1/mails/send-player:
+    $ref: ./paths/mail.yaml#/~1api~1v1~1mails~1send-player
   /api/v1/admin/mails/send:
     $ref: ./paths/mail.yaml#/~1api~1v1~1admin~1mails~1send
   /api/v1/admin/players/{playerId}/mails:
@@ -134,6 +138,10 @@ components:
       $ref: ./schemas/mail.yaml#/MailPage
     SendMailRequest:
       $ref: ./schemas/mail.yaml#/SendMailRequest
+    SendPlayerMailRequest:
+      $ref: ./schemas/mail.yaml#/SendPlayerMailRequest
+    MailClaimResult:
+      $ref: ./schemas/mail.yaml#/MailClaimResult
     BalanceConfig:
       $ref: ./schemas/game-state.yaml#/BalanceConfig
     BuildingConfig:

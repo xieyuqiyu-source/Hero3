@@ -2,6 +2,7 @@ package game
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"time"
 )
@@ -14,6 +15,8 @@ type Repository interface {
 	AddAccountGold(accountID string, amount int) error
 	DeductAccountGold(accountID string, amount int) error
 	AccountExists(accountID string) (bool, error)
+	MailAddressExists(nickname string, mailCode string) (bool, error)
+	FindPlayerByMailAddress(nickname string, mailCode string) (PlayerSummary, error)
 	ListAccounts() ([]AccountSummary, error)
 	ListPlayers(accountID string) ([]PlayerSummary, error)
 	CreatePlayer(accountID string, state GameState, updatedAt time.Time) error
@@ -43,10 +46,11 @@ type Repository interface {
 	// Mails
 	SaveMail(mail Mail) error
 	GetMailByID(mailID string) (Mail, error)
-	ListMails(playerID string, limit int, offset int) ([]Mail, int, error)
+	ListMails(playerID string, mailType string, limit int, offset int) ([]Mail, int, error)
 	CountUnreadMails(playerID string) (int, error)
 	MarkMailRead(playerID string, mailID string, readAt time.Time) error
 	DeleteMail(playerID string, mailID string) error
+	ClaimMailAttachments(playerID string, mailID string, claimedAt time.Time) (MailClaimResult, error)
 
 	// MiniGame Records
 	SaveMiniGameRecord(record MiniGameRecord) error
@@ -249,6 +253,35 @@ func (r *MemoryRepository) AccountExists(accountID string) (bool, error) {
 
 	_, exists := r.accounts[accountID]
 	return exists, nil
+}
+
+func (r *MemoryRepository) MailAddressExists(nickname string, mailCode string) (bool, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, state := range r.players {
+		if state.Player.Nickname == nickname && state.Player.MailCode == mailCode {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *MemoryRepository) FindPlayerByMailAddress(nickname string, mailCode string) (PlayerSummary, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, state := range r.players {
+		if state.Player.Nickname == nickname && state.Player.MailCode == mailCode {
+			return PlayerSummary{
+				ID:       state.Player.ID,
+				Nickname: state.Player.Nickname,
+				Faction:  state.Player.Faction,
+				MailCode: state.Player.MailCode,
+			}, nil
+		}
+	}
+	return PlayerSummary{}, ErrPlayerNotFound
 }
 
 func (r *MemoryRepository) ListAccounts() ([]AccountSummary, error) {
@@ -542,15 +575,19 @@ func (r *MemoryRepository) GetMailByID(mailID string) (Mail, error) {
 	return Mail{}, errors.New("mail not found")
 }
 
-func (r *MemoryRepository) ListMails(playerID string, limit int, offset int) ([]Mail, int, error) {
+func (r *MemoryRepository) ListMails(playerID string, mailType string, limit int, offset int) ([]Mail, int, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	mailType = strings.TrimSpace(mailType)
 	all := r.mails[playerID]
 	total := 0
 	result := []Mail{}
 	for _, mail := range all {
 		if mail.DeletedByPlayer {
+			continue
+		}
+		if mailType != "" && mail.MailType != mailType {
 			continue
 		}
 		total++
@@ -607,6 +644,65 @@ func (r *MemoryRepository) DeleteMail(playerID string, mailID string) error {
 		}
 	}
 	return errors.New("mail not found")
+}
+
+func (r *MemoryRepository) ClaimMailAttachments(playerID string, mailID string, claimedAt time.Time) (MailClaimResult, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	state, exists := r.players[playerID]
+	if !exists {
+		return MailClaimResult{}, ErrPlayerNotFound
+	}
+	if state.Resources.Items == nil {
+		state.Resources.Items = map[string]int{}
+	}
+
+	for i := range r.mails[playerID] {
+		mail := r.mails[playerID][i]
+		if mail.ID != mailID || mail.DeletedByPlayer {
+			continue
+		}
+		if len(mail.Attachments) == 0 || mail.IsClaimed {
+			return MailClaimResult{}, ErrInvalidMail
+		}
+		granted, accountGold, err := ApplyMailAttachmentsToState(&state, mail.Attachments)
+		if err != nil {
+			return MailClaimResult{}, err
+		}
+		if accountGold > 0 {
+			accountID := ""
+			for candidateAccountID, playerIDs := range r.accountPlayers {
+				for _, candidatePlayerID := range playerIDs {
+					if candidatePlayerID == playerID {
+						accountID = candidateAccountID
+						break
+					}
+				}
+				if accountID != "" {
+					break
+				}
+			}
+			if accountID == "" {
+				return MailClaimResult{}, ErrAccountNotFound
+			}
+			account := r.accounts[accountID]
+			account.Gold += accountGold
+			r.accounts[accountID] = account
+		}
+		mail.IsClaimed = true
+		mail.ClaimedAt = claimedAt.UTC().Format(resourceDateLayout)
+		r.mails[playerID][i] = mail
+		r.players[playerID] = state
+		return MailClaimResult{
+			Mail:         mail,
+			Resources:    state.Resources,
+			CityGold:     int(state.CityGold),
+			AccountGold:  accountGold,
+			GrantedItems: granted,
+		}, nil
+	}
+	return MailClaimResult{}, ErrMailNotFound
 }
 
 // --- MiniGame Record Methods (MemoryRepository) ---

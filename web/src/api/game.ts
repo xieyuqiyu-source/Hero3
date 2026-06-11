@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult } from '@/types/game'
 import type { BalanceConfig, FactionConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -234,8 +234,14 @@ export const gameApi = {
   },
 
   /** 分页获取信函 */
-  listMails(playerId: string, page: number, pageSize: number) {
-    return api.get<MailPage>(`/mails?playerId=${playerId}&page=${page}&pageSize=${pageSize}`)
+  listMails(playerId: string, page: number, pageSize: number, mailType?: string) {
+    const params = new URLSearchParams({
+      playerId,
+      page: String(page),
+      pageSize: String(pageSize),
+    })
+    if (mailType && mailType !== 'all') params.set('mailType', mailType)
+    return api.get<MailPage>(`/mails?${params.toString()}`)
   },
 
   /** 获取信函详情并标记已读 */
@@ -245,7 +251,22 @@ export const gameApi = {
 
   /** 删除单封信函 */
   deleteMail(playerId: string, mailId: string) {
-    return api.post<MailPage>(`/mails/${mailId}/delete`, { playerId })
+    return api.post<{ status: string }>(`/mails/${mailId}/delete`, { playerId })
+  },
+
+  /** 领取信函附件 */
+  claimMailAttachments(playerId: string, mailId: string) {
+    return api.post<MailClaimResult>(`/mails/${mailId}/claim`, { playerId })
+  },
+
+  /** 玩家互发纯文本信函 */
+  sendPlayerMail(senderPlayerId: string, recipient: string, title: string, content: string) {
+    return api.post<Mail>('/mails/send-player', {
+      senderPlayerId,
+      recipient,
+      title,
+      content,
+    })
   },
 
   /** 金币兑换城金（1金币=10城金，有冷却） */

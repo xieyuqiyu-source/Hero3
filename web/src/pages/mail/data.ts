@@ -11,6 +11,7 @@ export const TYPE_OPTIONS: Array<{ key: MailType; label: string }> = [
   { key: 'compensation', label: '补偿' },
   { key: 'reward', label: '奖励' },
   { key: 'event_reward', label: '活动' },
+  { key: 'system_notice', label: '系统' },
   { key: 'player_message', label: '私信' },
 ]
 

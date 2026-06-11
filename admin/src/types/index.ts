@@ -11,6 +11,7 @@ export interface GameState {
     id: string
     nickname: string
     faction: string
+    mailCode?: string
   }
   resources: {
     items: Record<string, number>
@@ -103,6 +104,7 @@ export interface PlayerSummary {
   id: string
   nickname: string
   faction: string
+  mailCode?: string
   updatedAt: string
 }
 

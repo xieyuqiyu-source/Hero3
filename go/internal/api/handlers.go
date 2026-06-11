@@ -842,7 +842,7 @@ func (h *Handlers) ListMails(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := h.gameService.ListMails(playerID, page, pageSize)
+	result, err := h.gameService.ListMails(playerID, page, pageSize, r.URL.Query().Get("mailType"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -887,6 +887,48 @@ func (h *Handlers) DeleteMail(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
+func (h *Handlers) ClaimMailAttachments(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+	result, err := h.gameService.ClaimMailAttachments(payload.PlayerID, r.PathValue("mailId"))
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, game.ErrMailNotFound) {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handlers) SendPlayerMail(w http.ResponseWriter, r *http.Request) {
+	var payload game.SendPlayerMailRequest
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.SenderPlayerID) {
+		return
+	}
+	mail, err := h.gameService.SendPlayerMail(payload)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, game.ErrPlayerNotFound) {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, mail)
+}
+
 func (h *Handlers) AdminSendMail(w http.ResponseWriter, r *http.Request) {
 	var payload game.SendMailRequest
 	if !decodeJSON(w, r, &payload) {
@@ -922,7 +964,7 @@ func (h *Handlers) AdminPlayerMails(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	result, err := h.gameService.ListMails(playerID, page, pageSize)
+	result, err := h.gameService.ListMails(playerID, page, pageSize, r.URL.Query().Get("mailType"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

@@ -1,6 +1,8 @@
 package game
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -20,10 +22,23 @@ type SendMailRequest struct {
 	ExpiresAt   string           `json:"expiresAt"`
 }
 
-func (s *Service) ListMails(playerID string, page int, pageSize int) (MailPage, error) {
+type SendPlayerMailRequest struct {
+	SenderPlayerID string `json:"senderPlayerId"`
+	Recipient      string `json:"recipient"`
+	Title          string `json:"title"`
+	Content        string `json:"content"`
+}
+
+var mailAddressPattern = regexp.MustCompile(`^(.+)#([0-9]{6})$`)
+
+func (s *Service) ListMails(playerID string, page int, pageSize int, mailType string) (MailPage, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
 		return MailPage{}, ErrPlayerNotFound
+	}
+	mailType, ok := normalizeMailTypeFilter(mailType)
+	if !ok {
+		return MailPage{}, ErrInvalidMail
 	}
 	if page < 1 {
 		page = 1
@@ -36,7 +51,7 @@ func (s *Service) ListMails(playerID string, page int, pageSize int) (MailPage, 
 	}
 
 	offset := (page - 1) * pageSize
-	mails, total, err := s.repo.ListMails(playerID, pageSize, offset)
+	mails, total, err := s.repo.ListMails(playerID, mailType, pageSize, offset)
 	if err != nil {
 		return MailPage{}, err
 	}
@@ -87,6 +102,43 @@ func (s *Service) DeleteMail(playerID string, mailID string) error {
 	return s.repo.DeleteMail(playerID, mailID)
 }
 
+func (s *Service) ClaimMailAttachments(playerID string, mailID string) (MailClaimResult, error) {
+	playerID = strings.TrimSpace(playerID)
+	mailID = strings.TrimSpace(mailID)
+	if playerID == "" {
+		return MailClaimResult{}, ErrPlayerNotFound
+	}
+	if mailID == "" {
+		return MailClaimResult{}, ErrMailNotFound
+	}
+
+	mail, err := s.repo.GetMailByID(mailID)
+	if err != nil || mail.PlayerID != playerID || mail.DeletedByPlayer {
+		return MailClaimResult{}, ErrMailNotFound
+	}
+	if len(mail.Attachments) == 0 {
+		return MailClaimResult{}, ErrMailNoAttachments
+	}
+	if mail.IsClaimed {
+		return MailClaimResult{}, ErrMailAlreadyClaimed
+	}
+	if mail.SenderType == "player" || mail.MailType == "player_message" {
+		return MailClaimResult{}, ErrInvalidMail
+	}
+	if strings.TrimSpace(mail.ExpiresAt) != "" {
+		expiresAt, parseErr := time.Parse(resourceDateLayout, mail.ExpiresAt)
+		if parseErr == nil && time.Now().After(expiresAt) {
+			return MailClaimResult{}, ErrInvalidMail
+		}
+	}
+
+	result, err := s.repo.ClaimMailAttachments(playerID, mailID, time.Now())
+	if err != nil {
+		return MailClaimResult{}, err
+	}
+	return result, nil
+}
+
 func (s *Service) SendMail(req SendMailRequest) (Mail, error) {
 	now := time.Now()
 	mail, err := buildMail(req, now)
@@ -100,6 +152,53 @@ func (s *Service) SendMail(req SendMailRequest) (Mail, error) {
 		return Mail{}, err
 	}
 	return mail, nil
+}
+
+func (s *Service) SendPlayerMail(req SendPlayerMailRequest) (Mail, error) {
+	senderID := strings.TrimSpace(req.SenderPlayerID)
+	if senderID == "" {
+		return Mail{}, ErrPlayerNotFound
+	}
+	senderState, err := s.repo.GetState(senderID)
+	if err != nil {
+		return Mail{}, err
+	}
+	if senderState.Player.MailCode == "" {
+		code, err := s.generateMailCode(senderState.Player.Nickname)
+		if err != nil {
+			return Mail{}, err
+		}
+		senderState.Player.MailCode = code
+		if err := s.repo.SaveState(senderState, time.Now()); err != nil {
+			return Mail{}, err
+		}
+	}
+
+	nickname, mailCode, err := parseMailAddress(req.Recipient)
+	if err != nil {
+		return Mail{}, ErrInvalidMail
+	}
+	recipient, err := s.repo.FindPlayerByMailAddress(nickname, mailCode)
+	if err != nil {
+		return Mail{}, ErrPlayerNotFound
+	}
+	if recipient.ID == senderID {
+		return Mail{}, ErrMailRecipientSelf
+	}
+
+	senderName := formatMailAddress(senderState.Player.Nickname, senderState.Player.MailCode)
+	return s.SendMail(SendMailRequest{
+		PlayerID:    recipient.ID,
+		MailType:    "player_message",
+		SenderType:  "player",
+		SenderID:    senderID,
+		SenderName:  senderName,
+		Title:       req.Title,
+		Content:     req.Content,
+		Attachments: nil,
+		SourceType:  "player",
+		SourceID:    senderID,
+	})
 }
 
 func buildMail(req SendMailRequest, now time.Time) (Mail, error) {
@@ -165,6 +264,17 @@ func normalizeMailType(mailType string) string {
 	}
 }
 
+func normalizeMailTypeFilter(mailType string) (string, bool) {
+	switch strings.TrimSpace(mailType) {
+	case "", "all":
+		return "", true
+	case "gm_notice", "compensation", "reward", "event_reward", "system_notice", "player_message":
+		return strings.TrimSpace(mailType), true
+	default:
+		return "", false
+	}
+}
+
 func normalizeSenderType(senderType string) string {
 	switch strings.TrimSpace(senderType) {
 	case "system", "player":
@@ -208,4 +318,59 @@ func validateMailAttachments(attachments []MailAttachment) bool {
 		}
 	}
 	return true
+}
+
+func parseMailAddress(address string) (string, string, error) {
+	address = strings.TrimSpace(address)
+	matches := mailAddressPattern.FindStringSubmatch(address)
+	if len(matches) != 3 {
+		return "", "", ErrInvalidMail
+	}
+	nickname := strings.TrimSpace(matches[1])
+	mailCode := strings.TrimSpace(matches[2])
+	if nickname == "" || mailCode == "" {
+		return "", "", ErrInvalidMail
+	}
+	return nickname, mailCode, nil
+}
+
+func formatMailAddress(nickname string, mailCode string) string {
+	return fmt.Sprintf("%s#%s", strings.TrimSpace(nickname), strings.TrimSpace(mailCode))
+}
+
+func ApplyMailAttachmentsToState(state *GameState, attachments []MailAttachment) (map[string]int, int, error) {
+	if state == nil {
+		return nil, 0, ErrPlayerNotFound
+	}
+	if state.Resources.Items == nil {
+		state.Resources.Items = map[string]int{}
+	}
+	granted := map[string]int{}
+	accountGold := 0
+	for _, attachment := range attachments {
+		if attachment.Amount <= 0 {
+			return nil, 0, ErrInvalidMail
+		}
+		key := strings.TrimSpace(attachment.ItemID)
+		switch strings.TrimSpace(attachment.Type) {
+		case "resource":
+			capacity := state.Resources.Capacity[key]
+			current := state.Resources.Items[key]
+			next := current + attachment.Amount
+			if capacity > 0 && next > capacity {
+				next = capacity
+			}
+			state.Resources.Items[key] = next
+			granted[key] += next - current
+		case "city_gold":
+			state.CityGold += FlexInt(attachment.Amount)
+			granted["city_gold"] += attachment.Amount
+		case "gold":
+			accountGold += attachment.Amount
+			granted["gold"] += attachment.Amount
+		default:
+			return nil, 0, ErrInvalidMail
+		}
+	}
+	return granted, accountGold, nil
 }

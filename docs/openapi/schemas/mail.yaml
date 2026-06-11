@@ -142,3 +142,53 @@ SendMailRequest:
     expiresAt:
       type: string
       format: date-time
+SendPlayerMailRequest:
+  type: object
+  required:
+  - senderPlayerId
+  - recipient
+  - title
+  - content
+  properties:
+    senderPlayerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+    recipient:
+      type: string
+      description: 收件人地址，格式为 玩家昵称#六位编号。
+      example: 主公#482193
+    title:
+      type: string
+      maxLength: 60
+      example: 你好
+    content:
+      type: string
+      maxLength: 5000
+      example: 这里是玩家信函正文。
+MailClaimResult:
+  type: object
+  required:
+  - mail
+  - resources
+  - cityGold
+  - grantedItems
+  properties:
+    mail:
+      $ref: '#/components/schemas/Mail'
+    resources:
+      $ref: '#/components/schemas/ResourceState'
+    cityGold:
+      type: integer
+      example: 1200
+    accountGold:
+      type: integer
+      description: 如果附件包含账号金币，则返回账号金币最新余额。
+      example: 100
+    grantedItems:
+      type: object
+      description: 本次实际发放的奖励汇总，key 为附件类型或资源类型。
+      additionalProperties:
+        type: integer
+      example:
+        wood: 1000
+        city_gold: 50

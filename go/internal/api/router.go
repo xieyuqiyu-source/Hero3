@@ -59,6 +59,8 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("GET /api/v1/mails", handlers.ListMails)
 	mux.HandleFunc("GET /api/v1/mails/{mailId}", handlers.GetMail)
 	mux.HandleFunc("POST /api/v1/mails/{mailId}/delete", handlers.DeleteMail)
+	mux.HandleFunc("POST /api/v1/mails/{mailId}/claim", handlers.ClaimMailAttachments)
+	mux.HandleFunc("POST /api/v1/mails/send-player", handlers.SendPlayerMail)
 	mux.HandleFunc("POST /api/v1/gold/exchange", handlers.ExchangeGold)
 	mux.HandleFunc("POST /api/v1/gold/reverse-exchange", handlers.ReverseExchangeGold)
 	mux.HandleFunc("GET /api/v1/admin/accounts", handlers.AdminAccounts)

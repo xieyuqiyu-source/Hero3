@@ -35,6 +35,9 @@ var (
 	ErrStatMaxLevel       = errors.New("general stat is at max level")
 	ErrMailNotFound       = errors.New("mail not found")
 	ErrInvalidMail        = errors.New("invalid mail")
+	ErrMailAlreadyClaimed = errors.New("mail already claimed")
+	ErrMailNoAttachments  = errors.New("mail has no attachments")
+	ErrMailRecipientSelf  = errors.New("cannot send mail to yourself")
 )
 
 const resourceDateLayout = time.RFC3339
@@ -273,6 +276,11 @@ func (s *Service) CreatePlayer(accountID string, nickname string, faction string
 	now := time.Now()
 	playerID := "player_" + randomID(12)
 	state := newPlayerState(playerID, nickname, faction, generalID, now)
+	mailCode, err := s.generateMailCode(nickname)
+	if err != nil {
+		return "", GameState{}, err
+	}
+	state.Player.MailCode = mailCode
 	if err := s.repo.CreatePlayer(accountID, state, now); err != nil {
 		return "", GameState{}, err
 	}
@@ -312,6 +320,14 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 	}
 
 	state, changed := settleResources(state, time.Now())
+	if strings.TrimSpace(state.Player.MailCode) == "" {
+		mailCode, codeErr := s.generateMailCode(state.Player.Nickname)
+		if codeErr != nil {
+			return GameState{}, codeErr
+		}
+		state.Player.MailCode = mailCode
+		changed = true
+	}
 	if ensureCoreBuildings(&state) {
 		changed = true
 	}
@@ -444,6 +460,41 @@ func randomID(bytesCount int) string {
 		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(bytes)
+}
+
+func (s *Service) generateMailCode(nickname string) (string, error) {
+	nickname = strings.TrimSpace(nickname)
+	if nickname == "" {
+		return "", ErrPlayerNotFound
+	}
+	for i := 0; i < 20; i++ {
+		raw := randomID(3)
+		if len(raw) > 6 {
+			raw = raw[:6]
+		}
+		code := ""
+		for _, ch := range raw {
+			if ch >= '0' && ch <= '9' {
+				code += string(ch)
+			} else {
+				code += fmt.Sprintf("%d", int(ch)%10)
+			}
+			if len(code) == 6 {
+				break
+			}
+		}
+		for len(code) < 6 {
+			code += "0"
+		}
+		exists, err := s.repo.MailAddressExists(nickname, code)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			return code, nil
+		}
+	}
+	return "", ErrInvalidMail
 }
 
 // OwnsPlayer 校验指定 accountID 是否拥有指定 playerID

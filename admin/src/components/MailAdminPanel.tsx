@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import { ChevronLeft, ChevronRight, Mail, RefreshCw, Send } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Mail, Plus, RefreshCw, Send, Trash2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
-import type { Mail as MailItem } from '@/types'
+import type { Mail as MailItem, MailAttachment } from '@/types'
 
 const MAIL_TYPES = [
   { value: 'gm_notice', label: 'GM 通知' },
@@ -11,12 +11,22 @@ const MAIL_TYPES = [
   { value: 'system_notice', label: '系统通知' },
 ]
 
+const ATTACHMENT_OPTIONS = [
+  { type: 'resource', itemId: 'wood', label: '木材' },
+  { type: 'resource', itemId: 'stone', label: '石料' },
+  { type: 'resource', itemId: 'iron', label: '铁矿' },
+  { type: 'resource', itemId: 'food', label: '粮食' },
+  { type: 'city_gold', itemId: 'city_gold', label: '城金' },
+  { type: 'gold', itemId: 'gold', label: '金币' },
+]
+
 export default function MailAdminPanel() {
   const [playerId, setPlayerId] = useState('')
   const [mailType, setMailType] = useState('gm_notice')
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [expiresAt, setExpiresAt] = useState('')
+  const [attachments, setAttachments] = useState<MailAttachment[]>([])
   const [mails, setMails] = useState<MailItem[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [totalMails, setTotalMails] = useState(0)
@@ -60,11 +70,13 @@ export default function MailAdminPanel() {
         mailType,
         title: title.trim(),
         content: content.trim(),
+        attachments: attachments.filter((item) => item.amount > 0),
         expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
       })
       setTitle('')
       setContent('')
       setExpiresAt('')
+      setAttachments([])
       setMessage('信函已发送')
       setCurrentPage(1)
       await loadMails(1, { silent: true })
@@ -122,6 +134,61 @@ export default function MailAdminPanel() {
           onChange={(event) => setExpiresAt(event.target.value)}
           className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent-border)]"
         />
+        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-xs font-semibold text-[var(--color-text-primary)]">附件</span>
+            <button
+              type="button"
+              onClick={() => setAttachments((items) => [...items, { type: 'resource', itemId: 'wood', amount: 1000 }])}
+              className="ml-auto inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[10px] text-[var(--color-text-secondary)] hover:border-[var(--color-accent-border)] cursor-pointer transition-colors"
+            >
+              <Plus size={12} />
+              添加附件
+            </button>
+          </div>
+          {attachments.length === 0 ? (
+            <p className="text-xs text-[var(--color-text-muted)]">无附件。玩家互发信函不支持附件，GM 信函可附带补偿奖励。</p>
+          ) : (
+            <div className="space-y-2">
+              {attachments.map((item, index) => {
+                const selected = `${item.type}:${item.itemId}`
+                return (
+                  <div key={index} className="grid gap-2 md:grid-cols-[1fr_140px_36px]">
+                    <select
+                      value={selected}
+                      onChange={(event) => {
+                        const [type, itemId] = event.target.value.split(':')
+                        setAttachments((items) => items.map((next, i) => i === index ? { ...next, type, itemId } : next))
+                      }}
+                      className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 text-xs outline-none focus:border-[var(--color-accent-border)]"
+                    >
+                      {ATTACHMENT_OPTIONS.map((option) => (
+                        <option key={`${option.type}:${option.itemId}`} value={`${option.type}:${option.itemId}`}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min={1}
+                      value={item.amount}
+                      onChange={(event) => setAttachments((items) => items.map((next, i) => i === index ? { ...next, amount: Number(event.target.value) } : next))}
+                      className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 text-xs outline-none focus:border-[var(--color-accent-border)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setAttachments((items) => items.filter((_, i) => i !== index))}
+                      className="inline-flex h-9 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:border-red-400 hover:text-red-500 cursor-pointer transition-colors"
+                      aria-label="删除附件"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="submit"

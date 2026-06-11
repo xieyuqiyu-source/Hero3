@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -52,10 +53,12 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			account_id VARCHAR(64) NOT NULL,
 			nickname VARCHAR(64) NOT NULL,
 			faction VARCHAR(32) NOT NULL,
+			mail_code VARCHAR(12) NOT NULL DEFAULT '',
 			state_json JSON NOT NULL,
 			created_at DATETIME(6) NOT NULL,
 			updated_at DATETIME(6) NOT NULL,
 			INDEX idx_players_account_updated (account_id, updated_at),
+			INDEX idx_players_mail_address (nickname, mail_code),
 			CONSTRAINT fk_players_account
 				FOREIGN KEY (account_id) REFERENCES accounts(id)
 				ON DELETE CASCADE
@@ -133,6 +136,12 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 	}
 
 	if err := addColumnIfMissing(ctx, db, `ALTER TABLE accounts ADD COLUMN gold INT NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE players ADD COLUMN mail_code VARCHAR(12) NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX idx_players_mail_address ON players (nickname, mail_code)`); err != nil && !isDuplicateKeyName(err) {
 		return err
 	}
 	if err := addColumnIfMissing(ctx, db, `ALTER TABLE minigame_records ADD COLUMN bet_unit VARCHAR(64) NOT NULL DEFAULT ''`); err != nil {
@@ -346,6 +355,38 @@ func (r *MySQLRepository) AccountExists(accountID string) (bool, error) {
 	return err == nil, err
 }
 
+func (r *MySQLRepository) MailAddressExists(nickname string, mailCode string) (bool, error) {
+	var exists int
+	err := r.db.QueryRow(
+		`SELECT 1 FROM players WHERE nickname = ? AND mail_code = ? LIMIT 1`,
+		nickname, mailCode,
+	).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func (r *MySQLRepository) FindPlayerByMailAddress(nickname string, mailCode string) (game.PlayerSummary, error) {
+	var summary game.PlayerSummary
+	var updatedAt time.Time
+	err := r.db.QueryRow(
+		`SELECT id, nickname, faction, mail_code, updated_at
+		 FROM players
+		 WHERE nickname = ? AND mail_code = ?
+		 LIMIT 1`,
+		nickname, mailCode,
+	).Scan(&summary.ID, &summary.Nickname, &summary.Faction, &summary.MailCode, &updatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return game.PlayerSummary{}, game.ErrPlayerNotFound
+	}
+	if err != nil {
+		return game.PlayerSummary{}, err
+	}
+	summary.UpdatedAt = updatedAt.UTC().Format(time.RFC3339)
+	return summary, nil
+}
+
 func (r *MySQLRepository) ListAccounts() ([]game.AccountSummary, error) {
 	rows, err := r.db.Query(
 		`SELECT
@@ -355,6 +396,7 @@ func (r *MySQLRepository) ListAccounts() ([]game.AccountSummary, error) {
 			p.id,
 			p.nickname,
 			p.faction,
+			p.mail_code,
 			p.updated_at
 		FROM accounts a
 		LEFT JOIN players p ON p.account_id = a.id
@@ -374,9 +416,10 @@ func (r *MySQLRepository) ListAccounts() ([]game.AccountSummary, error) {
 		var playerID sql.NullString
 		var nickname sql.NullString
 		var faction sql.NullString
+		var mailCode sql.NullString
 		var updatedAt sql.NullTime
 
-		if err := rows.Scan(&accountID, &username, &createdAt, &playerID, &nickname, &faction, &updatedAt); err != nil {
+		if err := rows.Scan(&accountID, &username, &createdAt, &playerID, &nickname, &faction, &mailCode, &updatedAt); err != nil {
 			return nil, err
 		}
 
@@ -397,6 +440,7 @@ func (r *MySQLRepository) ListAccounts() ([]game.AccountSummary, error) {
 				ID:       playerID.String,
 				Nickname: nickname.String,
 				Faction:  faction.String,
+				MailCode: mailCode.String,
 			}
 			if updatedAt.Valid {
 				player.UpdatedAt = updatedAt.Time.UTC().Format(time.RFC3339)
@@ -425,7 +469,7 @@ func (r *MySQLRepository) ListPlayers(accountID string) ([]game.PlayerSummary, e
 	}
 
 	rows, err := r.db.Query(
-		`SELECT id, nickname, faction, state_json, updated_at
+		`SELECT id, nickname, faction, mail_code, state_json, updated_at
 		 FROM players
 		 WHERE account_id = ?
 		 ORDER BY updated_at DESC`,
@@ -438,10 +482,10 @@ func (r *MySQLRepository) ListPlayers(accountID string) ([]game.PlayerSummary, e
 
 	players := []game.PlayerSummary{}
 	for rows.Next() {
-		var id, nickname, faction string
+		var id, nickname, faction, mailCode string
 		var stateJSON []byte
 		var updatedAt time.Time
-		if err := rows.Scan(&id, &nickname, &faction, &stateJSON, &updatedAt); err != nil {
+		if err := rows.Scan(&id, &nickname, &faction, &mailCode, &stateJSON, &updatedAt); err != nil {
 			return nil, err
 		}
 
@@ -449,6 +493,7 @@ func (r *MySQLRepository) ListPlayers(accountID string) ([]game.PlayerSummary, e
 			ID:        id,
 			Nickname:  nickname,
 			Faction:   faction,
+			MailCode:  mailCode,
 			UpdatedAt: updatedAt.UTC().Format(time.RFC3339),
 		}
 
@@ -477,12 +522,13 @@ func (r *MySQLRepository) CreatePlayer(accountID string, state game.GameState, u
 
 	now := updatedAt.UTC()
 	_, err = r.db.Exec(
-		`INSERT INTO players (id, account_id, nickname, faction, state_json, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO players (id, account_id, nickname, faction, mail_code, state_json, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		state.Player.ID,
 		accountID,
 		state.Player.Nickname,
 		state.Player.Faction,
+		state.Player.MailCode,
 		stateJSON,
 		now,
 		now,
@@ -549,7 +595,8 @@ func (r *MySQLRepository) DeletePlayer(playerID string) error {
 
 func (r *MySQLRepository) GetState(playerID string) (game.GameState, error) {
 	var stateJSON []byte
-	err := r.db.QueryRow(`SELECT state_json FROM players WHERE id = ? LIMIT 1`, playerID).Scan(&stateJSON)
+	var mailCode string
+	err := r.db.QueryRow(`SELECT state_json, mail_code FROM players WHERE id = ? LIMIT 1`, playerID).Scan(&stateJSON, &mailCode)
 	if errors.Is(err, sql.ErrNoRows) {
 		return game.GameState{}, game.ErrPlayerNotFound
 	}
@@ -560,6 +607,9 @@ func (r *MySQLRepository) GetState(playerID string) (game.GameState, error) {
 	var state game.GameState
 	if err := json.Unmarshal(stateJSON, &state); err != nil {
 		return game.GameState{}, err
+	}
+	if state.Player.MailCode == "" {
+		state.Player.MailCode = mailCode
 	}
 	return state, nil
 }
@@ -572,10 +622,11 @@ func (r *MySQLRepository) SaveState(state game.GameState, updatedAt time.Time) e
 
 	result, err := r.db.Exec(
 		`UPDATE players
-		 SET nickname = ?, faction = ?, state_json = ?, updated_at = ?
+		 SET nickname = ?, faction = ?, mail_code = ?, state_json = ?, updated_at = ?
 		 WHERE id = ?`,
 		state.Player.Nickname,
 		state.Player.Faction,
+		state.Player.MailCode,
 		stateJSON,
 		updatedAt.UTC(),
 		state.Player.ID,
@@ -610,6 +661,11 @@ func addColumnIfMissing(ctx context.Context, db *sql.DB, statement string) error
 func isDuplicateColumn(err error) bool {
 	var mysqlErr *mysql.MySQLError
 	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1060
+}
+
+func isDuplicateKeyName(err error) bool {
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1061
 }
 
 // --- Battle Report Methods ---
@@ -824,31 +880,51 @@ func (r *MySQLRepository) GetMailByID(mailID string) (game.Mail, error) {
 	return scanMail(row)
 }
 
-func (r *MySQLRepository) ListMails(playerID string, limit int, offset int) ([]game.Mail, int, error) {
+func (r *MySQLRepository) ListMails(playerID string, mailType string, limit int, offset int) ([]game.Mail, int, error) {
 	if limit <= 0 {
 		limit = 10
 	}
 	if offset < 0 {
 		offset = 0
 	}
+	mailType = strings.TrimSpace(mailType)
 
 	var total int
-	if err := r.db.QueryRow(
-		`SELECT COUNT(*) FROM mails WHERE player_id = ? AND deleted_by_player = 0`,
-		playerID,
-	).Scan(&total); err != nil {
-		return nil, 0, err
+	var rows *sql.Rows
+	var err error
+	if mailType == "" {
+		if err := r.db.QueryRow(
+			`SELECT COUNT(*) FROM mails WHERE player_id = ? AND deleted_by_player = 0`,
+			playerID,
+		).Scan(&total); err != nil {
+			return nil, 0, err
+		}
+		rows, err = r.db.Query(
+			`SELECT id, player_id, mail_type, sender_type, sender_id, sender_name,
+				title, content, attachments_json, source_type, source_id,
+				is_read, is_claimed, deleted_by_player, expires_at, created_at, read_at, claimed_at
+			 FROM mails
+			 WHERE player_id = ? AND deleted_by_player = 0
+			 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+			playerID, limit, offset,
+		)
+	} else {
+		if err := r.db.QueryRow(
+			`SELECT COUNT(*) FROM mails WHERE player_id = ? AND mail_type = ? AND deleted_by_player = 0`,
+			playerID, mailType,
+		).Scan(&total); err != nil {
+			return nil, 0, err
+		}
+		rows, err = r.db.Query(
+			`SELECT id, player_id, mail_type, sender_type, sender_id, sender_name,
+				title, content, attachments_json, source_type, source_id,
+				is_read, is_claimed, deleted_by_player, expires_at, created_at, read_at, claimed_at
+			 FROM mails
+			 WHERE player_id = ? AND mail_type = ? AND deleted_by_player = 0
+			 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+			playerID, mailType, limit, offset,
+		)
 	}
-
-	rows, err := r.db.Query(
-		`SELECT id, player_id, mail_type, sender_type, sender_id, sender_name,
-			title, content, attachments_json, source_type, source_id,
-			is_read, is_claimed, deleted_by_player, expires_at, created_at, read_at, claimed_at
-		 FROM mails
-		 WHERE player_id = ? AND deleted_by_player = 0
-		 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-		playerID, limit, offset,
-	)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -904,6 +980,135 @@ func (r *MySQLRepository) DeleteMail(playerID string, mailID string) error {
 		return errors.New("mail not found")
 	}
 	return err
+}
+
+func (r *MySQLRepository) ClaimMailAttachments(playerID string, mailID string, claimedAt time.Time) (game.MailClaimResult, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return game.MailClaimResult{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	mail, err := scanMail(tx.QueryRow(
+		`SELECT id, player_id, mail_type, sender_type, sender_id, sender_name,
+			title, content, attachments_json, source_type, source_id,
+			is_read, is_claimed, deleted_by_player, expires_at, created_at, read_at, claimed_at
+		 FROM mails
+		 WHERE id = ? AND player_id = ? AND deleted_by_player = 0
+		 LIMIT 1 FOR UPDATE`,
+		mailID, playerID,
+	))
+	if err != nil {
+		return game.MailClaimResult{}, game.ErrMailNotFound
+	}
+	if len(mail.Attachments) == 0 {
+		return game.MailClaimResult{}, game.ErrMailNoAttachments
+	}
+	if mail.IsClaimed {
+		return game.MailClaimResult{}, game.ErrMailAlreadyClaimed
+	}
+
+	var accountID string
+	var mailCode string
+	var stateJSON []byte
+	err = tx.QueryRow(
+		`SELECT account_id, mail_code, state_json FROM players WHERE id = ? LIMIT 1 FOR UPDATE`,
+		playerID,
+	).Scan(&accountID, &mailCode, &stateJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		return game.MailClaimResult{}, game.ErrPlayerNotFound
+	}
+	if err != nil {
+		return game.MailClaimResult{}, err
+	}
+
+	var state game.GameState
+	if err = json.Unmarshal(stateJSON, &state); err != nil {
+		return game.MailClaimResult{}, err
+	}
+	if state.Player.MailCode == "" {
+		state.Player.MailCode = mailCode
+	}
+	granted, accountGold, err := game.ApplyMailAttachmentsToState(&state, mail.Attachments)
+	if err != nil {
+		return game.MailClaimResult{}, err
+	}
+
+	var goldBalance int
+	if accountGold > 0 {
+		err = tx.QueryRow(`SELECT gold FROM accounts WHERE id = ? LIMIT 1 FOR UPDATE`, accountID).Scan(&goldBalance)
+		if err != nil {
+			return game.MailClaimResult{}, err
+		}
+		goldBalance += accountGold
+		if _, err = tx.Exec(`UPDATE accounts SET gold = ? WHERE id = ?`, goldBalance, accountID); err != nil {
+			return game.MailClaimResult{}, err
+		}
+		if err = insertGoldLedgerTx(tx, game.GoldLedgerEntry{
+			AccountID:    accountID,
+			PlayerID:     playerID,
+			Currency:     game.LedgerCurrencyGold,
+			Direction:    game.LedgerDirectionCredit,
+			Amount:       accountGold,
+			BalanceAfter: goldBalance,
+			RefType:      "mail",
+			RefID:        mailID,
+			Reason:       "mail_claim",
+			CreatedAt:    claimedAt.UTC().Format(time.RFC3339),
+		}); err != nil {
+			return game.MailClaimResult{}, err
+		}
+	}
+
+	if amount := granted["city_gold"]; amount > 0 {
+		if err = insertGoldLedgerTx(tx, game.GoldLedgerEntry{
+			AccountID:    accountID,
+			PlayerID:     playerID,
+			Currency:     game.LedgerCurrencyCityGold,
+			Direction:    game.LedgerDirectionCredit,
+			Amount:       amount,
+			BalanceAfter: int(state.CityGold),
+			RefType:      "mail",
+			RefID:        mailID,
+			Reason:       "mail_claim",
+			CreatedAt:    claimedAt.UTC().Format(time.RFC3339),
+		}); err != nil {
+			return game.MailClaimResult{}, err
+		}
+	}
+
+	nextStateJSON, err := json.Marshal(state)
+	if err != nil {
+		return game.MailClaimResult{}, err
+	}
+	if _, err = tx.Exec(
+		`UPDATE players SET state_json = ?, mail_code = ?, updated_at = ? WHERE id = ?`,
+		nextStateJSON, state.Player.MailCode, claimedAt.UTC(), playerID,
+	); err != nil {
+		return game.MailClaimResult{}, err
+	}
+
+	if _, err = tx.Exec(
+		`UPDATE mails
+		 SET is_claimed = 1, claimed_at = ?
+		 WHERE id = ? AND player_id = ? AND is_claimed = 0 AND deleted_by_player = 0`,
+		claimedAt.UTC(), mailID, playerID,
+	); err != nil {
+		return game.MailClaimResult{}, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return game.MailClaimResult{}, err
+	}
+	mail.IsClaimed = true
+	mail.ClaimedAt = claimedAt.UTC().Format(time.RFC3339)
+	return game.MailClaimResult{
+		Mail:         mail,
+		Resources:    state.Resources,
+		CityGold:     int(state.CityGold),
+		AccountGold:  goldBalance,
+		GrantedItems: granted,
+	}, nil
 }
 
 type mailScanner interface {
@@ -1020,6 +1225,29 @@ func (r *MySQLRepository) WriteGoldLedger(entry game.GoldLedgerEntry) error {
 	}
 
 	_, err := r.db.Exec(
+		`INSERT INTO gold_ledger
+		 (account_id, player_id, currency, direction, amount, balance_after, ref_type, ref_id, reason, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		entry.AccountID,
+		entry.PlayerID,
+		entry.Currency,
+		entry.Direction,
+		entry.Amount,
+		entry.BalanceAfter,
+		entry.RefType,
+		entry.RefID,
+		entry.Reason,
+		createdAt.UTC(),
+	)
+	return err
+}
+
+func insertGoldLedgerTx(tx *sql.Tx, entry game.GoldLedgerEntry) error {
+	createdAt, _ := time.Parse(time.RFC3339, entry.CreatedAt)
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+	_, err := tx.Exec(
 		`INSERT INTO gold_ledger
 		 (account_id, player_id, currency, direction, amount, balance_after, ref_type, ref_id, reason, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

@@ -71,6 +71,10 @@ Player:
     nickname:
       type: string
       example: 主公
+    mailCode:
+      type: string
+      description: 玩家信函短编号，与昵称组合成 玩家昵称#编号。
+      example: '482193'
     faction:
       type: string
       example: wei

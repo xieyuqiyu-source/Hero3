@@ -33,6 +33,7 @@ type PlayerSummary struct {
 	ID            string `json:"id"`
 	Nickname      string `json:"nickname"`
 	Faction       string `json:"faction"`
+	MailCode      string `json:"mailCode,omitempty"`
 	TotalArmy     int    `json:"totalArmy"`
 	BuildingLevel int    `json:"buildingLevel"`
 	UpdatedAt     string `json:"updatedAt"`
@@ -49,6 +50,7 @@ type Player struct {
 	ID       string `json:"id"`
 	Nickname string `json:"nickname"`
 	Faction  string `json:"faction"`
+	MailCode string `json:"mailCode,omitempty"`
 }
 
 type ResourceState struct {
@@ -194,6 +196,14 @@ type MailPage struct {
 	PageSize int    `json:"pageSize"`
 	Total    int    `json:"total"`
 	Unread   int    `json:"unread"`
+}
+
+type MailClaimResult struct {
+	Mail         Mail           `json:"mail"`
+	Resources    ResourceState  `json:"resources"`
+	CityGold     int            `json:"cityGold"`
+	AccountGold  int            `json:"accountGold,omitempty"`
+	GrantedItems map[string]int `json:"grantedItems"`
 }
 
 type GameState struct {

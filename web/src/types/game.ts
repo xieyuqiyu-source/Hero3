@@ -4,6 +4,7 @@ export interface Player {
   id: string
   nickname: string
   faction: string
+  mailCode?: string
 }
 
 export interface AccountSession {
@@ -17,6 +18,7 @@ export interface PlayerSummary {
   id: string
   nickname: string
   faction: string
+  mailCode?: string
   totalArmy: number
   buildingLevel: number
   updatedAt: string
@@ -119,6 +121,14 @@ export interface Mail {
   createdAt: string
   readAt?: string
   claimedAt?: string
+}
+
+export interface MailClaimResult {
+  mail: Mail
+  resources: ResourceState
+  cityGold: number
+  accountGold?: number
+  grantedItems: Record<string, number>
 }
 
 export interface GeneralTraitInstance {
