@@ -1,6 +1,6 @@
-import type { CSSProperties, FC, PointerEvent } from 'react'
+import type { CSSProperties, FC } from 'react'
 import fishingPondBg from '@/assets/minigames/fishing/fishing-pond-bg.webp'
-import fishermanActionSprites from '@/assets/minigames/fishing/fisherman-action-sprites.png'
+import fishermanActionSprites from '@/assets/minigames/fishing/fisherman-only-sprites.png'
 import waterEffectsSprites from '@/assets/minigames/fishing/water-effects.png'
 import type { BaitType, BiteSpot, Bubble, FishCatch, FishShadow, GamePhase } from './types'
 
@@ -44,7 +44,7 @@ export const FishingPondScene: FC<FishingPondSceneProps> = ({
   onReel,
   onReset,
 }) => {
-  const handlePointerDown = (_event: PointerEvent<HTMLDivElement>) => {
+  const handlePointerDown = () => {
     if (phase === 'idle') onCastDown()
     else if (phase === 'biting') onReel()
   }
@@ -58,6 +58,10 @@ export const FishingPondScene: FC<FishingPondSceneProps> = ({
     : catchResult?.rarity === 'epic'
       ? 'from-purple-200 via-sky-200 to-cyan-300'
       : 'from-sky-200 via-sky-300 to-cyan-300'
+  const isSweetSpot = castPower >= selectedBait.sweetStart && castPower <= selectedBait.sweetEnd
+  const castPreviewX = 42 + castPower * 0.4
+  const castPreviewY = 70 - castPower * 0.28
+  const castColor = isSweetSpot ? '#22c55e' : castPower > selectedBait.sweetEnd ? '#ef4444' : '#38bdf8'
   const fishermanFrame = phase === 'idle'
     ? 0
     : phase === 'casting'
@@ -83,38 +87,32 @@ export const FishingPondScene: FC<FishingPondSceneProps> = ({
         className="absolute inset-0 h-full w-full object-cover [image-rendering:auto]"
         draggable={false}
       />
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-950/8" />
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-950/12" />
       <div className={`absolute inset-x-0 top-0 h-[32%] bg-gradient-to-b ${sceneTone} opacity-15`} />
-      <div className="absolute left-8 top-8 h-7 w-7 rounded-sm bg-[#ffe28a] shadow-[8px_0_0_#ffe28a,0_8px_0_#ffe28a,8px_8px_0_#f5c453]" />
+      <div className="absolute inset-x-0 bottom-0 h-[48%] bg-gradient-to-t from-slate-950/18 via-cyan-950/5 to-transparent" />
+      <div className="absolute bottom-[14%] left-[34%] h-[40%] w-[58%] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.16),rgba(14,165,233,0.04)_42%,transparent_68%)] opacity-70 animate-water-shimmer" />
 
-      {/* Distant mountains */}
-      <div className="absolute left-[-4%] top-[18%] h-20 w-52 bg-[#6fa389] [clip-path:polygon(0_100%,22%_30%,40%_100%,58%_18%,84%_100%,100%_100%)] opacity-80" />
-      <div className="absolute right-[-6%] top-[16%] h-24 w-64 bg-[#5f947c] [clip-path:polygon(0_100%,18%_45%,34%_100%,52%_20%,74%_100%,100%_44%,100%_100%)] opacity-80" />
-
-      {/* Pavilion */}
-      <div className="absolute right-[10%] top-[27%] hidden h-20 w-24 sm:block">
-        <div className="absolute left-2 top-0 h-4 w-20 bg-[#7c2d12] shadow-[6px_4px_0_#431407,-6px_4px_0_#431407]" />
-        <div className="absolute left-5 top-4 h-9 w-2 bg-[#78350f]" />
-        <div className="absolute right-5 top-4 h-9 w-2 bg-[#78350f]" />
-        <div className="absolute bottom-4 left-3 h-3 w-18 bg-[#92400e]" />
-      </div>
-
-      <div className="absolute bottom-0 left-0 right-0 h-[68%] bg-[#6cad52]/15" />
-      <div className="absolute bottom-0 left-0 h-[22%] w-[48%] bg-[#7a5b34]/35 shadow-[inset_0_8px_0_rgba(155,122,71,0.35)]" />
-      <div className="absolute bottom-[9%] left-[31%] h-[64%] w-[67%] rounded-[45%] border-4 border-[#12394e]/40 bg-[#2996b7]/25 shadow-[inset_0_-22px_0_rgba(18,107,137,0.3),inset_0_14px_0_rgba(255,255,255,0.16),0_10px_0_rgba(15,79,102,0.28)]" />
-      <div className="absolute bottom-[15%] left-[37%] h-[46%] w-[56%] rounded-[45%] bg-[repeating-linear-gradient(0deg,rgba(255,255,255,0.10)_0_2px,transparent_2px_20px)] opacity-25 animate-water-shimmer" />
-      <div className="absolute bottom-[12%] left-[24%] h-12 w-20 rounded-t-full bg-[#7b5d38] shadow-[12px_8px_0_#5c4329]" />
-
-      {/* Lotus / reeds */}
-      <div className="absolute bottom-[28%] right-[13%] h-3 w-8 rounded-full bg-[#2f7d45] shadow-[24px_-12px_0_#2f7d45,-22px_10px_0_#3f9b57]" />
-      <div className="absolute bottom-[40%] right-[20%] h-3 w-3 bg-[#f0a6c1] shadow-[4px_0_0_#f0a6c1,2px_-4px_0_#f7c1d4]" />
-      <div className="absolute bottom-[25%] left-[4%] h-16 w-2 bg-[#315c2a] shadow-[8px_-8px_0_#315c2a,16px_2px_0_#315c2a,24px_-12px_0_#315c2a]" />
+      {phase === 'casting' && (
+        <>
+          <div
+            className="absolute h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/60 bg-white/10 shadow-[0_0_18px_rgba(255,255,255,0.25)]"
+            style={{ left: `${castPreviewX}%`, top: `${castPreviewY}%` }}
+          />
+          <div
+            className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_12px_rgba(255,255,255,0.75)]"
+            style={{ left: `${castPreviewX}%`, top: `${castPreviewY}%`, backgroundColor: castColor }}
+          />
+          <div
+            className="absolute left-[31%] top-[62%] h-px origin-left rotate-[-23deg] bg-white/55"
+            style={{ width: `${Math.max(80, castPower * 3.2)}px` }}
+          />
+        </>
+      )}
 
       <div
-        className={`absolute bottom-[13%] left-[1%] h-32 w-[66%] pointer-events-none transition-transform duration-300 [image-rendering:pixelated] sm:bottom-[13%] sm:left-[2%] sm:h-40 sm:w-[60%] md:h-48 md:w-[58%] ${phase === 'casting' ? '-translate-y-1' : phase === 'reeling' ? '-translate-y-2' : ''}`}
+        className="absolute bottom-[55%] left-[14%] h-[34%] aspect-[340/440] pointer-events-none [image-rendering:pixelated] sm:bottom-[27%] sm:left-[16%] md:bottom-[30%] md:left-[19%]"
         style={spriteFrameStyle(fishermanActionSprites, 6, fishermanFrame)}
-      >
-      </div>
+      />
 
       {(phase === 'waiting' || phase === 'biting' || phase === 'reeling') && (
         <>
@@ -181,36 +179,38 @@ export const FishingPondScene: FC<FishingPondSceneProps> = ({
 
       <div className="relative z-10 flex min-h-[420px] flex-col justify-between p-3 md:min-h-[470px] md:p-4">
         <div className="flex items-start justify-between gap-2">
-          <div className="rounded-md border-2 border-slate-800 bg-white/80 px-2 py-1 text-[10px] font-bold text-slate-800 shadow-[3px_3px_0_#334155]">
+          <div className="rounded border border-amber-900/50 bg-amber-50/88 px-2 py-1 text-[10px] font-bold text-amber-950 shadow-[0_2px_8px_rgba(15,23,42,0.18)] backdrop-blur-sm">
             {selectedBait.name} · {selectedBait.cityGoldCost} 城金
           </div>
-          <div className="hidden rounded-md border-2 border-slate-800 bg-white/80 px-2 py-1 text-[10px] font-bold text-slate-800 shadow-[3px_3px_0_#334155] sm:block">
+          <div className="hidden rounded border border-sky-950/40 bg-sky-50/88 px-2 py-1 text-[10px] font-bold text-sky-950 shadow-[0_2px_8px_rgba(15,23,42,0.18)] backdrop-blur-sm sm:block">
             蓄力框 {selectedBait.sweetStart}-{selectedBait.sweetEnd}%
           </div>
         </div>
 
         {phase === 'idle' && (
-          <div className="mb-5 self-center rounded-md border-4 border-slate-800 bg-white/90 px-5 py-3 text-center shadow-[5px_5px_0_#334155]">
-            <p className="text-xs font-black text-slate-900">{combo > 0 ? `连击 ${combo}，鱼群聚过来了` : '按住钓场蓄力，松手投杆'}</p>
-            <p className="mt-1 text-[10px] text-slate-500 md:hidden">手机端已简化显示，复杂版后续单独设计</p>
+          <div className="mb-4 self-center rounded border border-slate-900/35 bg-white/82 px-3 py-2 text-center shadow-[0_6px_18px_rgba(15,23,42,0.18)] backdrop-blur-sm">
+            <p className="text-[11px] font-black text-slate-900">{combo > 0 ? `连击 ${combo}，鱼群聚过来了` : '按住画面蓄力，松手投杆'}</p>
           </div>
         )}
 
         {phase === 'casting' && (
-          <div className="mb-4 w-full max-w-[360px] self-center rounded-md border-4 border-slate-800 bg-white/90 p-3 shadow-[5px_5px_0_#334155]">
-            <p className="mb-2 text-center text-xs font-black text-slate-900">蓄力中，松手投杆</p>
+          <div className="mb-4 w-full max-w-[250px] self-end rounded border border-slate-900/40 bg-white/86 p-2.5 shadow-[0_8px_22px_rgba(15,23,42,0.2)] backdrop-blur-sm">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <p className="text-[11px] font-black text-slate-900">松手投杆</p>
+              <p className="text-sm font-black" style={{ color: castColor }}>{Math.round(castPower)}%</p>
+            </div>
             <div className="relative">
-              <div className="h-5 w-full overflow-hidden border-2 border-slate-900 bg-slate-200">
+              <div className="h-3 w-full overflow-hidden rounded-full border border-slate-900/45 bg-slate-200">
                 <div
                   className="h-full transition-all duration-[25ms]"
                   style={{
                     width: `${castPower}%`,
-                    background: castPower >= selectedBait.sweetStart && castPower <= selectedBait.sweetEnd ? '#22c55e' : castPower > selectedBait.sweetEnd ? '#ef4444' : '#38bdf8',
+                    background: castColor,
                   }}
                 />
               </div>
               <div
-                className="pointer-events-none absolute top-0 bottom-0 border-x-4 border-green-900 bg-green-400/25"
+                className="pointer-events-none absolute top-0 bottom-0 border-x-2 border-green-900/80 bg-green-400/25"
                 style={{ left: `${selectedBait.sweetStart}%`, width: `${selectedBait.sweetEnd - selectedBait.sweetStart}%` }}
               />
             </div>
@@ -219,28 +219,25 @@ export const FishingPondScene: FC<FishingPondSceneProps> = ({
               <span className="font-bold text-green-700">最佳 {selectedBait.sweetStart}-{selectedBait.sweetEnd}%</span>
               <span>强</span>
             </div>
-            <p className="mt-1 text-center text-lg font-black text-slate-900">{castPower}%</p>
           </div>
         )}
 
         {phase === 'waiting' && (
-          <div className="mb-4 self-center rounded-md border-4 border-slate-800 bg-white/90 px-4 py-2 text-center shadow-[5px_5px_0_#334155]">
+          <div className="mb-4 self-center rounded border border-slate-900/35 bg-white/84 px-3 py-2 text-center shadow-[0_6px_18px_rgba(15,23,42,0.18)] backdrop-blur-sm">
             <p className="text-xs font-black text-slate-900">
               {tensionLevel === 0 ? '鱼线入水...' : tensionLevel === 1 ? '水面微动...' : tensionLevel === 2 ? '鱼影靠近...' : '盯紧水面'}
             </p>
-            <p className="mt-1 text-[10px] text-slate-500">涟漪出现后要立刻点击</p>
           </div>
         )}
 
         {phase === 'biting' && (
-          <div className="mb-4 self-center rounded-md border-4 border-red-800 bg-amber-100 px-5 py-2 text-center shadow-[5px_5px_0_#7f1d1d] animate-pulse">
+          <div className="mb-4 self-center rounded border border-red-900/45 bg-amber-100/90 px-4 py-2 text-center shadow-[0_8px_22px_rgba(127,29,29,0.22)] animate-pulse backdrop-blur-sm">
             <p className="text-sm font-black text-red-700">水面起涟漪！点击收杆</p>
-            <p className="mt-1 text-[10px] text-red-500">超时涟漪会消散</p>
           </div>
         )}
 
         {phase === 'reeling' && (
-          <div className="mb-4 self-center rounded-md border-4 border-slate-800 bg-white/90 px-5 py-3 text-center shadow-[5px_5px_0_#334155]">
+          <div className="mb-4 self-center rounded border border-slate-900/35 bg-white/84 px-5 py-3 text-center shadow-[0_6px_18px_rgba(15,23,42,0.18)] backdrop-blur-sm">
             <p className="text-xs font-black text-slate-900">收杆中...</p>
             <div className="mt-2 flex justify-center gap-1.5">
               {[0, 1, 2, 3].map(i => (
@@ -251,7 +248,7 @@ export const FishingPondScene: FC<FishingPondSceneProps> = ({
         )}
 
         {phase === 'escaped' && (
-          <div className="mb-4 self-center rounded-md border-4 border-slate-800 bg-white/90 px-5 py-3 text-center shadow-[5px_5px_0_#334155]">
+          <div className="mb-4 self-center rounded border border-slate-900/35 bg-white/86 px-5 py-3 text-center shadow-[0_6px_18px_rgba(15,23,42,0.18)] backdrop-blur-sm">
             <p className="text-xs font-black text-slate-900">涟漪散了，鱼跑掉了</p>
             {combo > 0 && <p className="mt-1 text-[9px] text-red-600">连击中断</p>}
             <button
@@ -265,7 +262,7 @@ export const FishingPondScene: FC<FishingPondSceneProps> = ({
         )}
 
         {phase === 'caught' && !showResult && catchResult && (
-          <div className="mb-4 self-center rounded-md border-4 border-slate-800 bg-white/90 px-5 py-3 text-center shadow-[5px_5px_0_#334155]">
+          <div className="mb-4 self-center rounded border border-slate-900/35 bg-white/86 px-5 py-3 text-center shadow-[0_6px_18px_rgba(15,23,42,0.18)] backdrop-blur-sm">
             <div className={`
               mx-auto flex h-16 w-16 items-center justify-center border-4 transition-all duration-500
               ${catchResult.rarity === 'legendary'
