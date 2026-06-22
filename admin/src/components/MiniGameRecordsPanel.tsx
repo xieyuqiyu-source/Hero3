@@ -11,6 +11,7 @@ interface MiniGameRecord {
   rarity: string
   rewardUnit: string
   rewardAmount: number
+  remainingAmount: number
   createdAt: string
 }
 
@@ -124,7 +125,10 @@ export default function MiniGameRecordsPanel() {
                       <span className="text-xs text-[var(--color-text-primary)]">{record.resultName}</span>
                     </div>
                     <div className="text-right">
-                      <span className="text-[10px] text-[var(--color-text-muted)]">{record.rewardUnit} ×{record.rewardAmount.toLocaleString()}</span>
+                      <span className="block text-[10px] text-[var(--color-text-muted)]">{record.rewardUnit} ×{record.rewardAmount.toLocaleString()}</span>
+                      <span className="block text-[9px] text-amber-600">
+                        剩 {record.remainingAmount.toLocaleString()} / 已兑 {(record.rewardAmount - record.remainingAmount).toLocaleString()}
+                      </span>
                     </div>
                   </div>
                 ))}

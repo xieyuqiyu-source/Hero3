@@ -104,6 +104,7 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			rarity VARCHAR(32) NOT NULL,
 			reward_unit VARCHAR(64) NOT NULL DEFAULT '',
 			reward_amount INT NOT NULL DEFAULT 0,
+			remaining_amount INT NOT NULL DEFAULT 0,
 			bet_unit VARCHAR(64) NOT NULL DEFAULT '',
 			bet_amount INT NOT NULL DEFAULT 0,
 			created_at DATETIME(6) NOT NULL,
@@ -148,6 +149,15 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := addColumnIfMissing(ctx, db, `ALTER TABLE minigame_records ADD COLUMN bet_amount INT NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE minigame_records ADD COLUMN remaining_amount INT NOT NULL DEFAULT -1`); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE minigame_records SET remaining_amount = reward_amount WHERE remaining_amount = -1 AND game_type = 'fishing'`); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE minigame_records SET remaining_amount = 0 WHERE remaining_amount = -1`); err != nil {
 		return err
 	}
 
@@ -1171,10 +1181,13 @@ func (r *MySQLRepository) SaveMiniGameRecord(record game.MiniGameRecord) error {
 	if createdAt.IsZero() {
 		createdAt = time.Now()
 	}
+	if record.GameType == "fishing" && record.RemainingAmount == 0 && record.RewardAmount > 0 {
+		record.RemainingAmount = record.RewardAmount
+	}
 
 	_, err := r.db.Exec(
-		`INSERT INTO minigame_records (id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, bet_unit, bet_amount, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO minigame_records (id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, remaining_amount, bet_unit, bet_amount, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		record.ID,
 		record.PlayerID,
 		record.GameType,
@@ -1182,6 +1195,7 @@ func (r *MySQLRepository) SaveMiniGameRecord(record game.MiniGameRecord) error {
 		record.Rarity,
 		record.RewardUnit,
 		record.RewardAmount,
+		record.RemainingAmount,
 		record.BetUnit,
 		record.BetAmount,
 		createdAt.UTC(),
@@ -1191,7 +1205,7 @@ func (r *MySQLRepository) SaveMiniGameRecord(record game.MiniGameRecord) error {
 
 func (r *MySQLRepository) ListMiniGameRecords(playerID string, limit int) ([]game.MiniGameRecord, error) {
 	rows, err := r.db.Query(
-		`SELECT id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, bet_unit, bet_amount, created_at
+		`SELECT id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, remaining_amount, bet_unit, bet_amount, created_at
 		 FROM minigame_records
 		 WHERE player_id = ?
 		 ORDER BY created_at DESC
@@ -1207,13 +1221,98 @@ func (r *MySQLRepository) ListMiniGameRecords(playerID string, limit int) ([]gam
 	for rows.Next() {
 		var r game.MiniGameRecord
 		var createdAt time.Time
-		if err := rows.Scan(&r.ID, &r.PlayerID, &r.GameType, &r.ResultName, &r.Rarity, &r.RewardUnit, &r.RewardAmount, &r.BetUnit, &r.BetAmount, &createdAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.PlayerID, &r.GameType, &r.ResultName, &r.Rarity, &r.RewardUnit, &r.RewardAmount, &r.RemainingAmount, &r.BetUnit, &r.BetAmount, &createdAt); err != nil {
 			return nil, err
 		}
 		r.CreatedAt = createdAt.UTC().Format(time.RFC3339)
 		records = append(records, r)
 	}
 	return records, rows.Err()
+}
+
+func (r *MySQLRepository) RedeemMiniGameRecord(playerID string, recordID string, amount int, redeemedAt time.Time) (game.MiniGameRedeemResult, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return game.MiniGameRedeemResult{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var record game.MiniGameRecord
+	var createdAt time.Time
+	err = tx.QueryRow(
+		`SELECT id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, remaining_amount, bet_unit, bet_amount, created_at
+		 FROM minigame_records
+		 WHERE id = ? AND player_id = ?
+		 LIMIT 1 FOR UPDATE`,
+		recordID, playerID,
+	).Scan(&record.ID, &record.PlayerID, &record.GameType, &record.ResultName, &record.Rarity, &record.RewardUnit, &record.RewardAmount, &record.RemainingAmount, &record.BetUnit, &record.BetAmount, &createdAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return game.MiniGameRedeemResult{}, game.ErrMiniGameNotFound
+	}
+	if err != nil {
+		return game.MiniGameRedeemResult{}, err
+	}
+	record.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+	if record.GameType != "fishing" || record.RewardUnit == "" || record.RewardAmount <= 0 {
+		return game.MiniGameRedeemResult{}, game.ErrInvalidMiniGame
+	}
+	if record.RemainingAmount <= 0 || amount > record.RemainingAmount {
+		return game.MiniGameRedeemResult{}, game.ErrMiniGameStockShort
+	}
+
+	var stateJSON []byte
+	err = tx.QueryRow(`SELECT state_json FROM players WHERE id = ? LIMIT 1 FOR UPDATE`, playerID).Scan(&stateJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		return game.MiniGameRedeemResult{}, game.ErrPlayerNotFound
+	}
+	if err != nil {
+		return game.MiniGameRedeemResult{}, err
+	}
+	var state game.GameState
+	if err = json.Unmarshal(stateJSON, &state); err != nil {
+		return game.MiniGameRedeemResult{}, err
+	}
+	unitID, unitCfg, ok := game.FindFactionUnitByName(state.Player.Faction, record.RewardUnit)
+	if !ok {
+		return game.MiniGameRedeemResult{}, game.ErrCrossFactionReward
+	}
+
+	record.RemainingAmount -= amount
+	result, err := tx.Exec(
+		`UPDATE minigame_records SET remaining_amount = ? WHERE id = ? AND player_id = ? AND remaining_amount >= ?`,
+		record.RemainingAmount, recordID, playerID, amount,
+	)
+	if err != nil {
+		return game.MiniGameRedeemResult{}, err
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return game.MiniGameRedeemResult{}, err
+	} else if affected == 0 {
+		return game.MiniGameRedeemResult{}, game.ErrMiniGameStockShort
+	}
+
+	game.AddArmyUnit(&state, unitID, amount)
+	state.ServerTime = redeemedAt.UTC().Format(time.RFC3339)
+	nextStateJSON, err := json.Marshal(state)
+	if err != nil {
+		return game.MiniGameRedeemResult{}, err
+	}
+	if _, err = tx.Exec(
+		`UPDATE players SET state_json = ?, updated_at = ? WHERE id = ?`,
+		nextStateJSON, redeemedAt.UTC(), playerID,
+	); err != nil {
+		return game.MiniGameRedeemResult{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return game.MiniGameRedeemResult{}, err
+	}
+	return game.MiniGameRedeemResult{
+		Record:         record,
+		State:          state,
+		RedeemedUnitID: unitID,
+		RedeemedUnit:   unitCfg.Name,
+		RedeemedAmount: amount,
+	}, nil
 }
 
 // --- Gold Ledger Methods ---

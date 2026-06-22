@@ -1,0 +1,79 @@
+/api/v1/minigame/record:
+  post:
+    tags:
+    - MiniGame
+    summary: 保存小游戏记录
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MiniGameRecordRequest'
+    responses:
+      '201':
+        description: 已创建记录
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MiniGameRecord'
+/api/v1/minigame/records:
+  get:
+    tags:
+    - MiniGame
+    summary: 玩家查询自己的小游戏记录与库存
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 小游戏记录汇总
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MiniGameSummary'
+/api/v1/minigame/redeem:
+  post:
+    tags:
+    - MiniGame
+    summary: 兑换小游戏库存奖励
+    description: 钓鱼奖励只允许兑换当前玩家阵营拥有的兵种；非本阵营兵种暂时只能存储，待驻防增援系统完成后开放。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MiniGameRedeemRequest'
+    responses:
+      '200':
+        description: 兑换成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MiniGameRedeemResult'
+      '400':
+        description: 库存不足、非本阵营兵种或请求非法
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/minigame/records:
+  get:
+    tags:
+    - Admin
+    summary: GM 查询玩家万象幻境记录
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 小游戏记录汇总
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MiniGameSummary'

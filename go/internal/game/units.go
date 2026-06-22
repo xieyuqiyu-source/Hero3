@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -47,9 +48,9 @@ type GeneralInfo struct {
 type FactionsConfig map[string]FactionConfig
 
 var (
-	unitsMu       sync.RWMutex
-	activeUnits   = UnitsConfig{}
-	factionsMu    sync.RWMutex
+	unitsMu        sync.RWMutex
+	activeUnits    = UnitsConfig{}
+	factionsMu     sync.RWMutex
 	activeFactions = FactionsConfig{}
 )
 
@@ -82,6 +83,23 @@ func GetUnitConfig(faction string, unitID string) (UnitConfig, bool) {
 	}
 	config, exists := units[unitID]
 	return config, exists
+}
+
+func FindFactionUnitByName(faction string, unitName string) (string, UnitConfig, bool) {
+	unitName = strings.TrimSpace(unitName)
+	if unitName == "" {
+		return "", UnitConfig{}, false
+	}
+	units := GetFactionUnits(faction)
+	if units == nil {
+		return "", UnitConfig{}, false
+	}
+	for unitID, config := range units {
+		if strings.TrimSpace(config.Name) == unitName {
+			return unitID, config, true
+		}
+	}
+	return "", UnitConfig{}, false
 }
 
 // LoadFactionsConfig 从 JSON 文件加载阵营配置

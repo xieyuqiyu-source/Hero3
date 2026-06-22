@@ -1,0 +1,35 @@
+import type { BaitType, FishCatch } from './types'
+
+export const FISH_POOL: FishCatch[] = [
+  { name: '草鱼', rarity: 'common', reward: '青州军', rewardAmount: 300, description: '常见的淡水鱼，肉质鲜美', emoji: '🐟' },
+  { name: '鲤鱼', rarity: 'common', reward: '贪狼营', rewardAmount: 300, description: '跃龙门的吉祥之鱼', emoji: '🐠' },
+  { name: '鲈鱼', rarity: 'common', reward: '禁卫甲士', rewardAmount: 250, description: '清蒸最佳的上等食材', emoji: '🐡' },
+  { name: '锦鲤', rarity: 'common', reward: '麒麟卫', rewardAmount: 250, description: '色彩斑斓的观赏鱼', emoji: '🎏' },
+  { name: '泥鳅', rarity: 'common', reward: '青州军', rewardAmount: 400, description: '滑不溜秋但营养丰富', emoji: '🪱' },
+  { name: '金龙鱼', rarity: 'rare', reward: '骁骑营', rewardAmount: 1800, description: '金光闪闪的珍贵鱼种', emoji: '✨' },
+  { name: '银鲨', rarity: 'rare', reward: '西凉铁骑', rewardAmount: 1800, description: '银色鳞片如铠甲般坚硬', emoji: '🦈' },
+  { name: '玄武龟', rarity: 'rare', reward: '青龙军', rewardAmount: 2800, description: '传说中玄武的后裔', emoji: '🐢' },
+  { name: '雷电鳗', rarity: 'rare', reward: '虎卫', rewardAmount: 2200, description: '体内蕴含雷电之力', emoji: '⚡' },
+  { name: '九尾金鲤', rarity: 'rare', reward: '骁骑营', rewardAmount: 3500, description: '九条尾鳍如扇般展开', emoji: '🌊' },
+  { name: '虎鲸', rarity: 'epic', reward: '虎豹骑', rewardAmount: 12000, description: '海中霸主，力量惊人', emoji: '🐋' },
+  { name: '蛟龙', rarity: 'epic', reward: '南蛮象', rewardAmount: 12000, description: '即将化龙的水中神兽', emoji: '🐲' },
+  { name: '凤凰鱼', rarity: 'epic', reward: '木牛流马', rewardAmount: 300, description: '浴火重生的神秘鱼种', emoji: '🔥' },
+  { name: '白泽', rarity: 'epic', reward: '虎豹骑', rewardAmount: 18000, description: '通晓万物的上古瑞兽', emoji: '🦄' },
+  { name: '鲲鹏', rarity: 'legendary', reward: '汉室宗亲', rewardAmount: 4000, description: '北冥有鱼，其名为鲲', emoji: '🌌' },
+  { name: '神龙', rarity: 'legendary', reward: '土族', rewardAmount: 2000, description: '万灵之首，至高无上', emoji: '🐉' },
+  { name: '混沌', rarity: 'legendary', reward: '汉室宗亲', rewardAmount: 8000, description: '天地未分之初的原始神兽', emoji: '🌀' },
+]
+
+export const RARITY_CONFIG = {
+  common: { label: '普通', color: 'text-slate-500', bg: 'bg-slate-500/10', border: 'border-slate-500/20', weight: 65, glow: '' },
+  rare: { label: '稀有', color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20', weight: 22, glow: 'shadow-[0_0_15px_rgba(59,130,246,0.3)]' },
+  epic: { label: '史诗', color: 'text-purple-500', bg: 'bg-purple-500/10', border: 'border-purple-500/20', weight: 8, glow: 'shadow-[0_0_25px_rgba(168,85,247,0.4)]' },
+  legendary: { label: '传说', color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20', weight: 1.5, glow: 'shadow-[0_0_40px_rgba(245,158,11,0.5)]' },
+}
+
+export const BAITS: BaitType[] = [
+  { id: 'coarse', name: '粗饵', tier: '一阶', description: '低成本，命中框较窄', rarityBoost: 1, cityGoldCost: 0, biteChance: 0.72, biteWindowMs: 1500, sweetStart: 67, sweetEnd: 77 },
+  { id: 'shrimp', name: '灵虾', tier: '二阶', description: '稀有提升，命中更稳', rarityBoost: 1.2, cityGoldCost: 30, biteChance: 0.8, biteWindowMs: 1850, sweetStart: 62, sweetEnd: 82 },
+  { id: 'golden', name: '金鳞饵', tier: '三阶', description: '史诗提升，容错更高', rarityBoost: 1.55, cityGoldCost: 120, biteChance: 0.88, biteWindowMs: 2200, sweetStart: 56, sweetEnd: 86 },
+  { id: 'dragon', name: '龙涎饵', tier: '四阶', description: '传说提升，命中框最大', rarityBoost: 2.15, cityGoldCost: 500, biteChance: 0.95, biteWindowMs: 2600, sweetStart: 48, sweetEnd: 90 },
+]

@@ -25,6 +25,8 @@ tags:
   description: 军情与战报
 - name: Mail
   description: 信函系统
+- name: MiniGame
+  description: 万象幻境小游戏
 - name: Admin
   description: GM 后台接口
 paths:
@@ -78,6 +80,14 @@ paths:
     $ref: ./paths/mail.yaml#/~1api~1v1~1mails~1{mailId}~1claim
   /api/v1/mails/send-player:
     $ref: ./paths/mail.yaml#/~1api~1v1~1mails~1send-player
+  /api/v1/minigame/record:
+    $ref: ./paths/minigame.yaml#/~1api~1v1~1minigame~1record
+  /api/v1/minigame/records:
+    $ref: ./paths/minigame.yaml#/~1api~1v1~1minigame~1records
+  /api/v1/minigame/redeem:
+    $ref: ./paths/minigame.yaml#/~1api~1v1~1minigame~1redeem
+  /api/v1/admin/minigame/records:
+    $ref: ./paths/minigame.yaml#/~1api~1v1~1admin~1minigame~1records
   /api/v1/admin/mails/send:
     $ref: ./paths/mail.yaml#/~1api~1v1~1admin~1mails~1send
   /api/v1/admin/players/{playerId}/mails:
@@ -142,6 +152,16 @@ components:
       $ref: ./schemas/mail.yaml#/SendPlayerMailRequest
     MailClaimResult:
       $ref: ./schemas/mail.yaml#/MailClaimResult
+    MiniGameRecord:
+      $ref: ./schemas/minigame.yaml#/MiniGameRecord
+    MiniGameSummary:
+      $ref: ./schemas/minigame.yaml#/MiniGameSummary
+    MiniGameRecordRequest:
+      $ref: ./schemas/minigame.yaml#/MiniGameRecordRequest
+    MiniGameRedeemRequest:
+      $ref: ./schemas/minigame.yaml#/MiniGameRedeemRequest
+    MiniGameRedeemResult:
+      $ref: ./schemas/minigame.yaml#/MiniGameRedeemResult
     BalanceConfig:
       $ref: ./schemas/game-state.yaml#/BalanceConfig
     BuildingConfig:

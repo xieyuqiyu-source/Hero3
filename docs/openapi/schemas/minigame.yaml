@@ -1,0 +1,123 @@
+MiniGameRecord:
+  type: object
+  required:
+  - id
+  - playerId
+  - gameType
+  - resultName
+  - rarity
+  - rewardUnit
+  - rewardAmount
+  - remainingAmount
+  - createdAt
+  properties:
+    id:
+      type: string
+      example: mg_47f23e0eeb08ab5040
+    playerId:
+      type: string
+    gameType:
+      type: string
+      enum: [fishing, gambling]
+    resultName:
+      type: string
+      example: 金龙鱼
+    rarity:
+      type: string
+      enum: [common, rare, epic, legendary]
+    rewardUnit:
+      type: string
+      example: 骁骑营
+    rewardAmount:
+      type: integer
+      description: 原始钓获或赢得数量。
+      example: 5000
+    remainingAmount:
+      type: integer
+      description: 剩余可兑换库存；为 0 时表示已消耗完。
+      example: 3000
+    betUnit:
+      type: string
+    betAmount:
+      type: integer
+    createdAt:
+      type: string
+      format: date-time
+MiniGameSummary:
+  type: object
+  required:
+  - totalRecords
+  - records
+  - rewardTotals
+  properties:
+    totalRecords:
+      type: integer
+    records:
+      type: array
+      items:
+        $ref: '#/components/schemas/MiniGameRecord'
+    rewardTotals:
+      type: object
+      description: 按剩余可兑换数量汇总。
+      additionalProperties:
+        type: integer
+MiniGameRecordRequest:
+  type: object
+  required:
+  - playerId
+  - gameType
+  - resultName
+  properties:
+    playerId:
+      type: string
+    gameType:
+      type: string
+      enum: [fishing, gambling]
+    resultName:
+      type: string
+    rarity:
+      type: string
+    rewardUnit:
+      type: string
+    rewardAmount:
+      type: integer
+    betUnit:
+      type: string
+    betAmount:
+      type: integer
+MiniGameRedeemRequest:
+  type: object
+  required:
+  - playerId
+  - recordId
+  - amount
+  properties:
+    playerId:
+      type: string
+    recordId:
+      type: string
+    amount:
+      type: integer
+      minimum: 1
+MiniGameRedeemResult:
+  type: object
+  required:
+  - record
+  - state
+  - redeemedUnitId
+  - redeemedUnit
+  - redeemedAmount
+  properties:
+    record:
+      $ref: '#/components/schemas/MiniGameRecord'
+    state:
+      $ref: '#/components/schemas/GameState'
+    redeemedUnitId:
+      type: string
+      example: qiQiYing
+    redeemedUnit:
+      type: string
+      example: 骁骑营
+    redeemedAmount:
+      type: integer
+      example: 1000

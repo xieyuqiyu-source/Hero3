@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult } from '@/types/game'
 import type { BalanceConfig, FactionConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -281,7 +281,17 @@ export const gameApi = {
 
   /** 上报小游戏记录（钓鱼/赌博） */
   saveMiniGameRecord(playerId: string, gameType: string, resultName: string, rarity: string, rewardUnit: string, rewardAmount: number, betUnit?: string, betAmount?: number) {
-    return api.post<{ id: string }>('/minigame/record', { playerId, gameType, resultName, rarity, rewardUnit, rewardAmount, betUnit: betUnit ?? '', betAmount: betAmount ?? 0 })
+    return api.post<MiniGameRecord>('/minigame/record', { playerId, gameType, resultName, rarity, rewardUnit, rewardAmount, betUnit: betUnit ?? '', betAmount: betAmount ?? 0 })
+  },
+
+  /** 获取自己的小游戏库存/记录 */
+  listMiniGameRecords(playerId: string) {
+    return api.get<MiniGameSummary>(`/minigame/records?playerId=${playerId}`)
+  },
+
+  /** 兑换小游戏库存奖励 */
+  redeemMiniGameReward(playerId: string, recordId: string, amount: number) {
+    return api.post<MiniGameRedeemResult>('/minigame/redeem', { playerId, recordId, amount })
   },
 
 }

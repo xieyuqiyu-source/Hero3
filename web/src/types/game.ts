@@ -131,6 +131,34 @@ export interface MailClaimResult {
   grantedItems: Record<string, number>
 }
 
+export interface MiniGameRecord {
+  id: string
+  playerId: string
+  gameType: 'fishing' | 'gambling' | string
+  resultName: string
+  rarity: 'common' | 'rare' | 'epic' | 'legendary' | string
+  rewardUnit: string
+  rewardAmount: number
+  remainingAmount: number
+  betUnit?: string
+  betAmount?: number
+  createdAt: string
+}
+
+export interface MiniGameSummary {
+  totalRecords: number
+  records: MiniGameRecord[]
+  rewardTotals: Record<string, number>
+}
+
+export interface MiniGameRedeemResult {
+  record: MiniGameRecord
+  state: GameState
+  redeemedUnitId: string
+  redeemedUnit: string
+  redeemedAmount: number
+}
+
 export interface GeneralTraitInstance {
   traitId: string
   name: string

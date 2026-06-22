@@ -1207,3 +1207,77 @@ func TestOwnsPlayer(t *testing.T) {
 		})
 	}
 }
+
+func TestRedeemMiniGameRewardPartialAddsFactionArmy(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_fishing_redeem", Username: "fishing_redeem", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_fishing_redeem", "Fisher", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+	record, err := svc.SaveMiniGameRecord(state.Player.ID, "fishing", "金龙鱼", "rare", "骁骑营", 5000, "", 0)
+	if err != nil {
+		t.Fatalf("save minigame record: %v", err)
+	}
+
+	result, err := svc.RedeemMiniGameReward(state.Player.ID, record.ID, 1200)
+	if err != nil {
+		t.Fatalf("RedeemMiniGameReward failed: %v", err)
+	}
+	if result.Record.RemainingAmount != 3800 {
+		t.Fatalf("expected remaining 3800, got %d", result.Record.RemainingAmount)
+	}
+	if result.RedeemedUnitID != "qiQiYing" {
+		t.Fatalf("expected wei unit qiQiYing, got %s", result.RedeemedUnitID)
+	}
+	found := false
+	for _, unit := range result.State.Army {
+		if unit.UnitType == "qiQiYing" && unit.Amount == 1200 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected redeemed unit in army, got %+v", result.State.Army)
+	}
+}
+
+func TestRedeemMiniGameRewardRejectsCrossFactionUnit(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_fishing_cross", Username: "fishing_cross", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_fishing_cross", "Fisher", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+	record, err := svc.SaveMiniGameRecord(state.Player.ID, "fishing", "蛟龙", "epic", "南蛮象", 50000, "", 0)
+	if err != nil {
+		t.Fatalf("save minigame record: %v", err)
+	}
+
+	_, err = svc.RedeemMiniGameReward(state.Player.ID, record.ID, 1000)
+	if !errors.Is(err, ErrCrossFactionReward) {
+		t.Fatalf("expected ErrCrossFactionReward, got %v", err)
+	}
+	records, err := repo.ListMiniGameRecords(state.Player.ID, 10)
+	if err != nil {
+		t.Fatalf("list records: %v", err)
+	}
+	if len(records) != 1 || records[0].RemainingAmount != 50000 {
+		t.Fatalf("expected stock unchanged, got %+v", records)
+	}
+}

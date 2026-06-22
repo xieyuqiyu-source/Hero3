@@ -55,6 +55,7 @@ type Repository interface {
 	// MiniGame Records
 	SaveMiniGameRecord(record MiniGameRecord) error
 	ListMiniGameRecords(playerID string, limit int) ([]MiniGameRecord, error)
+	RedeemMiniGameRecord(playerID string, recordID string, amount int, redeemedAt time.Time) (MiniGameRedeemResult, error)
 
 	// Gold Ledger（货币流水，写入失败由调用方降级处理）
 	WriteGoldLedger(entry GoldLedgerEntry) error
@@ -710,6 +711,9 @@ func (r *MemoryRepository) ClaimMailAttachments(playerID string, mailID string, 
 func (r *MemoryRepository) SaveMiniGameRecord(record MiniGameRecord) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if record.GameType == "fishing" && record.RemainingAmount == 0 && record.RewardAmount > 0 {
+		record.RemainingAmount = record.RewardAmount
+	}
 
 	r.miniGameRecords[record.PlayerID] = append([]MiniGameRecord{record}, r.miniGameRecords[record.PlayerID]...)
 	// 保留最多 500 条
@@ -728,6 +732,51 @@ func (r *MemoryRepository) ListMiniGameRecords(playerID string, limit int) ([]Mi
 		return all[:limit], nil
 	}
 	return all, nil
+}
+
+func (r *MemoryRepository) RedeemMiniGameRecord(playerID string, recordID string, amount int, redeemedAt time.Time) (MiniGameRedeemResult, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	state, exists := r.players[playerID]
+	if !exists {
+		return MiniGameRedeemResult{}, ErrPlayerNotFound
+	}
+	records := r.miniGameRecords[playerID]
+	for i := range records {
+		record := records[i]
+		if record.ID != recordID {
+			continue
+		}
+		if record.GameType != "fishing" || record.RewardUnit == "" || record.RewardAmount <= 0 {
+			return MiniGameRedeemResult{}, ErrInvalidMiniGame
+		}
+		if record.RemainingAmount <= 0 {
+			return MiniGameRedeemResult{}, ErrMiniGameStockShort
+		}
+		if amount > record.RemainingAmount {
+			return MiniGameRedeemResult{}, ErrMiniGameStockShort
+		}
+		unitID, unitCfg, ok := FindFactionUnitByName(state.Player.Faction, record.RewardUnit)
+		if !ok {
+			return MiniGameRedeemResult{}, ErrCrossFactionReward
+		}
+		record.RemainingAmount -= amount
+		records[i] = record
+		r.miniGameRecords[playerID] = records
+		AddArmyUnit(&state, unitID, amount)
+		state.ServerTime = redeemedAt.UTC().Format(resourceDateLayout)
+		r.players[playerID] = state
+		r.playerUpdatedAt[playerID] = redeemedAt.UTC()
+		return MiniGameRedeemResult{
+			Record:         record,
+			State:          state,
+			RedeemedUnitID: unitID,
+			RedeemedUnit:   unitCfg.Name,
+			RedeemedAmount: amount,
+		}, nil
+	}
+	return MiniGameRedeemResult{}, ErrMiniGameNotFound
 }
 
 // --- Gold Ledger Methods (MemoryRepository) ---

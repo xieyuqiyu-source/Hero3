@@ -170,3 +170,65 @@ body {
 .animate-float-up {
   animation: float-up 2s ease-out forwards;
 }
+
+@keyframes fish-shadow-glide {
+  0%, 100% {
+    transform: translateX(-5px) scaleX(0.94);
+    opacity: 0.52;
+  }
+  50% {
+    transform: translateX(7px) scaleX(1.05);
+    opacity: 0.76;
+  }
+}
+
+.animate-fish-shadow-glide {
+  animation: fish-shadow-glide 2.2s ease-in-out infinite;
+}
+
+@keyframes fishing-ripple-soft {
+  0% {
+    transform: scale(0.76);
+    opacity: 0.68;
+  }
+  70% {
+    transform: scale(1.32);
+    opacity: 0.18;
+  }
+  100% {
+    transform: scale(1.48);
+    opacity: 0;
+  }
+}
+
+.animate-fishing-ripple-soft {
+  animation: fishing-ripple-soft 0.9s ease-out infinite;
+}
+
+@keyframes fishing-splash {
+  0%, 100% {
+    transform: translateY(0) scale(0.94);
+  }
+  45% {
+    transform: translateY(-3px) scale(1.04);
+  }
+}
+
+.animate-fishing-splash {
+  animation: fishing-splash 0.42s ease-in-out infinite;
+}
+
+@keyframes water-shimmer {
+  0%, 100% {
+    transform: translateX(0);
+    opacity: 0.22;
+  }
+  50% {
+    transform: translateX(8px);
+    opacity: 0.3;
+  }
+}
+
+.animate-water-shimmer {
+  animation: water-shimmer 4.5s ease-in-out infinite;
+}

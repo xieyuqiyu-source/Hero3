@@ -38,6 +38,10 @@ var (
 	ErrMailAlreadyClaimed = errors.New("mail already claimed")
 	ErrMailNoAttachments  = errors.New("mail has no attachments")
 	ErrMailRecipientSelf  = errors.New("cannot send mail to yourself")
+	ErrMiniGameNotFound   = errors.New("minigame record not found")
+	ErrInvalidMiniGame    = errors.New("invalid minigame record")
+	ErrCrossFactionReward = errors.New("reward unit is not available for current faction")
+	ErrMiniGameStockShort = errors.New("insufficient minigame reward stock")
 )
 
 const resourceDateLayout = time.RFC3339

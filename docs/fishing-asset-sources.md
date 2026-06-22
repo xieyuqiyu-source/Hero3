@@ -1,0 +1,36 @@
+# 仙池垂钓素材来源记录
+
+最后更新：2026-06-22
+
+## 当前项目内素材
+
+| 文件 | 来源 | 用途 | 备注 |
+| --- | --- | --- | --- |
+| `web/src/assets/minigames/fishing/fishing-pond-bg.png` | AI 生成临时素材 | PC 端钓场背景源图 | 保留为源文件，后续可替换为正式素材。 |
+| `web/src/assets/minigames/fishing/fishing-pond-bg.webp` | 由源图压缩生成 | PC 端钓场实际加载背景 | 项目中实际引用，约 230KB。 |
+
+## 可考虑的免费素材来源
+
+这些来源需要下载前再次核对具体包内 license，不直接默认可用。
+
+| 来源 | 链接 | 授权/注意 |
+| --- | --- | --- |
+| Kenney Assets | https://kenney.nl/assets | Kenney 官方说明资产页素材为 CC0，可商用，署名非必需。适合找 UI、通用图标、环境装饰。 |
+| Kenney Support License | https://kenney.nl/support | 官方 FAQ 明确资产可用于商业项目，署名非必需，但不能使用 Kenney 标志。 |
+| itch.io Free Fishing Pixel Art Pack | https://free-game-assets.itch.io/free-fishing-pixel-art-pack | 免费钓鱼像素包，包含 fisherman、fish、hook 等动画。下载前需要核对页面和包内 license。 |
+| itch.io Fishing + Pixel Art 分类 | https://itch.io/game-assets/free/tag-fishing/tag-pixel-art | 可用于筛选更多免费钓鱼像素包；每个包授权不同，必须逐个确认。 |
+| OpenGameArt Fishing Game Assets Pixel Art | https://opengameart.org/content/fishing-game-assets-pixel-art | OpenGameArt 上的钓鱼素材页面，下载前确认 license 字段。 |
+| OpenGameArt fish CC0 | https://opengameart.org/content/fish-0 | 页面显示 License 为 CC0，可作为鱼类 sprite 候选。 |
+
+## 使用策略
+
+1. 短期：先用 AI 生成背景 + CSS/sprite 占位，快速验证玩法和界面层级。
+2. 中期：优先接入授权明确的 CC0 素材，例如 Kenney 或 OpenGameArt CC0。
+3. 长期：如果要统一风格，最好定制一套 `fishing-bg`、`fisherman-idle/cast/reel`、`bobber`、`ripple`、`fish-shadow`。
+
+## 授权原则
+
+- 不使用授权不明的图片。
+- itch.io 免费不等于可商用，必须看作者 license。
+- OpenGameArt 每个条目的 license 不同，不能只看站点来源。
+- 下载素材后保留原始包、license 文件和来源链接。

@@ -72,6 +72,19 @@ type ArmyUnit struct {
 	Amount   int    `json:"amount"`
 }
 
+func AddArmyUnit(state *GameState, unitType string, amount int) {
+	if state == nil || unitType == "" || amount <= 0 {
+		return
+	}
+	for i := range state.Army {
+		if state.Army[i].UnitType == unitType {
+			state.Army[i].Amount += amount
+			return
+		}
+	}
+	state.Army = append(state.Army, ArmyUnit{UnitType: unitType, Amount: amount})
+}
+
 type General struct {
 	ID                  string                                     `json:"id"`
 	Name                string                                     `json:"name"`

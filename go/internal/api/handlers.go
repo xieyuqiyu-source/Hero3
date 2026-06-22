@@ -1448,6 +1448,53 @@ func (h *Handlers) SaveMiniGameRecord(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, record)
 }
 
+func (h *Handlers) ListMiniGameRecords(w http.ResponseWriter, r *http.Request) {
+	playerID := r.URL.Query().Get("playerId")
+	if playerID == "" {
+		writeError(w, http.StatusBadRequest, "playerId is required")
+		return
+	}
+	if !h.requireOwnership(w, r, playerID) {
+		return
+	}
+	summary, err := h.gameService.GetMiniGameRecords(playerID, 200)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
+}
+
+func (h *Handlers) RedeemMiniGameReward(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+		RecordID string `json:"recordId"`
+		Amount   int    `json:"amount"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+	result, err := h.gameService.RedeemMiniGameReward(payload.PlayerID, payload.RecordID, payload.Amount)
+	if err != nil {
+		status := http.StatusBadRequest
+		message := err.Error()
+		switch {
+		case errors.Is(err, game.ErrMiniGameNotFound), errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrCrossFactionReward):
+			message = "该奖励不是当前阵营兵种，驻防增援系统完成后即可兑换"
+		case errors.Is(err, game.ErrMiniGameStockShort):
+			message = "可兑换库存不足"
+		}
+		writeError(w, status, message)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *Handlers) AdminMiniGameRecords(w http.ResponseWriter, r *http.Request) {
 	playerID := r.URL.Query().Get("playerId")
 	if playerID == "" {

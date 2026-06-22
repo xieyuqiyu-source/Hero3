@@ -11,6 +11,114 @@
 
 ---
 
+## 2026-06-22 - `待提交 feat: add fishing reward inventory redemption`
+
+### 改动目标
+
+把仙池垂钓从“只记录可兑换奖励”的展示型小游戏，升级成“库存消耗”模式：钓到的奖励先进入库存。玩家可以在独立弹窗中查看钓鱼记录与剩余库存，并对本阵营兵种进行部分兑换。非本阵营兵种暂时只能存储，等驻防增援系统完成后再开放兑换。
+
+### 后端改动
+
+- `MiniGameRecord` 增加 `remainingAmount`，用于表示剩余可兑换库存。
+- 保留 `rewardAmount` 作为原始钓获数量，GM 可通过 `rewardAmount - remainingAmount` 查到已兑换数量。
+- MySQL `minigame_records` 表增加 `remaining_amount` 字段。
+- 迁移时会把旧记录的 `remaining_amount` 回填为原始 `reward_amount`。
+- 新增玩家查询接口：`GET /api/v1/minigame/records`。
+- 新增兑换接口：`POST /api/v1/minigame/redeem`。
+- 兑换逻辑使用库存消耗模式：
+  - 校验记录属于当前玩家。
+  - 校验记录是钓鱼奖励。
+  - 校验兑换数量大于 0 且不超过 `remainingAmount`。
+  - 校验 `rewardUnit` 是当前玩家阵营拥有的兵种。
+  - 兑换成功后把对应数量加入玩家军队。
+  - 同步扣减 `remainingAmount`。
+- MySQL 兑换使用事务和行锁，避免重复点击导致重复加兵。
+- 新增回归测试：
+  - 本阵营兵种可以部分兑换并加入军队。
+  - 非本阵营兵种兑换会被拒绝，库存不变。
+
+### Web 改动
+
+- 仙池垂钓页面新增“钓鱼记录”按钮。
+- 玩家进入钓鱼页面后会拉取自己的小游戏记录。
+- 每次钓到奖励后，保存记录成功会立即加入本地库存列表。
+- 钓鱼记录与兑换列表放进独立弹窗中，弹窗内部滚动，避免记录过多撑高垂钓页面。
+- 弹窗顶部显示库存条数、可兑换数量和暂存数量。
+- 本阵营兵种显示兑换数量输入框和兑换按钮。
+- 非本阵营兵种展示提示：暂时只能存储，驻防增援系统完成后即可兑换。
+- 兑换成功后局部更新军队状态和库存剩余数量。
+- PC 端仙池垂钓主画面重绘为像素风钓场：
+  - 小人坐在岸边钓鱼。
+  - 水面有浮漂、鱼影、气泡和涟漪。
+  - 抛竿后进入等待阶段，涟漪出现时点击收杆。
+  - 超过反应时间未点击则本次垂钓失败。
+  - 蓄力条根据鱼饵显示不同大小的最佳蓄力框。
+- 鱼饵前端模型扩展为四级：
+  - 粗饵、灵虾、金鳞饵、龙涎饵。
+  - 每级鱼饵带城金价格、咬钩概率、反应窗口和最佳蓄力区间。
+  - 当前只展示规则和影响前端判定，暂未接入后端扣城金。
+- 仙池垂钓前端结构拆分到 `web/src/pages/map/components/minigames/fishing/`：
+  - `FishingPondScene`：钓场画面、像素风背景、小人、浮漂、涟漪、蓄力条。
+  - `FishingBaitSelector`：鱼饵选择与钓鱼记录入口。
+  - `FishingInventoryModal`：钓鱼库存和兑换弹窗。
+  - `FishingResultModal`：钓获结果弹窗。
+  - `fishingConfig` / `types`：鱼池、鱼饵、稀有度配置和类型。
+  - `FishingGame.tsx` 收敛为状态流、计时器和接口调用入口，后续替换素材时优先改场景组件。
+- `FishingPondScene` 增加素材化场景层：
+  - 已接入 `fishing-bg`、`fisherman`、`bobber`、`ripple` sprite 图层。
+  - 增加远景山体、竹亭、荷叶、芦苇、岸边土坡等国风像素占位层。
+  - 小人根据投杆、等待、收杆阶段改变角度和鱼竿动作。
+  - 史诗/传说钓获阶段增加全场颜色光效。
+- 新增 AI 生成临时钓场背景：
+  - 源图：`web/src/assets/minigames/fishing/fishing-pond-bg.png`。
+  - 实际引用：`web/src/assets/minigames/fishing/fishing-pond-bg.webp`。
+  - WebP 从约 2.3MB 压缩到约 230KB，用于控制首屏加载体积。
+- 新增 AI 生成临时前景 sprite：
+  - 人物源图：`web/src/assets/minigames/fishing/fisherman-sprites-source.png`。
+  - 人物透明图：`web/src/assets/minigames/fishing/fisherman-sprites.png`。
+  - 水面特效源图：`web/src/assets/minigames/fishing/water-effects-source.png`。
+  - 水面特效透明图：`web/src/assets/minigames/fishing/water-effects.png`。
+  - `FishingPondScene` 已把原来的 CSS 小人、浮漂、鱼影、涟漪和气泡替换为 sprite 图层，后续更换正式素材时只需要替换资源和少量定位参数。
+- 优化仙池垂钓临时素材表现：
+  - 重新处理人物和水面 sprite 的透明边缘，清理绿幕残留和细碎脏像素。
+  - 降低钓场上半部分白色蒙版和水面白色纹理透明度，避免背景发灰发雾。
+  - 新增浮漂上下浮动、鱼影游动、涟漪扩散、水花跳动和水面慢速流动动画。
+  - 新增 6 帧人物出杆动作素材，素材帧内自带鱼竿、鱼线、浮漂和落水点，避免用 SVG 曲线补线造成突兀。
+  - 移除独立浮漂图层和 SVG 鱼线，等待、咬钩、收杆阶段改由人物动作帧承担主视觉。
+  - 当前主人物 6 帧动作素材打包约 594KB，水面特效约 293KB；后续正式素材可继续压缩或拆分懒加载。
+- 精简仙池垂钓顶部信息区：
+  - 标题、玩法说明、抛竿/钓获/最佳/传说统计、鱼饵选择和钓鱼记录入口合并为行内工具栏。
+  - 鱼饵和钓鱼记录按钮统一为紧凑高度，减少钓场上方留白。
+  - 保留响应式换行，手机端宽度不足时仍可正常展示。
+- 新增 `docs/fishing-asset-sources.md`，记录 AI 临时素材、Kenney、OpenGameArt、itch.io 等候选免费素材来源和授权注意事项。
+
+### Admin 改动
+
+- GM 万象幻境记录面板显示钓鱼奖励原始数量、剩余数量、已兑换数量。
+- 汇总统计改为按 `remainingAmount` 统计当前可兑换库存。
+
+### OpenAPI 和文档改动
+
+- 新增 `docs/openapi/paths/minigame.yaml`。
+- 新增 `docs/openapi/schemas/minigame.yaml`。
+- 新增 `docs/fishing-system-design.md`，记录仙池垂钓 PC/手机端设计、鱼饵城金、触发概率、蓄力框、顶级鱼获池规则。
+- 主 OpenAPI 挂载万象幻境相关路径和 schema。
+- MVP 文档标记万象幻境钓鱼库存第一版完成。
+
+### 验证结果
+
+- `go test ./...` 通过。
+- `web npm run build` 通过。
+- `admin npm run build` 通过。
+
+### 后续注意事项
+
+- 非本阵营兵种仍然只能存储，不能兑换。
+- 当前只支持钓鱼奖励兑换；豪赌仍保留原有记录逻辑。
+- 第一版支持部分兑换，但没有兑换流水表；目前通过原始数量和剩余数量做 GM 查账。
+
+---
+
 ## 2026-06-11 - `a7327c9 feat: add mail attachments and player messaging`
 
 ### 改动目标
