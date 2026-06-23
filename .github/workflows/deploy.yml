@@ -56,17 +56,6 @@ jobs:
           pnpm install --no-frozen-lockfile
           pnpm build
 
-      - name: Pack release
-        run: |
-          set -euo pipefail
-          rm -rf release hero3-release.tgz
-          mkdir -p release/backend release/web release/admin
-          cp go/bin/hero3-server release/backend/hero3-server
-          cp -a go/config release/backend/config
-          cp -a web/dist/. release/web/
-          cp -a admin/dist/. release/admin/
-          tar -czf hero3-release.tgz -C release .
-
       - name: Configure SSH
         env:
           HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
@@ -83,7 +72,7 @@ jobs:
           ssh-keyscan -T 10 -t ed25519 -p "$HERO3_SSH_PORT" -H "$HERO3_SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
           touch ~/.ssh/known_hosts
 
-      - name: Upload release
+      - name: Prepare remote deploy
         env:
           HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
           HERO3_SSH_PORT: ${{ secrets.HERO3_SSH_PORT || '22' }}
@@ -91,26 +80,6 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$HERO3_SSH_USER"
-          scp \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=accept-new \
-            -o UserKnownHostsFile=~/.ssh/known_hosts \
-            -o ConnectTimeout=15 \
-            -o ServerAliveInterval=10 \
-            -o ServerAliveCountMax=3 \
-            -i ~/.ssh/hero3_deploy_key \
-            -P "$HERO3_SSH_PORT" \
-            hero3-release.tgz "$HERO3_SSH_USER@$HERO3_SSH_HOST:/tmp/hero3-release.$GITHUB_SHA.tgz"
-
-      - name: Deploy on server
-        env:
-          HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
-          HERO3_SSH_PORT: ${{ secrets.HERO3_SSH_PORT || '22' }}
-          HERO3_SSH_USER: ${{ secrets.HERO3_SSH_USER }}
-        run: |
-          set -euo pipefail
-          REMOTE_RELEASE="/tmp/hero3-release.$GITHUB_SHA.tgz"
           ssh \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
@@ -121,14 +90,14 @@ jobs:
             -o ServerAliveCountMax=6 \
             -i ~/.ssh/hero3_deploy_key \
             -p "$HERO3_SSH_PORT" \
-            "$HERO3_SSH_USER@$HERO3_SSH_HOST" "REMOTE_RELEASE='$REMOTE_RELEASE' bash -s" <<'EOF'
+            "$HERO3_SSH_USER@$HERO3_SSH_HOST" "GITHUB_SHA='$GITHUB_SHA' bash -s" <<'EOF'
           set -euo pipefail
 
           STAMP="$(date +%Y%m%d%H%M%S)"
-          DEPLOY_DIR="/tmp/hero3-deploy.$STAMP"
+          UPLOAD_DIR="/tmp/hero3-upload.$GITHUB_SHA"
 
-          mkdir -p /opt/hero3/backups /var/www/hero3/backups "$DEPLOY_DIR"
-          tar -xzf "$REMOTE_RELEASE" -C "$DEPLOY_DIR"
+          command -v rsync >/dev/null
+          mkdir -p /opt/hero3/backups /var/www/hero3/backups "$UPLOAD_DIR/backend"
 
           if [ -f /opt/hero3/go/bin/hero3-server ]; then
             cp -a /opt/hero3/go/bin/hero3-server "/opt/hero3/backups/hero3-server.$STAMP"
@@ -141,16 +110,68 @@ jobs:
           fi
 
           mkdir -p /opt/hero3/go/bin /opt/hero3/go/config /var/www/hero3/web /var/www/hero3/admin
-          install -m 755 "$DEPLOY_DIR/backend/hero3-server" /opt/hero3/go/bin/hero3-server
-          cp -a "$DEPLOY_DIR/backend/config/." /opt/hero3/go/config/
-          cp -a "$DEPLOY_DIR/web/." /var/www/hero3/web/
-          cp -a "$DEPLOY_DIR/admin/." /var/www/hero3/admin/
+          EOF
+
+      - name: Upload backend
+        env:
+          HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
+          HERO3_SSH_PORT: ${{ secrets.HERO3_SSH_PORT || '22' }}
+          HERO3_SSH_USER: ${{ secrets.HERO3_SSH_USER }}
+        run: |
+          set -euo pipefail
+          SSH_OPTS="-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 -i ~/.ssh/hero3_deploy_key -p $HERO3_SSH_PORT"
+          RSYNC_RSH="ssh $SSH_OPTS" rsync -azc --delete --delay-updates --info=stats2 go/bin/hero3-server "$HERO3_SSH_USER@$HERO3_SSH_HOST:/tmp/hero3-upload.$GITHUB_SHA/backend/hero3-server"
+          RSYNC_RSH="ssh $SSH_OPTS" rsync -azc --delete --delay-updates --info=stats2 go/config/ "$HERO3_SSH_USER@$HERO3_SSH_HOST:/tmp/hero3-upload.$GITHUB_SHA/backend/config/"
+
+      - name: Upload web
+        env:
+          HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
+          HERO3_SSH_PORT: ${{ secrets.HERO3_SSH_PORT || '22' }}
+          HERO3_SSH_USER: ${{ secrets.HERO3_SSH_USER }}
+        run: |
+          set -euo pipefail
+          SSH_OPTS="-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 -i ~/.ssh/hero3_deploy_key -p $HERO3_SSH_PORT"
+          RSYNC_RSH="ssh $SSH_OPTS" rsync -azc --delete --delay-updates --info=stats2 web/dist/ "$HERO3_SSH_USER@$HERO3_SSH_HOST:/var/www/hero3/web/"
+
+      - name: Upload admin
+        env:
+          HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
+          HERO3_SSH_PORT: ${{ secrets.HERO3_SSH_PORT || '22' }}
+          HERO3_SSH_USER: ${{ secrets.HERO3_SSH_USER }}
+        run: |
+          set -euo pipefail
+          SSH_OPTS="-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 -i ~/.ssh/hero3_deploy_key -p $HERO3_SSH_PORT"
+          RSYNC_RSH="ssh $SSH_OPTS" rsync -azc --delete --delay-updates --info=stats2 admin/dist/ "$HERO3_SSH_USER@$HERO3_SSH_HOST:/var/www/hero3/admin/"
+
+      - name: Deploy on server
+        env:
+          HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
+          HERO3_SSH_PORT: ${{ secrets.HERO3_SSH_PORT || '22' }}
+          HERO3_SSH_USER: ${{ secrets.HERO3_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=accept-new \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=6 \
+            -i ~/.ssh/hero3_deploy_key \
+            -p "$HERO3_SSH_PORT" \
+            "$HERO3_SSH_USER@$HERO3_SSH_HOST" "GITHUB_SHA='$GITHUB_SHA' bash -s" <<'EOF'
+          set -euo pipefail
+
+          UPLOAD_DIR="/tmp/hero3-upload.$GITHUB_SHA"
+          install -m 755 "$UPLOAD_DIR/backend/hero3-server" /opt/hero3/go/bin/hero3-server
+          rsync -a --delete "$UPLOAD_DIR/backend/config/" /opt/hero3/go/config/
 
           systemctl restart hero3
           nginx -t
           systemctl reload nginx
 
-          rm -rf "$DEPLOY_DIR" "$REMOTE_RELEASE"
+          rm -rf "$UPLOAD_DIR"
           EOF
 
       - name: Health check
