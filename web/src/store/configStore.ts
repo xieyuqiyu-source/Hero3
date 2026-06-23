@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { gameApi } from '@/api/game'
+import type { ItemDefinition } from '@/types/game'
 
 export interface BuildingConfig {
   type: string
@@ -55,6 +56,7 @@ interface ConfigStore {
   balance: BalanceConfig | null
   factions: Record<string, FactionConfig> | null
   units: Record<string, Record<string, UnitConfig>> | null
+  items: Record<string, ItemDefinition> | null
   loaded: boolean
   loadBootstrap: () => Promise<void>
 }
@@ -63,6 +65,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   balance: null,
   factions: null,
   units: null,
+  items: null,
   loaded: false,
 
   loadBootstrap: async () => {
@@ -73,6 +76,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         balance: data.balance,
         factions: data.factions,
         units: data.units,
+        items: data.items,
         loaded: true,
       })
     } catch {

@@ -60,6 +60,13 @@ type ResourceState struct {
 
 type ResourceProduction map[string]int
 
+type ItemStack struct {
+	ItemID     string `json:"itemId"`
+	Amount     int    `json:"amount"`
+	ObtainedAt string `json:"obtainedAt,omitempty"`
+	UpdatedAt  string `json:"updatedAt,omitempty"`
+}
+
 type Building struct {
 	ID            string  `json:"id"`
 	Type          string  `json:"type"`
@@ -212,16 +219,18 @@ type MailPage struct {
 }
 
 type MailClaimResult struct {
-	Mail         Mail           `json:"mail"`
-	Resources    ResourceState  `json:"resources"`
-	CityGold     int            `json:"cityGold"`
-	AccountGold  int            `json:"accountGold,omitempty"`
-	GrantedItems map[string]int `json:"grantedItems"`
+	Mail         Mail                 `json:"mail"`
+	Resources    ResourceState        `json:"resources"`
+	Inventory    map[string]ItemStack `json:"inventory,omitempty"`
+	CityGold     int                  `json:"cityGold"`
+	AccountGold  int                  `json:"accountGold,omitempty"`
+	GrantedItems map[string]int       `json:"grantedItems"`
 }
 
 type GameState struct {
 	Player              Player                  `json:"player"`
 	Resources           ResourceState           `json:"resources"`
+	Inventory           map[string]ItemStack    `json:"inventory,omitempty"`
 	ResourceProduction  ResourceProduction      `json:"resourceProduction"`
 	ResourceSettledAt   string                  `json:"resourceSettledAt"`
 	CityGold            FlexInt                 `json:"cityGold"`
@@ -260,6 +269,7 @@ func newPlayerState(id string, nickname string, faction string, generalID string
 			},
 			Capacity: map[string]int{},
 		},
+		Inventory: map[string]ItemStack{},
 		Buildings: []Building{
 			// 木场 x5
 			{ID: "wood_camp-1", Type: "wood_camp", Level: 1},

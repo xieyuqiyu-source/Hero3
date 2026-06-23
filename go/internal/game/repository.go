@@ -665,8 +665,11 @@ func (r *MemoryRepository) ClaimMailAttachments(playerID string, mailID string, 
 		if mail.ID != mailID || mail.DeletedByPlayer {
 			continue
 		}
-		if len(mail.Attachments) == 0 || mail.IsClaimed {
-			return MailClaimResult{}, ErrInvalidMail
+		if len(mail.Attachments) == 0 {
+			return MailClaimResult{}, ErrMailNoAttachments
+		}
+		if mail.IsClaimed {
+			return MailClaimResult{}, ErrMailAlreadyClaimed
 		}
 		granted, accountGold, err := ApplyMailAttachmentsToState(&state, mail.Attachments)
 		if err != nil {
@@ -699,6 +702,7 @@ func (r *MemoryRepository) ClaimMailAttachments(playerID string, mailID string, 
 		return MailClaimResult{
 			Mail:         mail,
 			Resources:    state.Resources,
+			Inventory:    state.Inventory,
 			CityGold:     int(state.CityGold),
 			AccountGold:  accountGold,
 			GrantedItems: granted,

@@ -114,10 +114,13 @@ const MailPage: FC = () => {
       const result = await gameApi.claimMailAttachments(activePlayerId, mailId)
       setSelectedMail(result.mail)
       setMails((items) => items.map((item) => item.id === mailId ? result.mail : item))
-      patchState({ resources: result.resources, cityGold: result.cityGold })
+      patchState({ resources: result.resources, inventory: result.inventory, cityGold: result.cityGold })
       if (account && result.accountGold !== undefined) {
         useAccountStore.setState({ account: { ...account, gold: result.accountGold } })
       }
+      toast.success('附件已领取')
+    } catch {
+      // api client 已经展示了后端错误，这里只防止未捕获异常打断页面。
     } finally {
       setClaiming(false)
     }

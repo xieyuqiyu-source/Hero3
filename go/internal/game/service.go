@@ -15,34 +15,40 @@ import (
 )
 
 var (
-	ErrAccountExists      = errors.New("account already exists")
-	ErrAccountNotFound    = errors.New("account not found")
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrPlayerNotFound     = errors.New("player not found")
-	ErrBuildingNotFound   = errors.New("building not found")
-	ErrInsufficientRes    = errors.New("insufficient resources")
-	ErrAlreadyUpgrading   = errors.New("building is already upgrading")
-	ErrNotUpgrading       = errors.New("building is not upgrading")
-	ErrMaxLevel           = errors.New("building is at max level")
-	ErrUnitNotFound       = errors.New("unit not found")
-	ErrNonCombatUnit      = errors.New("unit cannot participate in combat")
-	ErrInvalidAmount      = errors.New("invalid recruit amount")
-	ErrQueueFull          = errors.New("recruit queue is full")
-	ErrInvalidGeneral     = errors.New("invalid general for faction")
-	ErrGeneralNotFound    = errors.New("general not found")
-	ErrInvalidStatKey     = errors.New("invalid general stat")
-	ErrNoStatPoints       = errors.New("no general stat points available")
-	ErrStatMaxLevel       = errors.New("general stat is at max level")
-	ErrMailNotFound       = errors.New("mail not found")
-	ErrInvalidMail        = errors.New("invalid mail")
-	ErrMailAlreadyClaimed = errors.New("mail already claimed")
-	ErrMailNoAttachments  = errors.New("mail has no attachments")
-	ErrMailRecipientSelf  = errors.New("cannot send mail to yourself")
-	ErrMiniGameNotFound   = errors.New("minigame record not found")
-	ErrInvalidMiniGame    = errors.New("invalid minigame record")
-	ErrInvalidBait        = errors.New("invalid fishing bait")
-	ErrCrossFactionReward = errors.New("reward unit is not available for current faction")
-	ErrMiniGameStockShort = errors.New("insufficient minigame reward stock")
+	ErrAccountExists         = errors.New("account already exists")
+	ErrAccountNotFound       = errors.New("account not found")
+	ErrInvalidCredentials    = errors.New("invalid credentials")
+	ErrPlayerNotFound        = errors.New("player not found")
+	ErrBuildingNotFound      = errors.New("building not found")
+	ErrInsufficientRes       = errors.New("insufficient resources")
+	ErrAlreadyUpgrading      = errors.New("building is already upgrading")
+	ErrNotUpgrading          = errors.New("building is not upgrading")
+	ErrMaxLevel              = errors.New("building is at max level")
+	ErrUnitNotFound          = errors.New("unit not found")
+	ErrNonCombatUnit         = errors.New("unit cannot participate in combat")
+	ErrInvalidAmount         = errors.New("invalid recruit amount")
+	ErrQueueFull             = errors.New("recruit queue is full")
+	ErrInvalidGeneral        = errors.New("invalid general for faction")
+	ErrGeneralNotFound       = errors.New("general not found")
+	ErrInvalidStatKey        = errors.New("invalid general stat")
+	ErrNoStatPoints          = errors.New("no general stat points available")
+	ErrStatMaxLevel          = errors.New("general stat is at max level")
+	ErrMailNotFound          = errors.New("mail not found")
+	ErrInvalidMail           = errors.New("invalid mail")
+	ErrMailAlreadyClaimed    = errors.New("mail already claimed")
+	ErrMailNoAttachments     = errors.New("mail has no attachments")
+	ErrMailExpired           = errors.New("mail expired")
+	ErrMailClaimForbidden    = errors.New("mail attachments cannot be claimed")
+	ErrMailInvalidAttachment = errors.New("invalid mail attachment")
+	ErrMailRecipientSelf     = errors.New("cannot send mail to yourself")
+	ErrMiniGameNotFound      = errors.New("minigame record not found")
+	ErrInvalidMiniGame       = errors.New("invalid minigame record")
+	ErrInvalidBait           = errors.New("invalid fishing bait")
+	ErrCrossFactionReward    = errors.New("reward unit is not available for current faction")
+	ErrMiniGameStockShort    = errors.New("insufficient minigame reward stock")
+	ErrItemNotFound          = errors.New("item not found")
+	ErrItemNotUsable         = errors.New("item is not usable")
+	ErrInsufficientItem      = errors.New("insufficient item")
 )
 
 const resourceDateLayout = time.RFC3339
@@ -56,6 +62,7 @@ type Service struct {
 	npcConfigPath string
 	combatPath    string
 	generalsPath  string
+	itemsPath     string
 }
 
 // getPlayerLock 获取指定玩家的互斥锁（懒创建）
@@ -70,6 +77,7 @@ type BootstrapResponse struct {
 	Balance  BalanceConfig  `json:"balance"`
 	Factions FactionsConfig `json:"factions"`
 	Units    UnitsConfig    `json:"units"`
+	Items    ItemsConfig    `json:"items"`
 	Message  string         `json:"message"`
 }
 
@@ -104,6 +112,11 @@ func (s *Service) SetCombatPath(path string) error {
 func (s *Service) SetGeneralsPath(path string) error {
 	s.generalsPath = path
 	return LoadGeneralsConfig(path)
+}
+
+func (s *Service) SetItemsPath(path string) error {
+	s.itemsPath = path
+	return LoadItemsConfig(path)
 }
 
 func (s *Service) GetGeneralsConfig() GeneralsConfig {
@@ -336,6 +349,10 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 	if ensureCoreBuildings(&state) {
 		changed = true
 	}
+	if state.Inventory == nil {
+		state.Inventory = map[string]ItemStack{}
+		changed = true
+	}
 
 	// 旧存档没有将领数据时，根据阵营分配默认将领
 	if state.General == nil && state.Player.Faction != "" {
@@ -436,6 +453,7 @@ func (s *Service) Bootstrap() BootstrapResponse {
 	balance := currentBalance()
 	factions := GetFactionsConfig()
 	units := GetUnitsConfig()
+	items := GetItemsConfig()
 	return BootstrapResponse{
 		GameName: "Hero3",
 		Modules: []string{
@@ -446,10 +464,12 @@ func (s *Service) Bootstrap() BootstrapResponse {
 			"map",
 			"combat",
 			"save",
+			"item",
 		},
 		Balance:  balance,
 		Factions: factions,
 		Units:    units,
+		Items:    items,
 		Message:  "Hero3 后端基础服务已就绪，具体玩法逻辑待接入。",
 	}
 }

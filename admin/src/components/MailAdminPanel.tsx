@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { ChevronLeft, ChevronRight, Mail, Plus, RefreshCw, Send, Trash2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
-import type { Mail as MailItem, MailAttachment } from '@/types'
+import PlayerSelector from './PlayerSelector'
+import type { ItemDefinition, Mail as MailItem, MailAttachment } from '@/types'
 
 const MAIL_TYPES = [
   { value: 'gm_notice', label: 'GM 通知' },
@@ -11,7 +12,7 @@ const MAIL_TYPES = [
   { value: 'system_notice', label: '系统通知' },
 ]
 
-const ATTACHMENT_OPTIONS = [
+const BASE_ATTACHMENT_OPTIONS = [
   { type: 'resource', itemId: 'wood', label: '木材' },
   { type: 'resource', itemId: 'stone', label: '石料' },
   { type: 'resource', itemId: 'iron', label: '铁矿' },
@@ -25,8 +26,8 @@ export default function MailAdminPanel() {
   const [mailType, setMailType] = useState('gm_notice')
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
-  const [expiresAt, setExpiresAt] = useState('')
   const [attachments, setAttachments] = useState<MailAttachment[]>([])
+  const [itemsConfig, setItemsConfig] = useState<Record<string, ItemDefinition>>({})
   const [mails, setMails] = useState<MailItem[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [totalMails, setTotalMails] = useState(0)
@@ -34,6 +35,21 @@ export default function MailAdminPanel() {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const totalPages = Math.max(1, Math.ceil(totalMails / 10))
+
+  useEffect(() => {
+    adminApi.getItemsConfig()
+      .then(setItemsConfig)
+      .catch(() => setItemsConfig({}))
+  }, [])
+
+  const attachmentOptions = useMemo(() => {
+    const itemOptions = Object.entries(itemsConfig).map(([itemId, item]) => ({
+      type: 'item',
+      itemId,
+      label: item.name,
+    }))
+    return [...BASE_ATTACHMENT_OPTIONS, ...itemOptions]
+  }, [itemsConfig])
 
   const loadMails = async (page = currentPage, options: { silent?: boolean } = {}) => {
     if (!playerId.trim()) return
@@ -71,11 +87,9 @@ export default function MailAdminPanel() {
         title: title.trim(),
         content: content.trim(),
         attachments: attachments.filter((item) => item.amount > 0),
-        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
       })
       setTitle('')
       setContent('')
-      setExpiresAt('')
       setAttachments([])
       setMessage('信函已发送')
       setCurrentPage(1)
@@ -97,11 +111,10 @@ export default function MailAdminPanel() {
 
       <form onSubmit={handleSubmit} className="grid gap-3 p-4">
         <div className="grid gap-3 md:grid-cols-[1fr_160px]">
-          <input
+          <PlayerSelector
             value={playerId}
-            onChange={(event) => setPlayerId(event.target.value)}
-            placeholder="玩家 playerId"
-            className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent-border)]"
+            onChange={(pid) => setPlayerId(pid)}
+            placeholder="选择收信玩家"
           />
           <select
             value={mailType}
@@ -127,12 +140,6 @@ export default function MailAdminPanel() {
           rows={5}
           placeholder="正文"
           className="resize-none rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent-border)]"
-        />
-        <input
-          type="datetime-local"
-          value={expiresAt}
-          onChange={(event) => setExpiresAt(event.target.value)}
-          className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent-border)]"
         />
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">
           <div className="mb-2 flex items-center gap-2">
@@ -162,7 +169,7 @@ export default function MailAdminPanel() {
                       }}
                       className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 text-xs outline-none focus:border-[var(--color-accent-border)]"
                     >
-                      {ATTACHMENT_OPTIONS.map((option) => (
+                      {attachmentOptions.map((option) => (
                         <option key={`${option.type}:${option.itemId}`} value={`${option.type}:${option.itemId}`}>
                           {option.label}
                         </option>

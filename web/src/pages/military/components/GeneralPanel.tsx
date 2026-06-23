@@ -1,8 +1,12 @@
-import { type FC, useState } from 'react'
+import { type FC, useMemo, useState } from 'react'
+import { Boxes, Package, Sparkles, Swords, UserRound } from 'lucide-react'
+import { gameApi } from '@/api/game'
+import { toast } from '@/components/ui'
+import { useConfigStore } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
+import type { ItemDefinition, ItemEffect, ItemStack } from '@/types/game'
 import { getTraitMeta, formatParamLabel, formatParamValue } from '@/utils/traits'
 
-const INVENTORY_SLOTS = 20
 const ATTRIBUTE_LABELS: Record<string, string> = {
   productionBonus: '资源产量',
   woodProductionBonus: '木材产量',
@@ -58,11 +62,48 @@ const STAT_COLORS: Record<string, string> = {
   command: 'text-purple-500',
 }
 const STAT_ORDER = ['force', 'intelligence', 'politics', 'command']
+const RARITY_CLASS: Record<string, string> = {
+  common: 'text-slate-500 bg-slate-500/10 border-slate-500/20',
+  rare: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
+  epic: 'text-fuchsia-500 bg-fuchsia-500/10 border-fuchsia-500/20',
+  legendary: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
+}
+const RARITY_LABEL: Record<string, string> = {
+  common: '普通',
+  rare: '稀有',
+  epic: '史诗',
+  legendary: '传说',
+}
+
+const effectIcon = (effects: ItemEffect[]) => {
+  if (effects.some((effect) => effect.type === 'general_exp')) return UserRound
+  if (effects.some((effect) => effect.type === 'unit_by_faction')) return Swords
+  return Boxes
+}
 
 const GeneralPanel: FC = () => {
+  const state = useGameStore((s) => s.state)
   const general = useGameStore((s) => s.state?.general)
+  const activePlayerId = useGameStore((s) => s.activePlayerId)
+  const setState = useGameStore((s) => s.setState)
   const allocateGeneralStat = useGameStore((s) => s.allocateGeneralStat)
+  const itemsConfig = useConfigStore((s) => s.items)
   const [allocatingStat, setAllocatingStat] = useState<string | null>(null)
+  const [usingItemId, setUsingItemId] = useState<string | null>(null)
+  const inventoryRows = useMemo(() => {
+    const inventory = state?.inventory ?? {}
+    return Object.values(inventory)
+      .filter((stack) => stack.amount > 0)
+      .map((stack) => ({
+        stack,
+        item: itemsConfig?.[stack.itemId],
+      }))
+      .sort((a, b) => {
+        const nameA = a.item?.name ?? a.stack.itemId
+        const nameB = b.item?.name ?? b.stack.itemId
+        return nameA.localeCompare(nameB, 'zh-Hans-CN')
+      })
+  }, [itemsConfig, state?.inventory])
 
   if (!general) {
     return (
@@ -95,6 +136,20 @@ const GeneralPanel: FC = () => {
       await allocateGeneralStat(statKey)
     } finally {
       setAllocatingStat(null)
+    }
+  }
+
+  const handleUseItem = async (stack: ItemStack, item?: ItemDefinition) => {
+    if (!activePlayerId || !item?.usable || usingItemId) return
+    setUsingItemId(stack.itemId)
+    try {
+      const result = await gameApi.useItem(activePlayerId, stack.itemId, 1)
+      setState(result.state)
+      toast.success(`已使用 ${item.name}`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '物品使用失败')
+    } finally {
+      setUsingItemId(null)
     }
   }
 
@@ -237,20 +292,63 @@ const GeneralPanel: FC = () => {
         </div>
       </div>
 
-      {/* Right: Inventory Grid */}
+      {/* Right: Inventory */}
       <div className="flex-1 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 flex flex-col">
-        <h3 className="text-xs font-semibold text-[var(--color-text-primary)] mb-3">背包</h3>
-        <div className="grid grid-cols-5 gap-2 flex-1 content-start">
-          {Array.from({ length: INVENTORY_SLOTS }).map((_, i) => (
-            <div
-              key={i}
-              className="aspect-square rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-dim)] flex items-center justify-center"
-            >
-              <span className="text-[10px] text-[var(--color-text-muted)]">{i + 1}</span>
-            </div>
-          ))}
+        <div className="flex items-center gap-2 mb-3">
+          <Package size={14} className="text-[var(--color-accent)]" />
+          <h3 className="text-xs font-semibold text-[var(--color-text-primary)]">背包</h3>
+          <span className="ml-auto text-[10px] text-[var(--color-text-muted)]">{inventoryRows.length} 类</span>
         </div>
-      </div>
+        {inventoryRows.length === 0 ? (
+          <div className="flex-1 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-dim)] flex items-center justify-center">
+            <span className="text-xs text-[var(--color-text-muted)]">暂无物品</span>
+          </div>
+        ) : (
+          <div className="space-y-2 overflow-y-auto pr-1 scrollbar-none">
+            {inventoryRows.map(({ stack, item }) => {
+              const Icon = effectIcon(item?.effects ?? [])
+              const rarity = RARITY_CLASS[item?.rarity ?? 'common'] ?? RARITY_CLASS.common
+              return (
+                <div key={stack.itemId} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2">
+                  <div className="flex items-start gap-2">
+                    <div className="w-9 h-9 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] flex items-center justify-center shrink-0">
+                      <Icon size={16} className="text-[var(--color-accent)]" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-xs font-semibold text-[var(--color-text-primary)] truncate">{item?.name ?? stack.itemId}</span>
+                        <span className={`shrink-0 text-[9px] font-medium px-1.5 py-0.5 rounded-md border ${rarity}`}>
+                          {RARITY_LABEL[item?.rarity ?? 'common'] ?? item?.rarity ?? '普通'}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[10px] leading-relaxed text-[var(--color-text-muted)] line-clamp-2">
+                        {item?.description ?? '配置不存在，请检查物品表。'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-[var(--color-text-primary)]">x{stack.amount.toLocaleString()}</span>
+                    <button
+                      type="button"
+                      disabled={!item?.usable || usingItemId === stack.itemId}
+                      onClick={() => handleUseItem(stack, item)}
+                      className="
+                        inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-lg
+                        text-[11px] font-semibold bg-[var(--color-accent)] text-white
+                        disabled:opacity-45 disabled:cursor-not-allowed
+                        hover:brightness-105 cursor-pointer transition
+                      "
+                    >
+                      <Sparkles size={12} />
+                      使用
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+            </div>
     </div>
   )
 }

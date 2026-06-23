@@ -463,3 +463,12 @@ func copyResourceMap(source map[string]int) map[string]int {
 func coreResourceTypes() []string {
 	return []string{"wood", "stone", "iron", "food"}
 }
+
+func isCoreResourceType(resourceType string) bool {
+	for _, candidate := range coreResourceTypes() {
+		if resourceType == candidate {
+			return true
+		}
+	}
+	return false
+}

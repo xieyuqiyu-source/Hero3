@@ -44,6 +44,16 @@ const ERROR_MESSAGES: Record<string, string> = {
   'invalid general stat': '将领属性无效',
   'no general stat points available': '没有可用属性点',
   'general stat is at max level': '该属性已加满',
+  'item not found': '物品不存在',
+  'item is not usable': '该物品不可使用',
+  'insufficient item': '物品数量不足',
+  'mail not found': '信函不存在',
+  'mail has no attachments': '该信函没有附件',
+  'mail already claimed': '附件已领取',
+  'mail expired': '信函已过期',
+  'mail attachments cannot be claimed': '这类信函不能领取附件',
+  'invalid mail attachment': '附件数据异常，无法领取',
+  'invalid mail': '信函状态无效，无法领取',
 }
 
 /** 从错误响应体中提取可读消息 */

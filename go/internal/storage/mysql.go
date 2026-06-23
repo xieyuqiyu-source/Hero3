@@ -1115,6 +1115,7 @@ func (r *MySQLRepository) ClaimMailAttachments(playerID string, mailID string, c
 	return game.MailClaimResult{
 		Mail:         mail,
 		Resources:    state.Resources,
+		Inventory:    state.Inventory,
 		CityGold:     int(state.CityGold),
 		AccountGold:  goldBalance,
 		GrantedItems: granted,

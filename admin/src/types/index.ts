@@ -17,6 +17,7 @@ export interface GameState {
     items: Record<string, number>
     capacity: Record<string, number>
   }
+  inventory?: Record<string, ItemStack>
   resourceProduction: Record<string, number>
   resourceSettledAt: string
   buildings: Array<{
@@ -66,6 +67,35 @@ export interface GameState {
     note?: string
   }>
   serverTime: string
+}
+
+export interface ItemStack {
+  itemId: string
+  amount: number
+  obtainedAt?: string
+  updatedAt?: string
+}
+
+export interface ItemEffect {
+  type: string
+  amount?: number
+  resources?: Record<string, number>
+  unitByFaction?: Record<string, string>
+}
+
+export interface ItemDefinition {
+  id: string
+  name: string
+  description: string
+  type: string
+  rarity: string
+  icon?: string
+  usable: boolean
+  stackable: boolean
+  maxStack: number
+  useTarget: string
+  effects: ItemEffect[]
+  metadata?: Record<string, unknown>
 }
 
 export interface MailAttachment {

@@ -31,6 +31,35 @@ export interface ResourceState {
 
 export type ResourceProduction = Record<string, number>
 
+export interface ItemStack {
+  itemId: string
+  amount: number
+  obtainedAt?: string
+  updatedAt?: string
+}
+
+export interface ItemEffect {
+  type: 'general_exp' | 'resources' | 'unit_by_faction' | string
+  amount?: number
+  resources?: Record<string, number>
+  unitByFaction?: Record<string, string>
+}
+
+export interface ItemDefinition {
+  id: string
+  name: string
+  description: string
+  type: string
+  rarity: string
+  icon?: string
+  usable: boolean
+  stackable: boolean
+  maxStack: number
+  useTarget: string
+  effects: ItemEffect[]
+  metadata?: Record<string, unknown>
+}
+
 export interface Building {
   id: string
   type: string
@@ -126,6 +155,7 @@ export interface Mail {
 export interface MailClaimResult {
   mail: Mail
   resources: ResourceState
+  inventory?: Record<string, ItemStack>
   cityGold: number
   accountGold?: number
   grantedItems: Record<string, number>
@@ -201,6 +231,7 @@ export interface General {
 export interface GameState {
   player: Player
   resources: ResourceState
+  inventory?: Record<string, ItemStack>
   resourceProduction: ResourceProduction
   resourceSettledAt: string
   /** 存档级城金 */

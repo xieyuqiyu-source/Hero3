@@ -52,6 +52,10 @@ func main() {
 		logger.Error("generals config load failed", "path", cfg.GeneralsPath, "error", err)
 		os.Exit(1)
 	}
+	if err := gameService.SetItemsPath(cfg.ItemsPath); err != nil {
+		logger.Error("items config load failed", "path", cfg.ItemsPath, "error", err)
+		os.Exit(1)
+	}
 	if cfg.DatabaseDSN != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -91,6 +95,10 @@ func main() {
 		}
 		if err := gameService.SetGeneralsPath(cfg.GeneralsPath); err != nil {
 			logger.Error("generals config load failed", "path", cfg.GeneralsPath, "error", err)
+			os.Exit(1)
+		}
+		if err := gameService.SetItemsPath(cfg.ItemsPath); err != nil {
+			logger.Error("items config load failed", "path", cfg.ItemsPath, "error", err)
 			os.Exit(1)
 		}
 		logger.Info("database storage enabled")

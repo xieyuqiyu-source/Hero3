@@ -1,4 +1,4 @@
-import type { AccountSummary, BalanceConfig, GameState, GoldLedgerEntry, HealthState, Mail, MailAttachment, MailPage, NpcConfig, NpcState } from '@/types'
+import type { AccountSummary, BalanceConfig, GameState, GoldLedgerEntry, HealthState, ItemDefinition, Mail, MailAttachment, MailPage, NpcConfig, NpcState } from '@/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1'
 const ROOT_BASE = API_BASE.replace(/\/api\/v1$/, '')
@@ -14,7 +14,11 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
   const response = await fetch(url, { ...init, headers })
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`)
+    const body = await response.json().catch(() => null)
+    const message = body && typeof body === 'object' && 'error' in body
+      ? String((body as { error: string }).error)
+      : `HTTP ${response.status}`
+    throw new Error(message)
   }
 
   return response.json() as Promise<T>
@@ -35,6 +39,16 @@ export const adminApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId, adjustments }),
+    })
+  },
+  getItemsConfig() {
+    return request<Record<string, ItemDefinition>>(`${API_BASE}/items/config`)
+  },
+  grantItem(playerId: string, itemId: string, amount: number) {
+    return request<{ state: GameState }>(`${API_BASE}/admin/items/grant`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, itemId, amount }),
     })
   },
   instantCompleteRecruit(playerId: string, queueId: string) {

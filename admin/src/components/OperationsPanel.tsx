@@ -1,14 +1,30 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Package, Zap, Coins, Gift } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import PlayerSelector from './PlayerSelector'
+import type { ItemDefinition } from '@/types'
 
 export function ResourceToolsPanel() {
   const [playerId, setPlayerId] = useState('')
   const [accountId, setAccountId] = useState('')
   const [goldAmount, setGoldAmount] = useState(10)
+  const [items, setItems] = useState<Record<string, ItemDefinition>>({})
+  const [itemId, setItemId] = useState('')
+  const [itemAmount, setItemAmount] = useState(1)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    adminApi.getItemsConfig()
+      .then((result) => {
+        setItems(result)
+        const first = Object.keys(result)[0] ?? ''
+        setItemId((current) => current || first)
+      })
+      .catch(() => {
+        setItems({})
+      })
+  }, [])
 
   const showMsg = (msg: string) => {
     setMessage(msg)
@@ -50,6 +66,21 @@ export function ResourceToolsPanel() {
     try {
       await adminApi.adjustResources(playerId, { wood: 30000, stone: 30000, iron: 30000, food: 30000 })
       showMsg(`✅ 资源补发成功（各 +30000）`)
+    } catch (e: any) {
+      showMsg(`❌ 失败: ${e.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGrantItem = async () => {
+    if (!playerId || !itemId || itemAmount <= 0) return
+    const itemName = items[itemId]?.name ?? itemId
+    if (!confirm(`确认给玩家 ${playerId} 发放 ${itemName} x${itemAmount}？`)) return
+    setLoading(true)
+    try {
+      await adminApi.grantItem(playerId, itemId, itemAmount)
+      showMsg(`✅ 物品发放成功：${itemName} x${itemAmount}`)
     } catch (e: any) {
       showMsg(`❌ 失败: ${e.message}`)
     } finally {
@@ -129,6 +160,39 @@ export function ResourceToolsPanel() {
             <span className="text-[10px] text-[var(--color-text-muted)] ml-2">木/石/铁/粮 各 +30000</span>
           </div>
         </button>
+
+        <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <Gift size={14} className="text-violet-500" />
+            <strong className="text-sm text-violet-600">发放物品</strong>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-[1fr_96px_auto]">
+            <select
+              value={itemId}
+              onChange={(e) => setItemId(e.target.value)}
+              className="min-w-0 px-3 py-2 rounded-xl text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent-border)]"
+            >
+              {Object.entries(items).map(([id, item]) => (
+                <option key={id} value={id}>{item.name}</option>
+              ))}
+            </select>
+            <input
+              type="number"
+              min={1}
+              value={itemAmount}
+              onChange={(e) => setItemAmount(parseInt(e.target.value) || 0)}
+              className="px-3 py-2 rounded-xl text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent-border)]"
+            />
+            <button
+              type="button"
+              onClick={handleGrantItem}
+              disabled={loading || !playerId || !itemId || itemAmount <= 0}
+              className="px-3 py-2 rounded-xl text-xs font-bold text-violet-600 border border-violet-500/30 bg-violet-500/10 hover:bg-violet-500/15 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              发放
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Feedback */}

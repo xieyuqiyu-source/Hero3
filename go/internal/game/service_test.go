@@ -1400,3 +1400,147 @@ func TestRedeemMiniGameRewardAcceptsLegacyTuZuName(t *testing.T) {
 		t.Fatalf("unexpected redeem result: %+v", result)
 	}
 }
+
+func TestUseItemConsumesInventoryAndAppliesGeneralExp(t *testing.T) {
+	svc := NewService()
+	loadTestItemsConfig(t)
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "account_item_use", Username: "item_user", PasswordHash: "hash", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_item_use", "ItemUser", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	state, err := svc.GrantItem("player_item_use", "test_general_exp_small", 2)
+	if err != nil {
+		t.Fatalf("GrantItem failed: %v", err)
+	}
+	if state.Inventory["test_general_exp_small"].Amount != 2 {
+		t.Fatalf("expected 2 items after grant, got %d", state.Inventory["test_general_exp_small"].Amount)
+	}
+
+	result, err := svc.UseItem("player_item_use", "test_general_exp_small", 1)
+	if err != nil {
+		t.Fatalf("UseItem failed: %v", err)
+	}
+	if result.State.Inventory["test_general_exp_small"].Amount != 1 {
+		t.Fatalf("expected 1 item left, got %d", result.State.Inventory["test_general_exp_small"].Amount)
+	}
+	if result.State.General.Exp != 100 {
+		t.Fatalf("expected general exp 100, got %d", result.State.General.Exp)
+	}
+}
+
+func TestMailItemAttachmentAddsInventory(t *testing.T) {
+	svc := NewService()
+	loadTestItemsConfig(t)
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "account_mail_item", Username: "mail_item", PasswordHash: "hash", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_mail_item", "MailItem", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	mail, err := svc.SendMail(SendMailRequest{
+		PlayerID:   "player_mail_item",
+		MailType:   "reward",
+		SenderType: "gm",
+		Title:      "物品测试",
+		Content:    "测试物品附件",
+		Attachments: []MailAttachment{{
+			Type:   "item",
+			ItemID: "test_general_exp_small",
+			Amount: 3,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("SendMail failed: %v", err)
+	}
+	result, err := svc.ClaimMailAttachments("player_mail_item", mail.ID)
+	if err != nil {
+		t.Fatalf("ClaimMailAttachments failed: %v", err)
+	}
+	next, err := repo.GetState("player_mail_item")
+	if err != nil {
+		t.Fatalf("GetState failed: %v", err)
+	}
+	if next.Inventory["test_general_exp_small"].Amount != 3 {
+		t.Fatalf("expected 3 mail items, got %d", next.Inventory["test_general_exp_small"].Amount)
+	}
+	if result.GrantedItems["test_general_exp_small"] != 3 {
+		t.Fatalf("expected granted item count 3, got %d", result.GrantedItems["test_general_exp_small"])
+	}
+}
+
+func TestGMSendMailAppearsInPlayerMailbox(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "account_gm_mail", Username: "gm_mail", PasswordHash: "hash", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_gm_mail", "MailTarget", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	mail, err := svc.SendMail(SendMailRequest{
+		PlayerID:   state.Player.ID,
+		MailType:   "gm_notice",
+		SenderType: "gm",
+		Title:      "GM 测试",
+		Content:    "这是一封 GM 测试信函",
+	})
+	if err != nil {
+		t.Fatalf("SendMail failed: %v", err)
+	}
+	page, err := svc.ListMails(state.Player.ID, 1, 10, "")
+	if err != nil {
+		t.Fatalf("ListMails failed: %v", err)
+	}
+	if page.Total != 1 || page.Unread != 1 || len(page.Mails) != 1 {
+		t.Fatalf("unexpected mailbox page: %+v", page)
+	}
+	if page.Mails[0].ID != mail.ID || page.Mails[0].Title != "GM 测试" {
+		t.Fatalf("unexpected listed mail: %+v", page.Mails[0])
+	}
+}
+
+func loadTestItemsConfig(t *testing.T) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "items.json")
+	data := []byte(`{
+		"test_general_exp_small": {
+			"id": "test_general_exp_small",
+			"name": "测试经验包",
+			"description": "测试用",
+			"type": "consumable",
+			"rarity": "common",
+			"usable": true,
+			"stackable": true,
+			"maxStack": 999999,
+			"useTarget": "current_general",
+			"effects": [
+				{ "type": "general_exp", "amount": 100 }
+			]
+		}
+	}`)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write item config: %v", err)
+	}
+	if err := LoadItemsConfig(path); err != nil {
+		t.Fatalf("load item config: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = LoadItemsConfig(filepath.Join("..", "..", "config", "items.json"))
+	})
+}

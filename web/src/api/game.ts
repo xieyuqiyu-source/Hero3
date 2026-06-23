@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition } from '@/types/game'
 import type { BalanceConfig, FactionConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -68,6 +68,7 @@ export const gameApi = {
       balance: BalanceConfig
       factions: Record<string, FactionConfig>
       units: Record<string, Record<string, UnitConfig>>
+      items: Record<string, ItemDefinition>
       message: string
     }>('/game/bootstrap')
   },
@@ -277,6 +278,20 @@ export const gameApi = {
   /** 城金兑换金币（15城金=1金币，有损耗+冷却） */
   reverseExchangeGold(accountId: string, playerId: string, cityGoldAmount: number) {
     return api.post<{ state: GameState; accountGold: number }>('/gold/reverse-exchange', { accountId, playerId, cityGoldAmount })
+  },
+
+  /** 获取物品配置 */
+  getItemsConfig() {
+    return api.get<Record<string, ItemDefinition>>('/items/config')
+  },
+
+  /** 使用物品 */
+  useItem(playerId: string, itemId: string, amount = 1) {
+    return api.post<{ state: GameState; itemId: string; used: number; effects: Record<string, number> }>('/items/use', {
+      playerId,
+      itemId,
+      amount,
+    })
   },
 
   /** 上报小游戏记录（钓鱼/赌博） */

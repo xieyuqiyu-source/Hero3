@@ -123,13 +123,7 @@ func (s *Service) ClaimMailAttachments(playerID string, mailID string) (MailClai
 		return MailClaimResult{}, ErrMailAlreadyClaimed
 	}
 	if mail.SenderType == "player" || mail.MailType == "player_message" {
-		return MailClaimResult{}, ErrInvalidMail
-	}
-	if strings.TrimSpace(mail.ExpiresAt) != "" {
-		expiresAt, parseErr := time.Parse(resourceDateLayout, mail.ExpiresAt)
-		if parseErr == nil && time.Now().After(expiresAt) {
-			return MailClaimResult{}, ErrInvalidMail
-		}
+		return MailClaimResult{}, ErrMailClaimForbidden
 	}
 
 	result, err := s.repo.ClaimMailAttachments(playerID, mailID, time.Now())
@@ -313,6 +307,10 @@ func validateMailAttachments(attachments []MailAttachment) bool {
 			if strings.TrimSpace(attachment.ItemID) != "gold" {
 				return false
 			}
+		case "item":
+			if _, ok := GetItemDefinition(strings.TrimSpace(attachment.ItemID)); !ok {
+				return false
+			}
 		default:
 			return false
 		}
@@ -349,11 +347,14 @@ func ApplyMailAttachmentsToState(state *GameState, attachments []MailAttachment)
 	accountGold := 0
 	for _, attachment := range attachments {
 		if attachment.Amount <= 0 {
-			return nil, 0, ErrInvalidMail
+			return nil, 0, ErrMailInvalidAttachment
 		}
 		key := strings.TrimSpace(attachment.ItemID)
 		switch strings.TrimSpace(attachment.Type) {
 		case "resource":
+			if !isCoreResourceType(key) {
+				return nil, 0, ErrMailInvalidAttachment
+			}
 			capacity := state.Resources.Capacity[key]
 			current := state.Resources.Items[key]
 			next := current + attachment.Amount
@@ -363,13 +364,25 @@ func ApplyMailAttachmentsToState(state *GameState, attachments []MailAttachment)
 			state.Resources.Items[key] = next
 			granted[key] += next - current
 		case "city_gold":
+			if key != "city_gold" {
+				return nil, 0, ErrMailInvalidAttachment
+			}
 			state.CityGold += FlexInt(attachment.Amount)
 			granted["city_gold"] += attachment.Amount
 		case "gold":
+			if key != "gold" {
+				return nil, 0, ErrMailInvalidAttachment
+			}
 			accountGold += attachment.Amount
 			granted["gold"] += attachment.Amount
+		case "item":
+			if _, ok := GetItemDefinition(key); !ok {
+				return nil, 0, ErrItemNotFound
+			}
+			addItemToInventory(state, key, attachment.Amount, time.Now())
+			granted[key] += attachment.Amount
 		default:
-			return nil, 0, ErrInvalidMail
+			return nil, 0, ErrMailInvalidAttachment
 		}
 	}
 	return granted, accountGold, nil
