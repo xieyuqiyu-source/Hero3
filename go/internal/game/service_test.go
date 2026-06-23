@@ -1281,3 +1281,58 @@ func TestRedeemMiniGameRewardRejectsCrossFactionUnit(t *testing.T) {
 		t.Fatalf("expected stock unchanged, got %+v", records)
 	}
 }
+
+func TestRedeemAllFactionMiniGameRewardsSkipsCrossFactionStock(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_fishing_redeem_all", Username: "fishing_redeem_all", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_fishing_redeem_all", "Fisher", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+	if _, err := svc.SaveMiniGameRecord(state.Player.ID, "fishing", "金龙鱼", "rare", "骁骑营", 5000, "", 0); err != nil {
+		t.Fatalf("save first record: %v", err)
+	}
+	if _, err := svc.SaveMiniGameRecord(state.Player.ID, "fishing", "银鲤", "common", "青州军", 2000, "", 0); err != nil {
+		t.Fatalf("save second record: %v", err)
+	}
+	if _, err := svc.SaveMiniGameRecord(state.Player.ID, "fishing", "蛟龙", "epic", "南蛮象", 50000, "", 0); err != nil {
+		t.Fatalf("save cross faction record: %v", err)
+	}
+
+	result, err := svc.RedeemAllFactionMiniGameRewards(state.Player.ID, "fishing")
+	if err != nil {
+		t.Fatalf("RedeemAllFactionMiniGameRewards failed: %v", err)
+	}
+	if result.RedeemedAmount != 7000 {
+		t.Fatalf("expected redeemed amount 7000, got %d", result.RedeemedAmount)
+	}
+	if result.RedeemedRecords != 2 {
+		t.Fatalf("expected 2 redeemed records, got %d", result.RedeemedRecords)
+	}
+	if result.SkippedRecords != 1 || result.SkippedUnits["南蛮象"] != 50000 {
+		t.Fatalf("expected cross faction stock skipped, got records=%d units=%+v", result.SkippedRecords, result.SkippedUnits)
+	}
+	if result.RedeemedUnits["骁骑营"] != 5000 || result.RedeemedUnits["青州军"] != 2000 {
+		t.Fatalf("unexpected redeemed unit totals: %+v", result.RedeemedUnits)
+	}
+
+	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "fishing", 10, 0)
+	if err != nil {
+		t.Fatalf("list records: %v", err)
+	}
+	remainingByUnit := map[string]int{}
+	for _, record := range records {
+		remainingByUnit[record.RewardUnit] += record.RemainingAmount
+	}
+	if remainingByUnit["骁骑营"] != 0 || remainingByUnit["青州军"] != 0 || remainingByUnit["南蛮象"] != 50000 {
+		t.Fatalf("unexpected remaining stock: %+v", remainingByUnit)
+	}
+}

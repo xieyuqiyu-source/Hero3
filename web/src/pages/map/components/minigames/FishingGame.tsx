@@ -12,6 +12,9 @@ import { FishingResultModal } from './fishing/FishingResultModal'
 import { BAITS, FISH_POOL, RARITY_CONFIG } from './fishing/fishingConfig'
 import type { BaitType, Bubble, FishCatch, FishShadow, GamePhase, FishingStats } from './fishing/types'
 
+const RECORD_PAGE_SIZE = 100
+const BULK_REDEEM_ID = '__all__'
+
 const FishingGame: FC = () => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const gameState = useGameStore((s) => s.state)
@@ -63,7 +66,7 @@ const FishingGame: FC = () => {
     if (!activePlayerId) return
     setRecordsLoading(true)
     try {
-      const result = await gameApi.listMiniGameRecords(activePlayerId, 100, offset, 'fishing')
+      const result = await gameApi.listMiniGameRecords(activePlayerId, RECORD_PAGE_SIZE, offset, 'fishing')
       setRecords(result.records)
       setRecordsTotal(result.totalRecords)
       setRecordsHasMore(result.hasMore)
@@ -105,6 +108,31 @@ const FishingGame: FC = () => {
         patchState({ army: latestState.army, serverTime: latestState.serverTime })
       }
       toast.success(`${unitName} ×${redeemed.toLocaleString()} 已加入军队`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '兑换失败')
+    } finally {
+      setRedeemingId('')
+    }
+  }
+
+  const handleRedeemAllFactionInventory = async () => {
+    if (!activePlayerId || redeemingId) return
+    setRedeemingId(BULK_REDEEM_ID)
+    try {
+      const result = await gameApi.redeemAllMiniGameRewards(activePlayerId, 'fishing')
+      if (result.redeemedAmount <= 0) {
+        toast.error('没有本阵营可兑换库存')
+        return
+      }
+
+      patchState({ army: result.state.army, serverTime: result.state.serverTime })
+      await loadRecords(0)
+
+      const summary = Object.entries(result.redeemedUnits)
+        .slice(0, 3)
+        .map(([unitName, amount]) => `${unitName} ×${amount.toLocaleString()}`)
+        .join('、')
+      toast.success(`已兑换 ${result.redeemedAmount.toLocaleString()} 兵力${summary ? `：${summary}` : ''}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '兑换失败')
     } finally {
@@ -352,12 +380,14 @@ const FishingGame: FC = () => {
           recordsTotal={recordsTotal}
           recordsHasMore={recordsHasMore}
           recordsOffset={recordsOffset}
-          recordsPageSize={100}
+          recordsPageSize={RECORD_PAGE_SIZE}
           redeemingId={redeemingId}
+          redeemingAll={redeemingId === BULK_REDEEM_ID}
           isFactionUnit={isFactionUnit}
           onClose={() => setShowInventory(false)}
           onRefresh={() => void loadRecords(0)}
           onPageChange={(nextOffset) => void loadRecords(nextOffset)}
+          onRedeemAll={() => void handleRedeemAllFactionInventory()}
           onRedeemGroup={(unitName, groupRecords) => void handleRedeemGroup(unitName, groupRecords)}
         />
       )}

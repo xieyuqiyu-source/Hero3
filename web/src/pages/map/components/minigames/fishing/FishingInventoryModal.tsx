@@ -12,10 +12,12 @@ interface FishingInventoryModalProps {
   recordsOffset: number
   recordsPageSize: number
   redeemingId: string
+  redeemingAll: boolean
   isFactionUnit: (unitName: string) => boolean
   onClose: () => void
   onRefresh: () => void
   onPageChange: (offset: number) => void
+  onRedeemAll: () => void
   onRedeemGroup: (unitName: string, records: MiniGameRecord[]) => void
 }
 
@@ -44,10 +46,12 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
   recordsOffset,
   recordsPageSize,
   redeemingId,
+  redeemingAll,
   isFactionUnit,
   onClose,
   onRefresh,
   onPageChange,
+  onRedeemAll,
   onRedeemGroup,
 }) => {
   const inventoryRecords = records.filter(record => record.remainingAmount > 0)
@@ -89,14 +93,14 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
   const canNextPage = recordsHasMore
 
   return (
-    <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm animate-fishing-inventory-backdrop-in">
       <button
         type="button"
         aria-label="关闭钓鱼库存"
         onClick={onClose}
         className="absolute inset-0 cursor-default"
       />
-      <div className="relative h-[82vh] w-full max-w-[420px] animate-in fade-in-0 zoom-in-95 duration-200">
+      <div className="relative h-[82vh] w-full max-w-[420px] animate-fishing-inventory-dialog-in">
         <div className="flex h-full min-h-0 flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_18px_50px_rgba(15,23,42,0.12)]">
           <div className="shrink-0 border-b border-[var(--color-border)] px-3.5 py-3">
             <div className="flex items-center justify-between gap-3">
@@ -133,16 +137,30 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
               </div>
             </div>
             {inventoryRecords.length > 0 && (
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="rounded-xl bg-[var(--color-surface-dim)] px-2.5 py-2">
+              <div className="mt-3 grid grid-cols-[1fr_1fr_auto] gap-2">
+                <div className="min-w-0 rounded-xl bg-[var(--color-surface-dim)] px-2.5 py-2">
                   <p className="text-[9px] text-[var(--color-text-muted)]">可兑换</p>
                   <p className="mt-0.5 text-sm font-bold text-emerald-600">{redeemableAmount.toLocaleString()}</p>
                 </div>
-                <div className="rounded-xl bg-[var(--color-surface-dim)] px-2.5 py-2">
+                <div className="min-w-0 rounded-xl bg-[var(--color-surface-dim)] px-2.5 py-2">
                   <p className="text-[9px] text-[var(--color-text-muted)]">暂存</p>
                   <p className="mt-0.5 text-sm font-bold text-amber-600">{(totalInventoryAmount - redeemableAmount).toLocaleString()}</p>
                 </div>
+                <button
+                  type="button"
+                  onClick={onRedeemAll}
+                  disabled={recordsLoading || Boolean(redeemingId) || redeemableAmount <= 0}
+                  className="inline-flex min-w-[76px] items-center justify-center gap-1 rounded-xl bg-[var(--color-accent)] px-2.5 py-2 text-[10px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
+                >
+                  {redeemingAll && <Loader2 size={11} className="animate-spin" />}
+                  全部兑换
+                </button>
               </div>
+            )}
+            {inventoryRecords.length > 0 && (
+              <p className="mt-2 text-[9px] leading-4 text-[var(--color-text-muted)]">
+                全部兑换会扫描所有存储记录，目前只取出本阵营兵种。
+              </p>
             )}
           </div>
 
@@ -157,11 +175,15 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
               </div>
             ) : (
               <div className="space-y-2">
-                {groups.map(group => {
+                {groups.map((group, index) => {
                   const cfg = RARITY_CONFIG[group.highestRarity] ?? RARITY_CONFIG.common
                   const isRedeeming = redeemingId === group.rewardUnit
                   return (
-                    <div key={group.rewardUnit} className={`rounded-xl border px-2.5 py-2.5 ${group.canRedeem ? 'border-emerald-500/20 bg-emerald-500/[0.04]' : 'border-[var(--color-border)] bg-[var(--color-surface-dim)]'}`}>
+                    <div
+                      key={group.rewardUnit}
+                      className={`animate-fishing-inventory-item-in rounded-xl border px-2.5 py-2.5 ${group.canRedeem ? 'border-emerald-500/20 bg-emerald-500/[0.04]' : 'border-[var(--color-border)] bg-[var(--color-surface-dim)]'}`}
+                      style={{ animationDelay: `${Math.min(index * 35, 210)}ms` }}
+                    >
                       <div className="mb-2 flex flex-wrap gap-1">
                         {group.fishTags.map(tag => {
                           const tagCfg = RARITY_CONFIG[tag.rarity] ?? RARITY_CONFIG.common

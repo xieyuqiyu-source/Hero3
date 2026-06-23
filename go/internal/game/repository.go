@@ -56,6 +56,7 @@ type Repository interface {
 	SaveMiniGameRecord(record MiniGameRecord) error
 	ListMiniGameRecords(playerID string, gameType string, limit int, offset int) ([]MiniGameRecord, int, error)
 	RedeemMiniGameRecord(playerID string, recordID string, amount int, redeemedAt time.Time) (MiniGameRedeemResult, error)
+	RedeemAllFactionMiniGameRecords(playerID string, gameType string, redeemedAt time.Time) (MiniGameRedeemAllResult, error)
 
 	// Gold Ledger（货币流水，写入失败由调用方降级处理）
 	WriteGoldLedger(entry GoldLedgerEntry) error
@@ -794,6 +795,68 @@ func (r *MemoryRepository) RedeemMiniGameRecord(playerID string, recordID string
 		}, nil
 	}
 	return MiniGameRedeemResult{}, ErrMiniGameNotFound
+}
+
+func (r *MemoryRepository) RedeemAllFactionMiniGameRecords(playerID string, gameType string, redeemedAt time.Time) (MiniGameRedeemAllResult, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	state, exists := r.players[playerID]
+	if !exists {
+		return MiniGameRedeemAllResult{}, ErrPlayerNotFound
+	}
+	if gameType == "" {
+		gameType = "fishing"
+	}
+
+	records := r.miniGameRecords[playerID]
+	redeemedUnits := map[string]int{}
+	skippedUnits := map[string]int{}
+	redeemedRecords := 0
+	skippedRecords := 0
+	for i := range records {
+		record := records[i]
+		if record.GameType != gameType || record.RewardUnit == "" || record.RemainingAmount <= 0 {
+			continue
+		}
+		unitID, unitCfg, ok := FindFactionUnitByName(state.Player.Faction, record.RewardUnit)
+		if !ok {
+			skippedUnits[record.RewardUnit] += record.RemainingAmount
+			skippedRecords++
+			continue
+		}
+		amount := record.RemainingAmount
+		records[i].RemainingAmount = 0
+		AddArmyUnit(&state, unitID, amount)
+		redeemedUnits[unitCfg.Name] += amount
+		redeemedRecords++
+	}
+	if redeemedRecords == 0 {
+		state.ServerTime = redeemedAt.UTC().Format(resourceDateLayout)
+		return MiniGameRedeemAllResult{
+			State:          state,
+			RedeemedUnits:  redeemedUnits,
+			SkippedUnits:   skippedUnits,
+			SkippedRecords: skippedRecords,
+		}, nil
+	}
+
+	state.ServerTime = redeemedAt.UTC().Format(resourceDateLayout)
+	r.miniGameRecords[playerID] = records
+	r.players[playerID] = state
+	r.playerUpdatedAt[playerID] = redeemedAt.UTC()
+	total := 0
+	for _, amount := range redeemedUnits {
+		total += amount
+	}
+	return MiniGameRedeemAllResult{
+		State:           state,
+		RedeemedUnits:   redeemedUnits,
+		RedeemedAmount:  total,
+		RedeemedRecords: redeemedRecords,
+		SkippedUnits:    skippedUnits,
+		SkippedRecords:  skippedRecords,
+	}, nil
 }
 
 // --- Gold Ledger Methods (MemoryRepository) ---

@@ -154,7 +154,7 @@
     "unlock": { "building": "infantry_camp", "level": 10 }
   },
   "tuZu": {
-    "name": "土族",
+    "name": "士族",
     "description": "魏国贵族部队，拥有极高的战斗素养",
     "category": "special",
     "icon": "tuZu",

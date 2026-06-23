@@ -1516,6 +1516,29 @@ func (h *Handlers) RedeemMiniGameReward(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *Handlers) RedeemAllMiniGameRewards(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+		GameType string `json:"gameType"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+	result, err := h.gameService.RedeemAllFactionMiniGameRewards(payload.PlayerID, payload.GameType)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, game.ErrPlayerNotFound) {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *Handlers) AdminMiniGameRecords(w http.ResponseWriter, r *http.Request) {
 	playerID := r.URL.Query().Get("playerId")
 	if playerID == "" {

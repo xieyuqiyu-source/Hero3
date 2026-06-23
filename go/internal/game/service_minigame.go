@@ -38,6 +38,15 @@ type MiniGameRedeemResult struct {
 	RedeemedAmount int            `json:"redeemedAmount"`
 }
 
+type MiniGameRedeemAllResult struct {
+	State           GameState      `json:"state"`
+	RedeemedUnits   map[string]int `json:"redeemedUnits"`
+	RedeemedAmount  int            `json:"redeemedAmount"`
+	RedeemedRecords int            `json:"redeemedRecords"`
+	SkippedUnits    map[string]int `json:"skippedUnits"`
+	SkippedRecords  int            `json:"skippedRecords"`
+}
+
 // SaveMiniGameRecord 保存一条小游戏记录
 func (s *Service) SaveMiniGameRecord(playerID string, gameType string, resultName string, rarity string, rewardUnit string, rewardAmount int, betUnit string, betAmount int) (MiniGameRecord, error) {
 	playerID = strings.TrimSpace(playerID)
@@ -82,6 +91,18 @@ func (s *Service) RedeemMiniGameReward(playerID string, recordID string, amount 
 		return MiniGameRedeemResult{}, ErrInvalidAmount
 	}
 	return s.repo.RedeemMiniGameRecord(playerID, recordID, amount, time.Now())
+}
+
+func (s *Service) RedeemAllFactionMiniGameRewards(playerID string, gameType string) (MiniGameRedeemAllResult, error) {
+	playerID = strings.TrimSpace(playerID)
+	gameType = strings.TrimSpace(gameType)
+	if playerID == "" {
+		return MiniGameRedeemAllResult{}, ErrPlayerNotFound
+	}
+	if gameType == "" {
+		gameType = "fishing"
+	}
+	return s.repo.RedeemAllFactionMiniGameRecords(playerID, gameType, time.Now())
 }
 
 // GetMiniGameRecords GM 查询某玩家的小游戏记录（含汇总）

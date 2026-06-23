@@ -162,6 +162,15 @@ export interface MiniGameRedeemResult {
   redeemedAmount: number
 }
 
+export interface MiniGameRedeemAllResult {
+  state: GameState
+  redeemedUnits: Record<string, number>
+  redeemedAmount: number
+  redeemedRecords: number
+  skippedUnits: Record<string, number>
+  skippedRecords: number
+}
+
 export interface GeneralTraitInstance {
   traitId: string
   name: string

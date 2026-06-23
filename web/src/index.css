@@ -218,6 +218,55 @@ body {
   animation: fishing-splash 0.42s ease-in-out infinite;
 }
 
+@keyframes fishing-inventory-backdrop-in {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(4px);
+  }
+}
+
+@keyframes fishing-inventory-dialog-in {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fishing-inventory-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fishing-inventory-backdrop-in {
+  animation: fishing-inventory-backdrop-in 0.2s ease-out both;
+}
+
+.animate-fishing-inventory-dialog-in {
+  animation: fishing-inventory-dialog-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-fishing-inventory-item-in {
+  animation: fishing-inventory-item-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 @keyframes water-shimmer {
   0%, 100% {
     transform: translateX(0);

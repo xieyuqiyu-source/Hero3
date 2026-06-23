@@ -1344,6 +1344,116 @@ func (r *MySQLRepository) RedeemMiniGameRecord(playerID string, recordID string,
 	}, nil
 }
 
+func (r *MySQLRepository) RedeemAllFactionMiniGameRecords(playerID string, gameType string, redeemedAt time.Time) (game.MiniGameRedeemAllResult, error) {
+	if gameType == "" {
+		gameType = "fishing"
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return game.MiniGameRedeemAllResult{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var stateJSON []byte
+	err = tx.QueryRow(`SELECT state_json FROM players WHERE id = ? LIMIT 1 FOR UPDATE`, playerID).Scan(&stateJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		return game.MiniGameRedeemAllResult{}, game.ErrPlayerNotFound
+	}
+	if err != nil {
+		return game.MiniGameRedeemAllResult{}, err
+	}
+	var state game.GameState
+	if err = json.Unmarshal(stateJSON, &state); err != nil {
+		return game.MiniGameRedeemAllResult{}, err
+	}
+
+	rows, err := tx.Query(
+		`SELECT id, reward_unit, remaining_amount
+		 FROM minigame_records
+		 WHERE player_id = ? AND game_type = ? AND remaining_amount > 0 AND reward_unit <> ''
+		 ORDER BY created_at ASC
+		 FOR UPDATE`,
+		playerID, gameType,
+	)
+	if err != nil {
+		return game.MiniGameRedeemAllResult{}, err
+	}
+	defer rows.Close()
+
+	redeemedUnits := map[string]int{}
+	skippedUnits := map[string]int{}
+	var redeemIDs []string
+	redeemedRecords := 0
+	skippedRecords := 0
+	for rows.Next() {
+		var recordID string
+		var rewardUnit string
+		var remainingAmount int
+		if err := rows.Scan(&recordID, &rewardUnit, &remainingAmount); err != nil {
+			return game.MiniGameRedeemAllResult{}, err
+		}
+		unitID, unitCfg, ok := game.FindFactionUnitByName(state.Player.Faction, rewardUnit)
+		if !ok {
+			skippedUnits[rewardUnit] += remainingAmount
+			skippedRecords++
+			continue
+		}
+		redeemIDs = append(redeemIDs, recordID)
+		game.AddArmyUnit(&state, unitID, remainingAmount)
+		redeemedUnits[unitCfg.Name] += remainingAmount
+		redeemedRecords++
+	}
+	if err := rows.Err(); err != nil {
+		return game.MiniGameRedeemAllResult{}, err
+	}
+
+	total := 0
+	for _, amount := range redeemedUnits {
+		total += amount
+	}
+	state.ServerTime = redeemedAt.UTC().Format(time.RFC3339)
+
+	if len(redeemIDs) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(redeemIDs)), ",")
+		args := make([]any, 0, len(redeemIDs)+1)
+		args = append(args, playerID)
+		for _, id := range redeemIDs {
+			args = append(args, id)
+		}
+		if _, err := tx.Exec(
+			`UPDATE minigame_records
+			 SET remaining_amount = 0
+			 WHERE player_id = ? AND id IN (`+placeholders+`)`,
+			args...,
+		); err != nil {
+			return game.MiniGameRedeemAllResult{}, err
+		}
+
+		nextStateJSON, err := json.Marshal(state)
+		if err != nil {
+			return game.MiniGameRedeemAllResult{}, err
+		}
+		if _, err = tx.Exec(
+			`UPDATE players SET state_json = ?, updated_at = ? WHERE id = ?`,
+			nextStateJSON, redeemedAt.UTC(), playerID,
+		); err != nil {
+			return game.MiniGameRedeemAllResult{}, err
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		return game.MiniGameRedeemAllResult{}, err
+	}
+	return game.MiniGameRedeemAllResult{
+		State:           state,
+		RedeemedUnits:   redeemedUnits,
+		RedeemedAmount:  total,
+		RedeemedRecords: redeemedRecords,
+		SkippedUnits:    skippedUnits,
+		SkippedRecords:  skippedRecords,
+	}, nil
+}
+
 // --- Gold Ledger Methods ---
 
 func (r *MySQLRepository) WriteGoldLedger(entry game.GoldLedgerEntry) error {

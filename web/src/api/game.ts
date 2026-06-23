@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult } from '@/types/game'
 import type { BalanceConfig, FactionConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -293,6 +293,11 @@ export const gameApi = {
   /** 兑换小游戏库存奖励 */
   redeemMiniGameReward(playerId: string, recordId: string, amount: number) {
     return api.post<MiniGameRedeemResult>('/minigame/redeem', { playerId, recordId, amount })
+  },
+
+  /** 一次性兑换当前阵营的全部小游戏库存奖励 */
+  redeemAllMiniGameRewards(playerId: string, gameType = 'fishing') {
+    return api.post<MiniGameRedeemAllResult>('/minigame/redeem-all', { playerId, gameType })
   },
 
 }
