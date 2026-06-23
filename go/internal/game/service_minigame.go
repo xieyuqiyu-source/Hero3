@@ -47,6 +47,25 @@ type MiniGameRedeemAllResult struct {
 	SkippedRecords  int            `json:"skippedRecords"`
 }
 
+type FishingBaitUseResult struct {
+	State          GameState `json:"state"`
+	BaitID         string    `json:"baitId"`
+	CityGoldCost   int       `json:"cityGoldCost"`
+	CityGoldRemain int       `json:"cityGoldRemain"`
+}
+
+var fishingBaitCosts = map[string]int{
+	"coarse": 0,
+	"shrimp": 30,
+	"golden": 120,
+	"dragon": 500,
+}
+
+func fishingBaitCost(baitID string) (int, bool) {
+	cost, ok := fishingBaitCosts[strings.TrimSpace(baitID)]
+	return cost, ok
+}
+
 // SaveMiniGameRecord 保存一条小游戏记录
 func (s *Service) SaveMiniGameRecord(playerID string, gameType string, resultName string, rarity string, rewardUnit string, rewardAmount int, betUnit string, betAmount int) (MiniGameRecord, error) {
 	playerID = strings.TrimSpace(playerID)
@@ -76,6 +95,50 @@ func (s *Service) SaveMiniGameRecord(playerID string, gameType string, resultNam
 	}
 
 	return record, nil
+}
+
+func (s *Service) UseFishingBait(playerID string, baitID string) (FishingBaitUseResult, error) {
+	playerID = strings.TrimSpace(playerID)
+	baitID = strings.TrimSpace(baitID)
+	if playerID == "" {
+		return FishingBaitUseResult{}, ErrPlayerNotFound
+	}
+	cost, ok := fishingBaitCost(baitID)
+	if !ok {
+		return FishingBaitUseResult{}, ErrInvalidBait
+	}
+
+	if cost > 0 {
+		lock := s.getPlayerLock(playerID)
+		lock.Lock()
+		defer lock.Unlock()
+
+		newBalance, err := s.repo.DeductCityGold(playerID, cost)
+		if err != nil {
+			return FishingBaitUseResult{}, err
+		}
+		s.recordLedger(GoldLedgerEntry{
+			PlayerID:     playerID,
+			Currency:     LedgerCurrencyCityGold,
+			Direction:    LedgerDirectionDebit,
+			Amount:       cost,
+			BalanceAfter: newBalance,
+			RefType:      LedgerRefMiniGameBait,
+			RefID:        "fishing_bait_" + baitID,
+			Reason:       "钓鱼鱼饵消耗",
+		})
+	}
+
+	state, err := s.repo.GetState(playerID)
+	if err != nil {
+		return FishingBaitUseResult{}, err
+	}
+	return FishingBaitUseResult{
+		State:          state,
+		BaitID:         baitID,
+		CityGoldCost:   cost,
+		CityGoldRemain: int(state.CityGold),
+	}, nil
 }
 
 func (s *Service) RedeemMiniGameReward(playerID string, recordID string, amount int) (MiniGameRedeemResult, error) {

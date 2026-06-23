@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type FC } from 'react'
 import { Award, TrendingUp } from 'lucide-react'
 import { gameApi } from '@/api/game'
+import ConfirmCityGoldModal from '@/components/ConfirmCityGoldModal'
 import { toast } from '@/components/ui'
 import { useConfigStore } from '@/store/configStore'
+import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import { useGameStore } from '@/store/gameStore'
 import type { MiniGameRecord } from '@/types/game'
 import { FishingBaitSelector } from './fishing/FishingBaitSelector'
@@ -20,6 +22,7 @@ const FishingGame: FC = () => {
   const gameState = useGameStore((s) => s.state)
   const patchState = useGameStore((s) => s.patchState)
   const units = useConfigStore((s) => s.units)
+  const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
 
   const [phase, setPhase] = useState<GamePhase>('idle')
   const [catchResult, setCatchResult] = useState<FishCatch | null>(null)
@@ -42,6 +45,8 @@ const FishingGame: FC = () => {
   const [recordsOffset, setRecordsOffset] = useState(0)
   const [redeemingId, setRedeemingId] = useState('')
   const [showInventory, setShowInventory] = useState(false)
+  const [usingBait, setUsingBait] = useState(false)
+  const [confirmBaitOpen, setConfirmBaitOpen] = useState(false)
 
   const biteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const escapeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -50,6 +55,7 @@ const FishingGame: FC = () => {
   const shadowTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tensionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const powerDirectionRef = useRef(1)
+  const baitUseInFlightRef = useRef(false)
 
   useEffect(() => {
     return () => {
@@ -196,7 +202,7 @@ const FishingGame: FC = () => {
     setTensionLevel(0)
   }
 
-  const startCasting = () => {
+  const beginCastingPower = () => {
     setPhase('casting')
     setCastPower(0)
     powerDirectionRef.current = 1
@@ -216,8 +222,34 @@ const FishingGame: FC = () => {
     }, 25)
   }
 
-  const confirmCast = () => {
-    if (powerAnimRef.current) clearInterval(powerAnimRef.current)
+  const startCasting = () => {
+    if (!activePlayerId || phase !== 'idle' || usingBait) return
+    if (selectedBait.cityGoldCost > 0 && (gameState?.cityGold ?? 0) < selectedBait.cityGoldCost) {
+      toast.error('城金不足')
+      return
+    }
+    beginCastingPower()
+  }
+
+  const proceedCast = async () => {
+    if (!activePlayerId || usingBait || baitUseInFlightRef.current) return
+    baitUseInFlightRef.current = true
+    setUsingBait(true)
+    try {
+      const result = await gameApi.useFishingBait(activePlayerId, selectedBait.id)
+      patchState({ cityGold: result.state.cityGold, serverTime: result.state.serverTime })
+    } catch (error) {
+      setConfirmBaitOpen(false)
+      setPhase('idle')
+      setCastPower(0)
+      toast.error(error instanceof Error ? error.message : '使用鱼饵失败')
+      return
+    } finally {
+      baitUseInFlightRef.current = false
+      setUsingBait(false)
+    }
+
+    setConfirmBaitOpen(false)
     setPhase('waiting')
     setStats(s => ({ ...s, totalCasts: s.totalCasts + 1 }))
     setBiteSpot({
@@ -249,6 +281,22 @@ const FishingGame: FC = () => {
         setStats(s => ({ ...s, combo: 0 }))
       }, selectedBait.biteWindowMs)
     }, delay)
+  }
+
+  const confirmCast = () => {
+    if (!activePlayerId || phase !== 'casting' || usingBait || confirmBaitOpen) return
+    if (powerAnimRef.current) clearInterval(powerAnimRef.current)
+    if (selectedBait.cityGoldCost > 0 && !skipConfirmations) {
+      setConfirmBaitOpen(true)
+      return
+    }
+    void proceedCast()
+  }
+
+  const cancelBaitConfirm = () => {
+    setConfirmBaitOpen(false)
+    setPhase('idle')
+    setCastPower(0)
   }
 
   const reel = () => {
@@ -323,7 +371,7 @@ const FishingGame: FC = () => {
           selectedBait={selectedBait}
           showBaitSelect={showBaitSelect}
           inventoryCount={inventoryRecords.length}
-          canChangeBait={phase === 'idle'}
+          canChangeBait={phase === 'idle' && !usingBait}
           onToggleBaitSelect={() => setShowBaitSelect(prev => !prev)}
           onSelectBait={(bait) => { setSelectedBait(bait); setShowBaitSelect(false) }}
           onOpenInventory={() => setShowInventory(true)}
@@ -395,6 +443,16 @@ const FishingGame: FC = () => {
       {showResult && catchResult && (
         <FishingResultModal fish={catchResult} combo={stats.combo} onClose={reset} />
       )}
+
+      <ConfirmCityGoldModal
+        open={confirmBaitOpen}
+        title="使用鱼饵"
+        description={`${selectedBait.name} 将消耗 ${selectedBait.cityGoldCost} 城金，本次投杆无论是否钓中都会消耗。`}
+        cost={selectedBait.cityGoldCost}
+        loading={usingBait}
+        onClose={cancelBaitConfirm}
+        onConfirm={() => void proceedCast()}
+      />
     </div>
   )
 }

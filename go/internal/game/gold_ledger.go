@@ -35,6 +35,7 @@ const (
 	LedgerRefBoostPurchase   = "boost_purchase"
 	LedgerRefBattleOverflow  = "battle_overflow"
 	LedgerRefAdminAdjust     = "admin_adjust"
+	LedgerRefMiniGameBait    = "minigame_bait"
 )
 
 // GoldLedgerEntry 一条货币流水记录

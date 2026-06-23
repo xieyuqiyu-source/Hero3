@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult } from '@/types/game'
 import type { BalanceConfig, FactionConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -288,6 +288,11 @@ export const gameApi = {
   listMiniGameRecords(playerId: string, limit = 100, offset = 0, gameType = '') {
     const typeQuery = gameType ? `&gameType=${encodeURIComponent(gameType)}` : ''
     return api.get<MiniGameSummary>(`/minigame/records?playerId=${playerId}&limit=${limit}&offset=${offset}${typeQuery}`)
+  },
+
+  /** 使用钓鱼鱼饵并扣除城金 */
+  useFishingBait(playerId: string, baitId: string) {
+    return api.post<FishingBaitUseResult>('/minigame/fishing/use-bait', { playerId, baitId })
   },
 
   /** 兑换小游戏库存奖励 */

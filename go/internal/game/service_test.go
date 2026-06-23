@@ -1249,6 +1249,41 @@ func TestRedeemMiniGameRewardPartialAddsFactionArmy(t *testing.T) {
 	}
 }
 
+func TestUseFishingBaitDeductsCityGoldAndWritesLedger(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_fishing_bait", Username: "fishing_bait", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_fishing_bait", "Fisher", "wei", "caocao", now)
+	state.CityGold = 150
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.UseFishingBait(state.Player.ID, "golden")
+	if err != nil {
+		t.Fatalf("UseFishingBait failed: %v", err)
+	}
+	if result.CityGoldCost != 120 || result.CityGoldRemain != 30 || result.State.CityGold != 30 {
+		t.Fatalf("unexpected bait result: %+v", result)
+	}
+
+	entries, err := svc.ListGoldLedger(GoldLedgerFilter{PlayerID: state.Player.ID, RefType: LedgerRefMiniGameBait})
+	if err != nil {
+		t.Fatalf("ListGoldLedger failed: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 ledger entry, got %d: %+v", len(entries), entries)
+	}
+	entry := entries[0]
+	if entry.Currency != LedgerCurrencyCityGold || entry.Direction != LedgerDirectionDebit || entry.Amount != 120 || entry.BalanceAfter != 30 {
+		t.Fatalf("unexpected ledger entry: %+v", entry)
+	}
+}
+
 func TestRedeemMiniGameRewardRejectsCrossFactionUnit(t *testing.T) {
 	svc := NewService()
 	if err := svc.SetUnitsDir(filepath.Join("..", "..", "config", "units")); err != nil {

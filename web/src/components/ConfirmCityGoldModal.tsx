@@ -35,6 +35,7 @@ const ConfirmCityGoldModal: FC<ConfirmCityGoldModalProps> = ({
   }, [open])
 
   const handleClose = () => {
+    if (loading) return
     setVisible(false)
     setTimeout(onClose, 150)
   }

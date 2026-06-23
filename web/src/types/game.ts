@@ -171,6 +171,13 @@ export interface MiniGameRedeemAllResult {
   skippedRecords: number
 }
 
+export interface FishingBaitUseResult {
+  state: GameState
+  baitId: string
+  cityGoldCost: number
+  cityGoldRemain: number
+}
+
 export interface GeneralTraitInstance {
   traitId: string
   name: string

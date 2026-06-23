@@ -85,6 +85,7 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("DELETE /api/v1/admin/buff/{buffId}", handlers.RevokeBuff)
 	mux.HandleFunc("POST /api/v1/minigame/record", handlers.SaveMiniGameRecord)
 	mux.HandleFunc("GET /api/v1/minigame/records", handlers.ListMiniGameRecords)
+	mux.HandleFunc("POST /api/v1/minigame/fishing/use-bait", handlers.UseFishingBait)
 	mux.HandleFunc("POST /api/v1/minigame/redeem", handlers.RedeemMiniGameReward)
 	mux.HandleFunc("POST /api/v1/minigame/redeem-all", handlers.RedeemAllMiniGameRewards)
 	mux.HandleFunc("GET /api/v1/admin/minigame/records", handlers.AdminMiniGameRecords)
