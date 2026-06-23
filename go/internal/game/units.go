@@ -54,6 +54,10 @@ var (
 	activeFactions = FactionsConfig{}
 )
 
+var unitNameAliases = map[string]string{
+	"土族": "士族",
+}
+
 // GetUnitsConfig 获取当前兵种配置
 func GetUnitsConfig() UnitsConfig {
 	unitsMu.RLock()
@@ -89,6 +93,9 @@ func FindFactionUnitByName(faction string, unitName string) (string, UnitConfig,
 	unitName = strings.TrimSpace(unitName)
 	if unitName == "" {
 		return "", UnitConfig{}, false
+	}
+	if alias, ok := unitNameAliases[unitName]; ok {
+		unitName = alias
 	}
 	units := GetFactionUnits(faction)
 	if units == nil {

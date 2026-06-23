@@ -1371,3 +1371,32 @@ func TestRedeemAllFactionMiniGameRewardsSkipsCrossFactionStock(t *testing.T) {
 		t.Fatalf("unexpected remaining stock: %+v", remainingByUnit)
 	}
 }
+
+func TestRedeemMiniGameRewardAcceptsLegacyTuZuName(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_fishing_legacy_tuzu", Username: "fishing_legacy_tuzu", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_fishing_legacy_tuzu", "Fisher", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+	record, err := svc.SaveMiniGameRecord(state.Player.ID, "fishing", "神龙", "legendary", "土族", 2000, "", 0)
+	if err != nil {
+		t.Fatalf("save legacy record: %v", err)
+	}
+
+	result, err := svc.RedeemMiniGameReward(state.Player.ID, record.ID, 2000)
+	if err != nil {
+		t.Fatalf("RedeemMiniGameReward failed: %v", err)
+	}
+	if result.RedeemedUnitID != "tuZu" || result.RedeemedUnit != "士族" || result.RedeemedAmount != 2000 {
+		t.Fatalf("unexpected redeem result: %+v", result)
+	}
+}
