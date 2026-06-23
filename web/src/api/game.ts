@@ -285,8 +285,9 @@ export const gameApi = {
   },
 
   /** 获取自己的小游戏库存/记录 */
-  listMiniGameRecords(playerId: string) {
-    return api.get<MiniGameSummary>(`/minigame/records?playerId=${playerId}`)
+  listMiniGameRecords(playerId: string, limit = 100, offset = 0, gameType = '') {
+    const typeQuery = gameType ? `&gameType=${encodeURIComponent(gameType)}` : ''
+    return api.get<MiniGameSummary>(`/minigame/records?playerId=${playerId}&limit=${limit}&offset=${offset}${typeQuery}`)
   },
 
   /** 兑换小游戏库存奖励 */

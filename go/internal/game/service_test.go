@@ -1273,7 +1273,7 @@ func TestRedeemMiniGameRewardRejectsCrossFactionUnit(t *testing.T) {
 	if !errors.Is(err, ErrCrossFactionReward) {
 		t.Fatalf("expected ErrCrossFactionReward, got %v", err)
 	}
-	records, err := repo.ListMiniGameRecords(state.Player.ID, 10)
+	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "fishing", 10, 0)
 	if err != nil {
 		t.Fatalf("list records: %v", err)
 	}

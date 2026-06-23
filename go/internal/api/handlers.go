@@ -998,6 +998,26 @@ func parsePageQuery(w http.ResponseWriter, r *http.Request) (int, int, bool) {
 	return page, pageSize, true
 }
 
+func parseLimitOffset(r *http.Request, defaultLimit int, maxLimit int) (int, int) {
+	limit := defaultLimit
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if maxLimit > 0 && limit > maxLimit {
+		limit = maxLimit
+	}
+
+	offset := 0
+	if raw := r.URL.Query().Get("offset"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			offset = parsed
+		}
+	}
+	return limit, offset
+}
+
 func (h *Handlers) UpgradeBuilding(w http.ResponseWriter, r *http.Request) {
 	var payload upgradeBuildingRequest
 	if !decodeJSON(w, r, &payload) {
@@ -1457,7 +1477,8 @@ func (h *Handlers) ListMiniGameRecords(w http.ResponseWriter, r *http.Request) {
 	if !h.requireOwnership(w, r, playerID) {
 		return
 	}
-	summary, err := h.gameService.GetMiniGameRecords(playerID, 200)
+	limit, offset := parseLimitOffset(r, 100, 500)
+	summary, err := h.gameService.GetMiniGameRecords(playerID, r.URL.Query().Get("gameType"), limit, offset)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -1502,7 +1523,8 @@ func (h *Handlers) AdminMiniGameRecords(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	summary, err := h.gameService.GetMiniGameRecords(playerID, 200)
+	limit, offset := parseLimitOffset(r, 100, 500)
+	summary, err := h.gameService.GetMiniGameRecords(playerID, r.URL.Query().Get("gameType"), limit, offset)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

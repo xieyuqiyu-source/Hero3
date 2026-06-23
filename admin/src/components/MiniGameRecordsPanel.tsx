@@ -17,6 +17,9 @@ interface MiniGameRecord {
 
 interface MiniGameSummary {
   totalRecords: number
+  limit: number
+  offset: number
+  hasMore: boolean
   records: MiniGameRecord[]
   rewardTotals: Record<string, number>
 }
@@ -40,14 +43,17 @@ export default function MiniGameRecordsPanel() {
   const [summary, setSummary] = useState<MiniGameSummary | null>(null)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [offset, setOffset] = useState(0)
+  const pageSize = 100
 
-  const handleQuery = async () => {
+  const handleQuery = async (nextOffset = 0) => {
     if (!playerId) return
     setLoading(true)
     setMessage('')
     try {
-      const result = await adminApi.getMiniGameRecords(playerId)
+      const result = await adminApi.getMiniGameRecords(playerId, pageSize, nextOffset)
       setSummary(result)
+      setOffset(result.offset)
     } catch (e: unknown) {
       setMessage(`❌ 查询失败: ${e instanceof Error ? e.message : '未知错误'}`)
       setSummary(null)
@@ -71,13 +77,13 @@ export default function MiniGameRecordsPanel() {
         <div className="flex-1">
           <PlayerSelector
             value={playerId}
-            onChange={(pid) => { setPlayerId(pid); setSummary(null) }}
+            onChange={(pid) => { setPlayerId(pid); setSummary(null); setOffset(0) }}
             placeholder="选择玩家存档"
           />
         </div>
         <button
           type="button"
-          onClick={handleQuery}
+          onClick={() => void handleQuery(0)}
           disabled={!playerId || loading}
           className="px-3 py-2 rounded-xl text-xs font-medium bg-[var(--color-accent)] text-white hover:opacity-90 cursor-pointer disabled:opacity-50"
         >
@@ -93,6 +99,30 @@ export default function MiniGameRecordsPanel() {
 
       {summary && (
         <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--color-surface-dim)] px-3 py-2">
+            <span className="text-[11px] text-[var(--color-text-muted)]">
+              第 {Math.floor(offset / pageSize) + 1} 页 · {summary.records.length} 条 / 共 {summary.totalRecords} 条
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleQuery(Math.max(0, offset - pageSize))}
+                disabled={loading || offset <= 0}
+                className="rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-[10px] text-[var(--color-text-secondary)] disabled:opacity-50 cursor-pointer"
+              >
+                上一页
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleQuery(offset + pageSize)}
+                disabled={loading || !summary.hasMore}
+                className="rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-[10px] text-[var(--color-text-secondary)] disabled:opacity-50 cursor-pointer"
+              >
+                下一页
+              </button>
+            </div>
+          </div>
+
           {/* 汇总 */}
           {Object.keys(summary.rewardTotals).length > 0 && (
             <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">

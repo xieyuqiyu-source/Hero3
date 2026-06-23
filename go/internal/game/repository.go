@@ -54,7 +54,7 @@ type Repository interface {
 
 	// MiniGame Records
 	SaveMiniGameRecord(record MiniGameRecord) error
-	ListMiniGameRecords(playerID string, limit int) ([]MiniGameRecord, error)
+	ListMiniGameRecords(playerID string, gameType string, limit int, offset int) ([]MiniGameRecord, int, error)
 	RedeemMiniGameRecord(playerID string, recordID string, amount int, redeemedAt time.Time) (MiniGameRedeemResult, error)
 
 	// Gold Ledger（货币流水，写入失败由调用方降级处理）
@@ -723,15 +723,32 @@ func (r *MemoryRepository) SaveMiniGameRecord(record MiniGameRecord) error {
 	return nil
 }
 
-func (r *MemoryRepository) ListMiniGameRecords(playerID string, limit int) ([]MiniGameRecord, error) {
+func (r *MemoryRepository) ListMiniGameRecords(playerID string, gameType string, limit int, offset int) ([]MiniGameRecord, int, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	all := r.miniGameRecords[playerID]
-	if limit > 0 && len(all) > limit {
-		return all[:limit], nil
+	if gameType != "" {
+		filtered := make([]MiniGameRecord, 0, len(all))
+		for _, record := range all {
+			if record.GameType == gameType {
+				filtered = append(filtered, record)
+			}
+		}
+		all = filtered
 	}
-	return all, nil
+	total := len(all)
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= total {
+		return []MiniGameRecord{}, total, nil
+	}
+	end := total
+	if limit > 0 && offset+limit < end {
+		end = offset + limit
+	}
+	return all[offset:end], total, nil
 }
 
 func (r *MemoryRepository) RedeemMiniGameRecord(playerID string, recordID string, amount int, redeemedAt time.Time) (MiniGameRedeemResult, error) {

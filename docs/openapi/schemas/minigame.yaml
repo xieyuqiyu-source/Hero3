@@ -47,11 +47,24 @@ MiniGameSummary:
   type: object
   required:
   - totalRecords
+  - limit
+  - offset
+  - hasMore
   - records
   - rewardTotals
   properties:
     totalRecords:
       type: integer
+      description: 符合筛选条件的记录总数，不是当前页条数。
+    limit:
+      type: integer
+      description: 当前页请求条数上限。
+    offset:
+      type: integer
+      description: 当前页偏移量。
+    hasMore:
+      type: boolean
+      description: 是否还有下一页。
     records:
       type: array
       items:

@@ -147,6 +147,9 @@ export interface MiniGameRecord {
 
 export interface MiniGameSummary {
   totalRecords: number
+  limit: number
+  offset: number
+  hasMore: boolean
   records: MiniGameRecord[]
   rewardTotals: Record<string, number>
 }

@@ -27,6 +27,26 @@
       required: true
       schema:
         type: string
+    - name: gameType
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [fishing, gambling]
+      description: 按小游戏类型筛选；钓鱼库存通常传 fishing。
+    - name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 100
+        maximum: 500
+    - name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 0
     responses:
       '200':
         description: 小游戏记录汇总
@@ -70,6 +90,26 @@
       required: true
       schema:
         type: string
+    - name: gameType
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [fishing, gambling]
+      description: 按小游戏类型筛选；不传则返回全部小游戏记录。
+    - name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 100
+        maximum: 500
+    - name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 0
     responses:
       '200':
         description: 小游戏记录汇总

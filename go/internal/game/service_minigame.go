@@ -23,6 +23,9 @@ type MiniGameRecord struct {
 // MiniGameSummary GM 查询用的汇总信息
 type MiniGameSummary struct {
 	TotalRecords int              `json:"totalRecords"`
+	Limit        int              `json:"limit"`
+	Offset       int              `json:"offset"`
+	HasMore      bool             `json:"hasMore"`
 	Records      []MiniGameRecord `json:"records"`
 	RewardTotals map[string]int   `json:"rewardTotals"` // 兵种名 → 总可兑换数量
 }
@@ -82,8 +85,9 @@ func (s *Service) RedeemMiniGameReward(playerID string, recordID string, amount 
 }
 
 // GetMiniGameRecords GM 查询某玩家的小游戏记录（含汇总）
-func (s *Service) GetMiniGameRecords(playerID string, limit int) (MiniGameSummary, error) {
+func (s *Service) GetMiniGameRecords(playerID string, gameType string, limit int, offset int) (MiniGameSummary, error) {
 	playerID = strings.TrimSpace(playerID)
+	gameType = strings.TrimSpace(gameType)
 	if playerID == "" {
 		return MiniGameSummary{}, ErrPlayerNotFound
 	}
@@ -91,8 +95,14 @@ func (s *Service) GetMiniGameRecords(playerID string, limit int) (MiniGameSummar
 	if limit <= 0 {
 		limit = 100
 	}
+	if limit > 500 {
+		limit = 500
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
-	records, err := s.repo.ListMiniGameRecords(playerID, limit)
+	records, total, err := s.repo.ListMiniGameRecords(playerID, gameType, limit, offset)
 	if err != nil {
 		return MiniGameSummary{}, err
 	}
@@ -106,7 +116,10 @@ func (s *Service) GetMiniGameRecords(playerID string, limit int) (MiniGameSummar
 	}
 
 	return MiniGameSummary{
-		TotalRecords: len(records),
+		TotalRecords: total,
+		Limit:        limit,
+		Offset:       offset,
+		HasMore:      offset+len(records) < total,
 		Records:      records,
 		RewardTotals: totals,
 	}, nil

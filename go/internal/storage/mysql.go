@@ -1203,17 +1203,46 @@ func (r *MySQLRepository) SaveMiniGameRecord(record game.MiniGameRecord) error {
 	return err
 }
 
-func (r *MySQLRepository) ListMiniGameRecords(playerID string, limit int) ([]game.MiniGameRecord, error) {
+func (r *MySQLRepository) ListMiniGameRecords(playerID string, gameType string, limit int, offset int) ([]game.MiniGameRecord, int, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	where := `WHERE player_id = ?`
+	args := []any{playerID}
+	if gameType != "" {
+		where += ` AND game_type = ?`
+		args = append(args, gameType)
+	}
+
+	var total int
+	countArgs := append([]any{}, args...)
+	if err := r.db.QueryRow(
+		`SELECT COUNT(*)
+		 FROM minigame_records
+		 `+where,
+		countArgs...,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	queryArgs := append(append([]any{}, args...), limit, offset)
 	rows, err := r.db.Query(
 		`SELECT id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, remaining_amount, bet_unit, bet_amount, created_at
 		 FROM minigame_records
-		 WHERE player_id = ?
+		 `+where+`
 		 ORDER BY created_at DESC
-		 LIMIT ?`,
-		playerID, limit,
+		 LIMIT ? OFFSET ?`,
+		queryArgs...,
 	)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -1222,12 +1251,12 @@ func (r *MySQLRepository) ListMiniGameRecords(playerID string, limit int) ([]gam
 		var r game.MiniGameRecord
 		var createdAt time.Time
 		if err := rows.Scan(&r.ID, &r.PlayerID, &r.GameType, &r.ResultName, &r.Rarity, &r.RewardUnit, &r.RewardAmount, &r.RemainingAmount, &r.BetUnit, &r.BetAmount, &createdAt); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		r.CreatedAt = createdAt.UTC().Format(time.RFC3339)
 		records = append(records, r)
 	}
-	return records, rows.Err()
+	return records, total, rows.Err()
 }
 
 func (r *MySQLRepository) RedeemMiniGameRecord(playerID string, recordID string, amount int, redeemedAt time.Time) (game.MiniGameRedeemResult, error) {

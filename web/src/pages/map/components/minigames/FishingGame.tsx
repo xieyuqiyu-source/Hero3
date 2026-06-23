@@ -34,7 +34,9 @@ const FishingGame: FC = () => {
   const [tensionLevel, setTensionLevel] = useState(0)
   const [records, setRecords] = useState<MiniGameRecord[]>([])
   const [recordsLoading, setRecordsLoading] = useState(false)
-  const [redeemAmounts, setRedeemAmounts] = useState<Record<string, number>>({})
+  const [recordsTotal, setRecordsTotal] = useState(0)
+  const [recordsHasMore, setRecordsHasMore] = useState(false)
+  const [recordsOffset, setRecordsOffset] = useState(0)
   const [redeemingId, setRedeemingId] = useState('')
   const [showInventory, setShowInventory] = useState(false)
 
@@ -57,12 +59,15 @@ const FishingGame: FC = () => {
     }
   }, [])
 
-  const loadRecords = async () => {
+  const loadRecords = async (offset = 0) => {
     if (!activePlayerId) return
     setRecordsLoading(true)
     try {
-      const result = await gameApi.listMiniGameRecords(activePlayerId)
-      setRecords(result.records.filter(record => record.gameType === 'fishing'))
+      const result = await gameApi.listMiniGameRecords(activePlayerId, 100, offset, 'fishing')
+      setRecords(result.records)
+      setRecordsTotal(result.totalRecords)
+      setRecordsHasMore(result.hasMore)
+      setRecordsOffset(result.offset)
     } finally {
       setRecordsLoading(false)
     }
@@ -78,20 +83,28 @@ const FishingGame: FC = () => {
     return Object.values(units[faction]).some(config => config.name === unitName)
   }
 
-  const handleRedeem = async (record: MiniGameRecord) => {
+  const handleRedeemGroup = async (unitName: string, groupRecords: MiniGameRecord[]) => {
     if (!activePlayerId || redeemingId) return
-    const amount = Math.floor(redeemAmounts[record.id] || record.remainingAmount)
-    if (amount <= 0 || amount > record.remainingAmount) {
-      toast.error('兑换数量无效')
+    const targets = groupRecords.filter(record => record.remainingAmount > 0 && isFactionUnit(record.rewardUnit))
+    const totalAmount = targets.reduce((sum, record) => sum + record.remainingAmount, 0)
+    if (targets.length === 0 || totalAmount <= 0) {
+      toast.error('没有可兑换库存')
       return
     }
-    setRedeemingId(record.id)
+    setRedeemingId(unitName)
     try {
-      const result = await gameApi.redeemMiniGameReward(activePlayerId, record.id, amount)
-      setRecords(prev => prev.map(item => item.id === result.record.id ? result.record : item))
-      patchState({ army: result.state.army, serverTime: result.state.serverTime })
-      setRedeemAmounts(prev => ({ ...prev, [record.id]: Math.max(0, result.record.remainingAmount) }))
-      toast.success(`${result.redeemedUnit} ×${result.redeemedAmount.toLocaleString()} 已加入军队`)
+      let redeemed = 0
+      let latestState = null
+      for (const record of targets) {
+        const result = await gameApi.redeemMiniGameReward(activePlayerId, record.id, record.remainingAmount)
+        redeemed += result.redeemedAmount
+        latestState = result.state
+        setRecords(prev => prev.map(item => item.id === result.record.id ? result.record : item))
+      }
+      if (latestState) {
+        patchState({ army: latestState.army, serverTime: latestState.serverTime })
+      }
+      toast.success(`${unitName} ×${redeemed.toLocaleString()} 已加入军队`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '兑换失败')
     } finally {
@@ -240,7 +253,6 @@ const FishingGame: FC = () => {
           gameApi.saveMiniGameRecord(activePlayerId, 'fishing', fish.name, fish.rarity, fish.reward, fish.rewardAmount)
             .then(record => {
               setRecords(prev => [record, ...prev].slice(0, 200))
-              setRedeemAmounts(prev => ({ ...prev, [record.id]: record.remainingAmount }))
             })
             .catch(() => {})
         }
@@ -337,13 +349,16 @@ const FishingGame: FC = () => {
         <FishingInventoryModal
           records={records}
           recordsLoading={recordsLoading}
-          redeemAmounts={redeemAmounts}
+          recordsTotal={recordsTotal}
+          recordsHasMore={recordsHasMore}
+          recordsOffset={recordsOffset}
+          recordsPageSize={100}
           redeemingId={redeemingId}
           isFactionUnit={isFactionUnit}
           onClose={() => setShowInventory(false)}
-          onRefresh={() => void loadRecords()}
-          onRedeem={(record) => void handleRedeem(record)}
-          onChangeRedeemAmount={(recordId, amount) => setRedeemAmounts(prev => ({ ...prev, [recordId]: amount }))}
+          onRefresh={() => void loadRecords(0)}
+          onPageChange={(nextOffset) => void loadRecords(nextOffset)}
+          onRedeemGroup={(unitName, groupRecords) => void handleRedeemGroup(unitName, groupRecords)}
         />
       )}
 
