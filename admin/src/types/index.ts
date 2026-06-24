@@ -30,6 +30,14 @@ export interface GameState {
     unitType: string
     amount: number
   }>
+  general?: {
+    id: string
+    name: string
+    level: number
+    exp: number
+    availableStatPoints?: number
+    stats?: Record<string, number>
+  } | null
   recruitQueues: Array<{
     id: string
     unitType: string

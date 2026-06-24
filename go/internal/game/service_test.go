@@ -655,6 +655,110 @@ func TestAllocateGeneralStatRejectsMaxedStat(t *testing.T) {
 	}
 }
 
+func TestResetGeneralStatsDeductsGoldAndClearsStats(t *testing.T) {
+	setTestFactionsAndGenerals(t, FactionsConfig{
+		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "caocao", Name: "曹操"}}},
+	}, GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"caocao": {ID: "caocao", Name: "曹操", Faction: "wei", Enabled: true},
+		},
+	})
+
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	now := time.Date(2026, 6, 24, 10, 0, 0, 0, time.UTC)
+	account := Account{ID: "account_reset_general", Username: "reset_general", PasswordHash: "hash", Gold: 20, CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_reset_general", "测试", "wei", "caocao", now)
+	state.General.Level = 5
+	state.General.Stats = map[string]int{"force": 3, "politics": 2}
+	applyHeroConfigToGeneral(state.General)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := service.ResetGeneralStats(state.Player.ID)
+	if err != nil {
+		t.Fatalf("reset general stats: %v", err)
+	}
+	if result.AccountGold != 10 {
+		t.Fatalf("expected account gold 10, got %d", result.AccountGold)
+	}
+	if result.State.General.Stats["force"] != 0 || result.State.General.Stats["politics"] != 0 {
+		t.Fatalf("expected stats reset, got %+v", result.State.General.Stats)
+	}
+	if result.State.General.Level != 5 {
+		t.Fatalf("expected level preserved, got %d", result.State.General.Level)
+	}
+	if result.State.General.AvailableStatPoints != 5 {
+		t.Fatalf("expected 5 available points, got %d", result.State.General.AvailableStatPoints)
+	}
+	entries, err := service.ListGoldLedger(GoldLedgerFilter{AccountID: account.ID, RefType: LedgerRefGeneralReset})
+	if err != nil {
+		t.Fatalf("list ledger: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Amount != GeneralResetStatsGoldCost || entries[0].BalanceAfter != 10 {
+		t.Fatalf("unexpected ledger entries: %+v", entries)
+	}
+}
+
+func TestChangeGeneralPreservesGrowthAndResetsStats(t *testing.T) {
+	setTestFactionsAndGenerals(t, FactionsConfig{
+		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "caocao", Name: "曹操"}, {ID: "zhenmi", Name: "甄宓"}}},
+		"wu":  {Name: "吴国", Generals: []GeneralInfo{{ID: "zhouyu", Name: "周瑜"}}},
+	}, GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"caocao": {ID: "caocao", Name: "曹操", Faction: "wei", Enabled: true},
+			"zhenmi": {ID: "zhenmi", Name: "甄宓", Faction: "wei", Enabled: true, Buffs: map[string]float64{"productionBonus": 0.1}},
+			"zhouyu": {ID: "zhouyu", Name: "周瑜", Faction: "wu", Enabled: true},
+		},
+	})
+
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	now := time.Date(2026, 6, 24, 10, 0, 0, 0, time.UTC)
+	account := Account{ID: "account_change_general", Username: "change_general", PasswordHash: "hash", Gold: 20, CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_change_general", "测试", "wei", "caocao", now)
+	state.General.Level = 9
+	state.General.Exp = 12345
+	state.General.Stats = map[string]int{"force": 4}
+	applyHeroConfigToGeneral(state.General)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := service.ChangeGeneral(state.Player.ID, "zhenmi", "")
+	if err != nil {
+		t.Fatalf("change general: %v", err)
+	}
+	if result.State.General.ID != "zhenmi" || result.State.General.Name != "甄宓" {
+		t.Fatalf("unexpected general after change: %+v", result.State.General)
+	}
+	if result.State.General.Level != 9 || result.State.General.Exp != 12345 {
+		t.Fatalf("expected growth preserved, got level=%d exp=%d", result.State.General.Level, result.State.General.Exp)
+	}
+	if result.State.General.Stats["force"] != 0 || result.State.General.AvailableStatPoints != 9 {
+		t.Fatalf("expected stats reset and points returned, got stats=%+v points=%d", result.State.General.Stats, result.State.General.AvailableStatPoints)
+	}
+	if result.State.General.Attributes[StatProductionBonus] <= 0 {
+		t.Fatalf("expected new general fixed buff to apply, got %+v", result.State.General.Attributes)
+	}
+
+	if _, err := service.ChangeGeneral(state.Player.ID, "zhouyu", ""); !errors.Is(err, ErrInvalidGeneral) {
+		t.Fatalf("expected cross-faction change rejected, got %v", err)
+	}
+	if _, err := service.ChangeGeneral(state.Player.ID, "zhenmi", ""); !errors.Is(err, ErrInvalidGeneral) {
+		t.Fatalf("expected same-general change rejected, got %v", err)
+	}
+}
+
 func TestServiceUpdateBalancePersistsConfig(t *testing.T) {
 	original := GetBalanceConfig()
 	t.Cleanup(func() {

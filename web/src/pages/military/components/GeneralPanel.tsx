@@ -1,7 +1,8 @@
 import { type FC, useMemo, useState } from 'react'
-import { Boxes, Package, Sparkles, Swords, UserRound } from 'lucide-react'
+import { Boxes, Package, RefreshCcw, Repeat2, Sparkles, Swords, UserRound } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
+import { useAccountStore } from '@/store/accountStore'
 import { useConfigStore } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
 import type { ItemDefinition, ItemEffect, ItemStack } from '@/types/game'
@@ -87,9 +88,16 @@ const GeneralPanel: FC = () => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const setState = useGameStore((s) => s.setState)
   const allocateGeneralStat = useGameStore((s) => s.allocateGeneralStat)
+  const resetGeneralStats = useGameStore((s) => s.resetGeneralStats)
+  const changeGeneral = useGameStore((s) => s.changeGeneral)
+  const account = useAccountStore((s) => s.account)
+  const factions = useConfigStore((s) => s.factions)
   const itemsConfig = useConfigStore((s) => s.items)
   const [allocatingStat, setAllocatingStat] = useState<string | null>(null)
   const [usingItemId, setUsingItemId] = useState<string | null>(null)
+  const [resettingStats, setResettingStats] = useState(false)
+  const [changingGeneral, setChangingGeneral] = useState(false)
+  const [selectedGeneralId, setSelectedGeneralId] = useState('')
   const inventoryRows = useMemo(() => {
     const inventory = state?.inventory ?? {}
     return Object.values(inventory)
@@ -128,6 +136,9 @@ const GeneralPanel: FC = () => {
   const expProgress = nextLevelExp > 0 ? Math.min(100, Math.round((general.exp / nextLevelExp) * 100)) : 100
   const statEntries = STAT_ORDER.map((key) => [key, general.stats?.[key] ?? 0] as const)
   const availableStatPoints = general.availableStatPoints ?? 0
+  const factionGenerals = state?.player.faction ? (factions?.[state.player.faction]?.generals ?? []) : []
+  const changeTargets = factionGenerals.filter((item) => item.id !== general.id)
+  const targetGeneralId = selectedGeneralId || changeTargets[0]?.id || ''
 
   const handleAllocateStat = async (statKey: string) => {
     if (availableStatPoints <= 0 || allocatingStat) return
@@ -150,6 +161,44 @@ const GeneralPanel: FC = () => {
       toast.error(error instanceof Error ? error.message : '物品使用失败')
     } finally {
       setUsingItemId(null)
+    }
+  }
+
+  const handleResetStats = async () => {
+    if (resettingStats) return
+    const confirmed = window.confirm('确认消耗 10 金币重置四维加点？等级和经验会保留。')
+    if (!confirmed) return
+    setResettingStats(true)
+    try {
+      const accountGold = await resetGeneralStats()
+      if (account && accountGold !== undefined) {
+        useAccountStore.setState({ account: { ...account, gold: accountGold } })
+      }
+      toast.success('将领洗点成功')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '洗点失败')
+    } finally {
+      setResettingStats(false)
+    }
+  }
+
+  const handleChangeGeneral = async () => {
+    if (!targetGeneralId || changingGeneral) return
+    const target = changeTargets.find((item) => item.id === targetGeneralId)
+    const confirmed = window.confirm(`确认更换为「${target?.name ?? targetGeneralId}」？等级和经验保留，四维加点会重置。`)
+    if (!confirmed) return
+    setChangingGeneral(true)
+    try {
+      const accountGold = await changeGeneral(targetGeneralId)
+      if (account && accountGold !== undefined) {
+        useAccountStore.setState({ account: { ...account, gold: accountGold } })
+      }
+      setSelectedGeneralId('')
+      toast.success('换将成功')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '换将失败')
+    } finally {
+      setChangingGeneral(false)
     }
   }
 
@@ -219,6 +268,51 @@ const GeneralPanel: FC = () => {
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="mb-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold text-[var(--color-text-primary)]">将领调整</h3>
+            <span className="text-[10px] text-[var(--color-text-muted)]">金币 {account?.gold ?? 0}</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-[auto_1fr_auto]">
+            <button
+              type="button"
+              onClick={() => void handleResetStats()}
+              disabled={resettingStats}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 text-xs font-bold text-amber-600 transition hover:bg-amber-500/15 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCcw size={13} />
+              {resettingStats ? '洗点中' : '洗点 10 金币'}
+            </button>
+            <select
+              value={targetGeneralId}
+              onChange={(e) => setSelectedGeneralId(e.target.value)}
+              disabled={changeTargets.length === 0 || changingGeneral}
+              className="h-9 min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs text-[var(--color-text-primary)] outline-none disabled:opacity-50"
+            >
+              {changeTargets.length === 0 ? (
+                <option value="">无可更换将领</option>
+              ) : (
+                changeTargets.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))
+              )}
+            </select>
+            <button
+              type="button"
+              onClick={() => void handleChangeGeneral()}
+              disabled
+              title="换将卡上线后即可换将"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 text-xs font-bold text-blue-600 transition hover:bg-blue-500/15 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Repeat2 size={13} />
+              换将
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-[var(--color-text-muted)]">
+            换将卡上线后即可换将。规则已预留：仅限当前阵营，保留等级和经验，四维加点会重置。
+          </p>
         </div>
 
         {/* Attributes */}

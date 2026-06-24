@@ -11,6 +11,61 @@
 
 ---
 
+## 2026-06-24 - `待提交 feat: add general reset and change`
+
+### 改动目标
+
+补齐将领洗点和换将的第一版闭环。洗点先上线收费功能，换将限定当前阵营并保留成长，同时预留换将卡消耗逻辑，方便后续接入物品掉落。
+
+### 后端改动
+
+- 新增 `POST /api/v1/military/general/reset-stats`：
+  - 消耗账户金币 10 个。
+  - 清空当前将领四维加点。
+  - 保留当前将领、等级和经验。
+  - 无冷却。
+  - 写入金币流水 `general_reset`。
+- 新增 `POST /api/v1/military/general/change`：
+  - 只能更换当前存档阵营内的其它将领。
+  - 保留等级和经验。
+  - 重置四维加点。
+  - 重新套用目标将领的固定属性和特性。
+  - 预留 `itemId` 参数；传入时会消耗背包中 1 个对应物品。
+- 新增 `general_change_card` 物品配置，作为后续换将卡掉落/发放的预留道具。
+- 增加回归测试覆盖洗点扣金币、换将保留成长、跨阵营拦截和同将领换将拦截。
+
+### Web 改动
+
+- 将领页面新增“将领调整”区域。
+- 支持洗点按钮，显示账户金币余额并在成功后同步最新余额。
+- 本阵营将领下拉先保留展示。
+- 玩家侧换将按钮暂时置灰，提示“换将卡上线后即可换将”。
+
+### Admin 改动
+
+- GM 后台“玩家操作”新增将领操作。
+- 选择玩家后可执行洗点。
+- 选择玩家后按玩家阵营列出可换将领，并可执行换将。
+
+### OpenAPI 改动
+
+- 补充将领加点、洗点、换将接口文档。
+- 新增 `GeneralActionResult`、`ResetGeneralStatsRequest`、`ChangeGeneralRequest` schema。
+
+### 验证结果
+
+- `go test ./...` 通过。
+- `web npm run build` 通过。
+- `admin npm run build` 通过。
+- `make openapi` 通过，并重新生成 `docs/openapi.bundle.yaml`。
+
+### 后续注意事项
+
+- 当前玩家换将默认免费；换将卡消耗逻辑已预留，后续可在前端改为强制传 `general_change_card`。
+- 换将卡已进入物品配置，但暂未配置掉落来源。
+
+---
+
 ## 2026-06-24 - `待提交 feat: add dev app switcher`
 
 ### 改动目标

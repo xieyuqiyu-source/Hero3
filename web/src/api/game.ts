@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition, GeneralActionResult } from '@/types/game'
 import type { BalanceConfig, FactionConfig, FishingConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -144,6 +144,16 @@ export const gameApi = {
   /** 将领四维加点 */
   allocateGeneralStat(playerId: string, statKey: string) {
     return api.post<{ state: GameState }>('/military/general/stat', { playerId, statKey })
+  },
+
+  /** 将领洗点 */
+  resetGeneralStats(playerId: string) {
+    return api.post<GeneralActionResult>('/military/general/reset-stats', { playerId })
+  },
+
+  /** 更换将领 */
+  changeGeneral(playerId: string, generalId: string, itemId?: string) {
+    return api.post<GeneralActionResult>('/military/general/change', { playerId, generalId, itemId })
   },
 
   /** 极速完成建筑升级 */

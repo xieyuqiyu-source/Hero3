@@ -29,3 +29,52 @@ InstantCompleteRecruitRequest:
       type: string
       description: 征兵队列 ID。
       example: recruit_a1b2c3d4
+AllocateGeneralStatRequest:
+  type: object
+  required:
+  - playerId
+  - statKey
+  properties:
+    playerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+    statKey:
+      type: string
+      enum: [force, intelligence, politics, command]
+      description: 四维属性 key。
+ResetGeneralStatsRequest:
+  type: object
+  required:
+  - playerId
+  properties:
+    playerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+ChangeGeneralRequest:
+  type: object
+  required:
+  - playerId
+  - generalId
+  properties:
+    playerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+    generalId:
+      type: string
+      description: 目标将领 ID，必须属于当前存档阵营且不能等于当前将领。
+      example: zhenmi
+    itemId:
+      type: string
+      description: 预留换将卡物品 ID。传入时会消耗背包中 1 个该物品；不传则当前版本免费换将。
+      example: general_change_card
+GeneralActionResult:
+  type: object
+  required:
+  - state
+  - accountGold
+  properties:
+    state:
+      $ref: '#/components/schemas/GameState'
+    accountGold:
+      type: integer
+      description: 操作后的账户金币余额。

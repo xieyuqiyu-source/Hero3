@@ -111,5 +111,18 @@
       }
     ],
     "metadata": { "version": 1 }
+  },
+  "general_change_card": {
+    "id": "general_change_card",
+    "name": "换将卡",
+    "description": "用于更换当前存档将领。换将后保留等级和经验，四维加点重置。",
+    "type": "token",
+    "rarity": "epic",
+    "usable": false,
+    "stackable": true,
+    "maxStack": 999999,
+    "useTarget": "general_change",
+    "effects": [],
+    "metadata": { "version": 1, "reservedFor": "general_change" }
   }
 }

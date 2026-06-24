@@ -208,6 +208,11 @@ export interface FishingBaitUseResult {
   cityGoldRemain: number
 }
 
+export interface GeneralActionResult {
+  state: GameState
+  accountGold: number
+}
+
 export interface GeneralTraitInstance {
   traitId: string
   name: string

@@ -42,6 +42,8 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("POST /api/v1/military/recruit", handlers.Recruit)
 	mux.HandleFunc("POST /api/v1/military/recruit/instant", handlers.InstantCompleteRecruit)
 	mux.HandleFunc("POST /api/v1/military/general/stat", handlers.AllocateGeneralStat)
+	mux.HandleFunc("POST /api/v1/military/general/reset-stats", handlers.ResetGeneralStats)
+	mux.HandleFunc("POST /api/v1/military/general/change", handlers.ChangeGeneral)
 	mux.HandleFunc("POST /api/v1/city/buildings/instant", handlers.InstantCompleteBuilding)
 	mux.HandleFunc("POST /api/v1/city/boost", handlers.PurchaseBoost)
 	mux.HandleFunc("POST /api/v1/city/capacity-boost", handlers.PurchaseCapacityBoost)

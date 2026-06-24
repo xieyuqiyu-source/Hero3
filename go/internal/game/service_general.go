@@ -12,6 +12,7 @@ const (
 	GeneralMaxStatPointsPerKey = 100
 	GeneralLevelPercentAtMax   = 2.0
 	GeneralStatPercentPerPoint = 0.02
+	GeneralResetStatsGoldCost  = 10
 	generalExpQuadraticFactor  = 50
 	generalExpQuarticFactor    = 500
 )
@@ -22,6 +23,11 @@ type generalExpResult struct {
 	Gained      int
 	LevelBefore int
 	LevelAfter  int
+}
+
+type GeneralActionResult struct {
+	State       GameState `json:"state"`
+	AccountGold int       `json:"accountGold"`
 }
 
 func applyGeneralBattleExp(g *General, gained int) generalExpResult {
@@ -228,6 +234,149 @@ func (s *Service) AllocateGeneralStat(playerID string, statKey string) (GameStat
 		return GameState{}, err
 	}
 	return state, nil
+}
+
+func (s *Service) ResetGeneralStats(playerID string) (GeneralActionResult, error) {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return GeneralActionResult{}, ErrPlayerNotFound
+	}
+
+	lock := s.getPlayerLock(playerID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	state, err := s.repo.GetState(playerID)
+	if err != nil {
+		return GeneralActionResult{}, err
+	}
+	now := time.Now()
+	state, _ = settleResources(state, now)
+	if state.General == nil {
+		return GeneralActionResult{}, ErrGeneralNotFound
+	}
+
+	accountID, err := s.repo.GetAccountIDByPlayerID(playerID)
+	if err != nil {
+		return GeneralActionResult{}, err
+	}
+	if err := s.repo.DeductAccountGold(accountID, GeneralResetStatsGoldCost); err != nil {
+		return GeneralActionResult{}, err
+	}
+	account, err := s.repo.GetAccountByID(accountID)
+	if err != nil {
+		return GeneralActionResult{}, err
+	}
+
+	state.General.Stats = map[string]int{}
+	applyHeroConfigToGeneral(state.General)
+	refreshGeneralDerivedState(&state, now)
+	if err := s.repo.SaveState(state, now); err != nil {
+		return GeneralActionResult{}, err
+	}
+
+	s.recordLedger(GoldLedgerEntry{
+		AccountID:    accountID,
+		PlayerID:     playerID,
+		Currency:     LedgerCurrencyGold,
+		Direction:    LedgerDirectionDebit,
+		Amount:       GeneralResetStatsGoldCost,
+		BalanceAfter: account.Gold,
+		RefType:      LedgerRefGeneralReset,
+		RefID:        state.General.ID,
+		Reason:       "将领洗点",
+	})
+
+	return GeneralActionResult{State: state, AccountGold: account.Gold}, nil
+}
+
+func (s *Service) ChangeGeneral(playerID string, generalID string, itemID string) (GeneralActionResult, error) {
+	playerID = strings.TrimSpace(playerID)
+	generalID = strings.TrimSpace(generalID)
+	itemID = strings.TrimSpace(itemID)
+	if playerID == "" {
+		return GeneralActionResult{}, ErrPlayerNotFound
+	}
+	if generalID == "" {
+		return GeneralActionResult{}, ErrInvalidGeneral
+	}
+
+	lock := s.getPlayerLock(playerID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	state, err := s.repo.GetState(playerID)
+	if err != nil {
+		return GeneralActionResult{}, err
+	}
+	now := time.Now()
+	state, _ = settleResources(state, now)
+	if state.General == nil {
+		return GeneralActionResult{}, ErrGeneralNotFound
+	}
+	if state.General.ID == generalID {
+		return GeneralActionResult{}, ErrInvalidGeneral
+	}
+	if !isGeneralAllowedForFaction(state.Player.Faction, generalID) {
+		return GeneralActionResult{}, ErrInvalidGeneral
+	}
+	hero, ok := GetHeroConfig(generalID)
+	if !ok || !hero.Enabled || hero.Faction != state.Player.Faction {
+		return GeneralActionResult{}, ErrInvalidGeneral
+	}
+
+	if itemID != "" {
+		if _, ok := GetItemDefinition(itemID); !ok {
+			return GeneralActionResult{}, ErrItemNotFound
+		}
+		if !consumeItemFromInventory(&state, itemID, 1, now) {
+			return GeneralActionResult{}, ErrInsufficientItem
+		}
+	}
+
+	state.General.ID = generalID
+	state.General.Name = hero.Name
+	state.General.Stats = map[string]int{}
+	applyHeroConfigToGeneral(state.General)
+	refreshGeneralDerivedState(&state, now)
+	if err := s.repo.SaveState(state, now); err != nil {
+		return GeneralActionResult{}, err
+	}
+
+	accountGold := 0
+	if accountID, err := s.repo.GetAccountIDByPlayerID(playerID); err == nil {
+		if account, err := s.repo.GetAccountByID(accountID); err == nil {
+			accountGold = account.Gold
+		}
+	}
+	return GeneralActionResult{State: state, AccountGold: accountGold}, nil
+}
+
+func isGeneralAllowedForFaction(faction string, generalID string) bool {
+	factions := GetFactionsConfig()
+	fc, ok := factions[faction]
+	if !ok {
+		return false
+	}
+	for _, g := range fc.Generals {
+		if g.ID == generalID {
+			return true
+		}
+	}
+	return false
+}
+
+func refreshGeneralDerivedState(state *GameState, now time.Time) {
+	if state == nil {
+		return
+	}
+	modSources := CollectModifierSources(state)
+	production := calculateResourceProduction(state.Buildings, state.General)
+	state.ResourceProduction = applyProductionModifiers(production, now, modSources)
+	capacity := calculateResourceCapacity(state.Buildings)
+	state.Resources.Capacity = applyCapacityModifiers(capacity, now, modSources)
+	state.ActiveModifiers = GetModifierBreakdown(state, now)
+	state.ServerTime = now.UTC().Format(resourceDateLayout)
 }
 
 func isValidGeneralStatKey(key string) bool {

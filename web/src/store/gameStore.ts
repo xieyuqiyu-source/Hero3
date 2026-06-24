@@ -32,6 +32,10 @@ interface GameStore {
   upgradeBuilding: (buildingId: string) => Promise<void>
   /** 将领四维加点 */
   allocateGeneralStat: (statKey: string) => Promise<void>
+  /** 将领洗点 */
+  resetGeneralStats: () => Promise<number | undefined>
+  /** 更换将领 */
+  changeGeneral: (generalId: string, itemId?: string) => Promise<number | undefined>
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -80,6 +84,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!playerId) return
     const result = await gameApi.allocateGeneralStat(playerId, statKey)
     set({ state: result.state, stateReceivedAt: Date.now(), error: null })
+  },
+  resetGeneralStats: async () => {
+    const playerId = get().activePlayerId
+    if (!playerId) return undefined
+    const result = await gameApi.resetGeneralStats(playerId)
+    set({ state: result.state, stateReceivedAt: Date.now(), error: null })
+    return result.accountGold
+  },
+  changeGeneral: async (generalId: string, itemId?: string) => {
+    const playerId = get().activePlayerId
+    if (!playerId) return undefined
+    const result = await gameApi.changeGeneral(playerId, generalId, itemId)
+    set({ state: result.state, stateReceivedAt: Date.now(), error: null })
+    return result.accountGold
   },
 }))
 

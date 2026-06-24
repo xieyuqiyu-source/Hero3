@@ -60,6 +60,12 @@ paths:
     $ref: ./paths/military.yaml#/~1api~1v1~1military~1recruit
   /api/v1/military/recruit/instant:
     $ref: ./paths/military.yaml#/~1api~1v1~1military~1recruit~1instant
+  /api/v1/military/general/stat:
+    $ref: ./paths/military.yaml#/~1api~1v1~1military~1general~1stat
+  /api/v1/military/general/reset-stats:
+    $ref: ./paths/military.yaml#/~1api~1v1~1military~1general~1reset-stats
+  /api/v1/military/general/change:
+    $ref: ./paths/military.yaml#/~1api~1v1~1military~1general~1change
   /api/v1/map/npc-cities:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities
   /api/v1/map/npc-cities/refresh:
@@ -184,6 +190,14 @@ components:
       $ref: ./schemas/military.yaml#/RecruitRequest
     InstantCompleteRecruitRequest:
       $ref: ./schemas/military.yaml#/InstantCompleteRecruitRequest
+    AllocateGeneralStatRequest:
+      $ref: ./schemas/military.yaml#/AllocateGeneralStatRequest
+    ResetGeneralStatsRequest:
+      $ref: ./schemas/military.yaml#/ResetGeneralStatsRequest
+    ChangeGeneralRequest:
+      $ref: ./schemas/military.yaml#/ChangeGeneralRequest
+    GeneralActionResult:
+      $ref: ./schemas/military.yaml#/GeneralActionResult
     NpcState:
       $ref: ./schemas/map.yaml#/NpcState
     NpcCity:

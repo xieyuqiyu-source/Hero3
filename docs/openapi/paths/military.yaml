@@ -84,3 +84,109 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/military/general/stat:
+  post:
+    tags:
+    - Military
+    summary: 将领四维加点
+    operationId: allocateGeneralStat
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AllocateGeneralStatRequest'
+    responses:
+      '200':
+        description: 加点成功，返回更新后的游戏状态
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - state
+              properties:
+                state:
+                  $ref: '#/components/schemas/GameState'
+      '400':
+        description: 参数错误
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 玩家或将领不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '409':
+        description: 没有可用点数或属性已满
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/military/general/reset-stats:
+  post:
+    tags:
+    - Military
+    summary: 将领洗点
+    description: 消耗账户金币 10 个，清空当前将领四维加点，保留将领、等级和经验，无冷却。
+    operationId: resetGeneralStats
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResetGeneralStatsRequest'
+    responses:
+      '200':
+        description: 洗点成功，返回更新后的状态和账户金币余额
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeneralActionResult'
+      '404':
+        description: 玩家、账号或将领不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '422':
+        description: 金币不足
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/military/general/change:
+  post:
+    tags:
+    - Military
+    summary: 更换将领
+    description: 仅允许更换当前存档阵营内的其它将领。保留等级和经验，重置四维加点。itemId 为预留换将卡消耗字段，传入时会消耗背包中 1 个对应物品。
+    operationId: changeGeneral
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ChangeGeneralRequest'
+    responses:
+      '200':
+        description: 换将成功，返回更新后的状态和账户金币余额
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeneralActionResult'
+      '404':
+        description: 玩家、将领或换将卡物品配置不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '422':
+        description: 将领不属于当前阵营、不能更换为当前将领，或换将卡库存不足
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

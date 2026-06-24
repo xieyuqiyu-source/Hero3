@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Package, Zap, Coins, Gift } from 'lucide-react'
+import { Package, Zap, Coins, Gift, RefreshCcw, Repeat2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import PlayerSelector from './PlayerSelector'
 import type { ItemDefinition } from '@/types'
@@ -11,20 +11,52 @@ export function ResourceToolsPanel() {
   const [items, setItems] = useState<Record<string, ItemDefinition>>({})
   const [itemId, setItemId] = useState('')
   const [itemAmount, setItemAmount] = useState(1)
+  const [factionsConfig, setFactionsConfig] = useState<Record<string, any>>({})
+  const [playerFaction, setPlayerFaction] = useState('')
+  const [currentGeneralId, setCurrentGeneralId] = useState('')
+  const [generalId, setGeneralId] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    adminApi.getItemsConfig()
-      .then((result) => {
-        setItems(result)
-        const first = Object.keys(result)[0] ?? ''
+    void Promise.all([adminApi.getItemsConfig(), adminApi.getFactionsConfig()])
+      .then(([itemResult, factionResult]) => {
+        setItems(itemResult)
+        setFactionsConfig(factionResult as Record<string, any>)
+        const first = Object.keys(itemResult)[0] ?? ''
         setItemId((current) => current || first)
       })
       .catch(() => {
         setItems({})
+        setFactionsConfig({})
       })
   }, [])
+
+  const generalOptions = playerFaction
+    ? ((factionsConfig[playerFaction]?.generals ?? []) as Array<{ id: string; name: string }>).filter((item) => item.id !== currentGeneralId)
+    : []
+
+  const loadPlayerMeta = async (pid: string) => {
+    if (!pid) {
+      setPlayerFaction('')
+      setCurrentGeneralId('')
+      setGeneralId('')
+      return
+    }
+    try {
+      const state = await adminApi.getPlayerState(pid)
+      const faction = state.player.faction
+      const current = state.general?.id ?? ''
+      setPlayerFaction(faction)
+      setCurrentGeneralId(current)
+      const generals = ((factionsConfig[faction]?.generals ?? []) as Array<{ id: string; name: string }>)
+      setGeneralId(generals.find((item) => item.id !== current)?.id || '')
+    } catch {
+      setPlayerFaction('')
+      setCurrentGeneralId('')
+      setGeneralId('')
+    }
+  }
 
   const showMsg = (msg: string) => {
     setMessage(msg)
@@ -88,6 +120,36 @@ export function ResourceToolsPanel() {
     }
   }
 
+  const handleResetGeneralStats = async () => {
+    if (!playerId) return
+    if (!confirm(`确认给玩家 ${playerId} 洗点？将消耗该账号 10 金币。`)) return
+    setLoading(true)
+    try {
+      const result = await adminApi.resetGeneralStats(playerId)
+      showMsg(`✅ 洗点成功，账户金币余额: ${result.accountGold}`)
+    } catch (e: any) {
+      showMsg(`❌ 失败: ${e.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleChangeGeneral = async () => {
+    if (!playerId || !generalId) return
+    const name = generalOptions.find((item) => item.id === generalId)?.name ?? generalId
+    if (!confirm(`确认将玩家 ${playerId} 的将领更换为 ${name}？等级经验保留，四维加点重置。`)) return
+    setLoading(true)
+    try {
+      await adminApi.changeGeneral(playerId, generalId)
+      showMsg(`✅ 换将成功：${name}`)
+      await loadPlayerMeta(playerId)
+    } catch (e: any) {
+      showMsg(`❌ 失败: ${e.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-panel)] p-4">
       <div className="flex items-center gap-2 mb-3">
@@ -106,7 +168,7 @@ export function ResourceToolsPanel() {
         />
         <PlayerSelector
           value={playerId}
-          onChange={(pid, aid) => { setPlayerId(pid); setAccountId(aid) }}
+          onChange={(pid, aid) => { setPlayerId(pid); setAccountId(aid); void loadPlayerMeta(pid) }}
           placeholder="选择玩家存档"
         />
         <div className="flex items-center gap-2">
@@ -192,6 +254,47 @@ export function ResourceToolsPanel() {
               发放
             </button>
           </div>
+        </div>
+
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <Repeat2 size={14} className="text-amber-500" />
+            <strong className="text-sm text-amber-600">将领操作</strong>
+            {playerFaction && <span className="ml-auto text-[10px] text-[var(--color-text-muted)]">{playerFaction}</span>}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-[auto_1fr_auto]">
+            <button
+              type="button"
+              onClick={handleResetGeneralStats}
+              disabled={loading || !playerId}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-600 transition-colors hover:bg-amber-500/15 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCcw size={13} />
+              洗点
+            </button>
+            <select
+              value={generalId}
+              onChange={(e) => setGeneralId(e.target.value)}
+              disabled={loading || !playerId || generalOptions.length === 0}
+              className="min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-primary)] outline-none disabled:opacity-50"
+            >
+              {generalOptions.length === 0 ? (
+                <option value="">先选择玩家</option>
+              ) : (
+                generalOptions.map((general) => <option key={general.id} value={general.id}>{general.name}</option>)
+              )}
+            </select>
+            <button
+              type="button"
+              onClick={handleChangeGeneral}
+              disabled={loading || !playerId || !generalId}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs font-bold text-blue-600 transition-colors hover:bg-blue-500/15 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Repeat2 size={13} />
+              换将
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] text-[var(--color-text-muted)]">换将限制为玩家当前阵营，保留等级经验并重置四维加点。</p>
         </div>
       </div>
 

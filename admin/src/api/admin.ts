@@ -58,6 +58,20 @@ export const adminApi = {
       body: JSON.stringify({ playerId, queueId }),
     })
   },
+  resetGeneralStats(playerId: string) {
+    return request<{ state: GameState; accountGold: number }>(`${API_BASE}/military/general/reset-stats`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId }),
+    })
+  },
+  changeGeneral(playerId: string, generalId: string, itemId?: string) {
+    return request<{ state: GameState; accountGold: number }>(`${API_BASE}/military/general/change`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, generalId, itemId }),
+    })
+  },
   getNpcCities(playerId: string) {
     return request<NpcState>(`${API_BASE}/map/npc-cities?playerId=${encodeURIComponent(playerId)}`)
   },

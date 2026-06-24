@@ -610,6 +610,64 @@ func (h *Handlers) AllocateGeneralStat(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"state": state})
 }
 
+func (h *Handlers) ResetGeneralStats(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+
+	result, err := h.gameService.ResetGeneralStats(payload.PlayerID)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound), errors.Is(err, game.ErrGeneralNotFound), errors.Is(err, game.ErrAccountNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInsufficientGold):
+			status = http.StatusUnprocessableEntity
+		case errors.Is(err, game.ErrInvalidGoldAmount):
+			status = http.StatusBadRequest
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handlers) ChangeGeneral(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID  string `json:"playerId"`
+		GeneralID string `json:"generalId"`
+		ItemID    string `json:"itemId,omitempty"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+
+	result, err := h.gameService.ChangeGeneral(payload.PlayerID, payload.GeneralID, payload.ItemID)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound), errors.Is(err, game.ErrGeneralNotFound), errors.Is(err, game.ErrItemNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInvalidGeneral), errors.Is(err, game.ErrInsufficientItem):
+			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *Handlers) InstantCompleteBuilding(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		PlayerID   string `json:"playerId"`
