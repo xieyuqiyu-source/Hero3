@@ -133,4 +133,117 @@ MiniGameRedeemResult:
       example: 骁骑营
     redeemedAmount:
       type: integer
+FishingConfig:
+  type: object
+  required:
+  - rarities
+  - baits
+  - fishPool
+  properties:
+    rarities:
+      type: object
+      description: 稀有度配置，key 一般为 common / rare / epic / legendary。
+      additionalProperties:
+        $ref: '#/components/schemas/FishingRarityConfig'
+    baits:
+      type: array
+      items:
+        $ref: '#/components/schemas/FishingBaitConfig'
+    fishPool:
+      type: array
+      items:
+        $ref: '#/components/schemas/FishingFishConfig'
+FishingRarityConfig:
+  type: object
+  required:
+  - label
+  - weight
+  properties:
+    label:
+      type: string
+      example: 稀有
+    color:
+      type: string
+    bg:
+      type: string
+    border:
+      type: string
+    weight:
+      type: number
+      format: double
+      description: 抽取该稀有度的基础权重。
+      example: 22
+    glow:
+      type: string
+FishingBaitConfig:
+  type: object
+  required:
+  - id
+  - name
+  - rarityBoost
+  - cityGoldCost
+  - biteChance
+  - biteWindowMs
+  - sweetStart
+  - sweetEnd
+  properties:
+    id:
+      type: string
+      example: golden
+    name:
+      type: string
+      example: 金鳞饵
+    tier:
+      type: string
+      example: 三阶
+    description:
+      type: string
+    rarityBoost:
+      type: number
+      format: double
+      description: 稀有、史诗、传说权重倍率。
+    cityGoldCost:
+      type: integer
+      minimum: 0
+    biteChance:
+      type: number
+      format: double
+      minimum: 0
+      maximum: 1
+    biteWindowMs:
+      type: integer
+      minimum: 1
+    sweetStart:
+      type: integer
+      minimum: 0
+      maximum: 100
+    sweetEnd:
+      type: integer
+      minimum: 0
+      maximum: 100
+FishingFishConfig:
+  type: object
+  required:
+  - name
+  - rarity
+  - reward
+  - rewardAmount
+  properties:
+    name:
+      type: string
+      example: 神龙
+    rarity:
+      type: string
+      example: legendary
+    reward:
+      type: string
+      description: 绑定的奖励兵种名称。
+      example: 士族
+    rewardAmount:
+      type: integer
+      minimum: 1
+    description:
+      type: string
+    emoji:
+      type: string
       example: 1000

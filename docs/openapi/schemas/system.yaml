@@ -51,6 +51,22 @@ BootstrapResponse:
       - map
       - combat
       - save
+    balance:
+      $ref: '#/components/schemas/BalanceConfig'
+    factions:
+      type: object
+      additionalProperties: true
+      description: 阵营配置。
+    units:
+      type: object
+      additionalProperties: true
+      description: 兵种配置，按阵营分组。
+    items:
+      type: object
+      additionalProperties: true
+      description: 道具配置。
+    fishing:
+      $ref: '#/components/schemas/FishingConfig'
     message:
       type: string
       example: Hero3 后端基础服务已就绪，具体玩法逻辑待接入。

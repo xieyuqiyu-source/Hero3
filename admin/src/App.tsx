@@ -6,6 +6,7 @@ import ApiDiagnosticsPanel from '@/components/ApiDiagnosticsPanel'
 import { AuditPanel, GuardrailPanel } from '@/components/AuditPanel'
 import BalanceConfigPanel from '@/components/BalanceConfigPanel'
 import CollapsiblePanel from '@/components/CollapsiblePanel'
+import DevAppSwitcher from '@/components/DevAppSwitcher'
 import CombatConfigPanel from '@/components/CombatConfigPanel'
 import FactionsConfigPanel from '@/components/FactionsConfigPanel'
 import NpcConfigPanel from '@/components/NpcConfigPanel'
@@ -16,11 +17,12 @@ import BuffPanel from '@/components/BuffPanel'
 import MiniGameRecordsPanel from '@/components/MiniGameRecordsPanel'
 import AdminTokenPanel from '@/components/AdminTokenPanel'
 import GeneralsConfigPanel from '@/components/GeneralsConfigPanel'
+import FishingConfigPanel from '@/components/FishingConfigPanel'
 import GoldLedgerPanel from '@/components/GoldLedgerPanel'
 import MailAdminPanel from '@/components/MailAdminPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
-import { Sliders, MapPin, Swords, Flag, Shield, Users } from 'lucide-react'
+import { Sliders, MapPin, Swords, Flag, Shield, Users, Fish } from 'lucide-react'
 
 function App() {
   const [activePage, setActivePage] = useState<AdminPage>('overview')
@@ -107,6 +109,9 @@ function App() {
             <CollapsiblePanel icon={<Users size={16} className="text-[var(--color-accent)]" />} title="将领配置">
               <GeneralsConfigPanel />
             </CollapsiblePanel>
+            <CollapsiblePanel icon={<Fish size={16} className="text-[var(--color-accent)]" />} title="钓鱼配置">
+              <FishingConfigPanel />
+            </CollapsiblePanel>
           </div>
         )
       case 'api':
@@ -151,6 +156,7 @@ function App() {
         </div>
       )}
       {renderPage()}
+      <DevAppSwitcher />
     </AdminLayout>
   )
 }

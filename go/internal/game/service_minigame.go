@@ -54,16 +54,8 @@ type FishingBaitUseResult struct {
 	CityGoldRemain int       `json:"cityGoldRemain"`
 }
 
-var fishingBaitCosts = map[string]int{
-	"coarse": 0,
-	"shrimp": 30,
-	"golden": 120,
-	"dragon": 500,
-}
-
 func fishingBaitCost(baitID string) (int, bool) {
-	cost, ok := fishingBaitCosts[strings.TrimSpace(baitID)]
-	return cost, ok
+	return GetFishingBaitCost(baitID)
 }
 
 // SaveMiniGameRecord 保存一条小游戏记录

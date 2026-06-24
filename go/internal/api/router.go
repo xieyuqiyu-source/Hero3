@@ -94,6 +94,8 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/minigame/records", handlers.AdminMiniGameRecords)
 	mux.HandleFunc("GET /api/v1/admin/generals-config", handlers.AdminGeneralsConfig)
 	mux.HandleFunc("PUT /api/v1/admin/generals-config", handlers.UpdateAdminGeneralsConfig)
+	mux.HandleFunc("GET /api/v1/admin/fishing-config", handlers.AdminFishingConfig)
+	mux.HandleFunc("PUT /api/v1/admin/fishing-config", handlers.UpdateAdminFishingConfig)
 	mux.HandleFunc("GET /api/v1/admin/general-traits", handlers.AdminGeneralTraitRegistry)
 	mux.HandleFunc("POST /api/v1/admin/mails/send", handlers.AdminSendMail)
 	mux.HandleFunc("GET /api/v1/admin/players/{playerId}/mails", handlers.AdminPlayerMails)

@@ -98,6 +98,55 @@ export interface ItemDefinition {
   metadata?: Record<string, unknown>
 }
 
+export interface UnitConfig {
+  name: string
+  description: string
+  category: string
+  role?: string
+  icon: string
+  stats: Record<string, number>
+  cost: Record<string, number>
+  trainSeconds: number
+  unlock: Record<string, unknown>
+}
+
+export interface FishingRarityConfig {
+  label: string
+  color: string
+  bg: string
+  border: string
+  weight: number
+  glow: string
+}
+
+export interface FishingBaitConfig {
+  id: string
+  name: string
+  tier: string
+  description: string
+  rarityBoost: number
+  cityGoldCost: number
+  biteChance: number
+  biteWindowMs: number
+  sweetStart: number
+  sweetEnd: number
+}
+
+export interface FishingFishConfig {
+  name: string
+  rarity: string
+  reward: string
+  rewardAmount: number
+  description: string
+  emoji: string
+}
+
+export interface FishingConfig {
+  rarities: Record<string, FishingRarityConfig>
+  baits: FishingBaitConfig[]
+  fishPool: FishingFishConfig[]
+}
+
 export interface MailAttachment {
   type: string
   itemId: string

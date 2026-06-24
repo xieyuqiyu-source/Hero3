@@ -63,6 +63,7 @@ type Service struct {
 	combatPath    string
 	generalsPath  string
 	itemsPath     string
+	fishingPath   string
 }
 
 // getPlayerLock 获取指定玩家的互斥锁（懒创建）
@@ -78,6 +79,7 @@ type BootstrapResponse struct {
 	Factions FactionsConfig `json:"factions"`
 	Units    UnitsConfig    `json:"units"`
 	Items    ItemsConfig    `json:"items"`
+	Fishing  FishingConfig  `json:"fishing"`
 	Message  string         `json:"message"`
 }
 
@@ -119,6 +121,11 @@ func (s *Service) SetItemsPath(path string) error {
 	return LoadItemsConfig(path)
 }
 
+func (s *Service) SetFishingPath(path string) error {
+	s.fishingPath = path
+	return LoadFishingConfig(path)
+}
+
 func (s *Service) GetGeneralsConfig() GeneralsConfig {
 	return GetGeneralsConfig()
 }
@@ -133,6 +140,14 @@ func (s *Service) GetCombatConfig() combat.CombatConfig {
 
 func (s *Service) UpdateCombatConfig(config combat.CombatConfig) error {
 	return combat.SaveCombatConfig(s.combatPath, config)
+}
+
+func (s *Service) GetFishingConfig() FishingConfig {
+	return GetFishingConfig()
+}
+
+func (s *Service) UpdateFishingConfig(config FishingConfig) error {
+	return SaveFishingConfig(s.fishingPath, config)
 }
 
 func (s *Service) GetFactionsConfig() FactionsConfig {
@@ -454,6 +469,7 @@ func (s *Service) Bootstrap() BootstrapResponse {
 	factions := GetFactionsConfig()
 	units := GetUnitsConfig()
 	items := GetItemsConfig()
+	fishing := GetFishingConfig()
 	return BootstrapResponse{
 		GameName: "Hero3",
 		Modules: []string{
@@ -465,11 +481,13 @@ func (s *Service) Bootstrap() BootstrapResponse {
 			"combat",
 			"save",
 			"item",
+			"minigame",
 		},
 		Balance:  balance,
 		Factions: factions,
 		Units:    units,
 		Items:    items,
+		Fishing:  fishing,
 		Message:  "Hero3 后端基础服务已就绪，具体玩法逻辑待接入。",
 	}
 }

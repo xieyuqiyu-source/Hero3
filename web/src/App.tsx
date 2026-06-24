@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import RequirePlayer from './components/RequirePlayer'
 import ChangelogModal from './components/ChangelogModal'
 import { ToastContainer } from './components/ui'
+import DevAppSwitcher from './components/DevAppSwitcher'
 import { useConfigStore } from './store/configStore'
 import LoginPage from './pages/login'
 import ReportSharePage from './pages/report/ReportSharePage'
@@ -54,6 +55,7 @@ function App() {
       </Routes>
       <ToastContainer />
       <ChangelogModal />
+      <DevAppSwitcher />
     </>
   )
 }

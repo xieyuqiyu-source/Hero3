@@ -102,6 +102,8 @@ paths:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1balance
   /api/v1/admin/npc-config:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1npc-config
+  /api/v1/admin/fishing-config:
+    $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1fishing-config
 components:
   schemas:
     HealthState:
@@ -162,6 +164,14 @@ components:
       $ref: ./schemas/minigame.yaml#/MiniGameRedeemRequest
     MiniGameRedeemResult:
       $ref: ./schemas/minigame.yaml#/MiniGameRedeemResult
+    FishingConfig:
+      $ref: ./schemas/minigame.yaml#/FishingConfig
+    FishingRarityConfig:
+      $ref: ./schemas/minigame.yaml#/FishingRarityConfig
+    FishingBaitConfig:
+      $ref: ./schemas/minigame.yaml#/FishingBaitConfig
+    FishingFishConfig:
+      $ref: ./schemas/minigame.yaml#/FishingFishConfig
     BalanceConfig:
       $ref: ./schemas/game-state.yaml#/BalanceConfig
     BuildingConfig:

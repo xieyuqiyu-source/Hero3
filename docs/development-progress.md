@@ -11,6 +11,95 @@
 
 ---
 
+## 2026-06-24 - `待提交 feat: add dev app switcher`
+
+### 改动目标
+
+开发阶段在 Web 游戏前端和 GM 后台之间快速切换，减少手动改端口、复制地址的操作成本。生产环境不显示该入口，避免线上玩家看到 GM 入口。
+
+### Web 改动
+
+- 新增 `DevAppSwitcher` 开发辅助组件。
+- Web 前端右下角显示“GM 后台”入口。
+- 默认跳转到当前协议和当前 hostname 的 `5174/admin/`。
+- 支持 `VITE_ADMIN_URL` 覆盖跳转地址，方便特殊开发环境使用。
+
+### Admin 改动
+
+- 新增 `DevAppSwitcher` 开发辅助组件。
+- GM 后台右下角显示“游戏前端”入口。
+- 默认跳转到当前协议和当前 hostname 的 `5173/`。
+- 支持 `VITE_WEB_URL` 覆盖跳转地址。
+
+### 环境控制
+
+- 使用 `import.meta.env.DEV` 控制显示。
+- `npm run dev` 开发模式显示。
+- `npm run build` 生产构建中组件返回 `null`，线上隐藏。
+
+### 验证结果
+
+- `web npm run build` 通过。
+- `admin npm run build` 通过。
+
+---
+
+## 2026-06-24 - `待提交 feat: make fishing configurable`
+
+### 改动目标
+
+把仙池垂钓从前端硬编码鱼池升级为后端配置驱动，并在 GM 后台提供可视化配置入口。后续可以直接在后台新增鱼获、绑定奖励兵种、调整稀有度概率和鱼饵规则，不需要改前端代码。
+
+### 后端改动
+
+- 新增 `go/config/fishing.json` 作为钓鱼配置源。
+- 新增钓鱼配置模型与校验：
+  - 稀有度配置：展示标签、样式、基础权重。
+  - 鱼饵配置：城金成本、稀有倍率、咬钩率、咬钩窗口、蓄力命中区间。
+  - 鱼池配置：鱼名、稀有度、绑定奖励兵种、奖励数量、描述和图标。
+- Go 服务启动时加载 `HERO3_FISHING_PATH`，默认读取 `config/fishing.json`。
+- `game/bootstrap` 增加 `fishing` 字段，Web 端使用后端统一配置。
+- 鱼饵扣城金逻辑改为读取后端钓鱼配置，避免前端价格和后端扣费不一致。
+- 新增 GM 接口：
+  - `GET /api/v1/admin/fishing-config`
+  - `PUT /api/v1/admin/fishing-config`
+
+### Web 改动
+
+- 钓鱼页面优先使用 bootstrap 下发的钓鱼配置。
+- 保留原前端 `fishingConfig.ts` 作为兜底默认值，降低部署过程中新旧前后端短暂不一致的风险。
+- 抽鱼概率、鱼池、鱼饵规则均改为读取统一配置。
+
+### Admin 改动
+
+- 新增“钓鱼配置”GM 面板。
+- 支持可视化调整：
+  - 稀有度概率权重。
+  - 鱼饵成本、稀有倍率、咬钩率、咬钩窗口、蓄力命中区间。
+  - 鱼池鱼获、稀有度、绑定兵种、奖励数量、描述和图标。
+- 绑定兵种使用当前兵种配置下拉选择，避免手填错字。
+- 保留“高级 JSON”折叠区，方便后续批量导入或快速编辑。
+
+### OpenAPI 改动
+
+- `BootstrapResponse` 补充 `fishing` 配置字段。
+- 新增 `FishingConfig`、`FishingRarityConfig`、`FishingBaitConfig`、`FishingFishConfig` schema。
+- 新增 GM 钓鱼配置读写接口文档。
+
+### 验证结果
+
+- `go test ./...` 通过。
+- `web npm run build` 通过。
+- `admin npm run build` 通过。
+- `make openapi` 通过，并重新生成 `docs/openapi.bundle.yaml`。
+
+### 后续注意事项
+
+- 当前抽鱼仍由前端执行，后端负责配置和鱼饵扣费。若后续要更强防刷，需要把抽奖结果也迁移到后端权威计算。
+- GM 修改配置会影响后续 bootstrap 获取的新配置，已经进入钓鱼页的玩家需要刷新页面或重新加载配置后才会看到最新鱼池。
+
+---
+
 ## 2026-06-23 - `待提交 fix: add Wu rewards to fishing pool`
 
 ### 改动目标

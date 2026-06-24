@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FC } from 'react'
+import { useEffect, useMemo, useRef, useState, type FC } from 'react'
 import { Award, TrendingUp } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import ConfirmCityGoldModal from '@/components/ConfirmCityGoldModal'
@@ -11,7 +11,7 @@ import { FishingBaitSelector } from './fishing/FishingBaitSelector'
 import { FishingInventoryModal } from './fishing/FishingInventoryModal'
 import { FishingPondScene } from './fishing/FishingPondScene'
 import { FishingResultModal } from './fishing/FishingResultModal'
-import { BAITS, FISH_POOL, RARITY_CONFIG } from './fishing/fishingConfig'
+import { BAITS as DEFAULT_BAITS, FISH_POOL as DEFAULT_FISH_POOL, RARITY_CONFIG as DEFAULT_RARITY_CONFIG } from './fishing/fishingConfig'
 import type { BaitType, Bubble, FishCatch, FishShadow, GamePhase, FishingStats } from './fishing/types'
 
 const RECORD_PAGE_SIZE = 100
@@ -22,13 +22,14 @@ const FishingGame: FC = () => {
   const gameState = useGameStore((s) => s.state)
   const patchState = useGameStore((s) => s.patchState)
   const units = useConfigStore((s) => s.units)
+  const fishingConfig = useConfigStore((s) => s.fishing)
   const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
 
   const [phase, setPhase] = useState<GamePhase>('idle')
   const [catchResult, setCatchResult] = useState<FishCatch | null>(null)
   const [showResult, setShowResult] = useState(false)
   const [castPower, setCastPower] = useState(0)
-  const [selectedBait, setSelectedBait] = useState<BaitType>(BAITS[0])
+  const [selectedBait, setSelectedBait] = useState<BaitType>(DEFAULT_BAITS[0])
   const [stats, setStats] = useState<FishingStats>({
     totalCasts: 0, totalCaught: 0, combo: 0, bestCombo: 0, legendaryCount: 0, epicCount: 0,
   })
@@ -56,6 +57,16 @@ const FishingGame: FC = () => {
   const tensionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const powerDirectionRef = useRef(1)
   const baitUseInFlightRef = useRef(false)
+
+  const baits = useMemo(
+    () => (fishingConfig?.baits?.length ? fishingConfig.baits : DEFAULT_BAITS),
+    [fishingConfig],
+  )
+  const fishPool = useMemo(
+    () => (fishingConfig?.fishPool?.length ? fishingConfig.fishPool : DEFAULT_FISH_POOL),
+    [fishingConfig],
+  )
+  const rarityConfig = fishingConfig?.rarities ?? DEFAULT_RARITY_CONFIG
 
   useEffect(() => {
     return () => {
@@ -85,6 +96,13 @@ const FishingGame: FC = () => {
   useEffect(() => {
     void loadRecords()
   }, [activePlayerId])
+
+  useEffect(() => {
+    const nextBait = baits.find(bait => bait.id === selectedBait.id) ?? baits[0]
+    if (nextBait && nextBait !== selectedBait) {
+      setSelectedBait(nextBait)
+    }
+  }, [baits, selectedBait])
 
   const isFactionUnit = (unitName: string): boolean => {
     const faction = gameState?.player.faction
@@ -148,10 +166,10 @@ const FishingGame: FC = () => {
 
   const rollFish = (): FishCatch => {
     const weights = {
-      common: RARITY_CONFIG.common.weight,
-      rare: RARITY_CONFIG.rare.weight * selectedBait.rarityBoost,
-      epic: RARITY_CONFIG.epic.weight * selectedBait.rarityBoost,
-      legendary: RARITY_CONFIG.legendary.weight * selectedBait.rarityBoost,
+      common: rarityConfig.common?.weight ?? DEFAULT_RARITY_CONFIG.common.weight,
+      rare: (rarityConfig.rare?.weight ?? DEFAULT_RARITY_CONFIG.rare.weight) * selectedBait.rarityBoost,
+      epic: (rarityConfig.epic?.weight ?? DEFAULT_RARITY_CONFIG.epic.weight) * selectedBait.rarityBoost,
+      legendary: (rarityConfig.legendary?.weight ?? DEFAULT_RARITY_CONFIG.legendary.weight) * selectedBait.rarityBoost,
     }
     const comboBonus = 1 + Math.floor(stats.combo / 3) * 0.1
     weights.rare *= comboBonus
@@ -168,8 +186,9 @@ const FishingGame: FC = () => {
         break
       }
     }
-    const candidates = FISH_POOL.filter(fish => fish.rarity === selectedRarity)
-    return candidates[Math.floor(Math.random() * candidates.length)]
+    const candidates = fishPool.filter(fish => fish.rarity === selectedRarity)
+    const fallbackCandidates = candidates.length > 0 ? candidates : fishPool
+    return fallbackCandidates[Math.floor(Math.random() * fallbackCandidates.length)] ?? DEFAULT_FISH_POOL[0]
   }
 
   const startBubbles = () => {
@@ -367,7 +386,7 @@ const FishingGame: FC = () => {
         <div className="min-w-0 flex-1" />
 
         <FishingBaitSelector
-          baits={BAITS}
+          baits={baits}
           selectedBait={selectedBait}
           showBaitSelect={showBaitSelect}
           inventoryCount={inventoryRecords.length}
@@ -410,7 +429,7 @@ const FishingGame: FC = () => {
           </div>
           <div className="flex flex-wrap gap-1">
             {recentCatches.map((fish, i) => {
-              const cfg = RARITY_CONFIG[fish.rarity]
+              const cfg = rarityConfig[fish.rarity] ?? DEFAULT_RARITY_CONFIG[fish.rarity]
               return (
                 <span key={`${fish.name}-${i}`} className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${cfg.bg} ${cfg.color}`}>
                   {fish.emoji} {fish.name}

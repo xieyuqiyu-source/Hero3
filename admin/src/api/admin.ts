@@ -1,4 +1,4 @@
-import type { AccountSummary, BalanceConfig, GameState, GoldLedgerEntry, HealthState, ItemDefinition, Mail, MailAttachment, MailPage, NpcConfig, NpcState } from '@/types'
+import type { AccountSummary, BalanceConfig, FishingConfig, GameState, GoldLedgerEntry, HealthState, ItemDefinition, Mail, MailAttachment, MailPage, NpcConfig, NpcState, UnitConfig } from '@/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1'
 const ROOT_BASE = API_BASE.replace(/\/api\/v1$/, '')
@@ -126,7 +126,7 @@ export const adminApi = {
     })
   },
   getUnitsConfig() {
-    return request<Record<string, object>>(`${API_BASE}/admin/units-config`)
+    return request<Record<string, Record<string, UnitConfig>>>(`${API_BASE}/admin/units-config`)
   },
   updateUnitsConfig(faction: string, config: object) {
     return request<object>(`${API_BASE}/admin/units-config/${faction}`, {
@@ -205,6 +205,16 @@ export const adminApi = {
   },
   getGeneralTraitRegistry() {
     return request<object>(`${API_BASE}/admin/general-traits`)
+  },
+  getFishingConfig() {
+    return request<FishingConfig>(`${API_BASE}/admin/fishing-config`)
+  },
+  updateFishingConfig(config: FishingConfig) {
+    return request<FishingConfig>(`${API_BASE}/admin/fishing-config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
   },
   sendMail(payload: {
     playerId: string

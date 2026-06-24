@@ -363,6 +363,24 @@ func (h *Handlers) UpdateAdminCombatConfig(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, combat.GetCombatConfig())
 }
 
+func (h *Handlers) AdminFishingConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.gameService.GetFishingConfig())
+}
+
+func (h *Handlers) UpdateAdminFishingConfig(w http.ResponseWriter, r *http.Request) {
+	var payload game.FishingConfig
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	if err := h.gameService.UpdateFishingConfig(payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, h.gameService.GetFishingConfig())
+}
+
 func (h *Handlers) AdminFactionsConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, game.GetFactionsConfig())
 }

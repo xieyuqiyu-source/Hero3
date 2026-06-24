@@ -21,6 +21,12 @@ tags:
   description: 军事与征兵
 - name: Map
   description: 地图、NPC 城池与战斗
+- name: News
+  description: 军情与战报
+- name: Mail
+  description: 信函系统
+- name: MiniGame
+  description: 万象幻境小游戏
 - name: Admin
   description: GM 后台接口
 paths:
@@ -623,6 +629,403 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/news/reports:
+    get:
+      tags:
+      - News
+      summary: 分页获取军情战报
+      description: 获取玩家最近 3 天内未删除的军情战报。用于军情页分页展示，避免一次性拉取大量战报。
+      operationId: listBattleReports
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        description: 玩家存档 ID。
+        schema:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+      - name: page
+        in: query
+        required: false
+        description: 页码，从 1 开始。
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: pageSize
+        in: query
+        required: false
+        description: 每页数量，最大 50。
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+      responses:
+        '200':
+          description: 战报分页结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BattleReportPage'
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 无权访问该玩家存档
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/mails:
+    get:
+      tags:
+      - Mail
+      summary: 分页获取信函
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+      - name: mailType
+        in: query
+        description: 按信函类型筛选；不传或传 all 时返回全部。
+        schema:
+          type: string
+          enum:
+          - all
+          - gm_notice
+          - compensation
+          - reward
+          - event_reward
+          - system_notice
+          - player_message
+      responses:
+        '200':
+          description: 信函分页结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailPage'
+  /api/v1/mails/{mailId}:
+    get:
+      tags:
+      - Mail
+      summary: 获取信函详情并标记已读
+      parameters:
+      - name: mailId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: playerId
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 信函详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mail'
+        '404':
+          description: 信函不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/mails/{mailId}/delete:
+    post:
+      tags:
+      - Mail
+      summary: 删除单封信函
+      parameters:
+      - name: mailId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+  /api/v1/mails/{mailId}/claim:
+    post:
+      tags:
+      - Mail
+      summary: 领取信函附件
+      parameters:
+      - name: mailId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+      responses:
+        '200':
+          description: 领取成功，返回信函和更新后的局部游戏状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailClaimResult'
+        '400':
+          description: 无附件、已领取、已过期或玩家信函不可领取
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/mails/send-player:
+    post:
+      tags:
+      - Mail
+      summary: 玩家向玩家发送信函
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendPlayerMailRequest'
+      responses:
+        '201':
+          description: 已创建的玩家信函
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mail'
+        '400':
+          description: 收件人格式错误、不能给自己发信或内容不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/minigame/record:
+    post:
+      tags:
+      - MiniGame
+      summary: 保存小游戏记录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MiniGameRecordRequest'
+      responses:
+        '201':
+          description: 已创建记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MiniGameRecord'
+  /api/v1/minigame/records:
+    get:
+      tags:
+      - MiniGame
+      summary: 玩家查询自己的小游戏记录与库存
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: gameType
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - fishing
+          - gambling
+        description: 按小游戏类型筛选；钓鱼库存通常传 fishing。
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 100
+          maximum: 500
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+      responses:
+        '200':
+          description: 小游戏记录汇总
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MiniGameSummary'
+  /api/v1/minigame/redeem:
+    post:
+      tags:
+      - MiniGame
+      summary: 兑换小游戏库存奖励
+      description: 钓鱼奖励只允许兑换当前玩家阵营拥有的兵种；非本阵营兵种暂时只能存储，待驻防增援系统完成后开放。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MiniGameRedeemRequest'
+      responses:
+        '200':
+          description: 兑换成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MiniGameRedeemResult'
+        '400':
+          description: 库存不足、非本阵营兵种或请求非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/minigame/records:
+    get:
+      tags:
+      - Admin
+      summary: GM 查询玩家万象幻境记录
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: gameType
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - fishing
+          - gambling
+        description: 按小游戏类型筛选；不传则返回全部小游戏记录。
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 100
+          maximum: 500
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 0
+      responses:
+        '200':
+          description: 小游戏记录汇总
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MiniGameSummary'
+  /api/v1/admin/mails/send:
+    post:
+      tags:
+      - Admin
+      summary: GM 给指定玩家发送信函
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMailRequest'
+      responses:
+        '201':
+          description: 已创建的信函
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mail'
+  /api/v1/admin/players/{playerId}/mails:
+    get:
+      tags:
+      - Admin
+      summary: GM 查看指定玩家信函
+      parameters:
+      - name: playerId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+      - name: mailType
+        in: query
+        description: 按信函类型筛选；不传或传 all 时返回全部。
+        schema:
+          type: string
+          enum:
+          - all
+          - gm_notice
+          - compensation
+          - reward
+          - event_reward
+          - system_notice
+          - player_message
+      responses:
+        '200':
+          description: 信函分页结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailPage'
   /api/v1/admin/accounts:
     get:
       tags:
@@ -788,6 +1191,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/fishing-config:
+    get:
+      tags:
+      - Admin
+      summary: GM 读取仙池垂钓配置
+      description: 读取鱼池、鱼饵、稀有度概率权重配置。Web 端也会通过 game/bootstrap 获取同一份配置。
+      operationId: adminGetFishingConfig
+      responses:
+        '200':
+          description: 当前钓鱼配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FishingConfig'
+    put:
+      tags:
+      - Admin
+      summary: GM 保存仙池垂钓配置
+      description: 保存后立即更新后端内存配置，后续新进入钓鱼页面或刷新 bootstrap 的玩家会使用新鱼池和概率。
+      operationId: adminUpdateFishingConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FishingConfig'
+      responses:
+        '200':
+          description: 保存后的钓鱼配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FishingConfig'
+        '400':
+          description: 配置格式或内容不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
     HealthState:
@@ -843,6 +1285,22 @@ components:
           - map
           - combat
           - save
+        balance:
+          $ref: '#/components/schemas/BalanceConfig'
+        factions:
+          type: object
+          additionalProperties: true
+          description: 阵营配置。
+        units:
+          type: object
+          additionalProperties: true
+          description: 兵种配置，按阵营分组。
+        items:
+          type: object
+          additionalProperties: true
+          description: 道具配置。
+        fishing:
+          $ref: '#/components/schemas/FishingConfig'
         message:
           type: string
           example: Hero3 后端基础服务已就绪，具体玩法逻辑待接入。
@@ -929,6 +1387,10 @@ components:
         nickname:
           type: string
           example: 主公
+        mailCode:
+          type: string
+          description: 玩家信函短编号，与昵称组合成 玩家昵称#编号。
+          example: '482193'
         faction:
           type: string
           example: wei
@@ -948,6 +1410,7 @@ components:
       - mapTargets
       - recentBattleReports
       - unreadMessageCount
+      - unreadMailCount
       - serverTime
       properties:
         player:
@@ -982,9 +1445,13 @@ components:
             $ref: '#/components/schemas/MapTarget'
         recentBattleReports:
           type: array
+          description: 兼容字段。军情列表已拆到 /api/v1/news/reports 分页接口，game/state 默认返回空数组。
           items:
             $ref: '#/components/schemas/BattleReport'
         unreadMessageCount:
+          type: integer
+          example: 0
+        unreadMailCount:
           type: integer
           example: 0
         serverTime:
@@ -1003,6 +1470,10 @@ components:
         nickname:
           type: string
           example: 主公
+        mailCode:
+          type: string
+          description: 玩家信函短编号，与昵称组合成 玩家昵称#编号。
+          example: '482193'
         faction:
           type: string
           example: wei
@@ -1141,6 +1612,512 @@ components:
         createdAt:
           type: string
           format: date-time
+    BattleReportPage:
+      type: object
+      required:
+      - reports
+      - page
+      - pageSize
+      - total
+      properties:
+        reports:
+          type: array
+          items:
+            $ref: '#/components/schemas/BattleReport'
+        page:
+          type: integer
+          example: 1
+        pageSize:
+          type: integer
+          example: 10
+        total:
+          type: integer
+          description: 符合条件的战报总数。
+          example: 23
+    Mail:
+      type: object
+      required:
+      - id
+      - playerId
+      - mailType
+      - senderType
+      - senderName
+      - title
+      - content
+      - isRead
+      - isClaimed
+      - createdAt
+      properties:
+        id:
+          type: string
+          example: mail_47f23e0eeb08ab50402fedfc
+        playerId:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+        mailType:
+          type: string
+          enum:
+          - gm_notice
+          - compensation
+          - reward
+          - event_reward
+          - system_notice
+          - player_message
+        senderType:
+          type: string
+          enum:
+          - system
+          - gm
+          - player
+        senderId:
+          type: string
+        senderName:
+          type: string
+          example: Hero3 GM
+        title:
+          type: string
+          example: GM 通知
+        content:
+          type: string
+          example: 这里是信函正文。
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/MailAttachment'
+        sourceType:
+          type: string
+          enum:
+          - manual
+          - compensation
+          - activity
+          - system
+          - player
+          example: manual
+        sourceId:
+          type: string
+        isRead:
+          type: boolean
+        isClaimed:
+          type: boolean
+        deletedByPlayer:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+        claimedAt:
+          type: string
+          format: date-time
+    MailAttachment:
+      type: object
+      required:
+      - type
+      - itemId
+      - amount
+      properties:
+        type:
+          type: string
+          enum:
+          - resource
+          - city_gold
+          - gold
+          example: resource
+        itemId:
+          type: string
+          enum:
+          - wood
+          - stone
+          - iron
+          - food
+          - city_gold
+          - gold
+          example: wood
+        amount:
+          type: integer
+          minimum: 1
+          example: 1000
+        metadata:
+          type: object
+          additionalProperties: true
+    MailPage:
+      type: object
+      required:
+      - mails
+      - page
+      - pageSize
+      - total
+      - unread
+      properties:
+        mails:
+          type: array
+          items:
+            $ref: '#/components/schemas/Mail'
+        page:
+          type: integer
+          example: 1
+        pageSize:
+          type: integer
+          example: 10
+        total:
+          type: integer
+          example: 12
+        unread:
+          type: integer
+          example: 2
+    SendMailRequest:
+      type: object
+      required:
+      - playerId
+      - title
+      - content
+      properties:
+        playerId:
+          type: string
+        mailType:
+          type: string
+          enum:
+          - gm_notice
+          - compensation
+          - reward
+          - event_reward
+          - system_notice
+          default: gm_notice
+        title:
+          type: string
+          maxLength: 60
+        content:
+          type: string
+          maxLength: 5000
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/MailAttachment'
+        sourceType:
+          type: string
+          enum:
+          - manual
+          - compensation
+          - activity
+          - system
+          - player
+          default: manual
+        sourceId:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    SendPlayerMailRequest:
+      type: object
+      required:
+      - senderPlayerId
+      - recipient
+      - title
+      - content
+      properties:
+        senderPlayerId:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+        recipient:
+          type: string
+          description: 收件人地址，格式为 玩家昵称#六位编号。
+          example: 主公#482193
+        title:
+          type: string
+          maxLength: 60
+          example: 你好
+        content:
+          type: string
+          maxLength: 5000
+          example: 这里是玩家信函正文。
+    MailClaimResult:
+      type: object
+      required:
+      - mail
+      - resources
+      - cityGold
+      - grantedItems
+      properties:
+        mail:
+          $ref: '#/components/schemas/Mail'
+        resources:
+          $ref: '#/components/schemas/ResourceState'
+        cityGold:
+          type: integer
+          example: 1200
+        accountGold:
+          type: integer
+          description: 如果附件包含账号金币，则返回账号金币最新余额。
+          example: 100
+        grantedItems:
+          type: object
+          description: 本次实际发放的奖励汇总，key 为附件类型或资源类型。
+          additionalProperties:
+            type: integer
+          example:
+            wood: 1000
+            city_gold: 50
+    MiniGameRecord:
+      type: object
+      required:
+      - id
+      - playerId
+      - gameType
+      - resultName
+      - rarity
+      - rewardUnit
+      - rewardAmount
+      - remainingAmount
+      - createdAt
+      properties:
+        id:
+          type: string
+          example: mg_47f23e0eeb08ab5040
+        playerId:
+          type: string
+        gameType:
+          type: string
+          enum:
+          - fishing
+          - gambling
+        resultName:
+          type: string
+          example: 金龙鱼
+        rarity:
+          type: string
+          enum:
+          - common
+          - rare
+          - epic
+          - legendary
+        rewardUnit:
+          type: string
+          example: 骁骑营
+        rewardAmount:
+          type: integer
+          description: 原始钓获或赢得数量。
+          example: 5000
+        remainingAmount:
+          type: integer
+          description: 剩余可兑换库存；为 0 时表示已消耗完。
+          example: 3000
+        betUnit:
+          type: string
+        betAmount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+    MiniGameSummary:
+      type: object
+      required:
+      - totalRecords
+      - limit
+      - offset
+      - hasMore
+      - records
+      - rewardTotals
+      properties:
+        totalRecords:
+          type: integer
+          description: 符合筛选条件的记录总数，不是当前页条数。
+        limit:
+          type: integer
+          description: 当前页请求条数上限。
+        offset:
+          type: integer
+          description: 当前页偏移量。
+        hasMore:
+          type: boolean
+          description: 是否还有下一页。
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/MiniGameRecord'
+        rewardTotals:
+          type: object
+          description: 按剩余可兑换数量汇总。
+          additionalProperties:
+            type: integer
+    MiniGameRecordRequest:
+      type: object
+      required:
+      - playerId
+      - gameType
+      - resultName
+      properties:
+        playerId:
+          type: string
+        gameType:
+          type: string
+          enum:
+          - fishing
+          - gambling
+        resultName:
+          type: string
+        rarity:
+          type: string
+        rewardUnit:
+          type: string
+        rewardAmount:
+          type: integer
+        betUnit:
+          type: string
+        betAmount:
+          type: integer
+    MiniGameRedeemRequest:
+      type: object
+      required:
+      - playerId
+      - recordId
+      - amount
+      properties:
+        playerId:
+          type: string
+        recordId:
+          type: string
+        amount:
+          type: integer
+          minimum: 1
+    MiniGameRedeemResult:
+      type: object
+      required:
+      - record
+      - state
+      - redeemedUnitId
+      - redeemedUnit
+      - redeemedAmount
+      properties:
+        record:
+          $ref: '#/components/schemas/MiniGameRecord'
+        state:
+          $ref: '#/components/schemas/GameState'
+        redeemedUnitId:
+          type: string
+          example: qiQiYing
+        redeemedUnit:
+          type: string
+          example: 骁骑营
+        redeemedAmount:
+          type: integer
+    FishingConfig:
+      type: object
+      required:
+      - rarities
+      - baits
+      - fishPool
+      properties:
+        rarities:
+          type: object
+          description: 稀有度配置，key 一般为 common / rare / epic / legendary。
+          additionalProperties:
+            $ref: '#/components/schemas/FishingRarityConfig'
+        baits:
+          type: array
+          items:
+            $ref: '#/components/schemas/FishingBaitConfig'
+        fishPool:
+          type: array
+          items:
+            $ref: '#/components/schemas/FishingFishConfig'
+    FishingRarityConfig:
+      type: object
+      required:
+      - label
+      - weight
+      properties:
+        label:
+          type: string
+          example: 稀有
+        color:
+          type: string
+        bg:
+          type: string
+        border:
+          type: string
+        weight:
+          type: number
+          format: double
+          description: 抽取该稀有度的基础权重。
+          example: 22
+        glow:
+          type: string
+    FishingBaitConfig:
+      type: object
+      required:
+      - id
+      - name
+      - rarityBoost
+      - cityGoldCost
+      - biteChance
+      - biteWindowMs
+      - sweetStart
+      - sweetEnd
+      properties:
+        id:
+          type: string
+          example: golden
+        name:
+          type: string
+          example: 金鳞饵
+        tier:
+          type: string
+          example: 三阶
+        description:
+          type: string
+        rarityBoost:
+          type: number
+          format: double
+          description: 稀有、史诗、传说权重倍率。
+        cityGoldCost:
+          type: integer
+          minimum: 0
+        biteChance:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+        biteWindowMs:
+          type: integer
+          minimum: 1
+        sweetStart:
+          type: integer
+          minimum: 0
+          maximum: 100
+        sweetEnd:
+          type: integer
+          minimum: 0
+          maximum: 100
+    FishingFishConfig:
+      type: object
+      required:
+      - name
+      - rarity
+      - reward
+      - rewardAmount
+      properties:
+        name:
+          type: string
+          example: 神龙
+        rarity:
+          type: string
+          example: legendary
+        reward:
+          type: string
+          description: 绑定的奖励兵种名称。
+          example: 士族
+        rewardAmount:
+          type: integer
+          minimum: 1
+        description:
+          type: string
+        emoji:
+          type: string
+          example: 1000
     BalanceConfig:
       type: object
       required:

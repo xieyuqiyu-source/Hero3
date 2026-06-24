@@ -44,6 +44,43 @@ export interface GeneralInfo {
   title: string
 }
 
+export interface FishingRarityConfig {
+  label: string
+  color: string
+  bg: string
+  border: string
+  weight: number
+  glow: string
+}
+
+export interface FishingBaitConfig {
+  id: string
+  name: string
+  tier: string
+  description: string
+  rarityBoost: number
+  cityGoldCost: number
+  biteChance: number
+  biteWindowMs: number
+  sweetStart: number
+  sweetEnd: number
+}
+
+export interface FishingFishConfig {
+  name: string
+  rarity: 'common' | 'rare' | 'epic' | 'legendary'
+  reward: string
+  rewardAmount: number
+  description: string
+  emoji: string
+}
+
+export interface FishingConfig {
+  rarities: Record<string, FishingRarityConfig>
+  baits: FishingBaitConfig[]
+  fishPool: FishingFishConfig[]
+}
+
 export interface FactionConfig {
   name: string
   description: string
@@ -57,6 +94,7 @@ interface ConfigStore {
   factions: Record<string, FactionConfig> | null
   units: Record<string, Record<string, UnitConfig>> | null
   items: Record<string, ItemDefinition> | null
+  fishing: FishingConfig | null
   loaded: boolean
   loadBootstrap: () => Promise<void>
 }
@@ -66,6 +104,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   factions: null,
   units: null,
   items: null,
+  fishing: null,
   loaded: false,
 
   loadBootstrap: async () => {
@@ -77,6 +116,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         factions: data.factions,
         units: data.units,
         items: data.items,
+        fishing: data.fishing,
         loaded: true,
       })
     } catch {

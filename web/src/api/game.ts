@@ -2,7 +2,7 @@
 
 import { api } from './client'
 import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition } from '@/types/game'
-import type { BalanceConfig, FactionConfig, UnitConfig } from '@/store/configStore'
+import type { BalanceConfig, FactionConfig, FishingConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
   id: string
@@ -69,6 +69,7 @@ export const gameApi = {
       factions: Record<string, FactionConfig>
       units: Record<string, Record<string, UnitConfig>>
       items: Record<string, ItemDefinition>
+      fishing: FishingConfig
       message: string
     }>('/game/bootstrap')
   },

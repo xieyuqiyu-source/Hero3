@@ -18,6 +18,7 @@ export const FISH_POOL: FishCatch[] = [
   { name: '虎鲸', rarity: 'epic', reward: '虎豹骑', rewardAmount: 12000, description: '海中霸主，力量惊人', emoji: '🐋' },
   { name: '江海霸主', rarity: 'epic', reward: '霸王骑', rewardAmount: 12000, description: '横行江海的巨兽，气势压人', emoji: '🐋' },
   { name: '蛟龙', rarity: 'epic', reward: '南蛮象', rewardAmount: 12000, description: '即将化龙的水中神兽', emoji: '🐲' },
+  { name: '鳌匠鱼', rarity: 'epic', reward: '建筑师', rewardAmount: 300, description: '背负石纹，传说能引水筑基、固城修墙', emoji: '🪨' },
   { name: '凤凰鱼', rarity: 'epic', reward: '木牛流马', rewardAmount: 300, description: '浴火重生的神秘鱼种', emoji: '🔥' },
   { name: '风水灵鱼', rarity: 'epic', reward: '风水师', rewardAmount: 300, description: '灵气绕身，据说能辨山川水势', emoji: '🔥' },
   { name: '白泽', rarity: 'epic', reward: '虎豹骑', rewardAmount: 18000, description: '通晓万物的上古瑞兽', emoji: '🦄' },
