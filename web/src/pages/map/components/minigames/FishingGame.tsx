@@ -84,7 +84,7 @@ const FishingGame: FC = () => {
     setRecordsLoading(true)
     try {
       const result = await gameApi.listMiniGameRecords(activePlayerId, RECORD_PAGE_SIZE, offset, 'fishing')
-      setRecords(result.records)
+      setRecords(Array.isArray(result.records) ? result.records : [])
       setRecordsTotal(result.totalRecords)
       setRecordsHasMore(result.hasMore)
       setRecordsOffset(result.offset)

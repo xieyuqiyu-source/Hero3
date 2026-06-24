@@ -1247,7 +1247,7 @@ func (r *MySQLRepository) ListMiniGameRecords(playerID string, gameType string, 
 	}
 	defer rows.Close()
 
-	var records []game.MiniGameRecord
+	records := []game.MiniGameRecord{}
 	for rows.Next() {
 		var r game.MiniGameRecord
 		var createdAt time.Time

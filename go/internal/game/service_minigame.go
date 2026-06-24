@@ -182,6 +182,9 @@ func (s *Service) GetMiniGameRecords(playerID string, gameType string, limit int
 	if err != nil {
 		return MiniGameSummary{}, err
 	}
+	if records == nil {
+		records = []MiniGameRecord{}
+	}
 
 	// 汇总各兵种可兑换总量
 	totals := map[string]int{}
