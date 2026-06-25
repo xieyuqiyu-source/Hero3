@@ -80,6 +80,8 @@ Effect Pipeline 当前集中在：
 - `effect_pipeline.go`：应用层效果执行器，复用奖励、建筑变更和 Buff/Modifier 入口。
 - `item_effects.go`：道具效果已转换为标准 `reward` 效果。
 - `building_lifecycle.go`：建筑变更已通过 `building_mutation` 效果执行。
+- `service_mail.go`：信函附件已通过标准 `reward` 效果发放。
+- `service_minigame.go`：万象幻境兑换已通过标准 `reward` 效果发放。
 
 后续武将特性、活动、副本如果要影响长期资产，应优先提交标准 Effect。
 

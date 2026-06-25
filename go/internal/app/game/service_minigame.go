@@ -182,11 +182,12 @@ func (s *Service) RedeemMiniGameReward(playerID string, recordID string, amount 
 			reward := Reward{Type: RewardTypeUnit, ID: unitID, Amount: amount}
 			record.RemainingAmount -= amount
 			records[i] = record
-			result, err := ApplyRewardsToStateWithContext(state, []Reward{reward}, RewardGrantContext{
+			effectResult, err := ExecuteEffectsOnState(state, rewardsToEffects("minigame", []Reward{reward}), EffectContext{
 				PlayerID: playerID,
 				RefType:  LedgerRefMiniGameRedeem,
 				RefID:    record.ID,
 				Reason:   "minigame_redeem",
+				Source:   "minigame",
 			}, redeemedAt)
 			if err != nil {
 				return nil, err
@@ -196,7 +197,7 @@ func (s *Service) RedeemMiniGameReward(playerID string, recordID string, amount 
 			redeemedUnitID = unitID
 			redeemedUnit = unitCfg.Name
 			grantedRewards = []Reward{reward}
-			applyResult = result
+			applyResult = effectResult.Reward
 			return records, nil
 		}
 		return nil, ErrMiniGameNotFound
@@ -249,16 +250,17 @@ func (s *Service) RedeemAllFactionMiniGameRewards(playerID string, gameType stri
 			amount := record.RemainingAmount
 			reward := Reward{Type: RewardTypeUnit, ID: unitID, Amount: amount}
 			records[i].RemainingAmount = 0
-			result, err := ApplyRewardsToStateWithContext(state, []Reward{reward}, RewardGrantContext{
+			effectResult, err := ExecuteEffectsOnState(state, rewardsToEffects("minigame", []Reward{reward}), EffectContext{
 				PlayerID: playerID,
 				RefType:  LedgerRefMiniGameRedeem,
 				RefID:    record.ID,
 				Reason:   "minigame_redeem",
+				Source:   "minigame",
 			}, redeemedAt)
 			if err != nil {
 				return nil, err
 			}
-			mergeRewardApplyResult(&applyResult, result)
+			mergeRewardApplyResult(&applyResult, effectResult.Reward)
 			grantedRewards = append(grantedRewards, reward)
 			redeemedUnits[unitCfg.Name] += amount
 			redeemedRecords++

@@ -134,10 +134,18 @@ func (s *Service) ClaimMailAttachments(playerID string, mailID string) (MailClai
 			return ErrMailClaimForbidden
 		}
 		ctx.AccountID = account.ID
-		result, err := ApplyRewardsToStateWithContext(state, rewardsFromMailAttachments(mail.Attachments), ctx, claimedAt)
+		effectResult, err := ExecuteEffectsOnState(state, rewardsToEffects("mail", rewardsFromMailAttachments(mail.Attachments)), EffectContext{
+			AccountID: ctx.AccountID,
+			PlayerID:  ctx.PlayerID,
+			RefType:   ctx.RefType,
+			RefID:     ctx.RefID,
+			Reason:    ctx.Reason,
+			Source:    "mail",
+		}, claimedAt)
 		if err != nil {
 			return err
 		}
+		result := effectResult.Reward
 		if result.AccountGold > 0 {
 			account.Gold += result.AccountGold
 			result.LedgerEntries = append(result.LedgerEntries, GoldLedgerEntry{
