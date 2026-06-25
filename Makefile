@@ -64,7 +64,7 @@ migrate:
 
 ## 校验拆分后的 OpenAPI 入口文件
 openapi-lint:
-	python3 scripts/openapi_bundle.py --input docs/openapi/openapi.yaml --output docs/openapi.bundle.yaml
+	python3 scripts/openapi_bundle.py --input docs/接口文档/openapi/openapi.yaml --output docs/接口文档/openapi打包.yaml
 
 ## 打包 Apifox 导入文件
 openapi-bundle: openapi-lint

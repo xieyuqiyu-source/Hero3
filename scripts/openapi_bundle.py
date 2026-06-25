@@ -64,8 +64,8 @@ def validate_openapi(document: dict[str, Any]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Bundle Hero3 OpenAPI files.")
-    parser.add_argument("--input", default="docs/openapi/openapi.yaml")
-    parser.add_argument("--output", default="docs/openapi.bundle.yaml")
+    parser.add_argument("--input", default="docs/接口文档/openapi/openapi.yaml")
+    parser.add_argument("--output", default="docs/接口文档/openapi打包.yaml")
     args = parser.parse_args()
 
     input_path = Path(args.input).resolve()

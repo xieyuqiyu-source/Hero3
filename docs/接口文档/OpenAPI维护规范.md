@@ -5,7 +5,7 @@ Hero3 接口会持续增加，OpenAPI 按模块拆分维护。
 ## 文件职责
 
 ```text
-docs/openapi/
+docs/接口文档/openapi/
 ├── openapi.yaml          # 入口文件：服务信息、tags、paths/components 引用
 ├── paths/                # 接口路径，按业务模块拆分
 │   ├── system.yaml
@@ -30,11 +30,11 @@ docs/openapi/
 make openapi
 ```
 
-5. 将生成的 `docs/openapi.bundle.yaml` 导入 Apifox。
+5. 将生成的 `docs/接口文档/openapi打包.yaml` 导入 Apifox。
 
 ## 约定
 
-- `docs/openapi/openapi.yaml` 是维护入口。
-- `docs/openapi.bundle.yaml` 是 Apifox 导入文件，由脚本生成，不手动编辑。
+- `docs/接口文档/openapi/openapi.yaml` 是维护入口。
+- `docs/接口文档/openapi打包.yaml` 是 Apifox 导入文件，由脚本生成，不手动编辑。
 - 后端新增接口前，先补 OpenAPI；接口路径、参数、响应状态码必须和 Go handler 对齐。
 - admin 的接口诊断面板后续应从 OpenAPI 生成，避免维护两份接口清单。

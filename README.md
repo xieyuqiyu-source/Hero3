@@ -102,17 +102,18 @@ http://localhost:5174
 
 ## 设计文档
 
-- [MVP 设计文档](./docs/mvp-design.md)：记录第一版核心循环、数据归属、页面范围、接口边界、代码规模规范、移动端适配要求和开发顺序。
-- [服务器部署文档](./docs/deployment.md)：记录当前线上部署结构、发版流程、回滚和排查命令。
-- [OpenAPI 入口文档](./docs/openapi/openapi.yaml)：按模块拆分维护，用于接口调试、文档查看和前后端对齐。
-- [OpenAPI 打包文档](./docs/openapi.bundle.yaml)：由 `make openapi` 生成，导入 Apifox 使用。
+- [文档目录](./docs/文档目录.md)：按产品、系统、运维、流程、素材和接口文档分类。
+- [MVP 设计文档](./docs/产品/MVP设计.md)：记录第一版核心循环、数据归属、页面范围、接口边界、代码规模规范、移动端适配要求和开发顺序。
+- [服务器部署文档](./docs/运维部署/服务器部署文档.md)：记录当前线上部署结构、发版流程、回滚和排查命令。
+- [OpenAPI 入口文档](./docs/接口文档/openapi/openapi.yaml)：按模块拆分维护，用于接口调试、文档查看和前后端对齐。
+- [OpenAPI 打包文档](./docs/接口文档/openapi打包.yaml)：由 `make openapi` 生成，导入 Apifox 使用。
 
 ## Apifox
 
-当前接口文档按模块维护在 `docs/openapi/`：
+当前接口文档按模块维护在 `docs/接口文档/openapi/`：
 
 ```text
-docs/openapi/
+docs/接口文档/openapi/
 ├── openapi.yaml      # 入口文件
 ├── paths/            # 按模块维护接口路径
 └── schemas/          # 按领域维护请求/响应模型
@@ -124,7 +125,7 @@ docs/openapi/
 make openapi
 ```
 
-它会校验拆分后的 OpenAPI 并生成 `docs/openapi.bundle.yaml`。在 Apifox 中选择“导入数据”，格式选择 `OpenAPI/Swagger`，导入 `docs/openapi.bundle.yaml` 即可。
+它会校验拆分后的 OpenAPI 并生成 `docs/接口文档/openapi打包.yaml`。在 Apifox 中选择“导入数据”，格式选择 `OpenAPI/Swagger`，导入 `docs/接口文档/openapi打包.yaml` 即可。
 
 本地调试环境：
 
