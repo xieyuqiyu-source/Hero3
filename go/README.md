@@ -1,6 +1,8 @@
 # Hero3 Go 后端
 
-`Hero3 Go 后端` 是 Hero3 的数据与游戏规则服务。当前阶段只提供最小 API 骨架，具体账号、存档、资源、建筑、征兵、地图、战斗等业务逻辑会在后续开发中逐步接入。
+`Hero3 Go 后端` 是 Hero3 的数据与游戏规则服务。当前采用模块化单体方向：HTTP 输入输出、应用编排、通用核心能力和基础设施分层维护。
+
+当前后端已经接入账号、玩家存档、资源、建筑、征兵、NPC、战斗、武将、道具、信函、万象幻境、货币流水等基础能力，并正在建设稳定核心地基。核心地基要求玩家长期资产变更通过统一玩家状态事务、账号资产事务、奖励发放、事件管线和 Modifier 加成管线处理。
 
 ## 技术选择
 
@@ -20,10 +22,11 @@
 ```text
 go/
 ├── cmd/server/             # 服务启动入口
-├── internal/api/           # HTTP 路由与接口处理
-├── internal/config/        # 配置读取
-├── internal/game/          # 游戏业务服务占位
-├── internal/httpserver/    # HTTP Server 与中间件
+├── internal/transport/api/ # HTTP 路由与接口处理
+├── internal/app/game/      # 游戏应用服务与业务编排
+├── internal/core/          # 通用领域能力，当前包含战斗、将领事件、Modifier、事件总线、奖励契约和注册中心
+├── internal/platform/      # 配置、鉴权、HTTP Server 等平台能力
+├── internal/infrastructure/# MySQL 等基础设施实现
 ├── migrations/             # 数据库迁移占位
 ├── sql/                    # SQL 查询占位
 ├── .env.example            # 环境变量示例
@@ -160,5 +163,6 @@ curl -X POST http://localhost:8080/api/v1/players/create \
 
 - 页面展示状态放在前端，核心游戏数据以后端为准。
 - 战斗、资源结算、存档版本迁移等关键逻辑应放在 Go 后端。
-- 新业务优先放入 `internal/<domain>`，HTTP 层只做参数解析和响应封装。
+- 新业务先判断归属：HTTP 输入输出放 `internal/transport`，业务编排放 `internal/app`，可复用领域能力放 `internal/core`，数据库和外部设施放 `internal/infrastructure`。
+- HTTP 层只做参数解析、权限校验、服务调用和响应封装。
 - 数据库结构确定前，`migrations/` 与 `sql/` 先保留为空目录。

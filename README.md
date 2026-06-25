@@ -11,6 +11,17 @@ Hero3/
 └── go/     # Go 后端 API 服务
 ```
 
+Go 后端当前采用模块化单体目录：
+
+```text
+go/internal/
+├── transport/       # HTTP/API 输入输出层
+├── app/             # 应用服务与业务编排
+├── core/            # 通用领域能力，如战斗、将领事件
+├── platform/        # 鉴权、配置、HTTP Server 等平台能力
+└── infrastructure/  # MySQL 等基础设施实现
+```
+
 ## 前端
 
 前端目录：
@@ -104,6 +115,7 @@ http://localhost:5174
 
 - [文档目录](./docs/文档目录.md)：按产品、系统、运维、流程、素材和接口文档分类。
 - [MVP 设计文档](./docs/产品/MVP设计.md)：记录第一版核心循环、数据归属、页面范围、接口边界、代码规模规范、移动端适配要求和开发顺序。
+- [核心地基设计](./docs/架构/核心地基设计.md)：记录稳定核心、玩法模块接入、事务、奖励、事件和 Modifier 管线。
 - [服务器部署文档](./docs/运维部署/服务器部署文档.md)：记录当前线上部署结构、发版流程、回滚和排查命令。
 - [OpenAPI 入口文档](./docs/接口文档/openapi/openapi.yaml)：按模块拆分维护，用于接口调试、文档查看和前后端对齐。
 - [OpenAPI 打包文档](./docs/接口文档/openapi打包.yaml)：由 `make openapi` 生成，导入 Apifox 使用。

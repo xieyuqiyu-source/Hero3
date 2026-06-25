@@ -10,12 +10,12 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"hero3/internal/api"
-	"hero3/internal/config"
-	"hero3/internal/game"
-	_ "hero3/internal/general/traits" // 触发将领特性自动注册
-	"hero3/internal/httpserver"
-	"hero3/internal/storage"
+	"hero3/internal/app/game"
+	_ "hero3/internal/core/general/traits" // 触发将领特性自动注册
+	"hero3/internal/infrastructure/storage"
+	"hero3/internal/platform/config"
+	"hero3/internal/platform/httpserver"
+	"hero3/internal/transport/api"
 )
 
 func main() {
