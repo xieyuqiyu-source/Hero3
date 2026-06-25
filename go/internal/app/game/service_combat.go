@@ -1086,25 +1086,6 @@ func (s *Service) DeleteAllReports(playerID string) (GameState, error) {
 	return state, nil
 }
 
-// --- Trait dispatch helpers ---
-
-// buildActiveTraits 从玩家的 General 构建当前激活的特性列表
-// 单将领模式下直接读 state.General.Traits
-func buildActiveTraits(g *General) []general.ActiveTrait {
-	if g == nil || len(g.Traits) == 0 {
-		return nil
-	}
-	out := make([]general.ActiveTrait, 0, len(g.Traits))
-	for _, t := range g.Traits {
-		params := general.Params(t.Params)
-		out = append(out, general.ActiveTrait{
-			TraitID: t.TraitID,
-			Params:  params,
-		})
-	}
-	return out
-}
-
 // mergeIntoArmy 把指定数量的某兵种合并进玩家军队
 func mergeIntoArmy(state *GameState, unitType string, count int) {
 	if count <= 0 {
@@ -1138,32 +1119,4 @@ func armyMapToSlice(m map[string]int) []ArmyUnit {
 		}
 	}
 	return out
-}
-
-// mergeTraitOutcomes 把 trait 触发结果合并到战报中
-func mergeTraitOutcomes(report *BattleReport, outcomes map[string]general.TraitOutcome) {
-	if len(outcomes) == 0 {
-		return
-	}
-	if report.TraitOutcomes == nil {
-		report.TraitOutcomes = map[string]TraitOutcomeReport{}
-	}
-	for traitID, outcome := range outcomes {
-		report.TraitOutcomes[traitID] = TraitOutcomeReport{
-			TraitID: outcome.TraitID,
-			Name:    outcome.Name,
-			Detail:  outcome.Detail,
-		}
-		// 同时记入 TraitTriggered（保持向后兼容）
-		alreadyIn := false
-		for _, id := range report.TraitTriggered {
-			if id == traitID {
-				alreadyIn = true
-				break
-			}
-		}
-		if !alreadyIn {
-			report.TraitTriggered = append(report.TraitTriggered, traitID)
-		}
-	}
 }

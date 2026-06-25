@@ -167,33 +167,6 @@ func ComputeIntAttributeAt(base int, key string, now time.Time, sources ...Modif
 
 // --- 内置 ModifierSource 实现 ---
 
-// GeneralModifierSource 将领加成来源
-type GeneralModifierSource struct {
-	General *General
-}
-
-func (g *GeneralModifierSource) SourceName() string { return "将领" }
-
-func (g *GeneralModifierSource) ExpiresAt() []time.Time { return nil }
-
-func (g *GeneralModifierSource) Modifiers(now time.Time) []Modifier {
-	if g.General == nil || g.General.Buffs == nil {
-		return nil
-	}
-	mods := make([]Modifier, 0, len(g.General.Buffs))
-	for key, value := range g.General.Buffs {
-		if value == 0 {
-			continue
-		}
-		mods = append(mods, Modifier{
-			Key:   key,
-			Value: value,
-			Mode:  "percentAdd",
-		})
-	}
-	return mods
-}
-
 // FactionTraitModifierSource 阵营特性来源。
 type FactionTraitModifierSource struct {
 	Faction string

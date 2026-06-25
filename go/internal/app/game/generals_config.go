@@ -64,14 +64,6 @@ func GetGeneralsConfig() GeneralsConfig {
 	return cloneGeneralsConfig(activeGenerals)
 }
 
-// GetHeroConfig 根据 generalId 获取该将领的配置（用于注入 General.Traits）
-func GetHeroConfig(generalID string) (GeneralHeroConfig, bool) {
-	generalsMu.RLock()
-	defer generalsMu.RUnlock()
-	hero, ok := activeGenerals.Heroes[generalID]
-	return hero, ok
-}
-
 func SetGeneralsConfig(cfg GeneralsConfig) error {
 	// 校验配置一致性
 	if err := ValidateGeneralsConfig(cfg); err != nil {

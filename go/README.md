@@ -41,6 +41,14 @@ go/
 - `building_effects.go`：建筑产量、容量和建筑 Modifier 来源。
 - `service_building.go`：建筑升级、批量升级、极速完成等操作。
 
+武将系统当前集中在：
+
+- `general_registry.go`：武将配置查询、武将注册判断、全部武将配置列表。
+- `general_growth.go`：武将等级、经验、属性点和战斗经验计算。
+- `general_effects.go`：武将配置装配、属性拆解和 Modifier 来源。
+- `general_combat.go`：武将特性接入战斗特性总线和战报结果。
+- `service_general.go`：武将加点、洗点、换将等玩家操作。
+
 ## 本地运行
 
 启动服务：
