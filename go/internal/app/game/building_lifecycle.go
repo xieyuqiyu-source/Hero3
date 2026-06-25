@@ -107,33 +107,20 @@ func (s *Service) MutateBuilding(playerID string, mutation BuildingMutation) (Ga
 		return GameState{}, ErrBuildingNotFound
 	}
 
-	now := time.Now()
-	var before, after coreAssetSnapshot
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
-		nextState, _ := settleResources(*state, now)
-		*state = nextState
-		before = snapshotCoreAssets(state)
-
-		building := findBuildingByID(state, mutation.BuildingID)
-		if building == nil {
-			return ErrBuildingNotFound
-		}
-		if err := applyBuildingMutation(building, mutation, now); err != nil {
-			return err
-		}
-		state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
-		state.ServerTime = now.UTC().Format(resourceDateLayout)
-		nextState, _ = settleResources(*state, now)
-		*state = nextState
-		after = snapshotCoreAssets(state)
-		return nil
+	reason := firstNonEmpty(mutation.Reason, mutation.Type)
+	result, err := s.ExecuteEffects(playerID, []Effect{
+		buildingMutationToEffect(reason, mutation),
+	}, EffectContext{
+		PlayerID: playerID,
+		RefType:  reason,
+		RefID:    mutation.BuildingID,
+		Reason:   reason,
+		Source:   "building",
 	})
 	if err != nil {
 		return GameState{}, err
 	}
-	s.publishCoreAssetDiff(playerID, firstNonEmpty(mutation.Reason, mutation.Type), mutation.BuildingID, before, after, now)
-	hydrateStateForResponse(&state, now)
-	return state, nil
+	return result.State, nil
 }
 
 func findBuildingByID(state *GameState, buildingID string) *Building {

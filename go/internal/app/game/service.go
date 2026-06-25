@@ -27,6 +27,7 @@ var (
 	ErrInvalidBuildingStatus   = errors.New("invalid building status")
 	ErrInvalidBuildingMutation = errors.New("invalid building mutation")
 	ErrBuildingStatusBlocked   = errors.New("building status blocks this action")
+	ErrInvalidEffectType       = errors.New("invalid effect type")
 	ErrUnitNotFound            = errors.New("unit not found")
 	ErrNonCombatUnit           = errors.New("unit cannot participate in combat")
 	ErrInvalidBuffKey          = errors.New("invalid buff key")

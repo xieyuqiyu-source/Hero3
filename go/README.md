@@ -24,7 +24,7 @@ go/
 ├── cmd/server/             # 服务启动入口
 ├── internal/transport/api/ # HTTP 路由与接口处理
 ├── internal/app/game/      # 游戏应用服务与业务编排
-├── internal/core/          # 通用领域能力，当前包含战斗、建筑生命周期、将领事件、Modifier、事件总线、奖励契约和注册中心
+├── internal/core/          # 通用领域能力，当前包含战斗、建筑生命周期、Effect、将领事件、Modifier、事件总线、奖励契约和注册中心
 ├── internal/platform/      # 配置、鉴权、HTTP Server 等平台能力
 ├── internal/infrastructure/# MySQL 等基础设施实现
 ├── migrations/             # 数据库迁移占位
@@ -73,6 +73,15 @@ go/
 - `service_minigame.go`：万象幻境记录、鱼饵消耗、奖励兑换和兑换事件。
 
 后续活动/副本应先登记玩法模块边界，再通过奖励、事件、Modifier、建筑变更等核心入口接入长期资产。
+
+Effect Pipeline 当前集中在：
+
+- `internal/core/effect`：标准效果契约，只定义效果类型，不读写玩家存档。
+- `effect_pipeline.go`：应用层效果执行器，复用奖励、建筑变更和 Buff/Modifier 入口。
+- `item_effects.go`：道具效果已转换为标准 `reward` 效果。
+- `building_lifecycle.go`：建筑变更已通过 `building_mutation` 效果执行。
+
+后续武将特性、活动、副本如果要影响长期资产，应优先提交标准 Effect。
 
 ## 本地运行
 
