@@ -471,7 +471,7 @@ func (s *Service) Bootstrap() BootstrapResponse {
 	fishing := GetFishingConfig()
 	return BootstrapResponse{
 		GameName: "Hero3",
-		Modules: []string{
+		Modules: append([]string{
 			"player",
 			"city",
 			"resource",
@@ -480,8 +480,7 @@ func (s *Service) Bootstrap() BootstrapResponse {
 			"combat",
 			"save",
 			"item",
-			"minigame",
-		},
+		}, ListGameplayModuleIDs()...),
 		Balance:  balance,
 		Factions: factions,
 		Units:    units,

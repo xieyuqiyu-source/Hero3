@@ -66,6 +66,14 @@ go/
 - `buff_effects.go`：Buff/DeBuff 状态、过期清理、Modifier scope 校验和 Modifier 来源。
 - `service_buff.go`：Buff 发放、撤销等玩家操作。
 
+玩法模块边界当前集中在：
+
+- `gameplay_module_registry.go`：玩法模块边界声明，当前登记 `mail` 和 `minigame`。
+- `service_mail.go`：信函列表、阅读、发送、删除和附件领取。
+- `service_minigame.go`：万象幻境记录、鱼饵消耗、奖励兑换和兑换事件。
+
+后续活动/副本应先登记玩法模块边界，再通过奖励、事件、Modifier、建筑变更等核心入口接入长期资产。
+
 ## 本地运行
 
 启动服务：
