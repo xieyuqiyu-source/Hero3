@@ -1,8 +1,11 @@
-# Hero3 OpenAPI 维护规范
+# <span style="color:#4f46e5">Hero3 OpenAPI 维护规范</span>
+
+最后更新：2026-06-25
+文档状态：active
 
 Hero3 接口会持续增加，OpenAPI 按模块拆分维护。
 
-## 文件职责
+## <span style="color:#4f46e5">文件职责</span>
 
 ```text
 docs/接口文档/openapi/
@@ -19,7 +22,7 @@ docs/接口文档/openapi/
     └── common.yaml
 ```
 
-## 新增接口流程
+## <span style="color:#4f46e5">新增接口流程</span>
 
 1. 在 `paths/` 对应模块文件中新增接口。
 2. 如果有新的请求或响应结构，在 `schemas/` 对应领域文件中新增 schema。
@@ -32,7 +35,7 @@ make openapi
 
 5. 将生成的 `docs/接口文档/openapi打包.yaml` 导入 Apifox。
 
-## 约定
+## <span style="color:#4f46e5">约定</span>
 
 - `docs/接口文档/openapi/openapi.yaml` 是维护入口。
 - `docs/接口文档/openapi打包.yaml` 是 Apifox 导入文件，由脚本生成，不手动编辑。

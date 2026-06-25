@@ -1,8 +1,9 @@
-# NPC 城池系统设计文档
+# <span style="color:#16a34a">NPC 城池系统设计文档</span>
 
 最后更新：2026-05-23
+文档状态：active
 
-## 1. 设计目标
+## <span style="color:#8b5cf6">1. 设计目标</span>
 
 NPC 城池是玩家资源回流的核心入口。玩家通过攻击 NPC 城池掠夺资源，形成"征兵 → 打 NPC → 拿资源 → 再征兵"的正循环。
 
@@ -12,7 +13,7 @@ NPC 城池是玩家资源回流的核心入口。玩家通过攻击 NPC 城池�
 - 所有数值 GM 可通过配置调节，不改代码
 - 每个玩家独立生成 12 个 NPC 城池，互不影响
 
-## 2. 数据模型
+## <span style="color:#8b5cf6">2. 数据模型</span>
 
 NPC 城池与玩家城池共用相同的核心数据结构：
 
@@ -46,7 +47,7 @@ NPC 城池与玩家城池共用相同的核心数据结构：
 }
 ```
 
-## 3. 基准值
+## <span style="color:#8b5cf6">3. 基准值</span>
 
 基准 = 满级玩家无加成的数值：
 
@@ -55,7 +56,7 @@ NPC 城池与玩家城池共用相同的核心数据结构：
 | 产量基准 | 24,500/h 每种资源 | 5 × Lv.20 资源建筑 × 4,900/h |
 | 仓库基准 | 320,000 每种资源 | Lv.20 仓库 |
 
-## 4. 等级体系
+## <span style="color:#8b5cf6">4. 等级体系</span>
 
 ### 4.1 倍率配置
 
@@ -90,7 +91,7 @@ NPC 城池使用与玩家相同的惰性结算逻辑：
 
 恢复速度按兵种独立计算，受词条影响。
 
-## 5. 生成算法
+## <span style="color:#8b5cf6">5. 生成算法</span>
 
 ### 5.1 数量分配
 
@@ -160,7 +161,7 @@ NPC 城池使用与玩家相同的惰性结算逻辑：
 
 每次生成从池中随机取 12 个不重复的名字。
 
-## 6. 词条系统
+## <span style="color:#8b5cf6">6. 词条系统</span>
 
 ### 6.1 词条数量配置
 
@@ -212,7 +213,7 @@ NPC 城池使用与玩家相同的惰性结算逻辑：
 effectiveDefense := ApplyTraits(baseDefense, "cavalryDefenseBonus", npc.TraitBuffs())
 ```
 
-## 7. 侦查机制
+## <span style="color:#8b5cf6">7. 侦查机制</span>
 
 ### 7.1 侦查流程
 
@@ -233,7 +234,7 @@ effectiveDefense := ApplyTraits(baseDefense, "cavalryDefenseBonus", npc.TraitBuf
 - 当前资源精确值
 - 词条具体效果
 
-## 8. 攻击与掠夺
+## <span style="color:#8b5cf6">8. 攻击与掠夺</span>
 
 ### 8.1 攻击流程
 
@@ -261,7 +262,7 @@ effectiveDefense := ApplyTraits(baseDefense, "cavalryDefenseBonus", npc.TraitBuf
 
 守军被打空后，NPC 城池仍然可以被攻击（零损耗掠夺资源），直到守军恢复。这是设计意图——打空守军是对玩家实力的奖励。
 
-## 9. 刷新机制
+## <span style="color:#8b5cf6">9. 刷新机制</span>
 
 ### 9.1 自动刷新
 
@@ -274,7 +275,7 @@ effectiveDefense := ApplyTraits(baseDefense, "cavalryDefenseBonus", npc.TraitBuf
 - 立即生成新的 12 个城池
 - 旧城池数据完全替换
 
-## 10. GM 配置结构
+## <span style="color:#8b5cf6">10. GM 配置结构</span>
 
 所有 NPC 参数通过一个配置文件管理：
 
@@ -338,7 +339,7 @@ effectiveDefense := ApplyTraits(baseDefense, "cavalryDefenseBonus", npc.TraitBuf
 }
 ```
 
-## 11. 结算示例
+## <span style="color:#8b5cf6">11. 结算示例</span>
 
 ### 场景：玩家攻击一个中型"富矿"城池
 
@@ -362,7 +363,7 @@ effectiveDefense := ApplyTraits(baseDefense, "cavalryDefenseBonus", npc.TraitBuf
 - 实际掠夺：46,600（运载量是瓶颈）
 - 按比例分配：每种约 11,650
 
-## 12. 技术实现要点
+## <span style="color:#8b5cf6">12. 技术实现要点</span>
 
 1. **惰性结算**：NPC 资源和守军都用时间差计算，不需要定时任务
 2. **存储**：NPC 城池数据存在玩家的 state_json 中（或独立字段）
