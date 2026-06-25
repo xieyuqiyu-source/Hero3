@@ -55,24 +55,6 @@ func LoadItemsConfig(path string) error {
 	return nil
 }
 
-func GetItemsConfig() ItemsConfig {
-	itemsMu.RLock()
-	defer itemsMu.RUnlock()
-	result := make(ItemsConfig, len(itemsConfig))
-	for k, v := range itemsConfig {
-		result[k] = v
-	}
-	return result
-}
-
-func GetItemDefinition(itemID string) (ItemDefinition, bool) {
-	itemID = strings.TrimSpace(itemID)
-	itemsMu.RLock()
-	defer itemsMu.RUnlock()
-	item, ok := itemsConfig[itemID]
-	return item, ok
-}
-
 func ValidateItemsConfig(cfg ItemsConfig) error {
 	for id, item := range cfg {
 		if strings.TrimSpace(id) == "" || strings.TrimSpace(item.Name) == "" {

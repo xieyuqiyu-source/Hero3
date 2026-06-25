@@ -29,6 +29,8 @@ var (
 	ErrBuildingStatusBlocked   = errors.New("building status blocks this action")
 	ErrUnitNotFound            = errors.New("unit not found")
 	ErrNonCombatUnit           = errors.New("unit cannot participate in combat")
+	ErrInvalidBuffKey          = errors.New("invalid buff key")
+	ErrInvalidBuffMode         = errors.New("invalid buff mode")
 	ErrInvalidAmount           = errors.New("invalid recruit amount")
 	ErrQueueFull               = errors.New("recruit queue is full")
 	ErrInvalidGeneral          = errors.New("invalid general for faction")

@@ -57,6 +57,15 @@ go/
 - `service_recruit.go`：征兵、极速完成征兵等玩家操作。
 - `military_combat.go`：出兵扣兵、非战斗兵种限制、战斗单位构建和场景规则解析。
 
+道具/Buff 系统当前集中在：
+
+- `item_registry.go`：道具配置查询、道具注册判断、全部道具配置列表。
+- `inventory_state.go`：玩家背包道具增加和消耗。
+- `item_effects.go`：道具使用后的效果执行。
+- `service_item.go`：道具发放、使用等玩家操作。
+- `buff_effects.go`：Buff/DeBuff 状态、过期清理、Modifier scope 校验和 Modifier 来源。
+- `service_buff.go`：Buff 发放、撤销等玩家操作。
+
 ## 本地运行
 
 启动服务：

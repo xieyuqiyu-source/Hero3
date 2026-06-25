@@ -274,59 +274,6 @@ func (s *StaticModifierSource) Modifiers(now time.Time) []Modifier {
 	return s.Mods
 }
 
-// --- Buff 通用加成记录（GM 发放 / 活动 / 任务 / 购买 等） ---
-
-// Buff 表示一条加成记录，所有动态加成统一用此结构存储
-type Buff struct {
-	ID        string  `json:"id"`                  // 唯一标识
-	Source    string  `json:"source"`              // 来源："gm", "event", "purchase", "quest", "system"
-	Key       string  `json:"key"`                 // 属性键名，如 "productionBonus"
-	Value     float64 `json:"value"`               // 数值
-	Mode      string  `json:"mode"`                // "flat" | "percentAdd" | "percentMultiply"
-	ExpiresAt string  `json:"expiresAt,omitempty"` // 到期时间（空 = 永久）
-	CreatedAt string  `json:"createdAt"`           // 创建时间
-	Note      string  `json:"note,omitempty"`      // GM 备注
-}
-
-// BuffListSource 通用 Buff 列表加成来源
-// 从 GameState.Buffs 中读取所有动态 buff，自动过滤过期的
-type BuffListSource struct {
-	Buffs []Buff
-}
-
-func (b *BuffListSource) SourceName() string { return "活动/GM" }
-
-func (b *BuffListSource) ExpiresAt() []time.Time {
-	var times []time.Time
-	for _, buff := range b.Buffs {
-		if buff.ExpiresAt == "" {
-			continue
-		}
-		if t, err := time.Parse(resourceDateLayout, buff.ExpiresAt); err == nil {
-			times = append(times, t)
-		}
-	}
-	return times
-}
-
-func (b *BuffListSource) Modifiers(now time.Time) []Modifier {
-	var mods []Modifier
-	for _, buff := range b.Buffs {
-		// 检查是否过期
-		if buff.ExpiresAt != "" {
-			if t, err := time.Parse(resourceDateLayout, buff.ExpiresAt); err == nil && now.After(t) {
-				continue // 已过期，跳过
-			}
-		}
-		mods = append(mods, Modifier{
-			Key:   buff.Key,
-			Value: buff.Value,
-			Mode:  buff.Mode,
-		})
-	}
-	return mods
-}
-
 func init() {
 	_ = RegisterModifierSourceProvider("general", func(state *GameState) []ModifierSource {
 		return []ModifierSource{&GeneralModifierSource{General: state.General}}

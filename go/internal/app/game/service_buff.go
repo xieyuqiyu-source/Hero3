@@ -13,14 +13,8 @@ func (s *Service) GrantBuff(playerID string, key string, value float64, mode str
 		return GameState{}, ErrPlayerNotFound
 	}
 
-	// 校验 key 是否合法
-	if !IsValidStatKey(key) {
-		return GameState{}, errors.New("invalid stat key: " + key)
-	}
-
-	// 校验 mode 是否合法
-	if mode != "flat" && mode != "percentAdd" && mode != "percentMultiply" {
-		return GameState{}, errors.New("invalid mode: must be flat, percentAdd, or percentMultiply")
+	if err := validateBuffModifierSpec(key, mode); err != nil {
+		return GameState{}, err
 	}
 
 	result, err := s.GrantRewards(playerID, []Reward{{
@@ -79,23 +73,4 @@ func (s *Service) RevokeBuff(playerID string, buffID string) (GameState, error) 
 	}
 
 	return state, nil
-}
-
-// CleanExpiredBuffs 清理过期的 buff（在结算时调用）
-func cleanExpiredBuffs(state *GameState, now time.Time) {
-	if len(state.Buffs) == 0 {
-		return
-	}
-	remaining := state.Buffs[:0]
-	for _, b := range state.Buffs {
-		if b.ExpiresAt == "" {
-			remaining = append(remaining, b)
-			continue
-		}
-		if t, err := time.Parse(resourceDateLayout, b.ExpiresAt); err == nil && now.After(t) {
-			continue // 已过期，丢弃
-		}
-		remaining = append(remaining, b)
-	}
-	state.Buffs = remaining
 }
