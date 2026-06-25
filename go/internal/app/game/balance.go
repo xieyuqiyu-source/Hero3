@@ -232,11 +232,6 @@ var defaultBalance = BalanceConfig{
 	},
 }
 
-func getBuildingConfig(buildingType string) (BuildingConfig, bool) {
-	config, exists := currentBalance().Buildings[buildingType]
-	return config, exists
-}
-
 func GetBalanceConfig() BalanceConfig {
 	return currentBalance()
 }

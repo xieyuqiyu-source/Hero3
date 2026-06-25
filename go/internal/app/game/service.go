@@ -461,33 +461,6 @@ func hydrateStateForResponse(state *GameState, now time.Time) {
 	state.ActiveModifiers = GetModifierBreakdown(state, now)
 }
 
-func ensureCoreBuildings(state *GameState) bool {
-	if state == nil {
-		return false
-	}
-	required := []Building{
-		{ID: "infantry_camp-1", Type: "infantry_camp", Level: 1},
-		{ID: "cavalry_camp-1", Type: "cavalry_camp", Level: 1},
-		{ID: "weapon_bureau-1", Type: "weapon_bureau", Level: 1},
-		{ID: "armor_bureau-1", Type: "armor_bureau", Level: 1},
-	}
-	changed := false
-	for _, requiredBuilding := range required {
-		exists := false
-		for _, building := range state.Buildings {
-			if building.Type == requiredBuilding.Type {
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			state.Buildings = append(state.Buildings, requiredBuilding)
-			changed = true
-		}
-	}
-	return changed
-}
-
 func (s *Service) Bootstrap() BootstrapResponse {
 	balance := currentBalance()
 	factions := GetFactionsConfig()

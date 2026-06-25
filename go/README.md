@@ -34,6 +34,13 @@ go/
 └── README.md
 ```
 
+`internal/app/game` 仍保持同一个应用包，但已经开始按系统职责归口文件。建筑系统当前集中在：
+
+- `building_registry.go`：建筑配置查询、建筑类型判断、核心建筑补齐。
+- `building_lifecycle.go`：建筑状态变更和 `MutateBuilding` 统一入口。
+- `building_effects.go`：建筑产量、容量和建筑 Modifier 来源。
+- `service_building.go`：建筑升级、批量升级、极速完成等操作。
+
 ## 本地运行
 
 启动服务：

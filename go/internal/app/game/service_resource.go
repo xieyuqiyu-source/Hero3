@@ -341,28 +341,6 @@ func addProducedResource(current int, perHour int, elapsedSeconds float64, capac
 	return min(current+produced, capacity)
 }
 
-func calculateResourceProduction(buildings []Building, general *General) ResourceProduction {
-	production := ResourceProduction{}
-	balance := currentBalance()
-	for resourceType, value := range balance.BaseProduction {
-		production[resourceType] = value
-	}
-
-	for _, building := range buildings {
-		if !buildingIsOperational(building) {
-			continue
-		}
-		config, exists := getBuildingConfig(building.Type)
-		if !exists || config.ResourceType == "" {
-			continue
-		}
-		production[config.ResourceType] += valueByLevel(config.ProductionByLevel, building.Level)
-	}
-
-	// 注意：将领加成不在这里应用，统一由 applyProductionModifiers 通过 Modifier 管线处理
-	return production
-}
-
 // --- Modifier 管线辅助函数 ---
 
 // applySpeedBonus 通过 Modifier 管线计算速度加成后的实际时间。
@@ -438,27 +416,6 @@ func cleanExpiredBoosts(state *GameState, now time.Time) {
 			state.CapacityBoost = 0
 			state.CapacityBoostEnd = ""
 		}
-	}
-}
-
-func calculateResourceCapacity(buildings []Building) map[string]int {
-	balance := currentBalance()
-	capacity := valueByLevel(balance.Buildings["warehouse"].CapacityByLevel, 0)
-	for _, building := range buildings {
-		if !buildingIsOperational(building) {
-			continue
-		}
-		config, exists := getBuildingConfig(building.Type)
-		if !exists || len(config.CapacityByLevel) == 0 {
-			continue
-		}
-		capacity = valueByLevel(config.CapacityByLevel, building.Level)
-	}
-	return map[string]int{
-		"wood":  capacity,
-		"stone": capacity,
-		"iron":  capacity,
-		"food":  capacity,
 	}
 }
 

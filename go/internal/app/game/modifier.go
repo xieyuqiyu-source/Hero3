@@ -354,38 +354,6 @@ func (b *BuffListSource) Modifiers(now time.Time) []Modifier {
 	return mods
 }
 
-// BuildingBonusSource 功能建筑加成来源。
-type BuildingBonusSource struct {
-	Buildings []Building
-}
-
-func (b *BuildingBonusSource) SourceName() string { return "军事建筑" }
-
-func (b *BuildingBonusSource) ExpiresAt() []time.Time { return nil }
-
-func (b *BuildingBonusSource) Modifiers(now time.Time) []Modifier {
-	mods := make([]Modifier, 0, len(b.Buildings))
-	for _, building := range b.Buildings {
-		if !buildingIsOperational(building) {
-			continue
-		}
-		if building.Level <= 0 {
-			continue
-		}
-		config, exists := getBuildingConfig(building.Type)
-		if !exists {
-			continue
-		}
-		for _, mod := range config.ModifiersByLevel[building.Level] {
-			if mod.Value == 0 {
-				continue
-			}
-			mods = append(mods, mod)
-		}
-	}
-	return mods
-}
-
 func init() {
 	_ = RegisterModifierSourceProvider("general", func(state *GameState) []ModifierSource {
 		return []ModifierSource{&GeneralModifierSource{General: state.General}}
