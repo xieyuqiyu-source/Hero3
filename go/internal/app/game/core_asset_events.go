@@ -3,9 +3,10 @@ package game
 import "time"
 
 type coreAssetSnapshot struct {
-	Resources map[string]int
-	Buildings map[string]int
-	Army      map[string]int
+	Resources        map[string]int
+	Buildings        map[string]int
+	BuildingStatuses map[string]string
+	Army             map[string]int
 }
 
 func snapshotCoreAssets(state *GameState) coreAssetSnapshot {
@@ -13,11 +14,13 @@ func snapshotCoreAssets(state *GameState) coreAssetSnapshot {
 		return coreAssetSnapshot{}
 	}
 	buildings := make(map[string]int, len(state.Buildings))
+	buildingStatuses := make(map[string]string, len(state.Buildings))
 	for _, building := range state.Buildings {
 		if building.ID == "" {
 			continue
 		}
 		buildings[building.ID] = building.Level
+		buildingStatuses[building.ID] = normalizeBuildingStatus(building.Status)
 	}
 	army := make(map[string]int, len(state.Army))
 	for _, unit := range state.Army {
@@ -27,9 +30,10 @@ func snapshotCoreAssets(state *GameState) coreAssetSnapshot {
 		army[unit.UnitType] = unit.Amount
 	}
 	return coreAssetSnapshot{
-		Resources: copyResourceMap(state.Resources.Items),
-		Buildings: buildings,
-		Army:      army,
+		Resources:        copyResourceMap(state.Resources.Items),
+		Buildings:        buildings,
+		BuildingStatuses: buildingStatuses,
+		Army:             army,
 	}
 }
 
@@ -46,14 +50,17 @@ func (s *Service) publishCoreAssetDiff(playerID string, refType string, refID st
 			CreatedAt: now.UTC().Format(resourceDateLayout),
 		})
 	}
-	if changed := diffIntMaps(before.Buildings, after.Buildings); len(changed) > 0 {
+	buildingLevelChanges := diffIntMaps(before.Buildings, after.Buildings)
+	buildingStatusChanges := diffStringMaps(before.BuildingStatuses, after.BuildingStatuses)
+	if len(buildingLevelChanges) > 0 || len(buildingStatusChanges) > 0 {
 		s.publishEvent(GameEvent{
 			Type:     EventBuildingUpgraded,
 			PlayerID: playerID,
 			RefType:  refType,
 			RefID:    refID,
 			Payload: map[string]any{
-				"changes": changed,
+				"changes":       buildingLevelChanges,
+				"statusChanges": buildingStatusChanges,
 			},
 			CreatedAt: now.UTC().Format(resourceDateLayout),
 		})
@@ -85,6 +92,24 @@ func diffIntMaps(before map[string]int, after map[string]int) map[string]int {
 		}
 		if prev != 0 {
 			changes[key] = -prev
+		}
+	}
+	if len(changes) == 0 {
+		return nil
+	}
+	return changes
+}
+
+func diffStringMaps(before map[string]string, after map[string]string) map[string]string {
+	changes := map[string]string{}
+	for key, next := range after {
+		if before[key] != next {
+			changes[key] = next
+		}
+	}
+	for key := range before {
+		if _, ok := after[key]; !ok {
+			changes[key] = ""
 		}
 	}
 	if len(changes) == 0 {

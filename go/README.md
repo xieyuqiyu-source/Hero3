@@ -24,7 +24,7 @@ go/
 ├── cmd/server/             # 服务启动入口
 ├── internal/transport/api/ # HTTP 路由与接口处理
 ├── internal/app/game/      # 游戏应用服务与业务编排
-├── internal/core/          # 通用领域能力，当前包含战斗、将领事件、Modifier、事件总线、奖励契约和注册中心
+├── internal/core/          # 通用领域能力，当前包含战斗、建筑生命周期、将领事件、Modifier、事件总线、奖励契约和注册中心
 ├── internal/platform/      # 配置、鉴权、HTTP Server 等平台能力
 ├── internal/infrastructure/# MySQL 等基础设施实现
 ├── migrations/             # 数据库迁移占位

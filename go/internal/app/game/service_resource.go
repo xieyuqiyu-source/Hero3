@@ -185,6 +185,7 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 			// 升级在 settledAt 之前就完成了，直接完成
 			state.Buildings[i].Level++
 			state.Buildings[i].UpgradeEndsAt = nil
+			state.Buildings[i].Status = BuildingStatusNormal
 			changed = true
 		}
 	}
@@ -239,6 +240,7 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 			if event.buildingIdx >= 0 {
 				state.Buildings[event.buildingIdx].Level++
 				state.Buildings[event.buildingIdx].UpgradeEndsAt = nil
+				state.Buildings[event.buildingIdx].Status = BuildingStatusNormal
 				changed = true
 			}
 
@@ -347,6 +349,9 @@ func calculateResourceProduction(buildings []Building, general *General) Resourc
 	}
 
 	for _, building := range buildings {
+		if !buildingIsOperational(building) {
+			continue
+		}
 		config, exists := getBuildingConfig(building.Type)
 		if !exists || config.ResourceType == "" {
 			continue
@@ -440,6 +445,9 @@ func calculateResourceCapacity(buildings []Building) map[string]int {
 	balance := currentBalance()
 	capacity := valueByLevel(balance.Buildings["warehouse"].CapacityByLevel, 0)
 	for _, building := range buildings {
+		if !buildingIsOperational(building) {
+			continue
+		}
 		config, exists := getBuildingConfig(building.Type)
 		if !exists || len(config.CapacityByLevel) == 0 {
 			continue

@@ -366,6 +366,9 @@ func (b *BuildingBonusSource) ExpiresAt() []time.Time { return nil }
 func (b *BuildingBonusSource) Modifiers(now time.Time) []Modifier {
 	mods := make([]Modifier, 0, len(b.Buildings))
 	for _, building := range b.Buildings {
+		if !buildingIsOperational(building) {
+			continue
+		}
 		if building.Level <= 0 {
 			continue
 		}

@@ -71,7 +71,9 @@ type Building struct {
 	ID            string  `json:"id"`
 	Type          string  `json:"type"`
 	Level         int     `json:"level"`
+	Status        string  `json:"status,omitempty"`
 	UpgradeEndsAt *string `json:"upgradeEndsAt"`
+	StatusEndsAt  *string `json:"statusEndsAt,omitempty"`
 }
 
 type ArmyUnit struct {

@@ -34,6 +34,9 @@ func (s *Service) UpgradeBuilding(playerID string, buildingID string) (GameState
 		if building.UpgradeEndsAt != nil {
 			return ErrAlreadyUpgrading
 		}
+		if !buildingCanStartUpgrade(*building) {
+			return ErrBuildingStatusBlocked
+		}
 
 		config, exists := getBuildingConfig(building.Type)
 		if !exists {
@@ -63,6 +66,7 @@ func (s *Service) UpgradeBuilding(playerID string, buildingID string) (GameState
 		upgradeSeconds = applySpeedBonus(upgradeSeconds, "buildSpeedBonus", now, modSources)
 		endsAt := now.Add(time.Duration(upgradeSeconds) * time.Second).UTC().Format(resourceDateLayout)
 		building.UpgradeEndsAt = &endsAt
+		building.Status = BuildingStatusUpgrading
 
 		state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
 		state.ServerTime = now.UTC().Format(resourceDateLayout)
@@ -98,7 +102,7 @@ func (s *Service) UpgradeBuildingBatch(playerID string) (GameState, int, error) 
 		}
 		var candidates []candidate
 		for i, b := range state.Buildings {
-			if b.UpgradeEndsAt != nil {
+			if !buildingCanStartUpgrade(b) {
 				continue
 			}
 			config, exists := getBuildingConfig(b.Type)
@@ -147,6 +151,7 @@ func (s *Service) UpgradeBuildingBatch(playerID string) (GameState, int, error) 
 			upgradeSeconds = applySpeedBonus(upgradeSeconds, "buildSpeedBonus", now, batchModSources)
 			endsAt := now.Add(time.Duration(upgradeSeconds) * time.Second).UTC().Format(resourceDateLayout)
 			building.UpgradeEndsAt = &endsAt
+			building.Status = BuildingStatusUpgrading
 			upgraded++
 		}
 
@@ -216,8 +221,9 @@ func (s *Service) InstantCompleteBuilding(playerID string, buildingID string) (G
 			state.CityGold -= FlexInt(cost)
 		}
 
-		building.Level++
-		building.UpgradeEndsAt = nil
+		if err := applyBuildingMutation(building, BuildingMutation{Type: BuildingMutationCompleteUpgrade}, now); err != nil {
+			return err
+		}
 		state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
 		state.ServerTime = now.UTC().Format(resourceDateLayout)
 

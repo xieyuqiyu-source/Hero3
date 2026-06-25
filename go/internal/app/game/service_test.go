@@ -1251,6 +1251,78 @@ func TestInstantCompleteBuildingReturnsFreshModifiers(t *testing.T) {
 	}
 }
 
+func TestMutateBuildingCanDestroyBuildingAndPublishEvent(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+
+	now := time.Now()
+	account := Account{ID: "acc_building_destroy", Username: "building_destroy", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_building_destroy", "Destroy", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	events := []GameEvent{}
+	svc.SubscribeEvent(EventBuildingUpgraded, func(event GameEvent) {
+		events = append(events, event)
+	})
+
+	next, err := svc.MutateBuilding(state.Player.ID, BuildingMutation{
+		Type:       BuildingMutationDestroy,
+		BuildingID: "wood_camp-1",
+		Reason:     "test_destroy",
+	})
+	if err != nil {
+		t.Fatalf("MutateBuilding destroy failed: %v", err)
+	}
+	var found Building
+	for _, building := range next.Buildings {
+		if building.ID == "wood_camp-1" {
+			found = building
+			break
+		}
+	}
+	if found.Status != BuildingStatusDestroyed {
+		t.Fatalf("expected building destroyed, got %+v", found)
+	}
+	if len(events) != 1 || events[0].RefType != "test_destroy" {
+		t.Fatalf("expected building status event, got %+v", events)
+	}
+	statusChanges, ok := events[0].Payload["statusChanges"].(map[string]string)
+	if !ok || statusChanges["wood_camp-1"] != BuildingStatusDestroyed {
+		t.Fatalf("expected destroyed status change, got %+v", events[0].Payload)
+	}
+}
+
+func TestDestroyedBuildingCannotStartUpgrade(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+
+	now := time.Now()
+	account := Account{ID: "acc_building_blocked", Username: "building_blocked", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_building_blocked", "Blocked", "wei", "caocao", now)
+	for i := range state.Buildings {
+		if state.Buildings[i].ID == "wood_camp-1" {
+			state.Buildings[i].Status = BuildingStatusDestroyed
+			break
+		}
+	}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	_, err := svc.UpgradeBuilding(state.Player.ID, "wood_camp-1")
+	if !errors.Is(err, ErrBuildingStatusBlocked) {
+		t.Fatalf("expected blocked upgrade error, got %v", err)
+	}
+}
+
 func TestSimulateBattleDoesNotConsumeArmy(t *testing.T) {
 	setTestCombatUnitsConfig(t)
 
