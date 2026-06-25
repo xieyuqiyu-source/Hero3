@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 )
 
@@ -58,55 +57,11 @@ var unitNameAliases = map[string]string{
 	"土族": "士族",
 }
 
-// GetUnitsConfig 获取当前兵种配置
-func GetUnitsConfig() UnitsConfig {
-	unitsMu.RLock()
-	defer unitsMu.RUnlock()
-	return activeUnits
-}
-
 // GetFactionsConfig 获取当前阵营配置
 func GetFactionsConfig() FactionsConfig {
 	factionsMu.RLock()
 	defer factionsMu.RUnlock()
 	return activeFactions
-}
-
-// GetFactionUnits 获取指定阵营的兵种
-func GetFactionUnits(faction string) FactionUnits {
-	unitsMu.RLock()
-	defer unitsMu.RUnlock()
-	return activeUnits[faction]
-}
-
-// GetUnitConfig 获取指定阵营的指定兵种
-func GetUnitConfig(faction string, unitID string) (UnitConfig, bool) {
-	units := GetFactionUnits(faction)
-	if units == nil {
-		return UnitConfig{}, false
-	}
-	config, exists := units[unitID]
-	return config, exists
-}
-
-func FindFactionUnitByName(faction string, unitName string) (string, UnitConfig, bool) {
-	unitName = strings.TrimSpace(unitName)
-	if unitName == "" {
-		return "", UnitConfig{}, false
-	}
-	if alias, ok := unitNameAliases[unitName]; ok {
-		unitName = alias
-	}
-	units := GetFactionUnits(faction)
-	if units == nil {
-		return "", UnitConfig{}, false
-	}
-	for unitID, config := range units {
-		if strings.TrimSpace(config.Name) == unitName {
-			return unitID, config, true
-		}
-	}
-	return "", UnitConfig{}, false
 }
 
 // LoadFactionsConfig 从 JSON 文件加载阵营配置

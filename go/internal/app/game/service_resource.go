@@ -299,20 +299,7 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 			}
 			if now.After(endsAt) || now.Equal(endsAt) {
 				// 征兵完成，加入军队
-				found := false
-				for i, unit := range state.Army {
-					if unit.UnitType == queue.UnitType {
-						state.Army[i].Amount += queue.Amount
-						found = true
-						break
-					}
-				}
-				if !found {
-					state.Army = append(state.Army, ArmyUnit{
-						UnitType: queue.UnitType,
-						Amount:   queue.Amount,
-					})
-				}
+				AddArmyUnit(&state, queue.UnitType, queue.Amount)
 				changed = true
 			} else {
 				remaining = append(remaining, queue)

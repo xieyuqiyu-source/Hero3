@@ -49,6 +49,14 @@ go/
 - `general_combat.go`：武将特性接入战斗特性总线和战报结果。
 - `service_general.go`：武将加点、洗点、换将等玩家操作。
 
+兵种/军事系统当前集中在：
+
+- `unit_registry.go`：兵种配置查询、兵种注册判断、按名称查找兵种。
+- `army_state.go`：玩家兵力增加、兵力切片和 map 转换、战斗后兵力合并。
+- `recruit_timing.go`：征兵时长和征兵速度加成计算。
+- `service_recruit.go`：征兵、极速完成征兵等玩家操作。
+- `military_combat.go`：出兵扣兵、非战斗兵种限制、战斗单位构建和场景规则解析。
+
 ## 本地运行
 
 启动服务：
