@@ -12,7 +12,6 @@ import {
   Warehouse,
   Package,
   Shield,
-  ShieldAlert,
   Settings,
 } from 'lucide-react'
 import ThemeToggle from './ThemeToggle'
@@ -37,7 +36,6 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'city', label: '城池', icon: Castle },
   { key: 'military', label: '军事', icon: Swords },
   { key: 'map', label: '地图', icon: Map },
-  { key: 'pvp', label: '征战', icon: ShieldAlert },
   { key: 'settings', label: '设置', icon: Settings },
 ]
 

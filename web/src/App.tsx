@@ -13,7 +13,6 @@ import ReportSharePage from './pages/report/ReportSharePage'
 import CityPage from './pages/city'
 import MilitaryPage from './pages/military'
 import MapPage from './pages/map'
-import PvpPage from './pages/pvp'
 import NewsPage from './pages/news'
 import MailPage from './pages/mail'
 import NoticePage from './pages/notice'
@@ -49,7 +48,6 @@ function App() {
             <Route path="/city" element={<CityPage />} />
             <Route path="/military" element={<MilitaryPage />} />
             <Route path="/map" element={<MapPage />} />
-            <Route path="/pvp" element={<PvpPage />} />
             <Route path="/news" element={<NewsPage />} />
             <Route path="/mail" element={<MailPage />} />
             <Route path="/notice" element={<NoticePage />} />
