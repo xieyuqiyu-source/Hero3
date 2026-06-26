@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"hero3/internal/combat"
+	"hero3/internal/general"
 )
 
 // ListPvpTargets 返回当前玩家可攻击目标，排除自己和同账号存档。
@@ -357,12 +358,72 @@ func (s *Service) settlePvpMarch(marchID string, now time.Time) error {
 	}
 	defenderUnits, defenderSources := buildPlayerDefenseCombatUnits(defenderState, now)
 	ruleID := "official_attack"
+	attackerArmy := buildCombatArmy(attackerState.Player.Faction, attackerUnits)
+	defenderArmy := buildCombatArmy(defenderState.Player.Faction, defenderUnits)
+	attackerTraits := buildActiveTraits(attackerState.General)
+	defenderTraits := buildActiveTraits(defenderState.General)
+
+	beforeAttackCtx := &general.BeforeBattleContext{
+		Attacker:          &attackerArmy,
+		Defender:          &defenderArmy,
+		AttackerOwnsTrait: true,
+		DefenderOwnsTrait: false,
+		IsPvP:             true,
+		SameFaction:       attackerState.Player.Faction == defenderState.Player.Faction,
+	}
+	general.Dispatch(beforeAttackCtx, attackerTraits)
+	capturedToArmy := applyPvpCapturedUnits(&attackerState, &defenderState, defenderSources, beforeAttackCtx.CapturedToArmy, false)
+	capturedToGarrison := applyPvpCapturedUnits(&attackerState, &defenderState, defenderSources, beforeAttackCtx.CapturedToGarrison, true)
+
+	beforeDefenseCtx := &general.BeforeBattleContext{
+		Attacker:          &attackerArmy,
+		Defender:          &defenderArmy,
+		AttackerOwnsTrait: false,
+		DefenderOwnsTrait: true,
+		IsPvP:             true,
+		SameFaction:       attackerState.Player.Faction == defenderState.Player.Faction,
+	}
+	general.Dispatch(beforeDefenseCtx, defenderTraits)
+
 	result := combat.Resolve(combat.CombatInput{
 		RuleID:   ruleID,
-		Attacker: buildCombatArmy(attackerState.Player.Faction, attackerUnits),
-		Defender: buildCombatArmy(defenderState.Player.Faction, defenderUnits),
+		Attacker: attackerArmy,
+		Defender: defenderArmy,
 	})
+	afterAttackCtx := &general.AfterCombatResolveContext{
+		Result:            &result,
+		Attacker:          &attackerArmy,
+		Defender:          &defenderArmy,
+		AttackerOwnsTrait: true,
+		DefenderOwnsTrait: false,
+		IsAttackerOnly:    true,
+	}
+	general.Dispatch(afterAttackCtx, attackerTraits)
+	afterDefenseCtx := &general.AfterCombatResolveContext{
+		Result:            &result,
+		Attacker:          &attackerArmy,
+		Defender:          &defenderArmy,
+		AttackerOwnsTrait: false,
+		DefenderOwnsTrait: true,
+		IsAttackerOnly:    false,
+	}
+	general.Dispatch(afterDefenseCtx, defenderTraits)
+
 	report := applyPlayerBattleResult(&attackerState, &defenderState, result, attackerUnits, defenderSources, "pvp_attack", now)
+	report.CapturedUnits = capturedToArmy
+	report.CapturedToGarrison = capturedToGarrison
+	mergeTraitOutcomes(&report, beforeAttackCtx.Triggered)
+	mergeTraitOutcomes(&report, beforeDefenseCtx.Triggered)
+	mergeTraitOutcomes(&report, afterAttackCtx.Triggered)
+	mergeTraitOutcomes(&report, afterDefenseCtx.Triggered)
+	applyPvpAfterBattleTraits(&report, &attackerState, &defenderState, attackerTraits, defenderTraits)
+	attackerExp := calculatePvpGeneralExpFromLosses(result.DefenderLosses)
+	attackerExpResult := applyGeneralBattleExp(attackerState.General, attackerExp)
+	if attackerExpResult.Gained > 0 {
+		report.GeneralExpGained = attackerExpResult.Gained
+		report.GeneralLevelBefore = attackerExpResult.LevelBefore
+		report.GeneralLevelAfter = attackerExpResult.LevelAfter
+	}
 	defenderReport := report
 	defenderReport.ID = "br_" + randomID(8)
 	defenderReport.PlayerID = defenderState.Player.ID
@@ -370,6 +431,17 @@ func (s *Service) settlePvpMarch(marchID string, now time.Time) error {
 	defenderReport.PlayerName = defenderState.Player.Nickname
 	defenderReport.TargetID = attackerState.Player.ID
 	defenderReport.TargetName = attackerState.Player.Nickname
+	defenderExp := calculatePvpGeneralExpFromLosses(result.AttackerLosses)
+	defenderExpResult := applyGeneralBattleExp(defenderState.General, defenderExp)
+	if defenderExpResult.Gained > 0 {
+		defenderReport.GeneralExpGained = defenderExpResult.Gained
+		defenderReport.GeneralLevelBefore = defenderExpResult.LevelBefore
+		defenderReport.GeneralLevelAfter = defenderExpResult.LevelAfter
+	} else {
+		defenderReport.GeneralExpGained = 0
+		defenderReport.GeneralLevelBefore = 0
+		defenderReport.GeneralLevelAfter = 0
+	}
 
 	nowStr := now.UTC().Format(resourceDateLayout)
 	attackerState.ServerTime = nowStr
@@ -550,4 +622,131 @@ func copyIntMap(source map[string]int) map[string]int {
 		next[key] = value
 	}
 	return next
+}
+
+func applyPvpCapturedUnits(attackerState *GameState, defenderState *GameState, sources []defenderUnitSource, captured map[string]int, toGarrison bool) map[string]int {
+	if len(captured) == 0 {
+		return nil
+	}
+	sourceByID := map[string]defenderUnitSource{}
+	for _, source := range sources {
+		sourceByID[source.CombatID] = source
+	}
+	applied := map[string]int{}
+	for combatID, count := range captured {
+		if count <= 0 {
+			continue
+		}
+		source, ok := sourceByID[combatID]
+		if !ok {
+			unitType := strings.TrimSpace(strings.Split(combatID, "@")[0])
+			if unitType == "" {
+				continue
+			}
+			source = defenderUnitSource{CombatID: combatID, UnitType: unitType, Pool: defenderPoolArmy}
+		}
+		if source.Pool == defenderPoolGarrison {
+			deductArmyUnit(&defenderState.GarrisonArmy, source.UnitType, count)
+		} else {
+			deductArmyUnit(&defenderState.Army, source.UnitType, count)
+		}
+		if toGarrison {
+			addToArmy(&attackerState.GarrisonArmy, source.UnitType, count)
+		} else {
+			addToArmy(&attackerState.Army, source.UnitType, count)
+		}
+		applied[source.UnitType] += count
+	}
+	cleanArmyUnits(&attackerState.Army)
+	cleanArmyUnits(&attackerState.GarrisonArmy)
+	cleanArmyUnits(&defenderState.Army)
+	cleanArmyUnits(&defenderState.GarrisonArmy)
+	if len(applied) == 0 {
+		return nil
+	}
+	return applied
+}
+
+func applyPvpAfterBattleTraits(report *BattleReport, attackerState *GameState, defenderState *GameState, attackerTraits []general.ActiveTrait, defenderTraits []general.ActiveTrait) {
+	attackerArmy := armySliceToMap(attackerState.Army)
+	attackerCtx := &general.AfterBattleContext{
+		PlayerArmy:   attackerArmy,
+		PlayerLosses: report.LostUnits,
+		IsAttacker:   true,
+		Won:          report.Result == "attacker_victory",
+	}
+	general.Dispatch(attackerCtx, attackerTraits)
+	if len(attackerCtx.Revived) > 0 {
+		attackerState.Army = armyMapToSlice(attackerArmy)
+		report.RevivedUnits = mergeArmyMaps(report.RevivedUnits, attackerCtx.Revived)
+	}
+	mergeTraitOutcomes(report, attackerCtx.Triggered)
+
+	defenderArmy := mergeArmyMaps(armySliceToMap(defenderState.Army), armySliceToMap(defenderState.GarrisonArmy))
+	defenderCtx := &general.AfterBattleContext{
+		PlayerArmy:   defenderArmy,
+		PlayerLosses: report.DefenderLostUnits,
+		IsAttacker:   false,
+		Won:          report.Result == "defender_victory",
+	}
+	general.Dispatch(defenderCtx, defenderTraits)
+	if len(defenderCtx.Revived) > 0 {
+		applyDefenderRevivedByPools(defenderState, report, defenderCtx.Revived)
+		report.RevivedUnits = mergeArmyMaps(report.RevivedUnits, defenderCtx.Revived)
+	}
+	mergeTraitOutcomes(report, defenderCtx.Triggered)
+}
+
+func applyDefenderRevivedByPools(defenderState *GameState, report *BattleReport, revived map[string]int) {
+	for unitType, revivedCount := range revived {
+		if revivedCount <= 0 {
+			continue
+		}
+		mainLost := report.DefenderArmyLostUnits[unitType]
+		garrisonLost := report.DefenderGarrisonLostUnits[unitType]
+		totalLost := mainLost + garrisonLost
+		if totalLost <= 0 {
+			addToArmy(&defenderState.Army, unitType, revivedCount)
+			continue
+		}
+		mainRevived := int(math.Floor(float64(revivedCount) * float64(mainLost) / float64(totalLost)))
+		if mainLost > 0 && mainRevived == 0 {
+			mainRevived = 1
+		}
+		if mainRevived > revivedCount {
+			mainRevived = revivedCount
+		}
+		garrisonRevived := revivedCount - mainRevived
+		if mainRevived > 0 {
+			addToArmy(&defenderState.Army, unitType, mainRevived)
+		}
+		if garrisonRevived > 0 {
+			addToArmy(&defenderState.GarrisonArmy, unitType, garrisonRevived)
+		}
+	}
+	cleanArmyUnits(&defenderState.Army)
+	cleanArmyUnits(&defenderState.GarrisonArmy)
+}
+
+func calculatePvpGeneralExpFromLosses(losses []combat.UnitLoss) int {
+	total := 0
+	for _, loss := range losses {
+		if loss.Losses <= 0 {
+			continue
+		}
+		unitType := strings.TrimSpace(strings.Split(loss.ID, "@")[0])
+		if unitType == "" {
+			continue
+		}
+		_, unitCfg, ok := FindUnitConfigByID(unitType)
+		if !ok {
+			continue
+		}
+		upkeep := unitCfg.Stats["upkeep"]
+		if upkeep <= 0 {
+			continue
+		}
+		total += loss.Losses * upkeep
+	}
+	return total
 }

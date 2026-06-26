@@ -21,6 +21,8 @@ tags:
   description: 军事与征兵
 - name: Map
   description: 地图、NPC 城池与战斗
+- name: PVP
+  description: 玩家互攻、行军队列和行军加速
 - name: News
   description: 军情与战报
 - name: Mail
@@ -80,6 +82,16 @@ paths:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1players~1attack
   /api/v1/map/players/reinforce:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1players~1reinforce
+  /api/v1/pvp/targets:
+    $ref: ./paths/pvp.yaml#/~1api~1v1~1pvp~1targets
+  /api/v1/pvp/targets/{targetPlayerId}:
+    $ref: ./paths/pvp.yaml#/~1api~1v1~1pvp~1targets~1{targetPlayerId}
+  /api/v1/pvp/attack:
+    $ref: ./paths/pvp.yaml#/~1api~1v1~1pvp~1attack
+  /api/v1/pvp/marches:
+    $ref: ./paths/pvp.yaml#/~1api~1v1~1pvp~1marches
+  /api/v1/pvp/marches/{marchId}/accelerate:
+    $ref: ./paths/pvp.yaml#/~1api~1v1~1pvp~1marches~1{marchId}~1accelerate
   /api/v1/news/reports:
     $ref: ./paths/news.yaml#/~1api~1v1~1news~1reports
   /api/v1/mails:
@@ -126,6 +138,8 @@ paths:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1resources~1adjust
   /api/v1/admin/balance:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1balance
+  /api/v1/admin/march-config:
+    $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1march-config
   /api/v1/admin/npc-config:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1npc-config
   /api/v1/admin/fishing-config:
@@ -260,6 +274,28 @@ components:
       $ref: ./schemas/map.yaml#/AttackPlayerRequest
     AttackPlayerResponse:
       $ref: ./schemas/map.yaml#/AttackPlayerResponse
+    MarchAccelerateConfig:
+      $ref: ./schemas/pvp.yaml#/MarchAccelerateConfig
+    MarchConfig:
+      $ref: ./schemas/pvp.yaml#/MarchConfig
+    PvpTarget:
+      $ref: ./schemas/pvp.yaml#/PvpTarget
+    PvpTargetPage:
+      $ref: ./schemas/pvp.yaml#/PvpTargetPage
+    PvpAttackRequest:
+      $ref: ./schemas/pvp.yaml#/PvpAttackRequest
+    PvpAttackResponse:
+      $ref: ./schemas/pvp.yaml#/PvpAttackResponse
+    PvpMarch:
+      $ref: ./schemas/pvp.yaml#/PvpMarch
+    PvpMarchView:
+      $ref: ./schemas/pvp.yaml#/PvpMarchView
+    PvpMarchPage:
+      $ref: ./schemas/pvp.yaml#/PvpMarchPage
+    PvpAccelerateRequest:
+      $ref: ./schemas/pvp.yaml#/PvpAccelerateRequest
+    PvpAccelerateResponse:
+      $ref: ./schemas/pvp.yaml#/PvpAccelerateResponse
     ReinforcePlayerRequest:
       $ref: ./schemas/map.yaml#/ReinforcePlayerRequest
     ReinforcePlayerResponse:

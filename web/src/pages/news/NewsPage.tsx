@@ -10,6 +10,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
   plunder:   { label: '掠夺', color: 'text-amber-600 bg-amber-500/10' },
   scout:     { label: '侦查', color: 'text-blue-600 bg-blue-500/10' },
   reinforce: { label: '增援', color: 'text-green-600 bg-green-500/10' },
+  pvp_attack: { label: '征战', color: 'text-rose-600 bg-rose-500/10' },
 }
 
 const EMPTY_REPORTS: BattleReport[] = []

@@ -124,6 +124,45 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/march-config:
+  get:
+    tags:
+    - Admin
+    summary: GM 读取 PVP 行军配置
+    description: 读取行军最大/最短时间、速度换算倍率和加速配置。
+    operationId: adminGetMarchConfig
+    responses:
+      '200':
+        description: 当前 PVP 行军配置
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarchConfig'
+  put:
+    tags:
+    - Admin
+    summary: GM 保存 PVP 行军配置
+    description: 保存后影响后续新创建的行军；已出发行军继续使用创建时固化的配置。
+    operationId: adminUpdateMarchConfig
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MarchConfig'
+    responses:
+      '200':
+        description: 保存后的 PVP 行军配置
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarchConfig'
+      '400':
+        description: 配置格式或内容不合法
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
 /api/v1/admin/npc-config:
   get:
     tags:

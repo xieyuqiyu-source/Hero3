@@ -200,15 +200,8 @@ AttackPlayerRequest:
         type: integer
         minimum: 1
 AttackPlayerResponse:
-  type: object
-  required:
-  - battleReport
-  - state
-  properties:
-    battleReport:
-      $ref: '#/components/schemas/BattleReport'
-    state:
-      $ref: '#/components/schemas/GameState'
+  allOf:
+  - $ref: '#/components/schemas/PvpAttackResponse'
 ReinforcePlayerRequest:
   type: object
   required:

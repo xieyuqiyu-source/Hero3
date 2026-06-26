@@ -23,9 +23,10 @@ import FishingConfigPanel from '@/components/FishingConfigPanel'
 import GoldLedgerPanel from '@/components/GoldLedgerPanel'
 import MailAdminPanel from '@/components/MailAdminPanel'
 import AnnouncementAdminPanel from '@/components/AnnouncementAdminPanel'
+import MarchConfigPanel from '@/components/MarchConfigPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
-import { Sliders, MapPin, Swords, Flag, Shield, Users, Fish } from 'lucide-react'
+import { Sliders, MapPin, Swords, Flag, Shield, Users, Fish, Clock } from 'lucide-react'
 
 function App() {
   const [activePage, setActivePage] = useState<AdminPage>('overview')
@@ -104,6 +105,9 @@ function App() {
             </CollapsiblePanel>
             <CollapsiblePanel icon={<Swords size={16} className="text-[var(--color-accent)]" />} title="战斗规则">
               <CombatConfigPanel />
+            </CollapsiblePanel>
+            <CollapsiblePanel icon={<Clock size={16} className="text-[var(--color-accent)]" />} title="行军配置">
+              <MarchConfigPanel />
             </CollapsiblePanel>
             <CollapsiblePanel icon={<Flag size={16} className="text-[var(--color-accent)]" />} title="阵营配置">
               <FactionsConfigPanel />

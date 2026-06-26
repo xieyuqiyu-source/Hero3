@@ -132,8 +132,8 @@
   post:
     tags:
     - Map
-    summary: 攻击其他玩家城池
-    description: 玩家互攻基础接口。攻击方从主军队出征；防守方主军队和驻防军队共同参与防守，战损按来源分别扣减。
+    summary: 兼容入口：攻击其他玩家并创建 PVP 行军
+    description: 兼容旧路径。当前实现与 /api/v1/pvp/attack 相同：攻击方从主军队出征并创建行军，不立即结算战斗。
     operationId: attackPlayerCity
     requestBody:
       required: true
@@ -142,8 +142,8 @@
           schema:
             $ref: '#/components/schemas/AttackPlayerRequest'
     responses:
-      '200':
-        description: 玩家互攻战斗结算结果和攻击方最新状态
+      '201':
+        description: PVP 行军已创建
         content:
           application/json:
             schema:

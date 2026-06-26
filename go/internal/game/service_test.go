@@ -226,6 +226,16 @@ func setTestCombatUnitsConfig(t *testing.T) {
 					"upkeep":          2,
 				},
 			},
+			"weiCart": UnitConfig{
+				Name:     "辎重车",
+				Category: "siege",
+				Role:     "transport",
+				Stats: map[string]int{
+					"speed":         4,
+					"carryCapacity": 20,
+					"upkeep":        0,
+				},
+			},
 		},
 		"shu": FactionUnits{
 			"shuInfantry": UnitConfig{
@@ -249,6 +259,43 @@ func setTestCombatUnitsConfig(t *testing.T) {
 		activeUnits = originalUnits
 		unitsMu.Unlock()
 	})
+}
+
+func setTestBalanceConfig(t *testing.T, mutate func(*BalanceConfig)) {
+	t.Helper()
+	original := GetBalanceConfig()
+	next := GetBalanceConfig()
+	mutate(&next)
+	if err := SetBalanceConfig(next); err != nil {
+		t.Fatalf("set balance config: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := SetBalanceConfig(original); err != nil {
+			t.Fatalf("restore balance config: %v", err)
+		}
+	})
+}
+
+func createPvpTestPlayers(t *testing.T, svc *Service, now time.Time, attackerID string, defenderID string) (GameState, GameState) {
+	t.Helper()
+	repo := svc.repo.(*MemoryRepository)
+	attackerAccount := Account{ID: "acc_" + attackerID, Username: attackerID, PasswordHash: "x", CreatedAt: now}
+	defenderAccount := Account{ID: "acc_" + defenderID, Username: defenderID, PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(attackerAccount); err != nil {
+		t.Fatalf("create attacker account: %v", err)
+	}
+	if err := repo.CreateAccount(defenderAccount); err != nil {
+		t.Fatalf("create defender account: %v", err)
+	}
+	attacker := newPlayerState(attackerID, "Attacker", "wei", "caocao", now)
+	defender := newPlayerState(defenderID, "Defender", "shu", "liubei", now)
+	if err := repo.CreatePlayer(attackerAccount.ID, attacker, now); err != nil {
+		t.Fatalf("create attacker: %v", err)
+	}
+	if err := repo.CreatePlayer(defenderAccount.ID, defender, now); err != nil {
+		t.Fatalf("create defender: %v", err)
+	}
+	return attacker, defender
 }
 
 func TestValidateGeneralsConfigRejectsUnsafeTraitParams(t *testing.T) {
@@ -1715,6 +1762,309 @@ func TestAttackPlayerUsesGarrisonAndDeductsGarrisonLosses(t *testing.T) {
 	if reportsAfter[0].DefenderGarrisonLostUnits["weiInfantry"] != 90 {
 		t.Fatalf("expected report to track garrison losses, got %+v", reportsAfter[0].DefenderGarrisonLostUnits)
 	}
+}
+
+func TestPvpAttackValidationMarchConfigAndVisibility(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	setTestBalanceConfig(t, func(balance *BalanceConfig) {
+		balance.March = MarchConfig{
+			MaxDurationSeconds: 10800,
+			MinDurationSeconds: 300,
+			SpeedScale:         1,
+			Accelerate: MarchAccelerateConfig{
+				Enabled:             true,
+				CostCityGold:        40,
+				ReduceRate:          0.5,
+				MinRemainingSeconds: 300,
+			},
+		}
+	})
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	attacker, defender := createPvpTestPlayers(t, svc, now, "player_pvp_rules_attacker", "player_pvp_rules_defender")
+	attacker.Army = []ArmyUnit{
+		{UnitType: "weiInfantry", Amount: 20},
+		{UnitType: "weiCavalry", Amount: 20},
+		{UnitType: "weiCart", Amount: 5},
+	}
+	attacker.CityGold = 200
+	defender.Army = []ArmyUnit{{UnitType: "shuInfantry", Amount: 50}}
+	if err := repo.SaveState(attacker, now); err != nil {
+		t.Fatalf("save attacker: %v", err)
+	}
+	if err := repo.SaveState(defender, now); err != nil {
+		t.Fatalf("save defender: %v", err)
+	}
+
+	if _, err := svc.AttackPlayer(AttackPlayerRequest{PlayerID: attacker.Player.ID, TargetPlayerID: attacker.Player.ID, Units: map[string]int{"weiInfantry": 1}}); !errors.Is(err, ErrInvalidPlayerTarget) {
+		t.Fatalf("expected ErrInvalidPlayerTarget, got %v", err)
+	}
+	sameAccount := newPlayerState("player_pvp_rules_same_account", "SameAccount", "wei", "caocao", now)
+	if err := repo.CreatePlayer("acc_"+attacker.Player.ID, sameAccount, now); err != nil {
+		t.Fatalf("create same account player: %v", err)
+	}
+	if _, err := svc.AttackPlayer(AttackPlayerRequest{PlayerID: attacker.Player.ID, TargetPlayerID: sameAccount.Player.ID, Units: map[string]int{"weiInfantry": 1}}); !errors.Is(err, ErrSameAccountTarget) {
+		t.Fatalf("expected ErrSameAccountTarget, got %v", err)
+	}
+	if _, err := svc.AttackPlayer(AttackPlayerRequest{PlayerID: attacker.Player.ID, TargetPlayerID: defender.Player.ID, Units: map[string]int{"weiInfantry": 999}}); !errors.Is(err, ErrInsufficientArmy) {
+		t.Fatalf("expected ErrInsufficientArmy, got %v", err)
+	}
+	if _, err := svc.AttackPlayer(AttackPlayerRequest{PlayerID: attacker.Player.ID, TargetPlayerID: defender.Player.ID, Units: map[string]int{"weiCart": 1}}); !errors.Is(err, ErrNonCombatUnit) {
+		t.Fatalf("expected ErrNonCombatUnit, got %v", err)
+	}
+
+	result, err := svc.AttackPlayer(AttackPlayerRequest{
+		PlayerID:       attacker.Player.ID,
+		TargetPlayerID: defender.Player.ID,
+		Units:          map[string]int{"weiInfantry": 10, "weiCavalry": 10},
+	})
+	if err != nil {
+		t.Fatalf("AttackPlayer failed: %v", err)
+	}
+	if result.DurationSeconds != 1800 || result.SlowestSpeed != 6 {
+		t.Fatalf("expected slowest speed 6 and duration 1800, got speed=%d duration=%d", result.SlowestSpeed, result.DurationSeconds)
+	}
+	if result.March.AccelerateCostCityGold != 40 || result.March.SpeedScale != 1 {
+		t.Fatalf("expected march to freeze original config, got %+v", result.March)
+	}
+	setTestBalanceConfig(t, func(balance *BalanceConfig) {
+		balance.March.SpeedScale = 10
+		balance.March.Accelerate.CostCityGold = 1
+	})
+	storedMarch, err := repo.GetMarchByID(result.MarchID)
+	if err != nil {
+		t.Fatalf("get march: %v", err)
+	}
+	if storedMarch.SpeedScale != 1 || storedMarch.AccelerateCostCityGold != 40 {
+		t.Fatalf("expected stored march config unaffected by GM change, got %+v", storedMarch)
+	}
+
+	attackerViews, err := svc.ListPvpMarches(attacker.Player.ID, time.Now())
+	if err != nil {
+		t.Fatalf("list attacker marches: %v", err)
+	}
+	defenderViews, err := svc.ListPvpMarches(defender.Player.ID, time.Now())
+	if err != nil {
+		t.Fatalf("list defender marches: %v", err)
+	}
+	if len(attackerViews) != 1 || attackerViews[0].Direction != "outgoing" || attackerViews[0].Units["weiInfantry"] != 10 {
+		t.Fatalf("expected outgoing view with units, got %+v", attackerViews)
+	}
+	if len(defenderViews) != 1 || defenderViews[0].Direction != "incoming" || len(defenderViews[0].Units) != 0 {
+		t.Fatalf("expected incoming view without units, got %+v", defenderViews)
+	}
+	if err := svc.SettleDueMarches(time.Now()); err != nil {
+		t.Fatalf("settle before arrival: %v", err)
+	}
+	if _, total, err := repo.ListReports(attacker.Player.ID, 10, 0); err != nil || total != 0 {
+		t.Fatalf("expected no report before arrival, total=%d err=%v", total, err)
+	}
+}
+
+func TestPvpMarchAccelerateUsesFrozenConfig(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	setTestBalanceConfig(t, func(balance *BalanceConfig) {
+		balance.March.Accelerate.CostCityGold = 40
+		balance.March.Accelerate.ReduceRate = 0.5
+		balance.March.Accelerate.MinRemainingSeconds = 300
+	})
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	attacker, defender := createPvpTestPlayers(t, svc, now, "player_pvp_speed_attacker", "player_pvp_speed_defender")
+	attacker.Army = []ArmyUnit{{UnitType: "weiCavalry", Amount: 20}}
+	attacker.CityGold = 100
+	defender.Army = []ArmyUnit{{UnitType: "shuInfantry", Amount: 20}}
+	_ = repo.SaveState(attacker, now)
+	_ = repo.SaveState(defender, now)
+
+	result, err := svc.AttackPlayer(AttackPlayerRequest{PlayerID: attacker.Player.ID, TargetPlayerID: defender.Player.ID, Units: map[string]int{"weiCavalry": 10}})
+	if err != nil {
+		t.Fatalf("AttackPlayer failed: %v", err)
+	}
+	accelerateAt := time.Now().UTC()
+	march := result.March
+	march.ArrivesAt = accelerateAt.Add(1000 * time.Second).Format(time.RFC3339)
+	if err := repo.UpdateMarch(march); err != nil {
+		t.Fatalf("update march: %v", err)
+	}
+	setTestBalanceConfig(t, func(balance *BalanceConfig) {
+		balance.March.Accelerate.CostCityGold = 1
+		balance.March.Accelerate.ReduceRate = 0.1
+		balance.March.Accelerate.MinRemainingSeconds = 1
+	})
+
+	view, state, err := svc.AcceleratePvpMarch(attacker.Player.ID, march.ID, accelerateAt)
+	if err != nil {
+		t.Fatalf("AcceleratePvpMarch failed: %v", err)
+	}
+	if int(state.CityGold) != 60 {
+		t.Fatalf("expected frozen cost 40 to be deducted, cityGold=%d", int(state.CityGold))
+	}
+	if view.RemainingSeconds != 500 || view.AcceleratedTimes != 1 {
+		t.Fatalf("expected remaining halved to 500, got %+v", view)
+	}
+
+	march, _ = repo.GetMarchByID(march.ID)
+	march.ArrivesAt = accelerateAt.Add(400 * time.Second).Format(time.RFC3339)
+	_ = repo.UpdateMarch(march)
+	view, _, err = svc.AcceleratePvpMarch(attacker.Player.ID, march.ID, accelerateAt)
+	if err != nil {
+		t.Fatalf("second accelerate failed: %v", err)
+	}
+	if view.RemainingSeconds != 300 {
+		t.Fatalf("expected min remaining 300, got %d", view.RemainingSeconds)
+	}
+
+	march, _ = repo.GetMarchByID(march.ID)
+	march.Status = MarchStatusResolved
+	_ = repo.UpdateMarch(march)
+	if _, _, err := svc.AcceleratePvpMarch(attacker.Player.ID, march.ID, accelerateAt); !errors.Is(err, ErrMarchNotAccelerable) {
+		t.Fatalf("expected resolved march not accelerable, got %v", err)
+	}
+}
+
+func TestPvpNoGuardSettlementIsIdempotentAndPlundersSafely(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	attacker, defender := createPvpTestPlayers(t, svc, now, "player_pvp_noguard_attacker", "player_pvp_noguard_defender")
+	attacker.Army = []ArmyUnit{{UnitType: "weiCavalry", Amount: 10}}
+	attacker.Resources.Items = map[string]int{"wood": 0, "stone": 0, "iron": 0, "food": 0}
+	attacker.Resources.Capacity = map[string]int{"wood": 1000, "stone": 1000, "iron": 1000, "food": 1000}
+	defender.Army = nil
+	defender.GarrisonArmy = nil
+	defender.Resources.Items = map[string]int{"wood": 20, "stone": 100, "iron": 0, "food": 0}
+	defender.Resources.Capacity = map[string]int{"wood": 1000, "stone": 1000, "iron": 1000, "food": 1000}
+	_ = repo.SaveState(attacker, now)
+	_ = repo.SaveState(defender, now)
+
+	result, err := svc.AttackPlayer(AttackPlayerRequest{PlayerID: attacker.Player.ID, TargetPlayerID: defender.Player.ID, Units: map[string]int{"weiCavalry": 10}})
+	if err != nil {
+		t.Fatalf("AttackPlayer failed: %v", err)
+	}
+	march := result.March
+	settleAt := time.Now().Add(time.Second)
+	march.ArrivesAt = settleAt.Add(-time.Second).UTC().Format(time.RFC3339)
+	_ = repo.UpdateMarch(march)
+	if err := svc.SettleDueMarches(settleAt); err != nil {
+		t.Fatalf("SettleDueMarches failed: %v", err)
+	}
+	firstDefender, _ := repo.GetState(defender.Player.ID)
+	firstAttacker, _ := repo.GetState(attacker.Player.ID)
+	if armyUnitAmount(firstAttacker.Army, "weiCavalry") != 10 {
+		t.Fatalf("expected surviving attackers returned, got %+v", firstAttacker.Army)
+	}
+	if firstDefender.Resources.Items["wood"] < 0 || firstDefender.Resources.Items["stone"] < 0 {
+		t.Fatalf("expected defender resources non-negative, got %+v", firstDefender.Resources.Items)
+	}
+	plundered := firstAttacker.Resources.Items["wood"] + firstAttacker.Resources.Items["stone"]
+	if plundered <= 0 || plundered > 60 {
+		t.Fatalf("expected plunder within carry capacity 60, got %d resources=%+v", plundered, firstAttacker.Resources.Items)
+	}
+	reports, total, err := repo.ListReports(attacker.Player.ID, 10, 0)
+	if err != nil || total != 1 {
+		t.Fatalf("expected one attacker report, total=%d err=%v", total, err)
+	}
+	if !reports[0].DefenderNoGuard || len(reports[0].LostUnits) != 0 {
+		t.Fatalf("expected no-guard report without attacker losses, got %+v", reports[0])
+	}
+	if reports[0].DefenderArmyLostUnits == nil || reports[0].DefenderGarrisonLostUnits == nil {
+		t.Fatalf("expected split defender loss fields, got %+v", reports[0])
+	}
+	if _, total, err := repo.ListReports(defender.Player.ID, 10, 0); err != nil || total != 1 {
+		t.Fatalf("expected one defender report, total=%d err=%v", total, err)
+	}
+
+	if err := svc.SettleDueMarches(settleAt.Add(time.Minute)); err != nil {
+		t.Fatalf("repeat SettleDueMarches failed: %v", err)
+	}
+	afterRepeat, _ := repo.GetState(defender.Player.ID)
+	if afterRepeat.Resources.Items["wood"] != firstDefender.Resources.Items["wood"] || afterRepeat.Resources.Items["stone"] != firstDefender.Resources.Items["stone"] {
+		t.Fatalf("expected repeat settlement to be idempotent, before=%+v after=%+v", firstDefender.Resources.Items, afterRepeat.Resources.Items)
+	}
+	if _, total, err := repo.ListReports(attacker.Player.ID, 10, 0); err != nil || total != 1 {
+		t.Fatalf("expected no duplicate attacker reports, total=%d err=%v", total, err)
+	}
+}
+
+func TestPvpSettlementAppliesGeneralTraitsAndExperience(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	setTestFactionsAndGenerals(t, FactionsConfig{
+		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "zhenmi", Name: "甄宓"}}},
+		"shu": {Name: "蜀国", Generals: []GeneralInfo{{ID: "liubei", Name: "刘备"}}},
+	}, GeneralsConfig{
+		Enabled: true,
+		Common:  GeneralsCommonConfig{ExpCurve: []int{0, 1000}},
+		Heroes: map[string]GeneralHeroConfig{
+			"zhenmi": {
+				ID:      "zhenmi",
+				Name:    "甄宓",
+				Faction: "wei",
+				Enabled: true,
+				Traits: []GeneralTraitConfig{{
+					TraitID: "meiren",
+					Enabled: true,
+					Params:  map[string]float64{"captureRate": 0.5, "captureMax": 1000, "triggerChance": 1},
+				}},
+			},
+			"liubei": {ID: "liubei", Name: "刘备", Faction: "shu", Enabled: true},
+		},
+	})
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	attacker, defender := createPvpTestPlayers(t, svc, now, "player_pvp_trait_attacker", "player_pvp_trait_defender")
+	attacker.Player.Faction = "wei"
+	attacker.General = newGeneral("wei", "zhenmi")
+	attacker.Army = []ArmyUnit{{UnitType: "weiCavalry", Amount: 100}}
+	defender.Player.Faction = "shu"
+	defender.General = newGeneral("shu", "liubei")
+	defender.Army = []ArmyUnit{{UnitType: "shuInfantry", Amount: 20}}
+	_ = repo.SaveState(attacker, now)
+	_ = repo.SaveState(defender, now)
+
+	result, err := svc.AttackPlayer(AttackPlayerRequest{PlayerID: attacker.Player.ID, TargetPlayerID: defender.Player.ID, Units: map[string]int{"weiCavalry": 100}})
+	if err != nil {
+		t.Fatalf("AttackPlayer failed: %v", err)
+	}
+	march := result.March
+	settleAt := time.Now().Add(time.Second)
+	march.ArrivesAt = settleAt.Add(-time.Second).UTC().Format(time.RFC3339)
+	_ = repo.UpdateMarch(march)
+	if err := svc.SettleDueMarches(settleAt); err != nil {
+		t.Fatalf("SettleDueMarches failed: %v", err)
+	}
+	reports, total, err := repo.ListReports(attacker.Player.ID, 10, 0)
+	if err != nil || total != 1 {
+		t.Fatalf("expected one attacker report, total=%d err=%v", total, err)
+	}
+	report := reports[0]
+	if !containsString(report.TraitTriggered, "meiren") || report.CapturedToGarrison["shuInfantry"] != 10 {
+		t.Fatalf("expected meiren captured to garrison, got %+v", report)
+	}
+	if report.GeneralExpGained <= 0 {
+		t.Fatalf("expected PVP general exp from defender losses, got %+v", report)
+	}
+	storedAttacker, _ := repo.GetState(attacker.Player.ID)
+	if armyUnitAmount(storedAttacker.GarrisonArmy, "shuInfantry") != 10 {
+		t.Fatalf("expected captured cross-faction units in attacker garrison, got %+v", storedAttacker.GarrisonArmy)
+	}
+}
+
+func containsString(items []string, expected string) bool {
+	for _, item := range items {
+		if item == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func TestRedeemMiniGameRewardAcceptsLegacyTuZuName(t *testing.T) {

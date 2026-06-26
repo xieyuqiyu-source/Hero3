@@ -201,26 +201,53 @@ BattleReport:
   properties:
     id:
       type: string
+    playerId:
+      type: string
+    playerName:
+      type: string
     targetId:
       type: string
+    targetName:
+      type: string
+    type:
+      type: string
+      enum:
+      - attack
+      - plunder
+      - scout
+      - reinforce
+      - pvp_attack
     result:
       type: string
     playerPower:
       type: integer
     enemyPower:
       type: integer
-    lostUnits:
+    dispatchedUnits:
       type: object
+      description: 攻击方出征兵力。
       additionalProperties:
         type: integer
+    lostUnits:
+      type: object
+      description: 攻击方战损。
+      additionalProperties:
+        type: integer
+    defenderFaction:
+      type: string
     defenderUnits:
       type: object
       description: 防守方主军队与驻防军队聚合后的展示数量。
       additionalProperties:
         type: integer
+    defenderArmyUnits:
+      type: object
+      description: PVP 防守方主军队参战数量。
+      additionalProperties:
+        type: integer
     defenderGarrisonUnits:
       type: object
-      description: 防守方驻防军队参战数量。
+      description: PVP 防守方驻防军队参战数量。
       additionalProperties:
         type: integer
     defenderLostUnits:
@@ -228,15 +255,56 @@ BattleReport:
       description: 防守方总战损，含主军队与驻防军队。
       additionalProperties:
         type: integer
+    defenderArmyLostUnits:
+      type: object
+      description: PVP 防守方主军队战损，后端会从 army 扣除。
+      additionalProperties:
+        type: integer
     defenderGarrisonLostUnits:
       type: object
       description: 防守方驻防军队战损，后端会从 garrisonArmy 扣除。
       additionalProperties:
         type: integer
-    rewards:
+    defenderNoGuard:
+      type: boolean
+      description: PVP 防守方无可战斗守军时为 true。
+    defenderRevealed:
+      type: boolean
+    defenderResources:
       type: object
       additionalProperties:
         type: integer
+    rewards:
+      type: object
+      description: 攻击方掠夺或获得的资源。
+      additionalProperties:
+        type: integer
+    generalExpGained:
+      type: integer
+    generalLevelBefore:
+      type: integer
+    generalLevelAfter:
+      type: integer
+    capturedUnits:
+      type: object
+      additionalProperties:
+        type: integer
+    capturedToGarrison:
+      type: object
+      additionalProperties:
+        type: integer
+    revivedUnits:
+      type: object
+      additionalProperties:
+        type: integer
+    traitTriggered:
+      type: array
+      items:
+        type: string
+    traitOutcomes:
+      type: object
+      additionalProperties:
+        type: object
     createdAt:
       type: string
       format: date-time
@@ -281,6 +349,8 @@ BalanceConfig:
       type: object
       additionalProperties:
         $ref: '#/components/schemas/BuildingConfig'
+    march:
+      $ref: '#/components/schemas/MarchConfig'
 BuildingConfig:
   type: object
   required:

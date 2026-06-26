@@ -1,0 +1,184 @@
+/api/v1/pvp/targets:
+  get:
+    tags:
+    - PVP
+    summary: 获取可攻击玩家目标列表
+    description: 返回在线和离线玩家目标，排除自己和同账号其他存档，不暴露完整军队。
+    operationId: listPvpTargets
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    - name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 1
+    - name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 20
+        maximum: 50
+    responses:
+      '200':
+        description: PVP 目标分页
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PvpTargetPage'
+      '400':
+        description: 参数错误
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 玩家不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/pvp/targets/{targetPlayerId}:
+  get:
+    tags:
+    - PVP
+    summary: 获取 PVP 目标简要信息
+    description: 返回目标昵称、阵营、主城等级和总兵力估算，不直接暴露完整军队。
+    operationId: getPvpTarget
+    parameters:
+    - name: targetPlayerId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 目标简要信息
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PvpTarget'
+      '404':
+        description: 玩家或目标不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/pvp/attack:
+  post:
+    tags:
+    - PVP
+    summary: 发起玩家攻击并创建行军
+    description: 从攻击方主军队扣除出征兵力并创建 PVP 行军；不会立即结算战斗，行军到达后由统一结算入口生成双方战报。
+    operationId: startPvpAttack
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PvpAttackRequest'
+    responses:
+      '201':
+        description: 行军已创建
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PvpAttackResponse'
+      '400':
+        description: 目标无效、不能攻击自己或同账号存档、包含非战斗兵种
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 玩家、目标或兵种不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '422':
+        description: 出征兵力不足
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/pvp/marches:
+  get:
+    tags:
+    - PVP
+    summary: 获取当前玩家相关 PVP 行军
+    description: outgoing 行军显示出征兵力；incoming 行军只显示来源、阵营、预计抵达和倒计时，不暴露兵种数量。
+    operationId: listPvpMarches
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 行军列表
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PvpMarchPage'
+      '404':
+        description: 玩家不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/pvp/marches/{marchId}/accelerate:
+  post:
+    tags:
+    - PVP
+    summary: 加速自己的 outgoing PVP 行军
+    description: 只有攻击方可以加速自己的 marching 状态行军。每次消耗固化城金价格，并按固化比例缩短当前剩余时间，但不能低于固化最短剩余时间。
+    operationId: acceleratePvpMarch
+    parameters:
+    - name: marchId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PvpAccelerateRequest'
+    responses:
+      '200':
+        description: 加速后的行军和玩家状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PvpAccelerateResponse'
+      '404':
+        description: 玩家或行军不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '409':
+        description: 行军不可加速
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '422':
+        description: 城金不足
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

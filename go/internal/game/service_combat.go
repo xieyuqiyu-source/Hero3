@@ -1065,7 +1065,9 @@ func applyPlayerBattleResult(attackerState *GameState, defenderState *GameState,
 	dispatchedUnits := combatUnitsToAmountMap(attackerUnits)
 	playerLosses := map[string]int{}
 	for _, loss := range result.AttackerLosses {
-		playerLosses[loss.ID] += loss.Losses
+		if loss.Losses > 0 {
+			playerLosses[loss.ID] += loss.Losses
+		}
 	}
 	for _, unit := range attackerUnits {
 		survived := unit.Count - playerLosses[unit.ID]
@@ -1075,6 +1077,7 @@ func applyPlayerBattleResult(attackerState *GameState, defenderState *GameState,
 	}
 
 	defenderUnits := mergeArmyMaps(armySliceToMap(defenderState.Army), armySliceToMap(defenderState.GarrisonArmy))
+	defenderArmyUnits := armySliceToMap(defenderState.Army)
 	defenderGarrisonUnits := armySliceToMap(defenderState.GarrisonArmy)
 	defenderNoGuard := totalMapAmount(defenderUnits) == 0
 	lossByCombatID := map[string]int{}
@@ -1082,6 +1085,7 @@ func applyPlayerBattleResult(attackerState *GameState, defenderState *GameState,
 		lossByCombatID[loss.ID] = loss.Losses
 	}
 	defenderLostUnits := map[string]int{}
+	defenderArmyLostUnits := map[string]int{}
 	defenderGarrisonLostUnits := map[string]int{}
 	for _, source := range defenderSources {
 		lost := lossByCombatID[source.CombatID]
@@ -1096,6 +1100,7 @@ func applyPlayerBattleResult(attackerState *GameState, defenderState *GameState,
 			defenderGarrisonLostUnits[source.UnitType] += lost
 			deductArmyUnit(&defenderState.GarrisonArmy, source.UnitType, lost)
 		} else {
+			defenderArmyLostUnits[source.UnitType] += lost
 			deductArmyUnit(&defenderState.Army, source.UnitType, lost)
 		}
 	}
@@ -1144,8 +1149,10 @@ func applyPlayerBattleResult(attackerState *GameState, defenderState *GameState,
 		LostUnits:                 playerLosses,
 		DefenderFaction:           defenderState.Player.Faction,
 		DefenderUnits:             defenderUnits,
+		DefenderArmyUnits:         defenderArmyUnits,
 		DefenderGarrisonUnits:     defenderGarrisonUnits,
 		DefenderLostUnits:         defenderLostUnits,
+		DefenderArmyLostUnits:     defenderArmyLostUnits,
 		DefenderGarrisonLostUnits: defenderGarrisonLostUnits,
 		DefenderNoGuard:           defenderNoGuard,
 		DefenderRevealed:          defenderRevealed,

@@ -1,0 +1,333 @@
+MarchAccelerateConfig:
+  type: object
+  required:
+  - enabled
+  - costCityGold
+  - reduceRate
+  - minRemainingSeconds
+  properties:
+    enabled:
+      type: boolean
+      example: true
+    costCityGold:
+      type: integer
+      minimum: 1
+      example: 50
+    reduceRate:
+      type: number
+      format: double
+      minimum: 0
+      maximum: 1
+      example: 0.5
+    minRemainingSeconds:
+      type: integer
+      minimum: 1
+      example: 300
+MarchConfig:
+  type: object
+  required:
+  - maxDurationSeconds
+  - minDurationSeconds
+  - speedScale
+  - accelerate
+  properties:
+    maxDurationSeconds:
+      type: integer
+      description: 行军最大时间，默认 10800 秒。
+      example: 10800
+    minDurationSeconds:
+      type: integer
+      description: 行军最短时间，默认 300 秒。
+      example: 300
+    speedScale:
+      type: number
+      format: double
+      description: 速度换算倍率；rawDuration = maxDurationSeconds / max(1, slowestSpeed * speedScale)。
+      example: 1
+    accelerate:
+      $ref: '#/components/schemas/MarchAccelerateConfig'
+PvpTarget:
+  type: object
+  required:
+  - playerId
+  - nickname
+  - faction
+  - totalArmy
+  - buildingLevel
+  - updatedAt
+  properties:
+    playerId:
+      type: string
+    nickname:
+      type: string
+    faction:
+      type: string
+    totalArmy:
+      type: integer
+      description: 总兵力估算，不暴露完整军队。
+    buildingLevel:
+      type: integer
+    updatedAt:
+      type: string
+      format: date-time
+PvpTargetPage:
+  type: object
+  required:
+  - targets
+  - page
+  - pageSize
+  - total
+  properties:
+    targets:
+      type: array
+      items:
+        $ref: '#/components/schemas/PvpTarget'
+    page:
+      type: integer
+    pageSize:
+      type: integer
+    total:
+      type: integer
+PvpAttackRequest:
+  type: object
+  required:
+  - playerId
+  - targetPlayerId
+  - units
+  properties:
+    playerId:
+      type: string
+      description: 发起攻击的玩家存档 ID。
+    targetPlayerId:
+      type: string
+      description: 被攻击玩家存档 ID，不能是自己或同账号存档。
+    mode:
+      type: string
+      enum:
+      - attack
+      - plunder
+      default: attack
+    units:
+      type: object
+      description: 从攻击方主军队出征的战斗兵种数量；不能派驻防或非战斗兵种。
+      additionalProperties:
+        type: integer
+        minimum: 1
+      example:
+        weiCavalry: 100
+PvpMarch:
+  type: object
+  required:
+  - id
+  - attackerPlayerId
+  - defenderPlayerId
+  - type
+  - units
+  - slowestSpeed
+  - durationSeconds
+  - startedAt
+  - arrivesAt
+  - acceleratedTimes
+  - status
+  - createdAt
+  - updatedAt
+  properties:
+    id:
+      type: string
+    attackerPlayerId:
+      type: string
+    attackerName:
+      type: string
+    attackerFaction:
+      type: string
+    defenderPlayerId:
+      type: string
+    defenderName:
+      type: string
+    defenderFaction:
+      type: string
+    type:
+      type: string
+      enum:
+      - pvp_attack
+    units:
+      type: object
+      additionalProperties:
+        type: integer
+    slowestSpeed:
+      type: integer
+    durationSeconds:
+      type: integer
+    startedAt:
+      type: string
+      format: date-time
+    arrivesAt:
+      type: string
+      format: date-time
+    acceleratedTimes:
+      type: integer
+    status:
+      type: string
+      enum:
+      - marching
+      - resolving
+      - resolved
+      - canceled
+    resolvedAt:
+      type: string
+      format: date-time
+    attackerReportId:
+      type: string
+    defenderReportId:
+      type: string
+    maxDurationSeconds:
+      type: integer
+    minDurationSeconds:
+      type: integer
+    speedScale:
+      type: number
+      format: double
+    accelerateCostCityGold:
+      type: integer
+    accelerateReduceRate:
+      type: number
+      format: double
+    accelerateMinRemainingSeconds:
+      type: integer
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+PvpMarchView:
+  type: object
+  required:
+  - id
+  - direction
+  - type
+  - status
+  - sourcePlayerId
+  - sourceName
+  - sourceFaction
+  - targetPlayerId
+  - targetName
+  - targetFaction
+  - startedAt
+  - arrivesAt
+  - remainingSeconds
+  - acceleratedTimes
+  - canAccelerate
+  - accelerateCost
+  properties:
+    id:
+      type: string
+    direction:
+      type: string
+      enum:
+      - outgoing
+      - incoming
+    type:
+      type: string
+      enum:
+      - pvp_attack
+    status:
+      type: string
+      enum:
+      - marching
+      - resolving
+      - resolved
+      - canceled
+    sourcePlayerId:
+      type: string
+    sourceName:
+      type: string
+    sourceFaction:
+      type: string
+    targetPlayerId:
+      type: string
+    targetName:
+      type: string
+    targetFaction:
+      type: string
+    units:
+      type: object
+      description: 仅 outgoing 行军返回；incoming 不暴露兵种和数量。
+      additionalProperties:
+        type: integer
+    startedAt:
+      type: string
+      format: date-time
+    arrivesAt:
+      type: string
+      format: date-time
+    remainingSeconds:
+      type: integer
+    acceleratedTimes:
+      type: integer
+    canAccelerate:
+      type: boolean
+    accelerateCost:
+      type: integer
+    attackerReportId:
+      type: string
+    defenderReportId:
+      type: string
+PvpAttackResponse:
+  type: object
+  required:
+  - marchId
+  - startedAt
+  - arrivesAt
+  - durationSeconds
+  - slowestSpeed
+  - units
+  - march
+  - state
+  properties:
+    marchId:
+      type: string
+    startedAt:
+      type: string
+      format: date-time
+    arrivesAt:
+      type: string
+      format: date-time
+    durationSeconds:
+      type: integer
+    slowestSpeed:
+      type: integer
+    units:
+      type: object
+      additionalProperties:
+        type: integer
+    march:
+      $ref: '#/components/schemas/PvpMarch'
+    state:
+      $ref: '#/components/schemas/GameState'
+PvpMarchPage:
+  type: object
+  required:
+  - marches
+  properties:
+    marches:
+      type: array
+      items:
+        $ref: '#/components/schemas/PvpMarchView'
+PvpAccelerateRequest:
+  type: object
+  required:
+  - playerId
+  properties:
+    playerId:
+      type: string
+PvpAccelerateResponse:
+  type: object
+  required:
+  - march
+  - state
+  properties:
+    march:
+      $ref: '#/components/schemas/PvpMarchView'
+    state:
+      $ref: '#/components/schemas/GameState'

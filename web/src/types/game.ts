@@ -102,8 +102,10 @@ export interface BattleReport {
   lostUnits: Record<string, number>
   defenderFaction: string
   defenderUnits: Record<string, number>
+  defenderArmyUnits?: Record<string, number>
   defenderGarrisonUnits?: Record<string, number>
   defenderLostUnits: Record<string, number>
+  defenderArmyLostUnits?: Record<string, number>
   defenderGarrisonLostUnits?: Record<string, number>
   defenderNoGuard?: boolean
   defenderRevealed: boolean

@@ -184,8 +184,10 @@ type BattleReport struct {
 	LostUnits                 map[string]int                `json:"lostUnits"`
 	DefenderFaction           string                        `json:"defenderFaction"`
 	DefenderUnits             map[string]int                `json:"defenderUnits"`
+	DefenderArmyUnits         map[string]int                `json:"defenderArmyUnits,omitempty"`
 	DefenderGarrisonUnits     map[string]int                `json:"defenderGarrisonUnits,omitempty"`
 	DefenderLostUnits         map[string]int                `json:"defenderLostUnits"`
+	DefenderArmyLostUnits     map[string]int                `json:"defenderArmyLostUnits,omitempty"`
 	DefenderGarrisonLostUnits map[string]int                `json:"defenderGarrisonLostUnits,omitempty"`
 	DefenderNoGuard           bool                          `json:"defenderNoGuard,omitempty"`
 	DefenderRevealed          bool                          `json:"defenderRevealed"`

@@ -32,6 +32,10 @@ export interface GameState {
     unitType: string
     amount: number
   }>
+  garrisonArmy?: Array<{
+    unitType: string
+    amount: number
+  }>
   general?: {
     id: string
     name: string
@@ -342,6 +346,21 @@ export interface BalanceConfig {
   boostBaseCost: number
   boostMultiplierFactor: Record<string, number>
   boostDurationFactor: Record<string, number>
+  march: MarchConfig
+}
+
+export interface MarchAccelerateConfig {
+  enabled: boolean
+  costCityGold: number
+  reduceRate: number
+  minRemainingSeconds: number
+}
+
+export interface MarchConfig {
+  maxDurationSeconds: number
+  minDurationSeconds: number
+  speedScale: number
+  accelerate: MarchAccelerateConfig
 }
 
 export interface GoldLedgerEntry {

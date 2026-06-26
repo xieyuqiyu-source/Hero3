@@ -1,6 +1,6 @@
 /* Hero3 GM 后台 API 客户端，封装 Admin Token 请求。 */
 
-import type { AccountSummary, Announcement, AnnouncementInput, BalanceConfig, FishingConfig, GameState, GoldLedgerEntry, HealthState, ItemDefinition, Mail, MailAttachment, MailPage, NpcConfig, NpcState, UnitConfig } from '@/types'
+import type { AccountSummary, Announcement, AnnouncementInput, BalanceConfig, FishingConfig, GameState, GoldLedgerEntry, HealthState, ItemDefinition, Mail, MailAttachment, MailPage, MarchConfig, NpcConfig, NpcState, UnitConfig } from '@/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1'
 const ROOT_BASE = API_BASE.replace(/\/api\/v1$/, '')
@@ -109,6 +109,16 @@ export const adminApi = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(balance),
+    })
+  },
+  getMarchConfig() {
+    return request<MarchConfig>(`${API_BASE}/admin/march-config`)
+  },
+  updateMarchConfig(config: MarchConfig) {
+    return request<MarchConfig>(`${API_BASE}/admin/march-config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
     })
   },
   getNpcConfig() {
