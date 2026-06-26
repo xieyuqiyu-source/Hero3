@@ -61,3 +61,18 @@ func TestBuildCloneTablePlanTruncatesTargetTables(t *testing.T) {
 		t.Fatal("expected clone table plan to copy table slices")
 	}
 }
+
+func TestBuildCloneTablePlanSkipsMigrationMetadata(t *testing.T) {
+	sourceTables := []string{"accounts", schemaMigrationsTable, "players"}
+	targetTables := []string{"accounts", "players", schemaMigrationsTable, "player_resources"}
+
+	plan := buildCloneTablePlan(sourceTables, targetTables)
+	wantCopyTables := []string{"accounts", "players"}
+	if !reflect.DeepEqual(plan.CopyTables, wantCopyTables) {
+		t.Fatalf("expected copy tables %v, got %v", wantCopyTables, plan.CopyTables)
+	}
+	wantTruncateTables := []string{"accounts", "players", "player_resources"}
+	if !reflect.DeepEqual(plan.TruncateTables, wantTruncateTables) {
+		t.Fatalf("expected truncate tables %v, got %v", wantTruncateTables, plan.TruncateTables)
+	}
+}

@@ -16,6 +16,11 @@ type MySQLRepository struct {
 	db *sql.DB
 }
 
+const (
+	mysqlSchemaMigrationID          = "2026-06-26-core-schema"
+	mysqlSchemaMigrationDescription = "core schema bootstrap and compatibility migrations"
+)
+
 // NewMySQLRepository 创建 MySQL 仓储实例。
 func NewMySQLRepository(db *sql.DB) *MySQLRepository {
 	return &MySQLRepository{db: db}
@@ -192,9 +197,24 @@ func isDuplicateKeyName(err error) bool {
 	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1061
 }
 
+// recordMySQLMigration 记录当前轻量迁移已经应用，便于后续排查库结构来源。
+func recordMySQLMigration(ctx context.Context, db *sql.DB, migrationID string, description string) error {
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO schema_migrations (id, description, applied_at)
+		VALUES (?, ?, UTC_TIMESTAMP(6))
+		ON DUPLICATE KEY UPDATE description = VALUES(description)
+	`, migrationID, description)
+	return err
+}
+
 // MigrateMySQL 执行 MySQL 表结构初始化和轻量兼容迁移。
 func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 	statements := []string{
+		`CREATE TABLE IF NOT EXISTS schema_migrations (
+			id VARCHAR(128) PRIMARY KEY,
+			description VARCHAR(255) NOT NULL DEFAULT '',
+			applied_at DATETIME(6) NOT NULL
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS accounts (
 			id VARCHAR(64) PRIMARY KEY,
 			username VARCHAR(64) NOT NULL UNIQUE,
@@ -327,5 +347,5 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 
-	return nil
+	return recordMySQLMigration(ctx, db, mysqlSchemaMigrationID, mysqlSchemaMigrationDescription)
 }

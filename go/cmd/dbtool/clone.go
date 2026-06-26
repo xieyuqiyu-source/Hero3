@@ -12,7 +12,10 @@ import (
 	"hero3/internal/infrastructure/storage"
 )
 
-const defaultCloneBatchSize = 200
+const (
+	defaultCloneBatchSize = 200
+	schemaMigrationsTable = "schema_migrations"
+)
 
 type cloneDataOptions struct {
 	SourceDSN      string
@@ -167,9 +170,26 @@ func cloneMySQLData(ctx context.Context, options cloneDataOptions) (cloneDataRes
 // buildCloneTablePlan 明确复制源表、清理目标表，避免目标新表残留旧数据。
 func buildCloneTablePlan(sourceTables []string, targetTables []string) cloneTablePlan {
 	return cloneTablePlan{
-		CopyTables:     append([]string(nil), sourceTables...),
-		TruncateTables: append([]string(nil), targetTables...),
+		CopyTables:     cloneDataTables(sourceTables),
+		TruncateTables: cloneDataTables(targetTables),
 	}
+}
+
+// cloneDataTables 过滤内部元数据表，只保留需要复制或清空的业务数据表。
+func cloneDataTables(tables []string) []string {
+	filtered := make([]string, 0, len(tables))
+	for _, tableName := range tables {
+		if isCloneMetadataTable(tableName) {
+			continue
+		}
+		filtered = append(filtered, tableName)
+	}
+	return filtered
+}
+
+// isCloneMetadataTable 判断表是否属于迁移工具内部元数据。
+func isCloneMetadataTable(tableName string) bool {
+	return tableName == schemaMigrationsTable
 }
 
 // cloneableColumns 返回源库和目标库都存在的可复制列，并报告目标库新增列。
