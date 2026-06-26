@@ -1,3 +1,4 @@
+// Hero3 HTTP 处理器，负责请求解析、鉴权校验和服务层调用。
 package api
 
 import (
@@ -777,6 +778,68 @@ func (h *Handlers) AttackNpc(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *Handlers) AttackPlayer(w http.ResponseWriter, r *http.Request) {
+	var payload game.AttackPlayerRequest
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+
+	result, err := h.gameService.AttackPlayer(payload)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInvalidPlayerTarget):
+			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrNoUnitsSelected):
+			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrNonCombatUnit):
+			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrInsufficientArmy):
+			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handlers) ReinforcePlayer(w http.ResponseWriter, r *http.Request) {
+	var payload game.ReinforcePlayerRequest
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+
+	result, err := h.gameService.ReinforcePlayer(payload)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInvalidPlayerTarget), errors.Is(err, game.ErrNpcReinforceNotAllowed):
+			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrNoUnitsSelected):
+			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrNonCombatUnit):
+			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrInsufficientArmy):
+			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *Handlers) SimulateBattle(w http.ResponseWriter, r *http.Request) {
 	var payload game.BattleSimulationRequest
 	if !decodeJSON(w, r, &payload) {
@@ -1110,6 +1173,134 @@ func (h *Handlers) AdminPlayerMails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handlers) ListAnnouncements(w http.ResponseWriter, r *http.Request) {
+	playerID := r.URL.Query().Get("playerId")
+	if playerID == "" {
+		writeError(w, http.StatusBadRequest, "playerId is required")
+		return
+	}
+	if !h.requireOwnership(w, r, playerID) {
+		return
+	}
+
+	result, err := h.gameService.ListAnnouncements(playerID)
+	if err != nil {
+		writeError(w, announcementErrorStatus(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handlers) GetAnnouncement(w http.ResponseWriter, r *http.Request) {
+	playerID := r.URL.Query().Get("playerId")
+	if playerID == "" {
+		writeError(w, http.StatusBadRequest, "playerId is required")
+		return
+	}
+	if !h.requireOwnership(w, r, playerID) {
+		return
+	}
+
+	announcement, err := h.gameService.GetAnnouncement(playerID, r.PathValue("announcementId"))
+	if err != nil {
+		writeError(w, announcementErrorStatus(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, announcement)
+}
+
+func (h *Handlers) MarkAnnouncementRead(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+
+	announcement, err := h.gameService.MarkAnnouncementRead(payload.PlayerID, r.PathValue("announcementId"))
+	if err != nil {
+		writeError(w, announcementErrorStatus(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, announcement)
+}
+
+func (h *Handlers) AdminListAnnouncements(w http.ResponseWriter, r *http.Request) {
+	announcements, err := h.gameService.AdminListAnnouncements()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"announcements": announcements})
+}
+
+func (h *Handlers) AdminCreateAnnouncement(w http.ResponseWriter, r *http.Request) {
+	var payload game.AnnouncementInput
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	announcement, err := h.gameService.AdminCreateAnnouncement(payload)
+	if err != nil {
+		writeError(w, announcementErrorStatus(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, announcement)
+}
+
+func (h *Handlers) AdminUpdateAnnouncement(w http.ResponseWriter, r *http.Request) {
+	var payload game.AnnouncementInput
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	announcement, err := h.gameService.AdminUpdateAnnouncement(r.PathValue("announcementId"), payload)
+	if err != nil {
+		writeError(w, announcementErrorStatus(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, announcement)
+}
+
+func (h *Handlers) AdminPublishAnnouncement(w http.ResponseWriter, r *http.Request) {
+	announcement, err := h.gameService.AdminPublishAnnouncement(r.PathValue("announcementId"))
+	if err != nil {
+		writeError(w, announcementErrorStatus(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, announcement)
+}
+
+func (h *Handlers) AdminArchiveAnnouncement(w http.ResponseWriter, r *http.Request) {
+	announcement, err := h.gameService.AdminArchiveAnnouncement(r.PathValue("announcementId"))
+	if err != nil {
+		writeError(w, announcementErrorStatus(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, announcement)
+}
+
+func (h *Handlers) AdminDeleteAnnouncement(w http.ResponseWriter, r *http.Request) {
+	announcement, err := h.gameService.AdminDeleteAnnouncement(r.PathValue("announcementId"))
+	if err != nil {
+		writeError(w, announcementErrorStatus(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, announcement)
+}
+
+func announcementErrorStatus(err error) int {
+	switch {
+	case errors.Is(err, game.ErrAnnouncementNotFound), errors.Is(err, game.ErrPlayerNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, game.ErrInvalidAnnouncement):
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 func parsePageQuery(w http.ResponseWriter, r *http.Request) (int, int, bool) {
@@ -1672,7 +1863,7 @@ func (h *Handlers) RedeemMiniGameReward(w http.ResponseWriter, r *http.Request) 
 		case errors.Is(err, game.ErrMiniGameNotFound), errors.Is(err, game.ErrPlayerNotFound):
 			status = http.StatusNotFound
 		case errors.Is(err, game.ErrCrossFactionReward):
-			message = "该奖励不是当前阵营兵种，驻防增援系统完成后即可兑换"
+			message = "未找到可兑换兵种配置"
 		case errors.Is(err, game.ErrMiniGameStockShort):
 			message = "可兑换库存不足"
 		}

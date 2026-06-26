@@ -1,0 +1,115 @@
+AnnouncementType:
+  type: string
+  enum: [system, maintenance, event, update]
+AnnouncementStatus:
+  type: string
+  enum: [draft, published, archived]
+Announcement:
+  type: object
+  required:
+  - id
+  - title
+  - content
+  - type
+  - status
+  - pinned
+  - priority
+  - createdAt
+  - updatedAt
+  properties:
+    id:
+      type: string
+      example: ann_47f23e0eeb08ab50402fedfc
+    title:
+      type: string
+      maxLength: 120
+      example: 系统公告
+    content:
+      type: string
+      maxLength: 10000
+      example: 这里是公告正文。
+    type:
+      $ref: '#/components/schemas/AnnouncementType'
+    status:
+      $ref: '#/components/schemas/AnnouncementStatus'
+    pinned:
+      type: boolean
+      example: true
+    priority:
+      type: integer
+      example: 10
+    startsAt:
+      type: string
+      format: date-time
+    endsAt:
+      type: string
+      format: date-time
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+    read:
+      type: boolean
+      description: 玩家列表和详情中返回，表示当前玩家是否已读。
+AnnouncementRead:
+  type: object
+  required:
+  - announcementId
+  - playerId
+  - readAt
+  properties:
+    announcementId:
+      type: string
+    playerId:
+      type: string
+    readAt:
+      type: string
+      format: date-time
+AnnouncementPage:
+  type: object
+  required:
+  - announcements
+  - unread
+  properties:
+    announcements:
+      type: array
+      items:
+        $ref: '#/components/schemas/Announcement'
+    unread:
+      type: integer
+      example: 3
+AnnouncementInput:
+  type: object
+  required:
+  - title
+  - content
+  properties:
+    title:
+      type: string
+      maxLength: 120
+    content:
+      type: string
+      maxLength: 10000
+    type:
+      $ref: '#/components/schemas/AnnouncementType'
+    pinned:
+      type: boolean
+      default: false
+    priority:
+      type: integer
+      default: 0
+    startsAt:
+      type: string
+      format: date-time
+    endsAt:
+      type: string
+      format: date-time
+MarkAnnouncementReadRequest:
+  type: object
+  required:
+  - playerId
+  properties:
+    playerId:
+      type: string

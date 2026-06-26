@@ -25,6 +25,8 @@ tags:
   description: 军情与战报
 - name: Mail
   description: 信函系统
+- name: Announcement
+  description: 公告系统
 - name: MiniGame
   description: 万象幻境小游戏
 - name: Admin
@@ -74,6 +76,10 @@ paths:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1attack
   /api/v1/map/npc-cities/scout:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1scout
+  /api/v1/map/players/attack:
+    $ref: ./paths/map.yaml#/~1api~1v1~1map~1players~1attack
+  /api/v1/map/players/reinforce:
+    $ref: ./paths/map.yaml#/~1api~1v1~1map~1players~1reinforce
   /api/v1/news/reports:
     $ref: ./paths/news.yaml#/~1api~1v1~1news~1reports
   /api/v1/mails:
@@ -86,6 +92,12 @@ paths:
     $ref: ./paths/mail.yaml#/~1api~1v1~1mails~1{mailId}~1claim
   /api/v1/mails/send-player:
     $ref: ./paths/mail.yaml#/~1api~1v1~1mails~1send-player
+  /api/v1/announcements:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1announcements
+  /api/v1/announcements/{announcementId}:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1announcements~1{announcementId}
+  /api/v1/announcements/{announcementId}/read:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1announcements~1{announcementId}~1read
   /api/v1/minigame/record:
     $ref: ./paths/minigame.yaml#/~1api~1v1~1minigame~1record
   /api/v1/minigame/records:
@@ -98,6 +110,14 @@ paths:
     $ref: ./paths/mail.yaml#/~1api~1v1~1admin~1mails~1send
   /api/v1/admin/players/{playerId}/mails:
     $ref: ./paths/mail.yaml#/~1api~1v1~1admin~1players~1{playerId}~1mails
+  /api/v1/admin/announcements:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1admin~1announcements
+  /api/v1/admin/announcements/{announcementId}:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1admin~1announcements~1{announcementId}
+  /api/v1/admin/announcements/{announcementId}/publish:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1admin~1announcements~1{announcementId}~1publish
+  /api/v1/admin/announcements/{announcementId}/archive:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1admin~1announcements~1{announcementId}~1archive
   /api/v1/admin/accounts:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1accounts
   /api/v1/admin/players/{playerId}/state:
@@ -160,6 +180,20 @@ components:
       $ref: ./schemas/mail.yaml#/SendPlayerMailRequest
     MailClaimResult:
       $ref: ./schemas/mail.yaml#/MailClaimResult
+    AnnouncementType:
+      $ref: ./schemas/announcement.yaml#/AnnouncementType
+    AnnouncementStatus:
+      $ref: ./schemas/announcement.yaml#/AnnouncementStatus
+    Announcement:
+      $ref: ./schemas/announcement.yaml#/Announcement
+    AnnouncementRead:
+      $ref: ./schemas/announcement.yaml#/AnnouncementRead
+    AnnouncementPage:
+      $ref: ./schemas/announcement.yaml#/AnnouncementPage
+    AnnouncementInput:
+      $ref: ./schemas/announcement.yaml#/AnnouncementInput
+    MarkAnnouncementReadRequest:
+      $ref: ./schemas/announcement.yaml#/MarkAnnouncementReadRequest
     MiniGameRecord:
       $ref: ./schemas/minigame.yaml#/MiniGameRecord
     MiniGameSummary:
@@ -222,6 +256,14 @@ components:
       $ref: ./schemas/map.yaml#/AttackNpcRequest
     AttackNpcResponse:
       $ref: ./schemas/map.yaml#/AttackNpcResponse
+    AttackPlayerRequest:
+      $ref: ./schemas/map.yaml#/AttackPlayerRequest
+    AttackPlayerResponse:
+      $ref: ./schemas/map.yaml#/AttackPlayerResponse
+    ReinforcePlayerRequest:
+      $ref: ./schemas/map.yaml#/ReinforcePlayerRequest
+    ReinforcePlayerResponse:
+      $ref: ./schemas/map.yaml#/ReinforcePlayerResponse
     ScoutNpcRequest:
       $ref: ./schemas/map.yaml#/ScoutNpcRequest
     ScoutNpcResponse:

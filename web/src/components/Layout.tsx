@@ -1,3 +1,5 @@
+/* Hero3 主布局组件，负责桌面和移动端导航框架。 */
+
 import { useEffect, useState, type FC, type ReactNode } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
@@ -23,11 +25,23 @@ import { useGameStore } from '@/store/gameStore'
 import { useAccountStore } from '@/store/accountStore'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
 import { useConfigStore } from '@/store/configStore'
+import { useAnnouncementStore } from '@/store/announcementStore'
 import { FACTION_LABELS, FACTION_COLORS } from '@/utils/faction'
 import type { GameState } from '@/types/game'
 
 interface LayoutProps {
   children: ReactNode
+}
+
+// 根据兵种 ID 查找展示名，优先当前阵营，再兜底全阵营。
+function getUnitDisplayName(unitType: string, playerFaction?: string) {
+  const allUnits = useConfigStore.getState().units
+  const factionUnits = playerFaction ? allUnits?.[playerFaction] : undefined
+  if (factionUnits?.[unitType]?.name) return factionUnits[unitType].name
+  for (const units of Object.values(allUnits ?? {})) {
+    if (units[unitType]?.name) return units[unitType].name
+  }
+  return unitType
 }
 
 const Layout: FC<LayoutProps> = ({ children }) => {
@@ -179,15 +193,27 @@ const MobileSidebarContent: FC<{
 
   const unreadMessageCount = gameState?.unreadMessageCount ?? 0
   const unreadMailCount = gameState?.unreadMailCount ?? 0
+  const announcementUnread = useAnnouncementStore((s) => s.unread)
+  const loadedAnnouncementPlayerId = useAnnouncementStore((s) => s.loadedPlayerId)
+  const loadAnnouncements = useAnnouncementStore((s) => s.loadAnnouncements)
   const newsHasNotify = unreadMessageCount > 0
+  const playerId = gameState?.player.id ?? ''
+
+  useEffect(() => {
+    if (playerId && loadedAnnouncementPlayerId !== playerId) {
+      void loadAnnouncements(playerId)
+    }
+  }, [playerId, loadedAnnouncementPlayerId, loadAnnouncements])
+
   const quickActions = [
-    { key: 'news', label: '军情', hasNotify: newsHasNotify },
-    { key: 'mail', label: '信函', hasNotify: unreadMailCount > 0 },
-    { key: 'notice', label: '公告', hasNotify: true },
-    { key: 'account', label: '账户', hasNotify: false },
+    { key: 'news', label: '军情', hasNotify: newsHasNotify, count: unreadMessageCount },
+    { key: 'mail', label: '信函', hasNotify: unreadMailCount > 0, count: unreadMailCount },
+    { key: 'notice', label: '公告', hasNotify: announcementUnread > 0, count: announcementUnread },
+    { key: 'account', label: '账户', hasNotify: false, count: 0 },
   ]
   const resources = useProjectedResources()
   const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
+  const totalGarrisonArmy = gameState?.garrisonArmy?.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
 
   return (
     <>
@@ -210,6 +236,7 @@ const MobileSidebarContent: FC<{
               if (action.key === 'account') onNavigate('account')
               if (action.key === 'news') onNavigate('news')
               if (action.key === 'mail') onNavigate('mail')
+              if (action.key === 'notice') onNavigate('notice')
             }}
             className={`
               px-2.5 py-1.5 rounded-lg
@@ -221,6 +248,7 @@ const MobileSidebarContent: FC<{
             `}
           >
             {action.label}
+            {action.count > 0 ? ` ${action.count}` : ''}
           </button>
         ))}
       </div>
@@ -288,8 +316,7 @@ const MobileSidebarContent: FC<{
           {gameState?.army && gameState.army.filter(u => u.amount > 0).length > 0 ? (
             <div className="space-y-1">
               {gameState.army.filter(u => u.amount > 0).map((unit) => {
-                const factionUnits = useConfigStore.getState().units?.[gameState.player.faction]
-                const unitName = factionUnits?.[unit.unitType]?.name ?? unit.unitType
+                const unitName = getUnitDisplayName(unit.unitType, gameState.player.faction)
                 return (
                   <div key={unit.unitType} className="flex items-center justify-between px-2 py-1 rounded-lg bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
                     <span className="text-[10px] text-[var(--color-text-secondary)]">{unitName}</span>
@@ -300,6 +327,29 @@ const MobileSidebarContent: FC<{
             </div>
           ) : (
             <p className="text-xs text-[var(--color-text-secondary)] opacity-50">暂无兵力</p>
+          )}
+        </div>
+
+        <div className="mb-2.5 rounded-2xl p-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
+          <div className="flex items-center gap-2 mb-2">
+            <Shield size={14} className="text-emerald-600" />
+            <span className="text-sm font-semibold text-[var(--color-text-primary)]">驻防军队</span>
+            <span className="text-xs font-semibold text-emerald-600 ml-auto">{totalGarrisonArmy}</span>
+          </div>
+          {gameState?.garrisonArmy && gameState.garrisonArmy.filter(u => u.amount > 0).length > 0 ? (
+            <div className="space-y-1">
+              {gameState.garrisonArmy.filter(u => u.amount > 0).map((unit) => {
+                const unitName = getUnitDisplayName(unit.unitType, gameState.player.faction)
+                return (
+                  <div key={unit.unitType} className="flex items-center justify-between px-2 py-1 rounded-lg bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
+                    <span className="text-[10px] text-[var(--color-text-secondary)]">{unitName}</span>
+                    <span className="text-[10px] font-semibold text-emerald-600">{unit.amount.toLocaleString()}</span>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-[var(--color-text-secondary)] opacity-50">暂无驻防兵力</p>
           )}
         </div>
       </div>

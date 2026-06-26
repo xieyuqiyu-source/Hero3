@@ -102,7 +102,9 @@ export interface BattleReport {
   lostUnits: Record<string, number>
   defenderFaction: string
   defenderUnits: Record<string, number>
+  defenderGarrisonUnits?: Record<string, number>
   defenderLostUnits: Record<string, number>
+  defenderGarrisonLostUnits?: Record<string, number>
   defenderRevealed: boolean
   defenderResources: Record<string, number>
   rewards: Record<string, number>
@@ -159,6 +161,36 @@ export interface MailClaimResult {
   cityGold: number
   accountGold?: number
   grantedItems: Record<string, number>
+}
+
+export type AnnouncementType = 'system' | 'maintenance' | 'event' | 'update'
+
+export type AnnouncementStatus = 'draft' | 'published' | 'archived'
+
+export interface Announcement {
+  id: string
+  title: string
+  content: string
+  type: AnnouncementType
+  status: AnnouncementStatus
+  pinned: boolean
+  priority: number
+  startsAt?: string
+  endsAt?: string
+  createdAt: string
+  updatedAt: string
+  read?: boolean
+}
+
+export interface AnnouncementRead {
+  announcementId: string
+  playerId: string
+  readAt: string
+}
+
+export interface AnnouncementPage {
+  announcements: Announcement[]
+  unread: number
 }
 
 export interface MiniGameRecord {
@@ -254,6 +286,7 @@ export interface GameState {
   buildings: Building[]
   general: General | null
   army: ArmyUnit[]
+  garrisonArmy: ArmyUnit[]
   recruitQueues: RecruitQueue[]
   npcState?: NpcState | null
   mapTargets: MapTarget[]

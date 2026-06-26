@@ -128,3 +128,79 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/map/players/attack:
+  post:
+    tags:
+    - Map
+    summary: 攻击其他玩家城池
+    description: 玩家互攻基础接口。攻击方从主军队出征；防守方主军队和驻防军队共同参与防守，战损按来源分别扣减。
+    operationId: attackPlayerCity
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AttackPlayerRequest'
+    responses:
+      '200':
+        description: 玩家互攻战斗结算结果和攻击方最新状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttackPlayerResponse'
+      '400':
+        description: 参数错误、目标无效或未选择出征兵力
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 玩家或兵种不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '422':
+        description: 出征兵力不足
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/map/players/reinforce:
+  post:
+    tags:
+    - Map
+    summary: 增援其他玩家
+    description: 只能增援其他玩家，不能增援 NPC 城池。发起方扣除对应兵力；抵达后无论兵种阵营，全部进入目标玩家 garrisonArmy。
+    operationId: reinforcePlayer
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReinforcePlayerRequest'
+    responses:
+      '200':
+        description: 增援结果、发起方状态和目标玩家状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReinforcePlayerResponse'
+      '400':
+        description: 参数错误、目标无效、选择了 NPC 或未选择增援兵力
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 玩家或兵种不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '422':
+        description: 增援兵力不足
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

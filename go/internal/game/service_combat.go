@@ -1,3 +1,4 @@
+// Hero3 战斗服务，处理 NPC 战斗、玩家互攻、增援和战报结算。
 package game
 
 import (
@@ -11,9 +12,11 @@ import (
 )
 
 var (
-	ErrNpcNotFound      = errors.New("npc city not found")
-	ErrNoUnitsSelected  = errors.New("no units selected for dispatch")
-	ErrInsufficientArmy = errors.New("insufficient army for dispatch")
+	ErrNpcNotFound            = errors.New("npc city not found")
+	ErrNoUnitsSelected        = errors.New("no units selected for dispatch")
+	ErrInsufficientArmy       = errors.New("insufficient army for dispatch")
+	ErrInvalidPlayerTarget    = errors.New("invalid player target")
+	ErrNpcReinforceNotAllowed = errors.New("cannot reinforce npc city")
 )
 
 // AttackNpcRequest 攻击 NPC 请求
@@ -28,6 +31,34 @@ type AttackNpcRequest struct {
 type AttackNpcResponse struct {
 	BattleReport BattleReport `json:"battleReport"`
 	State        GameState    `json:"state"`
+}
+
+// AttackPlayerRequest 攻击其他玩家城池的请求。
+type AttackPlayerRequest struct {
+	PlayerID       string         `json:"playerId"`
+	TargetPlayerID string         `json:"targetPlayerId"`
+	Mode           string         `json:"mode"`
+	Units          map[string]int `json:"units"`
+}
+
+// AttackPlayerResponse 返回玩家互攻战报和攻击方最新状态。
+type AttackPlayerResponse struct {
+	BattleReport BattleReport `json:"battleReport"`
+	State        GameState    `json:"state"`
+}
+
+// ReinforcePlayerRequest 玩家增援其他玩家的请求。
+type ReinforcePlayerRequest struct {
+	PlayerID       string         `json:"playerId"`
+	TargetPlayerID string         `json:"targetPlayerId"`
+	Units          map[string]int `json:"units"`
+}
+
+// ReinforcePlayerResponse 返回增援战报和双方最新状态。
+type ReinforcePlayerResponse struct {
+	BattleReport BattleReport `json:"battleReport"`
+	State        GameState    `json:"state"`
+	TargetState  GameState    `json:"targetState"`
 }
 
 // BattleSimulationRequest 战斗模拟请求：只计算战果，不扣兵、不保存战报。
@@ -241,6 +272,180 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 	return AttackNpcResponse{
 		BattleReport: report,
 		State:        state,
+	}, nil
+}
+
+// ReinforcePlayer 把发起方兵力派到目标玩家驻防军队。
+func (s *Service) ReinforcePlayer(req ReinforcePlayerRequest) (ReinforcePlayerResponse, error) {
+	playerID := strings.TrimSpace(req.PlayerID)
+	targetPlayerID := strings.TrimSpace(req.TargetPlayerID)
+	if playerID == "" {
+		return ReinforcePlayerResponse{}, ErrPlayerNotFound
+	}
+	if targetPlayerID == "" || targetPlayerID == playerID {
+		return ReinforcePlayerResponse{}, ErrInvalidPlayerTarget
+	}
+
+	attackerState, err := s.repo.GetState(playerID)
+	if err != nil {
+		return ReinforcePlayerResponse{}, err
+	}
+	if isNpcTargetID(attackerState, targetPlayerID) {
+		return ReinforcePlayerResponse{}, ErrNpcReinforceNotAllowed
+	}
+	targetState, err := s.repo.GetState(targetPlayerID)
+	if err != nil {
+		return ReinforcePlayerResponse{}, err
+	}
+
+	now := time.Now()
+	attackerState, _ = settleResources(attackerState, now)
+	targetState, _ = settleResources(targetState, now)
+	dispatchedUnits, err := validateAndConsumeReinforcementArmy(&attackerState, req.Units)
+	if err != nil {
+		return ReinforcePlayerResponse{}, err
+	}
+	dispatchedMap := combatUnitsToAmountMap(dispatchedUnits)
+	for _, unit := range dispatchedUnits {
+		AddGarrisonUnit(&targetState, unit.ID, unit.Count)
+	}
+
+	nowStr := now.UTC().Format(resourceDateLayout)
+	report := BattleReport{
+		ID:                    "br_" + randomID(8),
+		PlayerID:              attackerState.Player.ID,
+		PlayerFaction:         attackerState.Player.Faction,
+		PlayerName:            attackerState.Player.Nickname,
+		TargetID:              targetState.Player.ID,
+		TargetName:            targetState.Player.Nickname,
+		Type:                  "reinforce",
+		Result:                "attacker_victory",
+		PlayerPower:           totalCombatUnitCount(dispatchedUnits),
+		EnemyPower:            0,
+		DispatchedUnits:       dispatchedMap,
+		LostUnits:             map[string]int{},
+		DefenderFaction:       targetState.Player.Faction,
+		DefenderUnits:         armySliceToMap(targetState.Army),
+		DefenderGarrisonUnits: armySliceToMap(targetState.GarrisonArmy),
+		DefenderRevealed:      true,
+		DefenderResources:     map[string]int{},
+		Rewards:               map[string]int{},
+		Read:                  false,
+		CreatedAt:             nowStr,
+	}
+	targetReport := report
+	targetReport.ID = "br_" + randomID(8)
+	targetReport.PlayerID = targetState.Player.ID
+	targetReport.PlayerFaction = targetState.Player.Faction
+	targetReport.PlayerName = targetState.Player.Nickname
+	targetReport.TargetID = attackerState.Player.ID
+	targetReport.TargetName = attackerState.Player.Nickname
+
+	attackerState.ServerTime = nowStr
+	targetState.ServerTime = nowStr
+	if err := s.repo.SaveStates([]GameState{attackerState, targetState}, now); err != nil {
+		return ReinforcePlayerResponse{}, err
+	}
+	if err := s.repo.SaveReport(report); err != nil {
+		slog.Warn("reinforce report save failed", "error", err, "reportId", report.ID)
+	}
+	if err := s.repo.SaveReport(targetReport); err != nil {
+		slog.Warn("reinforce target report save failed", "error", err, "reportId", targetReport.ID)
+	}
+
+	s.attachReportSummary(&attackerState, attackerState.Player.ID)
+	s.attachReportSummary(&targetState, targetState.Player.ID)
+	return ReinforcePlayerResponse{
+		BattleReport: report,
+		State:        attackerState,
+		TargetState:  targetState,
+	}, nil
+}
+
+// AttackPlayer 执行玩家之间的基础攻城战斗，防守方主军队和驻防军队共同参战。
+func (s *Service) AttackPlayer(req AttackPlayerRequest) (AttackPlayerResponse, error) {
+	playerID := strings.TrimSpace(req.PlayerID)
+	targetPlayerID := strings.TrimSpace(req.TargetPlayerID)
+	mode := strings.TrimSpace(req.Mode)
+	if playerID == "" {
+		return AttackPlayerResponse{}, ErrPlayerNotFound
+	}
+	if targetPlayerID == "" || targetPlayerID == playerID {
+		return AttackPlayerResponse{}, ErrInvalidPlayerTarget
+	}
+	if mode == "" {
+		mode = "attack"
+	}
+	if mode != "attack" && mode != "plunder" {
+		mode = "attack"
+	}
+
+	attackerState, err := s.repo.GetState(playerID)
+	if err != nil {
+		return AttackPlayerResponse{}, err
+	}
+	if isNpcTargetID(attackerState, targetPlayerID) {
+		return AttackPlayerResponse{}, ErrInvalidPlayerTarget
+	}
+	defenderState, err := s.repo.GetState(targetPlayerID)
+	if err != nil {
+		return AttackPlayerResponse{}, err
+	}
+	if attackerState.General != nil {
+		applyHeroConfigToGeneral(attackerState.General)
+	}
+	if defenderState.General != nil {
+		applyHeroConfigToGeneral(defenderState.General)
+	}
+
+	now := time.Now()
+	attackerState, _ = settleResources(attackerState, now)
+	defenderState, _ = settleResources(defenderState, now)
+	attackerUnits, err := validateAndConsumeArmy(&attackerState, req.Units)
+	if err != nil {
+		return AttackPlayerResponse{}, err
+	}
+	defenderUnits, defenderSources := buildPlayerDefenseCombatUnits(defenderState, now)
+	if len(defenderUnits) == 0 {
+		defenderUnits = []combat.Unit{}
+	}
+
+	ruleID := "official_attack"
+	if mode == "plunder" {
+		ruleID = "official_plunder"
+	}
+	input := combat.CombatInput{
+		RuleID:   ruleID,
+		Attacker: buildCombatArmy(attackerState.Player.Faction, attackerUnits),
+		Defender: buildCombatArmy(defenderState.Player.Faction, defenderUnits),
+	}
+	result := combat.Resolve(input)
+	report := applyPlayerBattleResult(&attackerState, &defenderState, result, attackerUnits, defenderSources, mode, now)
+
+	nowStr := now.UTC().Format(resourceDateLayout)
+	attackerState.ServerTime = nowStr
+	defenderState.ServerTime = nowStr
+	if err := s.repo.SaveStates([]GameState{attackerState, defenderState}, now); err != nil {
+		return AttackPlayerResponse{}, err
+	}
+	if err := s.repo.SaveReport(report); err != nil {
+		slog.Warn("player battle report save failed", "error", err, "reportId", report.ID)
+	}
+	defenderReport := report
+	defenderReport.ID = "br_" + randomID(8)
+	defenderReport.PlayerID = defenderState.Player.ID
+	defenderReport.PlayerFaction = defenderState.Player.Faction
+	defenderReport.PlayerName = defenderState.Player.Nickname
+	defenderReport.TargetID = attackerState.Player.ID
+	defenderReport.TargetName = attackerState.Player.Nickname
+	if err := s.repo.SaveReport(defenderReport); err != nil {
+		slog.Warn("player defense report save failed", "error", err, "reportId", defenderReport.ID)
+	}
+
+	s.attachReportSummary(&attackerState, attackerState.Player.ID)
+	return AttackPlayerResponse{
+		BattleReport: report,
+		State:        attackerState,
 	}, nil
 }
 
@@ -591,11 +796,68 @@ func validateAndConsumeArmy(state *GameState, units map[string]int) ([]combat.Un
 	return combatUnits, nil
 }
 
+// validateAndConsumeReinforcementArmy 校验并从主军队/驻防军队扣除增援兵力。
+func validateAndConsumeReinforcementArmy(state *GameState, units map[string]int) ([]combat.Unit, error) {
+	if len(units) == 0 {
+		return nil, ErrNoUnitsSelected
+	}
+	now := time.Now()
+	modSources := CollectModifierSources(state)
+	combatUnits := make([]combat.Unit, 0, len(units))
+
+	for unitType, count := range units {
+		if count <= 0 {
+			continue
+		}
+		_, unitCfg, exists := FindUnitConfigByID(unitType)
+		if !exists {
+			return nil, ErrUnitNotFound
+		}
+		if isNonCombatUnit(unitCfg) {
+			return nil, ErrNonCombatUnit
+		}
+		if armyUnitAmount(state.Army, unitType)+armyUnitAmount(state.GarrisonArmy, unitType) < count {
+			return nil, ErrInsufficientArmy
+		}
+		remaining := count
+		consumeArmyUnits(&state.Army, unitType, &remaining)
+		consumeArmyUnits(&state.GarrisonArmy, unitType, &remaining)
+		combatUnits = append(combatUnits, buildCombatUnit(unitType, unitType, unitCfg, count, now, modSources))
+	}
+	if len(combatUnits) == 0 {
+		return nil, ErrNoUnitsSelected
+	}
+	cleanArmyUnits(&state.Army)
+	cleanArmyUnits(&state.GarrisonArmy)
+	return combatUnits, nil
+}
+
 func isNonCombatUnit(unitCfg UnitConfig) bool {
 	if unitCfg.Role == "transport" {
 		return true
 	}
 	return unitCfg.Stats["upkeep"] <= 0
+}
+
+// buildCombatUnit 根据兵种配置构建战斗单位，可使用 displayID 区分主军和驻防来源。
+func buildCombatUnit(displayID string, unitType string, unitCfg UnitConfig, count int, now time.Time, modSources []ModifierSource) combat.Unit {
+	baseAttack := unitCfg.Stats["attack"]
+	baseInfDef := unitCfg.Stats["infantryDefense"]
+	baseCavDef := unitCfg.Stats["cavalryDefense"]
+	infDefense := ComputeAttributeAt(float64(baseInfDef), StatDefenseBonus, now, modSources...)
+	infDefense = ComputeAttributeAt(infDefense, StatInfantryDefenseBonus, now, modSources...)
+	cavDefense := ComputeAttributeAt(float64(baseCavDef), StatDefenseBonus, now, modSources...)
+	cavDefense = ComputeAttributeAt(cavDefense, StatCavalryDefenseBonus, now, modSources...)
+	return combat.Unit{
+		ID:              displayID,
+		Category:        unitCfg.Category,
+		Count:           count,
+		Attack:          ComputeIntAttributeAt(baseAttack, StatAttackBonus, now, modSources...),
+		InfantryDefense: int(infDefense),
+		CavalryDefense:  int(cavDefense),
+		CarryCapacity:   unitCfg.Stats["carryCapacity"],
+		Upkeep:          unitCfg.Stats["upkeep"],
+	}
 }
 
 func buildSimulatedCombatUnits(faction string, units map[string]int, now time.Time, modSources ...ModifierSource) ([]combat.Unit, error) {
@@ -679,6 +941,47 @@ func buildNpcCombatArmy(npc *NpcCity) combat.Army {
 		Faction: npc.Faction,
 		Units:   units,
 	}
+}
+
+type defenderUnitSource struct {
+	CombatID string
+	UnitType string
+	Pool     string
+	Amount   int
+}
+
+const (
+	defenderPoolArmy     = "army"
+	defenderPoolGarrison = "garrison"
+)
+
+// buildPlayerDefenseCombatUnits 构建玩家防守部队，并保留每个战斗单位的来源兵力池。
+func buildPlayerDefenseCombatUnits(state GameState, now time.Time) ([]combat.Unit, []defenderUnitSource) {
+	modSources := CollectModifierSources(&state)
+	units := []combat.Unit{}
+	sources := []defenderUnitSource{}
+	appendUnits := func(pool string, army []ArmyUnit) {
+		for _, armyUnit := range army {
+			if armyUnit.Amount <= 0 {
+				continue
+			}
+			_, unitCfg, exists := FindUnitConfigByID(armyUnit.UnitType)
+			if !exists || isNonCombatUnit(unitCfg) {
+				continue
+			}
+			combatID := armyUnit.UnitType + "@" + pool
+			units = append(units, buildCombatUnit(combatID, armyUnit.UnitType, unitCfg, armyUnit.Amount, now, modSources))
+			sources = append(sources, defenderUnitSource{
+				CombatID: combatID,
+				UnitType: armyUnit.UnitType,
+				Pool:     pool,
+				Amount:   armyUnit.Amount,
+			})
+		}
+	}
+	appendUnits(defenderPoolArmy, state.Army)
+	appendUnits(defenderPoolGarrison, state.GarrisonArmy)
+	return units, sources
 }
 
 func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatResult, attackerUnits []combat.Unit, mode string, now time.Time) BattleReport {
@@ -831,6 +1134,97 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 	return report
 }
 
+// applyPlayerBattleResult 结算玩家互攻战损，防守方按主军/驻防来源分别扣兵。
+func applyPlayerBattleResult(attackerState *GameState, defenderState *GameState, result combat.CombatResult, attackerUnits []combat.Unit, defenderSources []defenderUnitSource, mode string, now time.Time) BattleReport {
+	nowStr := now.UTC().Format(resourceDateLayout)
+	dispatchedUnits := combatUnitsToAmountMap(attackerUnits)
+	playerLosses := map[string]int{}
+	for _, loss := range result.AttackerLosses {
+		playerLosses[loss.ID] += loss.Losses
+	}
+	for _, unit := range attackerUnits {
+		survived := unit.Count - playerLosses[unit.ID]
+		if survived > 0 {
+			addToArmy(&attackerState.Army, unit.ID, survived)
+		}
+	}
+
+	defenderUnits := mergeArmyMaps(armySliceToMap(defenderState.Army), armySliceToMap(defenderState.GarrisonArmy))
+	defenderGarrisonUnits := armySliceToMap(defenderState.GarrisonArmy)
+	lossByCombatID := map[string]int{}
+	for _, loss := range result.DefenderLosses {
+		lossByCombatID[loss.ID] = loss.Losses
+	}
+	defenderLostUnits := map[string]int{}
+	defenderGarrisonLostUnits := map[string]int{}
+	for _, source := range defenderSources {
+		lost := lossByCombatID[source.CombatID]
+		if lost <= 0 {
+			continue
+		}
+		if lost > source.Amount {
+			lost = source.Amount
+		}
+		defenderLostUnits[source.UnitType] += lost
+		if source.Pool == defenderPoolGarrison {
+			defenderGarrisonLostUnits[source.UnitType] += lost
+			deductArmyUnit(&defenderState.GarrisonArmy, source.UnitType, lost)
+		} else {
+			deductArmyUnit(&defenderState.Army, source.UnitType, lost)
+		}
+	}
+	cleanArmyUnits(&attackerState.Army)
+	cleanArmyUnits(&defenderState.Army)
+	cleanArmyUnits(&defenderState.GarrisonArmy)
+
+	totalDefenderBefore := 0
+	for _, amount := range defenderUnits {
+		totalDefenderBefore += amount
+	}
+	totalDefenderLost := 0
+	for _, amount := range defenderLostUnits {
+		totalDefenderLost += amount
+	}
+	defenderRevealed := totalDefenderBefore == 0 || float64(totalDefenderLost)/float64(totalDefenderBefore) >= 0.25
+	if !defenderRevealed {
+		defenderUnits = map[string]int{}
+		defenderGarrisonUnits = map[string]int{}
+		defenderLostUnits = map[string]int{}
+		defenderGarrisonLostUnits = map[string]int{}
+	}
+
+	reportResult := "attacker_victory"
+	if result.Winner == "defender" {
+		reportResult = "defender_victory"
+	} else if result.Winner == "draw" {
+		reportResult = "draw"
+	}
+	return BattleReport{
+		ID:                        "br_" + randomID(8),
+		PlayerID:                  attackerState.Player.ID,
+		PlayerFaction:             attackerState.Player.Faction,
+		PlayerName:                attackerState.Player.Nickname,
+		TargetID:                  defenderState.Player.ID,
+		TargetName:                defenderState.Player.Nickname,
+		Type:                      mode,
+		Result:                    reportResult,
+		PlayerPower:               int(result.AttackPower),
+		EnemyPower:                int(result.DefensePower),
+		DispatchedUnits:           dispatchedUnits,
+		LostUnits:                 playerLosses,
+		DefenderFaction:           defenderState.Player.Faction,
+		DefenderUnits:             defenderUnits,
+		DefenderGarrisonUnits:     defenderGarrisonUnits,
+		DefenderLostUnits:         defenderLostUnits,
+		DefenderGarrisonLostUnits: defenderGarrisonLostUnits,
+		DefenderRevealed:          defenderRevealed,
+		DefenderResources:         copyResources(defenderState.Resources.Items),
+		Rewards:                   map[string]int{},
+		Read:                      false,
+		CreatedAt:                 nowStr,
+	}
+}
+
 func calculatePlunder(npc *NpcCity, carryCapacity int) map[string]int {
 	// 计算 NPC 总资源
 	totalResources := 0
@@ -904,6 +1298,108 @@ func addToArmy(army *[]ArmyUnit, unitType string, amount int) {
 		}
 	}
 	*army = append(*army, ArmyUnit{UnitType: unitType, Amount: amount})
+}
+
+// deductArmyUnit 从指定兵力池扣除战损。
+func deductArmyUnit(army *[]ArmyUnit, unitType string, amount int) {
+	if amount <= 0 {
+		return
+	}
+	for i := range *army {
+		if (*army)[i].UnitType != unitType {
+			continue
+		}
+		(*army)[i].Amount -= amount
+		if (*army)[i].Amount < 0 {
+			(*army)[i].Amount = 0
+		}
+		return
+	}
+}
+
+// armyUnitAmount 返回指定兵力池中某兵种数量。
+func armyUnitAmount(army []ArmyUnit, unitType string) int {
+	for _, unit := range army {
+		if unit.UnitType == unitType {
+			return unit.Amount
+		}
+	}
+	return 0
+}
+
+// consumeArmyUnits 从兵力池尽量扣除指定兵种，并减少 remaining。
+func consumeArmyUnits(army *[]ArmyUnit, unitType string, remaining *int) {
+	if remaining == nil || *remaining <= 0 {
+		return
+	}
+	for i := range *army {
+		if (*army)[i].UnitType != unitType || (*army)[i].Amount <= 0 {
+			continue
+		}
+		take := (*army)[i].Amount
+		if take > *remaining {
+			take = *remaining
+		}
+		(*army)[i].Amount -= take
+		*remaining -= take
+		return
+	}
+}
+
+// cleanArmyUnits 移除数量为 0 的兵种，保持状态输出简洁。
+func cleanArmyUnits(army *[]ArmyUnit) {
+	if army == nil {
+		return
+	}
+	cleaned := (*army)[:0]
+	for _, unit := range *army {
+		if unit.Amount > 0 {
+			cleaned = append(cleaned, unit)
+		}
+	}
+	*army = cleaned
+}
+
+// combatUnitsToAmountMap 聚合战斗单位数量为战报用 map。
+func combatUnitsToAmountMap(units []combat.Unit) map[string]int {
+	result := map[string]int{}
+	for _, unit := range units {
+		result[unit.ID] += unit.Count
+	}
+	return result
+}
+
+// totalCombatUnitCount 统计战斗单位总数量。
+func totalCombatUnitCount(units []combat.Unit) int {
+	total := 0
+	for _, unit := range units {
+		total += unit.Count
+	}
+	return total
+}
+
+// mergeArmyMaps 合并多个兵种数量 map。
+func mergeArmyMaps(items ...map[string]int) map[string]int {
+	result := map[string]int{}
+	for _, item := range items {
+		for unitType, amount := range item {
+			result[unitType] += amount
+		}
+	}
+	return result
+}
+
+// isNpcTargetID 判断目标 ID 是否属于当前玩家地图里的 NPC 城池。
+func isNpcTargetID(state GameState, targetID string) bool {
+	if state.NpcState == nil {
+		return false
+	}
+	for _, city := range state.NpcState.Cities {
+		if city.ID == targetID {
+			return true
+		}
+	}
+	return false
 }
 
 func copyResources(src map[string]int) map[string]int {

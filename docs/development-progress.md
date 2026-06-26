@@ -258,7 +258,7 @@
   - 最高稀有度标签。
 - 当前阵营可兑换兵种显示“一键兑换”按钮。
 - 一键兑换会顺序调用现有单条兑换接口，把该兵种下所有剩余库存兑换完。
-- 非当前阵营兵种继续只允许暂存，保留“驻防增援系统完成后即可兑换”的提示。
+- 非当前阵营兵种现在可兑换，兑换后进入玩家驻防军队。
 - 移除弹窗内逐条兑换输入框，减少操作复杂度。
 
 ### 验证结果
@@ -276,7 +276,7 @@
 
 ### 改动目标
 
-把仙池垂钓从“只记录可兑换奖励”的展示型小游戏，升级成“库存消耗”模式：钓到的奖励先进入库存。玩家可以在独立弹窗中查看钓鱼记录与剩余库存，并对本阵营兵种进行部分兑换。非本阵营兵种暂时只能存储，等驻防增援系统完成后再开放兑换。
+把仙池垂钓从“只记录可兑换奖励”的展示型小游戏，升级成“库存消耗”模式：钓到的奖励先进入库存。玩家可以在独立弹窗中查看钓鱼记录与剩余库存。本阵营兵种兑换进入主军队，非本阵营兵种兑换进入驻防军队。
 
 ### 后端改动
 
@@ -296,7 +296,7 @@
 - MySQL 兑换使用事务和行锁，避免重复点击导致重复加兵。
 - 新增回归测试：
   - 本阵营兵种可以部分兑换并加入军队。
-  - 非本阵营兵种兑换会被拒绝，库存不变。
+  - 非本阵营兵种兑换进入驻防军队，库存正常扣减。
 
 ### Web 改动
 
@@ -306,7 +306,7 @@
 - 钓鱼记录与兑换列表放进独立弹窗中，弹窗内部滚动，避免记录过多撑高垂钓页面。
 - 弹窗顶部显示库存条数、可兑换数量和暂存数量。
 - 本阵营兵种显示兑换数量输入框和兑换按钮。
-- 非本阵营兵种展示提示：暂时只能存储，驻防增援系统完成后即可兑换。
+- 非本阵营兵种展示提示：兑换后进入驻防军队。
 - 兑换成功后局部更新军队状态和库存剩余数量。
 - PC 端仙池垂钓主画面重绘为像素风钓场：
   - 小人坐在岸边钓鱼。
@@ -374,7 +374,7 @@
 
 ### 后续注意事项
 
-- 非本阵营兵种仍然只能存储，不能兑换。
+- 非本阵营兵种可以兑换，兑换后进入驻防军队。
 - 当前只支持钓鱼奖励兑换；豪赌仍保留原有记录逻辑。
 - 第一版支持部分兑换，但没有兑换流水表；目前通过原始数量和剩余数量做 GM 查账。
 
@@ -732,3 +732,59 @@
 - `expiresAt` 第一阶段只存储和展示，不做自动清理和过期过滤。
 - 批量发信暂不实现，后续等运营需求明确后再设计。
 - 后续如果继续优化 `game/state`，优先评估 NPC 城池响应瘦身，但不要直接迁移存储结构。
+
+## 2026-06-26 公告系统
+
+### 范围
+
+- 完成纯公告系统闭环，公告独立于信函系统。
+- 公告不支持附件、不支持领取操作、不支持玩家回复。
+- 支持全服展示、已读状态、置顶、优先级、发布时间和过期时间。
+
+### 后端
+
+- 新增 `Announcement`、`AnnouncementRead`、`AnnouncementPage`、`AnnouncementInput`。
+- 新增公告服务：
+  - `AdminCreateAnnouncement`
+  - `AdminUpdateAnnouncement`
+  - `AdminPublishAnnouncement`
+  - `AdminArchiveAnnouncement`
+  - `ListAnnouncements`
+  - `GetAnnouncement`
+  - `MarkAnnouncementRead`
+- MySQL 新增独立表 `announcements` 和 `announcement_reads`。
+- 内存仓储同步支持公告。
+- 玩家接口：
+  - `GET /api/v1/announcements`
+  - `GET /api/v1/announcements/{announcementId}`
+  - `POST /api/v1/announcements/{announcementId}/read`
+- GM 接口：
+  - `GET /api/v1/admin/announcements`
+  - `POST /api/v1/admin/announcements`
+  - `PUT /api/v1/admin/announcements/{announcementId}`
+  - `DELETE /api/v1/admin/announcements/{announcementId}`
+  - `POST /api/v1/admin/announcements/{announcementId}/publish`
+  - `POST /api/v1/admin/announcements/{announcementId}/archive`
+
+### Web 和 Admin
+
+- 玩家端新增 `/notice` 公告页。
+- 侧边栏和移动端菜单公告入口支持未读数量。
+- 公告列表、详情弹窗、loading、错误和空状态已接入。
+- GM 后台新增独立公告管理页面，支持列表、新建、编辑、发布、下架和删除入口。
+- GM 表单支持类型、置顶、优先级、开始时间、结束时间和基础校验。
+
+### OpenAPI 和测试
+
+- 新增 `docs/openapi/paths/announcement.yaml`。
+- 新增 `docs/openapi/schemas/announcement.yaml`。
+- `docs/openapi/openapi.yaml` 挂载公告 tag、paths 和 schemas。
+- 新增服务测试覆盖创建、发布、可见性、草稿/归档隐藏、时间窗口、置顶排序、已读状态和信函隔离。
+
+### 验证结果
+
+- `cd go && go test ./...` 通过。
+- `cd web && pnpm build` 通过。
+- `cd admin && pnpm build` 通过。
+- `make openapi` 待本轮最终验证执行。
+- `git diff --check` 待本轮最终验证执行。

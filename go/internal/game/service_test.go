@@ -1,3 +1,4 @@
+// Hero3 游戏服务测试，覆盖资源、战斗、驻防、增援和小游戏奖励逻辑。
 package game
 
 import (
@@ -221,6 +222,19 @@ func setTestCombatUnitsConfig(t *testing.T) {
 					"cavalryDefense":  10,
 					"carryCapacity":   6,
 					"upkeep":          2,
+				},
+			},
+		},
+		"shu": FactionUnits{
+			"shuInfantry": UnitConfig{
+				Name:     "蜀步兵",
+				Category: "infantry",
+				Stats: map[string]int{
+					"attack":          9,
+					"infantryDefense": 9,
+					"cavalryDefense":  7,
+					"carryCapacity":   5,
+					"upkeep":          1,
 				},
 			},
 		},
@@ -1388,7 +1402,7 @@ func TestUseFishingBaitDeductsCityGoldAndWritesLedger(t *testing.T) {
 	}
 }
 
-func TestRedeemMiniGameRewardRejectsCrossFactionUnit(t *testing.T) {
+func TestRedeemMiniGameRewardAddsCrossFactionUnitToGarrison(t *testing.T) {
 	svc := NewService()
 	if err := svc.SetUnitsDir(filepath.Join("..", "..", "config", "units")); err != nil {
 		t.Fatalf("load units: %v", err)
@@ -1408,20 +1422,32 @@ func TestRedeemMiniGameRewardRejectsCrossFactionUnit(t *testing.T) {
 		t.Fatalf("save minigame record: %v", err)
 	}
 
-	_, err = svc.RedeemMiniGameReward(state.Player.ID, record.ID, 1000)
-	if !errors.Is(err, ErrCrossFactionReward) {
-		t.Fatalf("expected ErrCrossFactionReward, got %v", err)
+	result, err := svc.RedeemMiniGameReward(state.Player.ID, record.ID, 1000)
+	if err != nil {
+		t.Fatalf("RedeemMiniGameReward failed: %v", err)
+	}
+	if result.Record.RemainingAmount != 49000 {
+		t.Fatalf("expected remaining 49000, got %d", result.Record.RemainingAmount)
+	}
+	if result.RedeemedUnitID != "southernElephant" {
+		t.Fatalf("expected shu unit southernElephant, got %s", result.RedeemedUnitID)
+	}
+	if len(result.State.Army) != 0 {
+		t.Fatalf("expected cross faction unit not to enter main army, got %+v", result.State.Army)
+	}
+	if armyUnitAmount(result.State.GarrisonArmy, "southernElephant") != 1000 {
+		t.Fatalf("expected cross faction unit in garrison, got %+v", result.State.GarrisonArmy)
 	}
 	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "fishing", 10, 0)
 	if err != nil {
 		t.Fatalf("list records: %v", err)
 	}
-	if len(records) != 1 || records[0].RemainingAmount != 50000 {
-		t.Fatalf("expected stock unchanged, got %+v", records)
+	if len(records) != 1 || records[0].RemainingAmount != 49000 {
+		t.Fatalf("expected stock reduced, got %+v", records)
 	}
 }
 
-func TestRedeemAllFactionMiniGameRewardsSkipsCrossFactionStock(t *testing.T) {
+func TestRedeemAllFactionMiniGameRewardsRoutesCrossFactionStockToGarrison(t *testing.T) {
 	svc := NewService()
 	if err := svc.SetUnitsDir(filepath.Join("..", "..", "config", "units")); err != nil {
 		t.Fatalf("load units: %v", err)
@@ -1450,17 +1476,23 @@ func TestRedeemAllFactionMiniGameRewardsSkipsCrossFactionStock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RedeemAllFactionMiniGameRewards failed: %v", err)
 	}
-	if result.RedeemedAmount != 7000 {
-		t.Fatalf("expected redeemed amount 7000, got %d", result.RedeemedAmount)
+	if result.RedeemedAmount != 57000 {
+		t.Fatalf("expected redeemed amount 57000, got %d", result.RedeemedAmount)
 	}
-	if result.RedeemedRecords != 2 {
-		t.Fatalf("expected 2 redeemed records, got %d", result.RedeemedRecords)
+	if result.RedeemedRecords != 3 {
+		t.Fatalf("expected 3 redeemed records, got %d", result.RedeemedRecords)
 	}
-	if result.SkippedRecords != 1 || result.SkippedUnits["南蛮象"] != 50000 {
-		t.Fatalf("expected cross faction stock skipped, got records=%d units=%+v", result.SkippedRecords, result.SkippedUnits)
+	if result.SkippedRecords != 0 || len(result.SkippedUnits) != 0 {
+		t.Fatalf("expected no skipped stock, got records=%d units=%+v", result.SkippedRecords, result.SkippedUnits)
 	}
-	if result.RedeemedUnits["骁骑营"] != 5000 || result.RedeemedUnits["青州军"] != 2000 {
+	if result.RedeemedUnits["骁骑营"] != 5000 || result.RedeemedUnits["青州军"] != 2000 || result.RedeemedUnits["南蛮象"] != 50000 {
 		t.Fatalf("unexpected redeemed unit totals: %+v", result.RedeemedUnits)
+	}
+	if armyUnitAmount(result.State.Army, "qiQiYing") != 5000 || armyUnitAmount(result.State.Army, "qingZhouArmy") != 2000 {
+		t.Fatalf("expected faction units in main army, got %+v", result.State.Army)
+	}
+	if armyUnitAmount(result.State.GarrisonArmy, "southernElephant") != 50000 {
+		t.Fatalf("expected cross faction stock in garrison, got %+v", result.State.GarrisonArmy)
 	}
 
 	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "fishing", 10, 0)
@@ -1471,8 +1503,179 @@ func TestRedeemAllFactionMiniGameRewardsSkipsCrossFactionStock(t *testing.T) {
 	for _, record := range records {
 		remainingByUnit[record.RewardUnit] += record.RemainingAmount
 	}
-	if remainingByUnit["骁骑营"] != 0 || remainingByUnit["青州军"] != 0 || remainingByUnit["南蛮象"] != 50000 {
+	if remainingByUnit["骁骑营"] != 0 || remainingByUnit["青州军"] != 0 || remainingByUnit["南蛮象"] != 0 {
 		t.Fatalf("unexpected remaining stock: %+v", remainingByUnit)
+	}
+}
+
+func TestAddOwnedRewardUnitRoutesByFaction(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+
+	now := time.Now()
+	state := newPlayerState("player_reward_route", "Router", "wei", "caocao", now)
+	AddOwnedRewardUnit(&state, "weiInfantry", 30)
+	AddOwnedRewardUnit(&state, "shuInfantry", 20)
+
+	if armyUnitAmount(state.Army, "weiInfantry") != 30 {
+		t.Fatalf("expected faction reward in main army, got %+v", state.Army)
+	}
+	if armyUnitAmount(state.GarrisonArmy, "shuInfantry") != 20 {
+		t.Fatalf("expected cross faction reward in garrison army, got %+v", state.GarrisonArmy)
+	}
+}
+
+func TestReinforcePlayerFactionUnitEntersTargetGarrison(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_reinforce_faction", Username: "reinforce_faction", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	attacker := newPlayerState("player_reinforce_sender", "Sender", "wei", "caocao", now)
+	attacker.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	target := newPlayerState("player_reinforce_target", "Target", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, attacker, now); err != nil {
+		t.Fatalf("create sender: %v", err)
+	}
+	if err := repo.CreatePlayer(account.ID, target, now); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+
+	result, err := svc.ReinforcePlayer(ReinforcePlayerRequest{
+		PlayerID:       attacker.Player.ID,
+		TargetPlayerID: target.Player.ID,
+		Units:          map[string]int{"weiInfantry": 40},
+	})
+	if err != nil {
+		t.Fatalf("ReinforcePlayer failed: %v", err)
+	}
+	if result.BattleReport.Type != "reinforce" {
+		t.Fatalf("expected reinforce report, got %s", result.BattleReport.Type)
+	}
+	if result.BattleReport.DefenderGarrisonUnits["weiInfantry"] != 40 {
+		t.Fatalf("expected reinforce report to show target garrison, got %+v", result.BattleReport.DefenderGarrisonUnits)
+	}
+	storedSender, _ := repo.GetState(attacker.Player.ID)
+	storedTarget, _ := repo.GetState(target.Player.ID)
+	if armyUnitAmount(storedSender.Army, "weiInfantry") != 60 {
+		t.Fatalf("expected sender army deducted to 60, got %+v", storedSender.Army)
+	}
+	if armyUnitAmount(storedTarget.GarrisonArmy, "weiInfantry") != 40 || armyUnitAmount(storedTarget.Army, "weiInfantry") != 0 {
+		t.Fatalf("expected target garrison only, army=%+v garrison=%+v", storedTarget.Army, storedTarget.GarrisonArmy)
+	}
+}
+
+func TestReinforcePlayerCrossFactionUnitEntersTargetGarrison(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_reinforce_cross", Username: "reinforce_cross", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	sender := newPlayerState("player_reinforce_cross_sender", "Sender", "wei", "caocao", now)
+	sender.GarrisonArmy = []ArmyUnit{{UnitType: "shuInfantry", Amount: 70}}
+	target := newPlayerState("player_reinforce_cross_target", "Target", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, sender, now); err != nil {
+		t.Fatalf("create sender: %v", err)
+	}
+	if err := repo.CreatePlayer(account.ID, target, now); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+
+	_, err := svc.ReinforcePlayer(ReinforcePlayerRequest{
+		PlayerID:       sender.Player.ID,
+		TargetPlayerID: target.Player.ID,
+		Units:          map[string]int{"shuInfantry": 30},
+	})
+	if err != nil {
+		t.Fatalf("ReinforcePlayer failed: %v", err)
+	}
+	storedSender, _ := repo.GetState(sender.Player.ID)
+	storedTarget, _ := repo.GetState(target.Player.ID)
+	if armyUnitAmount(storedSender.GarrisonArmy, "shuInfantry") != 40 {
+		t.Fatalf("expected sender garrison deducted to 40, got %+v", storedSender.GarrisonArmy)
+	}
+	if armyUnitAmount(storedTarget.GarrisonArmy, "shuInfantry") != 30 {
+		t.Fatalf("expected cross faction reinforcement in target garrison, got %+v", storedTarget.GarrisonArmy)
+	}
+}
+
+func TestReinforcePlayerRejectsNpcTarget(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_reinforce_npc", Username: "reinforce_npc", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_reinforce_npc", "Sender", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	state.NpcState = &NpcState{Cities: []NpcCity{{ID: "npc-city-1", Name: "NPC", Faction: "wei"}}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	_, err := svc.ReinforcePlayer(ReinforcePlayerRequest{
+		PlayerID:       state.Player.ID,
+		TargetPlayerID: "npc-city-1",
+		Units:          map[string]int{"weiInfantry": 10},
+	})
+	if !errors.Is(err, ErrNpcReinforceNotAllowed) {
+		t.Fatalf("expected ErrNpcReinforceNotAllowed, got %v", err)
+	}
+}
+
+func TestAttackPlayerUsesGarrisonAndDeductsGarrisonLosses(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_attack_garrison", Username: "attack_garrison", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	attacker := newPlayerState("player_attack_garrison_attacker", "Attacker", "wei", "caocao", now)
+	attacker.Army = []ArmyUnit{{UnitType: "weiCavalry", Amount: 200}}
+	defender := newPlayerState("player_attack_garrison_defender", "Defender", "wei", "caocao", now)
+	defender.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 10}}
+	defender.GarrisonArmy = []ArmyUnit{{UnitType: "weiInfantry", Amount: 90}}
+	if err := repo.CreatePlayer(account.ID, attacker, now); err != nil {
+		t.Fatalf("create attacker: %v", err)
+	}
+	if err := repo.CreatePlayer(account.ID, defender, now); err != nil {
+		t.Fatalf("create defender: %v", err)
+	}
+
+	result, err := svc.AttackPlayer(AttackPlayerRequest{
+		PlayerID:       attacker.Player.ID,
+		TargetPlayerID: defender.Player.ID,
+		Mode:           "attack",
+		Units:          map[string]int{"weiCavalry": 200},
+	})
+	if err != nil {
+		t.Fatalf("AttackPlayer failed: %v", err)
+	}
+	if result.BattleReport.EnemyPower <= 100 {
+		t.Fatalf("expected garrison to contribute to defense power, got %d", result.BattleReport.EnemyPower)
+	}
+	storedDefender, _ := repo.GetState(defender.Player.ID)
+	if armyUnitAmount(storedDefender.GarrisonArmy, "weiInfantry") != 0 {
+		t.Fatalf("expected garrison losses deducted from garrison, got %+v", storedDefender.GarrisonArmy)
+	}
+	if armyUnitAmount(storedDefender.Army, "weiInfantry") != 0 {
+		t.Fatalf("expected main army losses deducted separately, got %+v", storedDefender.Army)
+	}
+	if result.BattleReport.DefenderGarrisonLostUnits["weiInfantry"] != 90 {
+		t.Fatalf("expected report to track garrison losses, got %+v", result.BattleReport.DefenderGarrisonLostUnits)
 	}
 }
 
@@ -1617,6 +1820,202 @@ func TestGMSendMailAppearsInPlayerMailbox(t *testing.T) {
 	if page.Mails[0].ID != mail.ID || page.Mails[0].Title != "GM 测试" {
 		t.Fatalf("unexpected listed mail: %+v", page.Mails[0])
 	}
+}
+
+func TestAdminCreateAnnouncementCreatesDraft(t *testing.T) {
+	svc := NewService()
+
+	announcement, err := svc.AdminCreateAnnouncement(AnnouncementInput{
+		Title:   "停服维护预告",
+		Content: "今晚将进行维护。",
+		Type:    AnnouncementTypeMaintenance,
+	})
+	if err != nil {
+		t.Fatalf("AdminCreateAnnouncement failed: %v", err)
+	}
+	if announcement.ID == "" || announcement.Status != AnnouncementStatusDraft {
+		t.Fatalf("expected draft announcement with id, got %+v", announcement)
+	}
+	if announcement.Type != AnnouncementTypeMaintenance {
+		t.Fatalf("expected maintenance type, got %s", announcement.Type)
+	}
+
+	list, err := svc.AdminListAnnouncements()
+	if err != nil {
+		t.Fatalf("AdminListAnnouncements failed: %v", err)
+	}
+	if len(list) != 1 || list[0].ID != announcement.ID {
+		t.Fatalf("expected created announcement in admin list, got %+v", list)
+	}
+}
+
+func TestAdminPublishAnnouncementMakesItVisible(t *testing.T) {
+	svc, playerID := newAnnouncementTestService(t, "player_announcement_publish")
+
+	announcement, err := svc.AdminCreateAnnouncement(AnnouncementInput{
+		Title:   "系统公告",
+		Content: "欢迎进入 Hero3。",
+		Type:    AnnouncementTypeSystem,
+	})
+	if err != nil {
+		t.Fatalf("AdminCreateAnnouncement failed: %v", err)
+	}
+	published, err := svc.AdminPublishAnnouncement(announcement.ID)
+	if err != nil {
+		t.Fatalf("AdminPublishAnnouncement failed: %v", err)
+	}
+	if published.Status != AnnouncementStatusPublished {
+		t.Fatalf("expected published status, got %s", published.Status)
+	}
+
+	page, err := svc.ListAnnouncements(playerID)
+	if err != nil {
+		t.Fatalf("ListAnnouncements failed: %v", err)
+	}
+	if len(page.Announcements) != 1 || page.Announcements[0].ID != announcement.ID {
+		t.Fatalf("expected published announcement visible, got %+v", page)
+	}
+}
+
+func TestPlayerAnnouncementVisibilityRules(t *testing.T) {
+	svc, playerID := newAnnouncementTestService(t, "player_announcement_visibility")
+	now := time.Now().UTC()
+
+	visible := mustCreateAnnouncement(t, svc, AnnouncementInput{
+		Title:    "可见公告",
+		Content:  "这条公告当前可见。",
+		Type:     AnnouncementTypeUpdate,
+		StartsAt: now.Add(-time.Minute).Format(time.RFC3339),
+		EndsAt:   now.Add(time.Hour).Format(time.RFC3339),
+	}, true)
+	draft := mustCreateAnnouncement(t, svc, AnnouncementInput{
+		Title:   "草稿公告",
+		Content: "草稿不应可见。",
+	}, false)
+	archived := mustCreateAnnouncement(t, svc, AnnouncementInput{
+		Title:   "归档公告",
+		Content: "归档不应可见。",
+	}, true)
+	if _, err := svc.AdminArchiveAnnouncement(archived.ID); err != nil {
+		t.Fatalf("AdminArchiveAnnouncement failed: %v", err)
+	}
+	future := mustCreateAnnouncement(t, svc, AnnouncementInput{
+		Title:    "未来公告",
+		Content:  "未到展示时间。",
+		StartsAt: now.Add(time.Hour).Format(time.RFC3339),
+	}, true)
+	expired := mustCreateAnnouncement(t, svc, AnnouncementInput{
+		Title:    "过期公告",
+		Content:  "已经过期。",
+		StartsAt: now.Add(-2 * time.Hour).Format(time.RFC3339),
+		EndsAt:   now.Add(-time.Minute).Format(time.RFC3339),
+	}, true)
+
+	page, err := svc.ListAnnouncements(playerID)
+	if err != nil {
+		t.Fatalf("ListAnnouncements failed: %v", err)
+	}
+	if len(page.Announcements) != 1 || page.Announcements[0].ID != visible.ID {
+		t.Fatalf("expected only visible announcement, got %+v; hidden ids: %s %s %s %s", page, draft.ID, archived.ID, future.ID, expired.ID)
+	}
+}
+
+func TestPinnedAnnouncementSortsFirst(t *testing.T) {
+	svc, playerID := newAnnouncementTestService(t, "player_announcement_sort")
+
+	normal := mustCreateAnnouncement(t, svc, AnnouncementInput{
+		Title:    "普通公告",
+		Content:  "普通公告内容。",
+		Priority: 10,
+	}, true)
+	pinned := mustCreateAnnouncement(t, svc, AnnouncementInput{
+		Title:    "置顶公告",
+		Content:  "置顶公告内容。",
+		Pinned:   true,
+		Priority: 1,
+	}, true)
+
+	page, err := svc.ListAnnouncements(playerID)
+	if err != nil {
+		t.Fatalf("ListAnnouncements failed: %v", err)
+	}
+	if len(page.Announcements) < 2 {
+		t.Fatalf("expected at least two announcements, got %+v", page)
+	}
+	if page.Announcements[0].ID != pinned.ID || page.Announcements[1].ID != normal.ID {
+		t.Fatalf("expected pinned first, got %+v", page.Announcements)
+	}
+}
+
+func TestAnnouncementReadStateAndMailIsolation(t *testing.T) {
+	svc, playerID := newAnnouncementTestService(t, "player_announcement_read")
+
+	announcement := mustCreateAnnouncement(t, svc, AnnouncementInput{
+		Title:   "活动公告",
+		Content: "本公告只有文字内容。",
+		Type:    AnnouncementTypeEvent,
+	}, true)
+	before, err := svc.ListAnnouncements(playerID)
+	if err != nil {
+		t.Fatalf("ListAnnouncements before read failed: %v", err)
+	}
+	if before.Unread != 1 || before.Announcements[0].Read {
+		t.Fatalf("expected one unread announcement, got %+v", before)
+	}
+
+	readAnnouncement, err := svc.MarkAnnouncementRead(playerID, announcement.ID)
+	if err != nil {
+		t.Fatalf("MarkAnnouncementRead failed: %v", err)
+	}
+	if !readAnnouncement.Read {
+		t.Fatalf("expected read announcement, got %+v", readAnnouncement)
+	}
+	after, err := svc.ListAnnouncements(playerID)
+	if err != nil {
+		t.Fatalf("ListAnnouncements after read failed: %v", err)
+	}
+	if after.Unread != 0 || !after.Announcements[0].Read {
+		t.Fatalf("expected read=true and unread=0, got %+v", after)
+	}
+
+	mails, err := svc.ListMails(playerID, 1, 10, "")
+	if err != nil {
+		t.Fatalf("ListMails failed: %v", err)
+	}
+	if mails.Total != 0 || mails.Unread != 0 || len(mails.Mails) != 0 {
+		t.Fatalf("announcement should not create mail, got %+v", mails)
+	}
+}
+
+func newAnnouncementTestService(t *testing.T, playerID string) (*Service, string) {
+	t.Helper()
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "account_" + playerID, Username: "user_" + playerID, PasswordHash: "hash", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState(playerID, "公告测试", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+	return svc, state.Player.ID
+}
+
+func mustCreateAnnouncement(t *testing.T, svc *Service, input AnnouncementInput, publish bool) Announcement {
+	t.Helper()
+	announcement, err := svc.AdminCreateAnnouncement(input)
+	if err != nil {
+		t.Fatalf("AdminCreateAnnouncement failed: %v", err)
+	}
+	if publish {
+		announcement, err = svc.AdminPublishAnnouncement(announcement.ID)
+		if err != nil {
+			t.Fatalf("AdminPublishAnnouncement failed: %v", err)
+		}
+	}
+	return announcement
 }
 
 func loadTestItemsConfig(t *testing.T) {

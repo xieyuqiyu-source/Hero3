@@ -1,3 +1,4 @@
+// Hero3 MySQL 仓储实现，负责玩家状态、战报、信函和小游戏记录持久化。
 package storage
 
 import (
@@ -95,6 +96,31 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			INDEX idx_mails_player_list (player_id, deleted_by_player, created_at DESC),
 			INDEX idx_mails_player_unread (player_id, deleted_by_player, is_read),
 			INDEX idx_mails_source (source_type, source_id)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS announcements (
+			id VARCHAR(64) PRIMARY KEY,
+			title VARCHAR(160) NOT NULL,
+			content TEXT NOT NULL,
+			type VARCHAR(32) NOT NULL,
+			status VARCHAR(32) NOT NULL,
+			pinned TINYINT(1) NOT NULL DEFAULT 0,
+			priority INT NOT NULL DEFAULT 0,
+			starts_at DATETIME(6) NULL,
+			ends_at DATETIME(6) NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			INDEX idx_announcements_visible (status, pinned, priority, starts_at, created_at),
+			INDEX idx_announcements_admin (updated_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS announcement_reads (
+			announcement_id VARCHAR(64) NOT NULL,
+			player_id VARCHAR(64) NOT NULL,
+			read_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (announcement_id, player_id),
+			INDEX idx_announcement_reads_player (player_id, read_at),
+			CONSTRAINT fk_announcement_reads_announcement
+				FOREIGN KEY (announcement_id) REFERENCES announcements(id)
+				ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS minigame_records (
 			id VARCHAR(64) PRIMARY KEY,
@@ -566,6 +592,7 @@ func (r *MySQLRepository) DeleteAccount(accountID string) error {
 	for _, playerID := range playerIDs {
 		_, _ = r.db.Exec(`DELETE FROM battle_reports WHERE player_id = ?`, playerID)
 		_, _ = r.db.Exec(`DELETE FROM mails WHERE player_id = ?`, playerID)
+		_, _ = r.db.Exec(`DELETE FROM announcement_reads WHERE player_id = ?`, playerID)
 	}
 
 	result, err := r.db.Exec(`DELETE FROM accounts WHERE id = ?`, accountID)
@@ -587,6 +614,7 @@ func (r *MySQLRepository) DeletePlayer(playerID string) error {
 	// 先删独立存储
 	_, _ = r.db.Exec(`DELETE FROM battle_reports WHERE player_id = ?`, playerID)
 	_, _ = r.db.Exec(`DELETE FROM mails WHERE player_id = ?`, playerID)
+	_, _ = r.db.Exec(`DELETE FROM announcement_reads WHERE player_id = ?`, playerID)
 
 	result, err := r.db.Exec(`DELETE FROM players WHERE id = ?`, playerID)
 	if err != nil {
@@ -621,10 +649,12 @@ func (r *MySQLRepository) GetState(playerID string) (game.GameState, error) {
 	if state.Player.MailCode == "" {
 		state.Player.MailCode = mailCode
 	}
+	game.NormalizeGameState(&state)
 	return state, nil
 }
 
 func (r *MySQLRepository) SaveState(state game.GameState, updatedAt time.Time) error {
+	game.NormalizeGameState(&state)
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
 		return err
@@ -653,6 +683,45 @@ func (r *MySQLRepository) SaveState(state game.GameState, updatedAt time.Time) e
 		return game.ErrPlayerNotFound
 	}
 	return nil
+}
+
+// SaveStates 在一个事务中保存多个玩家状态，避免玩家互攻或增援只落一边。
+func (r *MySQLRepository) SaveStates(states []game.GameState, updatedAt time.Time) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for i := range states {
+		game.NormalizeGameState(&states[i])
+		stateJSON, err := json.Marshal(states[i])
+		if err != nil {
+			return err
+		}
+		result, err := tx.Exec(
+			`UPDATE players
+			 SET nickname = ?, faction = ?, mail_code = ?, state_json = ?, updated_at = ?
+			 WHERE id = ?`,
+			states[i].Player.Nickname,
+			states[i].Player.Faction,
+			states[i].Player.MailCode,
+			stateJSON,
+			updatedAt.UTC(),
+			states[i].Player.ID,
+		)
+		if err != nil {
+			return err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 {
+			return game.ErrPlayerNotFound
+		}
+	}
+	return tx.Commit()
 }
 
 func isDuplicateEntry(err error) bool {
@@ -1175,6 +1244,243 @@ func scanMail(scanner mailScanner) (game.Mail, error) {
 	return mail, nil
 }
 
+// --- Announcement Methods ---
+
+func (r *MySQLRepository) CreateAnnouncement(announcement game.Announcement) error {
+	startsAt, err := announcementTimeValue(announcement.StartsAt)
+	if err != nil {
+		return game.ErrInvalidAnnouncement
+	}
+	endsAt, err := announcementTimeValue(announcement.EndsAt)
+	if err != nil {
+		return game.ErrInvalidAnnouncement
+	}
+	createdAt, err := requiredAnnouncementTime(announcement.CreatedAt)
+	if err != nil {
+		return game.ErrInvalidAnnouncement
+	}
+	updatedAt, err := requiredAnnouncementTime(announcement.UpdatedAt)
+	if err != nil {
+		return game.ErrInvalidAnnouncement
+	}
+
+	_, err = r.db.Exec(
+		`INSERT INTO announcements (
+			id, title, content, type, status, pinned, priority, starts_at, ends_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		announcement.ID,
+		announcement.Title,
+		announcement.Content,
+		string(announcement.Type),
+		string(announcement.Status),
+		announcement.Pinned,
+		announcement.Priority,
+		startsAt,
+		endsAt,
+		createdAt,
+		updatedAt,
+	)
+	if isDuplicateEntry(err) {
+		return game.ErrInvalidAnnouncement
+	}
+	return err
+}
+
+func (r *MySQLRepository) UpdateAnnouncement(announcement game.Announcement) error {
+	startsAt, err := announcementTimeValue(announcement.StartsAt)
+	if err != nil {
+		return game.ErrInvalidAnnouncement
+	}
+	endsAt, err := announcementTimeValue(announcement.EndsAt)
+	if err != nil {
+		return game.ErrInvalidAnnouncement
+	}
+	updatedAt, err := requiredAnnouncementTime(announcement.UpdatedAt)
+	if err != nil {
+		return game.ErrInvalidAnnouncement
+	}
+
+	result, err := r.db.Exec(
+		`UPDATE announcements
+		 SET title = ?, content = ?, type = ?, status = ?, pinned = ?, priority = ?, starts_at = ?, ends_at = ?, updated_at = ?
+		 WHERE id = ?`,
+		announcement.Title,
+		announcement.Content,
+		string(announcement.Type),
+		string(announcement.Status),
+		announcement.Pinned,
+		announcement.Priority,
+		startsAt,
+		endsAt,
+		updatedAt,
+		announcement.ID,
+	)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err == nil && affected == 0 {
+		return game.ErrAnnouncementNotFound
+	}
+	return err
+}
+
+func (r *MySQLRepository) GetAnnouncementByID(announcementID string) (game.Announcement, error) {
+	announcement, err := scanAnnouncement(r.db.QueryRow(
+		`SELECT id, title, content, type, status, pinned, priority, starts_at, ends_at, created_at, updated_at, NULL
+		 FROM announcements
+		 WHERE id = ? LIMIT 1`,
+		announcementID,
+	))
+	if errors.Is(err, sql.ErrNoRows) {
+		return game.Announcement{}, game.ErrAnnouncementNotFound
+	}
+	return announcement, err
+}
+
+func (r *MySQLRepository) ListAdminAnnouncements() ([]game.Announcement, error) {
+	rows, err := r.db.Query(
+		`SELECT id, title, content, type, status, pinned, priority, starts_at, ends_at, created_at, updated_at, NULL
+		 FROM announcements
+		 ORDER BY pinned DESC, priority DESC, COALESCE(starts_at, created_at) DESC, created_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	announcements := []game.Announcement{}
+	for rows.Next() {
+		announcement, err := scanAnnouncement(rows)
+		if err != nil {
+			return nil, err
+		}
+		announcements = append(announcements, announcement)
+	}
+	return announcements, rows.Err()
+}
+
+func (r *MySQLRepository) ListVisibleAnnouncements(playerID string, now time.Time) ([]game.Announcement, error) {
+	rows, err := r.db.Query(
+		`SELECT a.id, a.title, a.content, a.type, a.status, a.pinned, a.priority,
+			a.starts_at, a.ends_at, a.created_at, a.updated_at, ar.read_at
+		 FROM announcements a
+		 LEFT JOIN announcement_reads ar
+			ON ar.announcement_id = a.id AND ar.player_id = ?
+		 WHERE a.status = ?
+			AND (a.starts_at IS NULL OR a.starts_at <= ?)
+			AND (a.ends_at IS NULL OR a.ends_at > ?)
+		 ORDER BY a.pinned DESC, a.priority DESC, COALESCE(a.starts_at, a.created_at) DESC, a.created_at DESC`,
+		playerID,
+		string(game.AnnouncementStatusPublished),
+		now.UTC(),
+		now.UTC(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	announcements := []game.Announcement{}
+	for rows.Next() {
+		announcement, err := scanAnnouncement(rows)
+		if err != nil {
+			return nil, err
+		}
+		announcements = append(announcements, announcement)
+	}
+	return announcements, rows.Err()
+}
+
+func (r *MySQLRepository) MarkAnnouncementRead(playerID string, announcementID string, readAt time.Time) error {
+	var exists int
+	if err := r.db.QueryRow(`SELECT 1 FROM announcements WHERE id = ? LIMIT 1`, announcementID).Scan(&exists); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return game.ErrAnnouncementNotFound
+		}
+		return err
+	}
+	_, err := r.db.Exec(
+		`INSERT INTO announcement_reads (announcement_id, player_id, read_at)
+		 VALUES (?, ?, ?)
+		 ON DUPLICATE KEY UPDATE read_at = VALUES(read_at)`,
+		announcementID,
+		playerID,
+		readAt.UTC(),
+	)
+	return err
+}
+
+type announcementScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanAnnouncement(scanner announcementScanner) (game.Announcement, error) {
+	var announcement game.Announcement
+	var announcementType string
+	var status string
+	var startsAt sql.NullTime
+	var endsAt sql.NullTime
+	var createdAt time.Time
+	var updatedAt time.Time
+	var readAt sql.NullTime
+
+	err := scanner.Scan(
+		&announcement.ID,
+		&announcement.Title,
+		&announcement.Content,
+		&announcementType,
+		&status,
+		&announcement.Pinned,
+		&announcement.Priority,
+		&startsAt,
+		&endsAt,
+		&createdAt,
+		&updatedAt,
+		&readAt,
+	)
+	if err != nil {
+		return game.Announcement{}, err
+	}
+
+	announcement.Type = game.AnnouncementType(announcementType)
+	announcement.Status = game.AnnouncementStatus(status)
+	if startsAt.Valid {
+		announcement.StartsAt = startsAt.Time.UTC().Format(time.RFC3339)
+	}
+	if endsAt.Valid {
+		announcement.EndsAt = endsAt.Time.UTC().Format(time.RFC3339)
+	}
+	announcement.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+	announcement.UpdatedAt = updatedAt.UTC().Format(time.RFC3339)
+	announcement.Read = readAt.Valid
+	return announcement, nil
+}
+
+func announcementTimeValue(value string) (any, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil, err
+	}
+	return parsed.UTC(), nil
+}
+
+func requiredAnnouncementTime(value string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, game.ErrInvalidAnnouncement
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return parsed.UTC(), nil
+}
+
 // --- MiniGame Record Methods ---
 
 func (r *MySQLRepository) SaveMiniGameRecord(record game.MiniGameRecord) error {
@@ -1302,7 +1608,7 @@ func (r *MySQLRepository) RedeemMiniGameRecord(playerID string, recordID string,
 	if err = json.Unmarshal(stateJSON, &state); err != nil {
 		return game.MiniGameRedeemResult{}, err
 	}
-	unitID, unitCfg, ok := game.FindFactionUnitByName(state.Player.Faction, record.RewardUnit)
+	_, unitID, unitCfg, ok := game.FindUnitByName(record.RewardUnit)
 	if !ok {
 		return game.MiniGameRedeemResult{}, game.ErrCrossFactionReward
 	}
@@ -1321,7 +1627,7 @@ func (r *MySQLRepository) RedeemMiniGameRecord(playerID string, recordID string,
 		return game.MiniGameRedeemResult{}, game.ErrMiniGameStockShort
 	}
 
-	game.AddArmyUnit(&state, unitID, amount)
+	game.AddOwnedRewardUnit(&state, unitID, amount)
 	state.ServerTime = redeemedAt.UTC().Format(time.RFC3339)
 	nextStateJSON, err := json.Marshal(state)
 	if err != nil {
@@ -1393,14 +1699,14 @@ func (r *MySQLRepository) RedeemAllFactionMiniGameRecords(playerID string, gameT
 		if err := rows.Scan(&recordID, &rewardUnit, &remainingAmount); err != nil {
 			return game.MiniGameRedeemAllResult{}, err
 		}
-		unitID, unitCfg, ok := game.FindFactionUnitByName(state.Player.Faction, rewardUnit)
+		_, unitID, unitCfg, ok := game.FindUnitByName(rewardUnit)
 		if !ok {
 			skippedUnits[rewardUnit] += remainingAmount
 			skippedRecords++
 			continue
 		}
 		redeemIDs = append(redeemIDs, recordID)
-		game.AddArmyUnit(&state, unitID, remainingAmount)
+		game.AddOwnedRewardUnit(&state, unitID, remainingAmount)
 		redeemedUnits[unitCfg.Name] += remainingAmount
 		redeemedRecords++
 	}

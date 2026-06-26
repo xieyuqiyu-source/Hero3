@@ -1,3 +1,4 @@
+// Hero3 游戏核心服务，负责账号、存档、配置和通用业务入口。
 package game
 
 import (
@@ -41,6 +42,8 @@ var (
 	ErrMailClaimForbidden    = errors.New("mail attachments cannot be claimed")
 	ErrMailInvalidAttachment = errors.New("invalid mail attachment")
 	ErrMailRecipientSelf     = errors.New("cannot send mail to yourself")
+	ErrAnnouncementNotFound  = errors.New("announcement not found")
+	ErrInvalidAnnouncement   = errors.New("invalid announcement")
 	ErrMiniGameNotFound      = errors.New("minigame record not found")
 	ErrInvalidMiniGame       = errors.New("invalid minigame record")
 	ErrInvalidBait           = errors.New("invalid fishing bait")

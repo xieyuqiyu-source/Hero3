@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition, GeneralActionResult } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, Announcement, AnnouncementPage, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition, GeneralActionResult } from '@/types/game'
 import type { BalanceConfig, FactionConfig, FishingConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -211,6 +211,20 @@ export const gameApi = {
     })
   },
 
+  /** 攻击其他玩家城池 */
+  attackPlayer(playerId: string, targetPlayerId: string, mode: 'attack' | 'plunder', units: Record<string, number>) {
+    return api.post<{ battleReport: BattleReport; state: GameState }>('/map/players/attack', {
+      playerId, targetPlayerId, mode, units,
+    })
+  },
+
+  /** 增援其他玩家，抵达后进入目标驻防军队 */
+  reinforcePlayer(playerId: string, targetPlayerId: string, units: Record<string, number>) {
+    return api.post<{ battleReport: BattleReport; state: GameState; targetState: GameState }>('/map/players/reinforce', {
+      playerId, targetPlayerId, units,
+    })
+  },
+
   /** 侦查 NPC 城池 */
   scoutNpc(playerId: string, npcId: string) {
     return api.post<{ success: boolean; battleReport: BattleReport; npcCity: NpcCity | null; state: GameState }>('/map/npc-cities/scout', { playerId, npcId })
@@ -279,6 +293,23 @@ export const gameApi = {
       title,
       content,
     })
+  },
+
+  /** 获取玩家可见公告列表 */
+  listAnnouncements(playerId: string) {
+    const params = new URLSearchParams({ playerId })
+    return api.get<AnnouncementPage>(`/announcements?${params.toString()}`)
+  },
+
+  /** 获取公告详情 */
+  getAnnouncement(playerId: string, announcementId: string) {
+    const params = new URLSearchParams({ playerId })
+    return api.get<Announcement>(`/announcements/${announcementId}?${params.toString()}`)
+  },
+
+  /** 标记公告已读 */
+  markAnnouncementRead(playerId: string, announcementId: string) {
+    return api.post<Announcement>(`/announcements/${announcementId}/read`, { playerId })
   },
 
   /** 金币兑换城金（1金币=10城金，有冷却） */

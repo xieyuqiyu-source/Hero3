@@ -1,4 +1,6 @@
-import type { AccountSummary, BalanceConfig, FishingConfig, GameState, GoldLedgerEntry, HealthState, ItemDefinition, Mail, MailAttachment, MailPage, NpcConfig, NpcState, UnitConfig } from '@/types'
+/* Hero3 GM 后台 API 客户端，封装 Admin Token 请求。 */
+
+import type { AccountSummary, Announcement, AnnouncementInput, BalanceConfig, FishingConfig, GameState, GoldLedgerEntry, HealthState, ItemDefinition, Mail, MailAttachment, MailPage, NpcConfig, NpcState, UnitConfig } from '@/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1'
 const ROOT_BASE = API_BASE.replace(/\/api\/v1$/, '')
@@ -246,5 +248,37 @@ export const adminApi = {
   },
   getPlayerMails(playerId: string, page = 1, pageSize = 10) {
     return request<MailPage>(`${API_BASE}/admin/players/${playerId}/mails?page=${page}&pageSize=${pageSize}`)
+  },
+  getAnnouncements() {
+    return request<{ announcements: Announcement[] }>(`${API_BASE}/admin/announcements`)
+  },
+  createAnnouncement(payload: AnnouncementInput) {
+    return request<Announcement>(`${API_BASE}/admin/announcements`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  },
+  updateAnnouncement(announcementId: string, payload: AnnouncementInput) {
+    return request<Announcement>(`${API_BASE}/admin/announcements/${announcementId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  },
+  publishAnnouncement(announcementId: string) {
+    return request<Announcement>(`${API_BASE}/admin/announcements/${announcementId}/publish`, {
+      method: 'POST',
+    })
+  },
+  archiveAnnouncement(announcementId: string) {
+    return request<Announcement>(`${API_BASE}/admin/announcements/${announcementId}/archive`, {
+      method: 'POST',
+    })
+  },
+  deleteAnnouncement(announcementId: string) {
+    return request<Announcement>(`${API_BASE}/admin/announcements/${announcementId}`, {
+      method: 'DELETE',
+    })
   },
 }

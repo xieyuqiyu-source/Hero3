@@ -1,3 +1,5 @@
+/* Hero3 玩家端应用入口，负责路由和全局初始化。 */
+
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { useEffect } from 'react'
 import Layout from './components/Layout'
@@ -13,6 +15,7 @@ import MilitaryPage from './pages/military'
 import MapPage from './pages/map'
 import NewsPage from './pages/news'
 import MailPage from './pages/mail'
+import NoticePage from './pages/notice'
 
 import AccountPage from './pages/account'
 import SettingsPage from './pages/settings'
@@ -47,6 +50,7 @@ function App() {
             <Route path="/map" element={<MapPage />} />
             <Route path="/news" element={<NewsPage />} />
             <Route path="/mail" element={<MailPage />} />
+            <Route path="/notice" element={<NoticePage />} />
 
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/account" element={<AccountPage />} />

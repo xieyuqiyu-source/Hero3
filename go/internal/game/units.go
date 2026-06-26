@@ -1,3 +1,4 @@
+// Hero3 兵种与阵营配置加载及查找逻辑。
 package game
 
 import (
@@ -104,6 +105,43 @@ func FindFactionUnitByName(faction string, unitName string) (string, UnitConfig,
 	for unitID, config := range units {
 		if strings.TrimSpace(config.Name) == unitName {
 			return unitID, config, true
+		}
+	}
+	return "", UnitConfig{}, false
+}
+
+// FindUnitByName 在所有阵营中按显示名查找兵种。
+func FindUnitByName(unitName string) (string, string, UnitConfig, bool) {
+	unitName = strings.TrimSpace(unitName)
+	if unitName == "" {
+		return "", "", UnitConfig{}, false
+	}
+	if alias, ok := unitNameAliases[unitName]; ok {
+		unitName = alias
+	}
+	unitsMu.RLock()
+	defer unitsMu.RUnlock()
+	for faction, factionUnits := range activeUnits {
+		for unitID, config := range factionUnits {
+			if strings.TrimSpace(config.Name) == unitName {
+				return faction, unitID, config, true
+			}
+		}
+	}
+	return "", "", UnitConfig{}, false
+}
+
+// FindUnitConfigByID 在所有阵营中按兵种 ID 查找配置。
+func FindUnitConfigByID(unitID string) (string, UnitConfig, bool) {
+	unitID = strings.TrimSpace(unitID)
+	if unitID == "" {
+		return "", UnitConfig{}, false
+	}
+	unitsMu.RLock()
+	defer unitsMu.RUnlock()
+	for faction, factionUnits := range activeUnits {
+		if config, ok := factionUnits[unitID]; ok {
+			return faction, config, true
 		}
 	}
 	return "", UnitConfig{}, false

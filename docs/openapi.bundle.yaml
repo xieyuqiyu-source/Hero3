@@ -25,6 +25,8 @@ tags:
   description: 军情与战报
 - name: Mail
   description: 信函系统
+- name: Announcement
+  description: 公告系统
 - name: MiniGame
   description: 万象幻境小游戏
 - name: Admin
@@ -736,6 +738,82 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/map/players/attack:
+    post:
+      tags:
+      - Map
+      summary: 攻击其他玩家城池
+      description: 玩家互攻基础接口。攻击方从主军队出征；防守方主军队和驻防军队共同参与防守，战损按来源分别扣减。
+      operationId: attackPlayerCity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttackPlayerRequest'
+      responses:
+        '200':
+          description: 玩家互攻战斗结算结果和攻击方最新状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttackPlayerResponse'
+        '400':
+          description: 参数错误、目标无效或未选择出征兵力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 玩家或兵种不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: 出征兵力不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/map/players/reinforce:
+    post:
+      tags:
+      - Map
+      summary: 增援其他玩家
+      description: 只能增援其他玩家，不能增援 NPC 城池。发起方扣除对应兵力；抵达后无论兵种阵营，全部进入目标玩家 garrisonArmy。
+      operationId: reinforcePlayer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReinforcePlayerRequest'
+      responses:
+        '200':
+          description: 增援结果、发起方状态和目标玩家状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReinforcePlayerResponse'
+        '400':
+          description: 参数错误、目标无效、选择了 NPC 或未选择增援兵力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 玩家或兵种不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: 增援兵力不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/news/reports:
     get:
       tags:
@@ -948,6 +1026,89 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/announcements:
+    get:
+      tags:
+      - Announcement
+      summary: 获取当前玩家可见公告列表
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 公告列表和未读数量
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementPage'
+        '404':
+          description: 玩家不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/announcements/{announcementId}:
+    get:
+      tags:
+      - Announcement
+      summary: 获取当前玩家可见公告详情
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: playerId
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 公告详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+        '404':
+          description: 公告不存在、未发布、未到展示时间或已过期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/announcements/{announcementId}/read:
+    post:
+      tags:
+      - Announcement
+      summary: 标记当前玩家公告已读
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkAnnouncementReadRequest'
+      responses:
+        '200':
+          description: 已读后的公告详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+        '404':
+          description: 公告不存在或当前不可见
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/minigame/record:
     post:
       tags:
@@ -1011,7 +1172,7 @@ paths:
       tags:
       - MiniGame
       summary: 兑换小游戏库存奖励
-      description: 钓鱼奖励只允许兑换当前玩家阵营拥有的兵种；非本阵营兵种暂时只能存储，待驻防增援系统完成后开放。
+      description: 钓鱼奖励可兑换为兵力；本阵营兵种进入主军队，非本阵营兵种进入驻防军队。
       requestBody:
         required: true
         content:
@@ -1026,7 +1187,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MiniGameRedeemResult'
         '400':
-          description: 库存不足、非本阵营兵种或请求非法
+          description: 库存不足、兵种配置缺失或请求非法
           content:
             application/json:
               schema:
@@ -1133,6 +1294,149 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MailPage'
+  /api/v1/admin/announcements:
+    get:
+      tags:
+      - Admin
+      summary: GM 获取公告列表
+      responses:
+        '200':
+          description: GM 公告列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - announcements
+                properties:
+                  announcements:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Announcement'
+    post:
+      tags:
+      - Admin
+      summary: GM 创建公告草稿
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementInput'
+      responses:
+        '201':
+          description: 已创建的公告草稿
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+        '400':
+          description: 标题、正文或时间配置不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/announcements/{announcementId}:
+    put:
+      tags:
+      - Admin
+      summary: GM 编辑公告
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementInput'
+      responses:
+        '200':
+          description: 更新后的公告
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+        '404':
+          description: 公告不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+      - Admin
+      summary: GM 删除公告（软删除为 archived）
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 已归档的公告
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+        '404':
+          description: 公告不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/announcements/{announcementId}/publish:
+    post:
+      tags:
+      - Admin
+      summary: GM 发布公告
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 已发布公告
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+        '404':
+          description: 公告不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/announcements/{announcementId}/archive:
+    post:
+      tags:
+      - Admin
+      summary: GM 下架公告
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 已下架公告
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+        '404':
+          description: 公告不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/admin/accounts:
     get:
       tags:
@@ -1513,6 +1817,7 @@ components:
       - resourceSettledAt
       - buildings
       - army
+      - garrisonArmy
       - recruitQueues
       - mapTargets
       - recentBattleReports
@@ -1536,6 +1841,12 @@ components:
             $ref: '#/components/schemas/Building'
         army:
           type: array
+          description: 玩家自己的主军队。本阶段增援兵不会并入这里。
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        garrisonArmy:
+          type: array
+          description: 驻防军队。来自其他玩家增援，或玩家通过奖励等非增援渠道获得的非本阵营兵种。
           items:
             $ref: '#/components/schemas/ArmyUnit'
         recruitQueues:
@@ -1710,6 +2021,26 @@ components:
           type: integer
         lostUnits:
           type: object
+          additionalProperties:
+            type: integer
+        defenderUnits:
+          type: object
+          description: 防守方主军队与驻防军队聚合后的展示数量。
+          additionalProperties:
+            type: integer
+        defenderGarrisonUnits:
+          type: object
+          description: 防守方驻防军队参战数量。
+          additionalProperties:
+            type: integer
+        defenderLostUnits:
+          type: object
+          description: 防守方总战损，含主军队与驻防军队。
+          additionalProperties:
+            type: integer
+        defenderGarrisonLostUnits:
+          type: object
+          description: 防守方驻防军队战损，后端会从 garrisonArmy 扣除。
           additionalProperties:
             type: integer
         rewards:
@@ -1968,6 +2299,128 @@ components:
           example:
             wood: 1000
             city_gold: 50
+    AnnouncementType:
+      type: string
+      enum:
+      - system
+      - maintenance
+      - event
+      - update
+    AnnouncementStatus:
+      type: string
+      enum:
+      - draft
+      - published
+      - archived
+    Announcement:
+      type: object
+      required:
+      - id
+      - title
+      - content
+      - type
+      - status
+      - pinned
+      - priority
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          example: ann_47f23e0eeb08ab50402fedfc
+        title:
+          type: string
+          maxLength: 120
+          example: 系统公告
+        content:
+          type: string
+          maxLength: 10000
+          example: 这里是公告正文。
+        type:
+          $ref: '#/components/schemas/AnnouncementType'
+        status:
+          $ref: '#/components/schemas/AnnouncementStatus'
+        pinned:
+          type: boolean
+          example: true
+        priority:
+          type: integer
+          example: 10
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+          description: 玩家列表和详情中返回，表示当前玩家是否已读。
+    AnnouncementRead:
+      type: object
+      required:
+      - announcementId
+      - playerId
+      - readAt
+      properties:
+        announcementId:
+          type: string
+        playerId:
+          type: string
+        readAt:
+          type: string
+          format: date-time
+    AnnouncementPage:
+      type: object
+      required:
+      - announcements
+      - unread
+      properties:
+        announcements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Announcement'
+        unread:
+          type: integer
+          example: 3
+    AnnouncementInput:
+      type: object
+      required:
+      - title
+      - content
+      properties:
+        title:
+          type: string
+          maxLength: 120
+        content:
+          type: string
+          maxLength: 10000
+        type:
+          $ref: '#/components/schemas/AnnouncementType'
+        pinned:
+          type: boolean
+          default: false
+        priority:
+          type: integer
+          default: 0
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+    MarkAnnouncementReadRequest:
+      type: object
+      required:
+      - playerId
+      properties:
+        playerId:
+          type: string
     MiniGameRecord:
       type: object
       required:
@@ -2739,6 +3192,73 @@ components:
         battleReport:
           $ref: '#/components/schemas/BattleReport'
         state:
+          $ref: '#/components/schemas/GameState'
+    AttackPlayerRequest:
+      type: object
+      required:
+      - playerId
+      - targetPlayerId
+      - units
+      properties:
+        playerId:
+          type: string
+          description: 发起攻击的玩家存档 ID。
+        targetPlayerId:
+          type: string
+          description: 被攻击的玩家存档 ID，不能是 NPC 城池 ID。
+        mode:
+          type: string
+          enum:
+          - attack
+          - plunder
+          default: attack
+        units:
+          type: object
+          description: 出征主军队兵力，key 为兵种 ID。
+          additionalProperties:
+            type: integer
+            minimum: 1
+    AttackPlayerResponse:
+      type: object
+      required:
+      - battleReport
+      - state
+      properties:
+        battleReport:
+          $ref: '#/components/schemas/BattleReport'
+        state:
+          $ref: '#/components/schemas/GameState'
+    ReinforcePlayerRequest:
+      type: object
+      required:
+      - playerId
+      - targetPlayerId
+      - units
+      properties:
+        playerId:
+          type: string
+          description: 发起增援的玩家存档 ID。
+        targetPlayerId:
+          type: string
+          description: 目标玩家存档 ID。只支持玩家，不支持 NPC 城池。
+        units:
+          type: object
+          description: 增援兵力，key 为兵种 ID；可来自发起方主军队或驻防军队。
+          additionalProperties:
+            type: integer
+            minimum: 1
+    ReinforcePlayerResponse:
+      type: object
+      required:
+      - battleReport
+      - state
+      - targetState
+      properties:
+        battleReport:
+          $ref: '#/components/schemas/BattleReport'
+        state:
+          $ref: '#/components/schemas/GameState'
+        targetState:
           $ref: '#/components/schemas/GameState'
     ScoutNpcRequest:
       type: object

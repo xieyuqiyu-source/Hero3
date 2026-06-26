@@ -1,3 +1,5 @@
+/* Hero3 钓鱼库存弹窗，展示可兑换库存和兑换去向。 */
+
 import { Loader2, PackageCheck, X } from 'lucide-react'
 import { useMemo, type FC } from 'react'
 import type { MiniGameRecord } from '@/types/game'
@@ -80,7 +82,7 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
         originalAmount: groupRecords.reduce((sum, record) => sum + record.rewardAmount, 0),
         fishTags: Array.from(fishMap.values()).sort((a, b) => rarityRank[b.rarity] - rarityRank[a.rarity] || b.amount - a.amount),
         highestRarity,
-        canRedeem: isFactionUnit(rewardUnit),
+        canRedeem: true,
       }
     }).sort((a, b) => Number(b.canRedeem) - Number(a.canRedeem) || rarityRank[b.highestRarity] - rarityRank[a.highestRarity] || b.totalAmount - a.totalAmount)
   }, [inventoryRecords, isFactionUnit])
@@ -207,7 +209,9 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
 
                       {group.canRedeem ? (
                         <div className="mt-2 flex items-center justify-between gap-2">
-                          <span className="text-[10px] text-emerald-700">可一键兑换全部库存</span>
+                          <span className="text-[10px] text-emerald-700">
+                            {isFactionUnit(group.rewardUnit) ? '兑换后进入军队' : '兑换后进入驻防军队'}
+                          </span>
                           <button
                             type="button"
                             onClick={() => onRedeemGroup(group.rewardUnit, group.records)}
@@ -218,11 +222,7 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
                             一键兑换
                           </button>
                         </div>
-                      ) : (
-                        <p className="mt-2 rounded-lg bg-amber-500/10 px-2 py-1.5 text-[10px] leading-5 text-amber-700">
-                          非当前阵营兵种，暂时只能存储；驻防增援系统完成后即可兑换。
-                        </p>
-                      )}
+                      ) : null}
                     </div>
                   )
                 })}

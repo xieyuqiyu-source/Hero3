@@ -59,7 +59,7 @@
     tags:
     - MiniGame
     summary: 兑换小游戏库存奖励
-    description: 钓鱼奖励只允许兑换当前玩家阵营拥有的兵种；非本阵营兵种暂时只能存储，待驻防增援系统完成后开放。
+    description: 钓鱼奖励可兑换为兵力；本阵营兵种进入主军队，非本阵营兵种进入驻防军队。
     requestBody:
       required: true
       content:
@@ -74,7 +74,7 @@
             schema:
               $ref: '#/components/schemas/MiniGameRedeemResult'
       '400':
-        description: 库存不足、非本阵营兵种或请求非法
+        description: 库存不足、兵种配置缺失或请求非法
         content:
           application/json:
             schema:

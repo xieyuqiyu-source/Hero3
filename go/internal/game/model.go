@@ -1,3 +1,4 @@
+// Hero3 游戏状态模型，定义玩家存档、军队、战报和资源结构。
 package game
 
 import (
@@ -79,17 +80,44 @@ type ArmyUnit struct {
 	Amount   int    `json:"amount"`
 }
 
+// AddGarrisonUnit 把兵力合并进玩家驻防军队。
+func AddGarrisonUnit(state *GameState, unitType string, amount int) {
+	if state == nil || unitType == "" || amount <= 0 {
+		return
+	}
+	addToArmyUnits(&state.GarrisonArmy, unitType, amount)
+}
+
+// AddOwnedRewardUnit 按兵种阵营把自有奖励分流到主军队或驻防军队。
+func AddOwnedRewardUnit(state *GameState, unitType string, amount int) {
+	if state == nil || unitType == "" || amount <= 0 {
+		return
+	}
+	unitFaction, _, ok := FindUnitConfigByID(unitType)
+	if ok && unitFaction != state.Player.Faction {
+		AddGarrisonUnit(state, unitType, amount)
+		return
+	}
+	AddArmyUnit(state, unitType, amount)
+}
+
+// AddArmyUnit 把兵力合并进玩家主军队。
 func AddArmyUnit(state *GameState, unitType string, amount int) {
 	if state == nil || unitType == "" || amount <= 0 {
 		return
 	}
-	for i := range state.Army {
-		if state.Army[i].UnitType == unitType {
-			state.Army[i].Amount += amount
+	addToArmyUnits(&state.Army, unitType, amount)
+}
+
+// addToArmyUnits 把同兵种数量合并到指定兵力池。
+func addToArmyUnits(army *[]ArmyUnit, unitType string, amount int) {
+	for i := range *army {
+		if (*army)[i].UnitType == unitType {
+			(*army)[i].Amount += amount
 			return
 		}
 	}
-	state.Army = append(state.Army, ArmyUnit{UnitType: unitType, Amount: amount})
+	*army = append(*army, ArmyUnit{UnitType: unitType, Amount: amount})
 }
 
 type General struct {
@@ -142,37 +170,39 @@ type MapTarget struct {
 }
 
 type BattleReport struct {
-	ID                 string                        `json:"id"`
-	PlayerID           string                        `json:"playerId"`
-	PlayerFaction      string                        `json:"playerFaction"`
-	PlayerName         string                        `json:"playerName,omitempty"`
-	TargetID           string                        `json:"targetId"`
-	TargetName         string                        `json:"targetName"`
-	Type               string                        `json:"type"` // "attack", "plunder", "scout", "reinforce"
-	Result             string                        `json:"result"`
-	PlayerPower        int                           `json:"playerPower"`
-	EnemyPower         int                           `json:"enemyPower"`
-	DispatchedUnits    map[string]int                `json:"dispatchedUnits"`
-	LostUnits          map[string]int                `json:"lostUnits"`
-	DefenderFaction    string                        `json:"defenderFaction"`
-	DefenderUnits      map[string]int                `json:"defenderUnits"`
-	DefenderLostUnits  map[string]int                `json:"defenderLostUnits"`
-	DefenderRevealed   bool                          `json:"defenderRevealed"`
-	DefenderResources  map[string]int                `json:"defenderResources"`
-	Rewards            map[string]int                `json:"rewards"`
-	Overflow           map[string]int                `json:"overflow,omitempty"`           // 各资源溢出量
-	OverflowCityGold   int                           `json:"overflowCityGold"`             // 溢出转换获得的城金
-	GeneralExpGained   int                           `json:"generalExpGained,omitempty"`   // 本次战斗获得将领经验
-	GeneralLevelBefore int                           `json:"generalLevelBefore,omitempty"` // 战斗前将领等级
-	GeneralLevelAfter  int                           `json:"generalLevelAfter,omitempty"`  // 战斗后将领等级
-	CapturedUnits      map[string]int                `json:"capturedUnits,omitempty"`      // 美人计俘虏到军队
-	CapturedToGarrison map[string]int                `json:"capturedToGarrison,omitempty"` // 美人计俘虏到驻防
-	RevivedUnits       map[string]int                `json:"revivedUnits,omitempty"`       // 仁德复活
-	TraitTriggered     []string                      `json:"traitTriggered,omitempty"`     // 触发了哪些特性（前端展示）
-	TraitOutcomes      map[string]TraitOutcomeReport `json:"traitOutcomes,omitempty"`      // 每个触发特性的具体结果
-	Read               bool                          `json:"read"`
-	DeletedByPlayer    bool                          `json:"deletedByPlayer,omitempty"`
-	CreatedAt          string                        `json:"createdAt"`
+	ID                        string                        `json:"id"`
+	PlayerID                  string                        `json:"playerId"`
+	PlayerFaction             string                        `json:"playerFaction"`
+	PlayerName                string                        `json:"playerName,omitempty"`
+	TargetID                  string                        `json:"targetId"`
+	TargetName                string                        `json:"targetName"`
+	Type                      string                        `json:"type"` // "attack", "plunder", "scout", "reinforce"
+	Result                    string                        `json:"result"`
+	PlayerPower               int                           `json:"playerPower"`
+	EnemyPower                int                           `json:"enemyPower"`
+	DispatchedUnits           map[string]int                `json:"dispatchedUnits"`
+	LostUnits                 map[string]int                `json:"lostUnits"`
+	DefenderFaction           string                        `json:"defenderFaction"`
+	DefenderUnits             map[string]int                `json:"defenderUnits"`
+	DefenderGarrisonUnits     map[string]int                `json:"defenderGarrisonUnits,omitempty"`
+	DefenderLostUnits         map[string]int                `json:"defenderLostUnits"`
+	DefenderGarrisonLostUnits map[string]int                `json:"defenderGarrisonLostUnits,omitempty"`
+	DefenderRevealed          bool                          `json:"defenderRevealed"`
+	DefenderResources         map[string]int                `json:"defenderResources"`
+	Rewards                   map[string]int                `json:"rewards"`
+	Overflow                  map[string]int                `json:"overflow,omitempty"`           // 各资源溢出量
+	OverflowCityGold          int                           `json:"overflowCityGold"`             // 溢出转换获得的城金
+	GeneralExpGained          int                           `json:"generalExpGained,omitempty"`   // 本次战斗获得将领经验
+	GeneralLevelBefore        int                           `json:"generalLevelBefore,omitempty"` // 战斗前将领等级
+	GeneralLevelAfter         int                           `json:"generalLevelAfter,omitempty"`  // 战斗后将领等级
+	CapturedUnits             map[string]int                `json:"capturedUnits,omitempty"`      // 美人计俘虏到军队
+	CapturedToGarrison        map[string]int                `json:"capturedToGarrison,omitempty"` // 美人计俘虏到驻防
+	RevivedUnits              map[string]int                `json:"revivedUnits,omitempty"`       // 仁德复活
+	TraitTriggered            []string                      `json:"traitTriggered,omitempty"`     // 触发了哪些特性（前端展示）
+	TraitOutcomes             map[string]TraitOutcomeReport `json:"traitOutcomes,omitempty"`      // 每个触发特性的具体结果
+	Read                      bool                          `json:"read"`
+	DeletedByPlayer           bool                          `json:"deletedByPlayer,omitempty"`
+	CreatedAt                 string                        `json:"createdAt"`
 }
 
 type BattleReportPage struct {
@@ -227,6 +257,59 @@ type MailClaimResult struct {
 	GrantedItems map[string]int       `json:"grantedItems"`
 }
 
+type AnnouncementType string
+
+const (
+	AnnouncementTypeSystem      AnnouncementType = "system"
+	AnnouncementTypeMaintenance AnnouncementType = "maintenance"
+	AnnouncementTypeEvent       AnnouncementType = "event"
+	AnnouncementTypeUpdate      AnnouncementType = "update"
+)
+
+type AnnouncementStatus string
+
+const (
+	AnnouncementStatusDraft     AnnouncementStatus = "draft"
+	AnnouncementStatusPublished AnnouncementStatus = "published"
+	AnnouncementStatusArchived  AnnouncementStatus = "archived"
+)
+
+type Announcement struct {
+	ID        string             `json:"id"`
+	Title     string             `json:"title"`
+	Content   string             `json:"content"`
+	Type      AnnouncementType   `json:"type"`
+	Status    AnnouncementStatus `json:"status"`
+	Pinned    bool               `json:"pinned"`
+	Priority  int                `json:"priority"`
+	StartsAt  string             `json:"startsAt,omitempty"`
+	EndsAt    string             `json:"endsAt,omitempty"`
+	CreatedAt string             `json:"createdAt"`
+	UpdatedAt string             `json:"updatedAt"`
+	Read      bool               `json:"read,omitempty"`
+}
+
+type AnnouncementRead struct {
+	AnnouncementID string `json:"announcementId"`
+	PlayerID       string `json:"playerId"`
+	ReadAt         string `json:"readAt"`
+}
+
+type AnnouncementPage struct {
+	Announcements []Announcement `json:"announcements"`
+	Unread        int            `json:"unread"`
+}
+
+type AnnouncementInput struct {
+	Title    string           `json:"title"`
+	Content  string           `json:"content"`
+	Type     AnnouncementType `json:"type"`
+	Pinned   bool             `json:"pinned"`
+	Priority int              `json:"priority"`
+	StartsAt string           `json:"startsAt"`
+	EndsAt   string           `json:"endsAt"`
+}
+
 type GameState struct {
 	Player              Player                  `json:"player"`
 	Resources           ResourceState           `json:"resources"`
@@ -242,6 +325,7 @@ type GameState struct {
 	Buildings           []Building              `json:"buildings"`
 	General             *General                `json:"general"`
 	Army                []ArmyUnit              `json:"army"`
+	GarrisonArmy        []ArmyUnit              `json:"garrisonArmy"`
 	RecruitQueues       []RecruitQueue          `json:"recruitQueues"`
 	NpcState            *NpcState               `json:"npcState,omitempty"`
 	MapTargets          []MapTarget             `json:"mapTargets"`
@@ -251,6 +335,19 @@ type GameState struct {
 	ActiveModifiers     []ModifierBreakdownItem `json:"activeModifiers,omitempty"`
 	Buffs               []Buff                  `json:"buffs,omitempty"` // 通用加成列表（GM/活动/任务等）
 	ServerTime          string                  `json:"serverTime"`
+}
+
+// NormalizeGameState 补齐旧存档缺失的新字段，保证 API 返回结构稳定。
+func NormalizeGameState(state *GameState) {
+	if state == nil {
+		return
+	}
+	if state.Army == nil {
+		state.Army = []ArmyUnit{}
+	}
+	if state.GarrisonArmy == nil {
+		state.GarrisonArmy = []ArmyUnit{}
+	}
 }
 
 func newPlayerState(id string, nickname string, faction string, generalID string, now time.Time) GameState {
@@ -303,6 +400,7 @@ func newPlayerState(id string, nickname string, faction string, generalID string
 			{ID: "armor_bureau-1", Type: "armor_bureau", Level: 1},
 		},
 		Army:          []ArmyUnit{},
+		GarrisonArmy:  []ArmyUnit{},
 		General:       newGeneral(faction, generalID),
 		RecruitQueues: []RecruitQueue{},
 		MapTargets: []MapTarget{

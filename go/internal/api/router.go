@@ -1,3 +1,4 @@
+// Hero3 HTTP 路由注册入口。
 package api
 
 import (
@@ -52,6 +53,8 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("POST /api/v1/map/npc-cities/refresh", handlers.RefreshNpcCities)
 	mux.HandleFunc("POST /api/v1/map/npc-cities/attack", handlers.AttackNpc)
 	mux.HandleFunc("POST /api/v1/map/npc-cities/scout", handlers.ScoutNpc)
+	mux.HandleFunc("POST /api/v1/map/players/attack", handlers.AttackPlayer)
+	mux.HandleFunc("POST /api/v1/map/players/reinforce", handlers.ReinforcePlayer)
 	mux.HandleFunc("POST /api/v1/combat/simulate", handlers.SimulateBattle)
 	mux.HandleFunc("GET /api/v1/news/reports", handlers.ListReports)
 	mux.HandleFunc("POST /api/v1/news/mark-read", handlers.MarkReportsRead)
@@ -63,6 +66,9 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("POST /api/v1/mails/{mailId}/delete", handlers.DeleteMail)
 	mux.HandleFunc("POST /api/v1/mails/{mailId}/claim", handlers.ClaimMailAttachments)
 	mux.HandleFunc("POST /api/v1/mails/send-player", handlers.SendPlayerMail)
+	mux.HandleFunc("GET /api/v1/announcements", handlers.ListAnnouncements)
+	mux.HandleFunc("GET /api/v1/announcements/{announcementId}", handlers.GetAnnouncement)
+	mux.HandleFunc("POST /api/v1/announcements/{announcementId}/read", handlers.MarkAnnouncementRead)
 	mux.HandleFunc("POST /api/v1/gold/exchange", handlers.ExchangeGold)
 	mux.HandleFunc("POST /api/v1/gold/reverse-exchange", handlers.ReverseExchangeGold)
 	mux.HandleFunc("GET /api/v1/items/config", handlers.ItemsConfig)
@@ -101,6 +107,12 @@ func NewRouter(options RouterOptions) http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/general-traits", handlers.AdminGeneralTraitRegistry)
 	mux.HandleFunc("POST /api/v1/admin/mails/send", handlers.AdminSendMail)
 	mux.HandleFunc("GET /api/v1/admin/players/{playerId}/mails", handlers.AdminPlayerMails)
+	mux.HandleFunc("GET /api/v1/admin/announcements", handlers.AdminListAnnouncements)
+	mux.HandleFunc("POST /api/v1/admin/announcements", handlers.AdminCreateAnnouncement)
+	mux.HandleFunc("PUT /api/v1/admin/announcements/{announcementId}", handlers.AdminUpdateAnnouncement)
+	mux.HandleFunc("DELETE /api/v1/admin/announcements/{announcementId}", handlers.AdminDeleteAnnouncement)
+	mux.HandleFunc("POST /api/v1/admin/announcements/{announcementId}/publish", handlers.AdminPublishAnnouncement)
+	mux.HandleFunc("POST /api/v1/admin/announcements/{announcementId}/archive", handlers.AdminArchiveAnnouncement)
 
 	// 公开路径白名单（不需要认证）
 	publicPaths := []string{

@@ -1,4 +1,6 @@
-import { useState, type FC } from 'react'
+/* Hero3 桌面侧边栏，展示导航、资源、主军队和驻防军队。 */
+
+import { useEffect, useState, type FC } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Castle,
@@ -22,6 +24,7 @@ import { useProjectedResources } from '@/hooks/useProjectedResources'
 import { useConfigStore } from '@/store/configStore'
 import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
+import { useAnnouncementStore } from '@/store/announcementStore'
 
 export interface NavItem {
   key: string
@@ -36,6 +39,17 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'settings', label: '设置', icon: Settings },
 ]
 
+// 根据兵种 ID 查找展示名，优先当前阵营，再兜底全阵营。
+function getUnitDisplayName(unitType: string, playerFaction?: string) {
+  const allUnits = useConfigStore.getState().units
+  const factionUnits = playerFaction ? allUnits?.[playerFaction] : undefined
+  if (factionUnits?.[unitType]?.name) return factionUnits[unitType].name
+  for (const units of Object.values(allUnits ?? {})) {
+    if (units[unitType]?.name) return units[unitType].name
+  }
+  return unitType
+}
+
 interface SidebarProps {
   activeKey: string
   collapsed: boolean
@@ -49,14 +63,26 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
   const resources = useProjectedResources()
   const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
+  const totalGarrisonArmy = gameState?.garrisonArmy?.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
   const unreadMessageCount = gameState?.unreadMessageCount ?? 0
   const unreadMailCount = gameState?.unreadMailCount ?? 0
+  const announcementUnread = useAnnouncementStore((s) => s.unread)
+  const loadedAnnouncementPlayerId = useAnnouncementStore((s) => s.loadedPlayerId)
+  const loadAnnouncements = useAnnouncementStore((s) => s.loadAnnouncements)
   const newsHasNotify = unreadMessageCount > 0
+  const playerId = gameState?.player.id ?? ''
+
+  useEffect(() => {
+    if (playerId && loadedAnnouncementPlayerId !== playerId) {
+      void loadAnnouncements(playerId)
+    }
+  }, [playerId, loadedAnnouncementPlayerId, loadAnnouncements])
+
   const quickActions = [
-    { key: 'news', label: '军情', hasNotify: newsHasNotify },
-    { key: 'mail', label: '信函', hasNotify: unreadMailCount > 0 },
-    { key: 'notice', label: '公告', hasNotify: true },
-    { key: 'account', label: '账户', hasNotify: false },
+    { key: 'news', label: '军情', hasNotify: newsHasNotify, count: unreadMessageCount },
+    { key: 'mail', label: '信函', hasNotify: unreadMailCount > 0, count: unreadMailCount },
+    { key: 'notice', label: '公告', hasNotify: announcementUnread > 0, count: announcementUnread },
+    { key: 'account', label: '账户', hasNotify: false, count: 0 },
   ]
 
   return (
@@ -124,6 +150,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
                 if (action.key === 'account') onNavigate('account')
                 if (action.key === 'news') onNavigate('news')
                 if (action.key === 'mail') onNavigate('mail')
+                if (action.key === 'notice') onNavigate('notice')
               }}
               className={`
                 px-2.5 py-1.5 rounded-lg
@@ -135,6 +162,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
               `}
             >
               {action.label}
+              {action.count > 0 ? ` ${action.count}` : ''}
             </button>
           ))}
         </div>
@@ -150,6 +178,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
                 if (action.key === 'account') onNavigate('account')
                 if (action.key === 'news') onNavigate('news')
                 if (action.key === 'mail') onNavigate('mail')
+                if (action.key === 'notice') onNavigate('notice')
               }}
               className={`
                 px-1.5 py-1.5 rounded-lg
@@ -160,7 +189,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
                 ${action.hasNotify ? 'animate-text-blink' : ''}
               `}
             >
-              {action.label.charAt(0)}
+              {action.count > 0 ? Math.min(action.count, 9) : action.label.charAt(0)}
             </button>
           ))}
         </div>
@@ -313,11 +342,10 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
                 </span>
                 <span className="text-xs font-semibold text-[var(--color-accent)]">{totalArmy}</span>
               </div>
-              {gameState?.army && gameState.army.length > 0 ? (
+              {gameState?.army && gameState.army.filter(u => u.amount > 0).length > 0 ? (
                 <div className="space-y-1">
                   {gameState.army.filter(u => u.amount > 0).map((unit) => {
-                    const factionUnits = useConfigStore.getState().units?.[gameState.player.faction]
-                    const unitName = factionUnits?.[unit.unitType]?.name ?? unit.unitType
+                    const unitName = getUnitDisplayName(unit.unitType, gameState.player.faction)
                     return (
                       <div key={unit.unitType} className="flex items-center justify-between px-2 py-1 rounded-lg bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
                         <span className="text-[10px] text-[var(--color-text-secondary)]">{unitName}</span>
@@ -328,6 +356,45 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
                 </div>
               ) : (
                 <p className="text-xs text-[var(--color-text-secondary)] opacity-50">暂无兵力</p>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className={`
+          mb-2.5 rounded-2xl p-3
+          bg-[var(--color-surface-dim)] border border-[var(--color-border)]
+          shadow-[0_4px_12px_rgba(15,23,42,0.03)]
+          transition-all duration-300
+          ${collapsed ? 'px-2' : ''}
+        `}>
+          {collapsed ? (
+            <div className="flex flex-col items-center gap-1">
+              <Shield size={18} className="text-emerald-600" />
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--color-text-primary)]">
+                  <Shield size={14} className="text-emerald-600" />
+                  驻防军队
+                </span>
+                <span className="text-xs font-semibold text-emerald-600">{totalGarrisonArmy}</span>
+              </div>
+              {gameState?.garrisonArmy && gameState.garrisonArmy.filter(u => u.amount > 0).length > 0 ? (
+                <div className="space-y-1">
+                  {gameState.garrisonArmy.filter(u => u.amount > 0).map((unit) => {
+                    const unitName = getUnitDisplayName(unit.unitType, gameState.player.faction)
+                    return (
+                      <div key={unit.unitType} className="flex items-center justify-between px-2 py-1 rounded-lg bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
+                        <span className="text-[10px] text-[var(--color-text-secondary)]">{unitName}</span>
+                        <span className="text-[10px] font-semibold text-emerald-600">{unit.amount.toLocaleString()}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-[var(--color-text-secondary)] opacity-50">暂无驻防兵力</p>
               )}
             </>
           )}

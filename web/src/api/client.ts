@@ -35,6 +35,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   'npc city not found': 'NPC城池不存在',
   'no units selected for dispatch': '未选择出征兵力',
   'insufficient army for dispatch': '兵力不足，无法出征',
+  'invalid player target': '无效的玩家目标',
+  'cannot reinforce npc city': '不能对 NPC 城池增援',
   'insufficient gold': '金币不足',
   'insufficient city gold': '城金不足',
   'invalid gold amount': '数量无效',

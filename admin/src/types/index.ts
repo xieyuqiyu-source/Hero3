@@ -1,3 +1,5 @@
+/* Hero3 GM 后台类型定义，描述接口响应和配置结构。 */
+
 export interface HealthState {
   status: string
   service: string
@@ -185,6 +187,41 @@ export interface MailPage {
   pageSize: number
   total: number
   unread: number
+}
+
+export type AnnouncementType = 'system' | 'maintenance' | 'event' | 'update'
+
+export type AnnouncementStatus = 'draft' | 'published' | 'archived'
+
+export interface Announcement {
+  id: string
+  title: string
+  content: string
+  type: AnnouncementType
+  status: AnnouncementStatus
+  pinned: boolean
+  priority: number
+  startsAt?: string
+  endsAt?: string
+  createdAt: string
+  updatedAt: string
+  read?: boolean
+}
+
+export interface AnnouncementRead {
+  announcementId: string
+  playerId: string
+  readAt: string
+}
+
+export interface AnnouncementInput {
+  title: string
+  content: string
+  type: AnnouncementType
+  pinned: boolean
+  priority: number
+  startsAt: string
+  endsAt: string
 }
 
 export interface PlayerSummary {

@@ -1,3 +1,4 @@
+// Hero3 游戏仓储接口和内存仓储实现。
 package game
 
 import (
@@ -24,6 +25,7 @@ type Repository interface {
 	DeletePlayer(playerID string) error
 	GetState(playerID string) (GameState, error)
 	SaveState(state GameState, updatedAt time.Time) error
+	SaveStates(states []GameState, updatedAt time.Time) error
 	// 城金原子操作
 	AddCityGold(playerID string, amount int) (int, error)    // 返回操作后余额
 	DeductCityGold(playerID string, amount int) (int, error) // 余额不足返回 ErrInsufficientCityGold
@@ -52,6 +54,14 @@ type Repository interface {
 	DeleteMail(playerID string, mailID string) error
 	ClaimMailAttachments(playerID string, mailID string, claimedAt time.Time) (MailClaimResult, error)
 
+	// Announcements
+	CreateAnnouncement(announcement Announcement) error
+	UpdateAnnouncement(announcement Announcement) error
+	GetAnnouncementByID(announcementID string) (Announcement, error)
+	ListAdminAnnouncements() ([]Announcement, error)
+	ListVisibleAnnouncements(playerID string, now time.Time) ([]Announcement, error)
+	MarkAnnouncementRead(playerID string, announcementID string, readAt time.Time) error
+
 	// MiniGame Records
 	SaveMiniGameRecord(record MiniGameRecord) error
 	ListMiniGameRecords(playerID string, gameType string, limit int, offset int) ([]MiniGameRecord, int, error)
@@ -65,29 +75,33 @@ type Repository interface {
 }
 
 type MemoryRepository struct {
-	mu              sync.RWMutex
-	accounts        map[string]Account
-	accountByName   map[string]string
-	accountPlayers  map[string][]string
-	players         map[string]GameState
-	playerUpdatedAt map[string]time.Time
-	reports         map[string][]BattleReport   // playerID → reports
-	mails           map[string][]Mail           // playerID → mails
-	miniGameRecords map[string][]MiniGameRecord // playerID → records
-	ledger          []GoldLedgerEntry
-	ledgerNextID    int64
+	mu                sync.RWMutex
+	accounts          map[string]Account
+	accountByName     map[string]string
+	accountPlayers    map[string][]string
+	players           map[string]GameState
+	playerUpdatedAt   map[string]time.Time
+	reports           map[string][]BattleReport // playerID → reports
+	mails             map[string][]Mail         // playerID → mails
+	announcements     map[string]Announcement
+	announcementReads map[string]map[string]time.Time
+	miniGameRecords   map[string][]MiniGameRecord // playerID → records
+	ledger            []GoldLedgerEntry
+	ledgerNextID      int64
 }
 
 func NewMemoryRepository() *MemoryRepository {
 	return &MemoryRepository{
-		accounts:        make(map[string]Account),
-		accountByName:   make(map[string]string),
-		accountPlayers:  make(map[string][]string),
-		players:         make(map[string]GameState),
-		playerUpdatedAt: make(map[string]time.Time),
-		reports:         make(map[string][]BattleReport),
-		mails:           make(map[string][]Mail),
-		miniGameRecords: make(map[string][]MiniGameRecord),
+		accounts:          make(map[string]Account),
+		accountByName:     make(map[string]string),
+		accountPlayers:    make(map[string][]string),
+		players:           make(map[string]GameState),
+		playerUpdatedAt:   make(map[string]time.Time),
+		reports:           make(map[string][]BattleReport),
+		mails:             make(map[string][]Mail),
+		announcements:     make(map[string]Announcement),
+		announcementReads: make(map[string]map[string]time.Time),
+		miniGameRecords:   make(map[string][]MiniGameRecord),
 	}
 }
 
@@ -402,6 +416,7 @@ func (r *MemoryRepository) GetState(playerID string) (GameState, error) {
 		return GameState{}, ErrPlayerNotFound
 	}
 
+	NormalizeGameState(&state)
 	return state, nil
 }
 
@@ -413,8 +428,27 @@ func (r *MemoryRepository) SaveState(state GameState, updatedAt time.Time) error
 		return ErrPlayerNotFound
 	}
 
+	NormalizeGameState(&state)
 	r.players[state.Player.ID] = state
 	r.playerUpdatedAt[state.Player.ID] = updatedAt
+	return nil
+}
+
+// SaveStates 批量保存多个玩家状态，用于玩家互攻和增援这类双玩家变更。
+func (r *MemoryRepository) SaveStates(states []GameState, updatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i := range states {
+		if _, exists := r.players[states[i].Player.ID]; !exists {
+			return ErrPlayerNotFound
+		}
+		NormalizeGameState(&states[i])
+	}
+	for _, state := range states {
+		r.players[state.Player.ID] = state
+		r.playerUpdatedAt[state.Player.ID] = updatedAt
+	}
 	return nil
 }
 
@@ -711,6 +745,86 @@ func (r *MemoryRepository) ClaimMailAttachments(playerID string, mailID string, 
 	return MailClaimResult{}, ErrMailNotFound
 }
 
+// --- Announcement Methods (MemoryRepository) ---
+
+func (r *MemoryRepository) CreateAnnouncement(announcement Announcement) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if announcement.ID == "" {
+		return ErrInvalidAnnouncement
+	}
+	r.announcements[announcement.ID] = announcement
+	return nil
+}
+
+func (r *MemoryRepository) UpdateAnnouncement(announcement Announcement) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.announcements[announcement.ID]; !exists {
+		return ErrAnnouncementNotFound
+	}
+	r.announcements[announcement.ID] = announcement
+	return nil
+}
+
+func (r *MemoryRepository) GetAnnouncementByID(announcementID string) (Announcement, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	announcement, exists := r.announcements[announcementID]
+	if !exists {
+		return Announcement{}, ErrAnnouncementNotFound
+	}
+	return announcement, nil
+}
+
+func (r *MemoryRepository) ListAdminAnnouncements() ([]Announcement, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	items := make([]Announcement, 0, len(r.announcements))
+	for _, announcement := range r.announcements {
+		items = append(items, announcement)
+	}
+	sortAnnouncements(items)
+	return items, nil
+}
+
+func (r *MemoryRepository) ListVisibleAnnouncements(playerID string, now time.Time) ([]Announcement, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	readMap := r.announcementReads[playerID]
+	items := []Announcement{}
+	for _, announcement := range r.announcements {
+		if !isAnnouncementVisible(announcement, now) {
+			continue
+		}
+		if _, ok := readMap[announcement.ID]; ok {
+			announcement.Read = true
+		}
+		items = append(items, announcement)
+	}
+	sortAnnouncements(items)
+	return items, nil
+}
+
+func (r *MemoryRepository) MarkAnnouncementRead(playerID string, announcementID string, readAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.announcements[announcementID]; !exists {
+		return ErrAnnouncementNotFound
+	}
+	if r.announcementReads[playerID] == nil {
+		r.announcementReads[playerID] = map[string]time.Time{}
+	}
+	r.announcementReads[playerID][announcementID] = readAt.UTC()
+	return nil
+}
+
 // --- MiniGame Record Methods (MemoryRepository) ---
 
 func (r *MemoryRepository) SaveMiniGameRecord(record MiniGameRecord) error {
@@ -779,14 +893,14 @@ func (r *MemoryRepository) RedeemMiniGameRecord(playerID string, recordID string
 		if amount > record.RemainingAmount {
 			return MiniGameRedeemResult{}, ErrMiniGameStockShort
 		}
-		unitID, unitCfg, ok := FindFactionUnitByName(state.Player.Faction, record.RewardUnit)
+		_, unitID, unitCfg, ok := FindUnitByName(record.RewardUnit)
 		if !ok {
 			return MiniGameRedeemResult{}, ErrCrossFactionReward
 		}
 		record.RemainingAmount -= amount
 		records[i] = record
 		r.miniGameRecords[playerID] = records
-		AddArmyUnit(&state, unitID, amount)
+		AddOwnedRewardUnit(&state, unitID, amount)
 		state.ServerTime = redeemedAt.UTC().Format(resourceDateLayout)
 		r.players[playerID] = state
 		r.playerUpdatedAt[playerID] = redeemedAt.UTC()
@@ -823,7 +937,7 @@ func (r *MemoryRepository) RedeemAllFactionMiniGameRecords(playerID string, game
 		if record.GameType != gameType || record.RewardUnit == "" || record.RemainingAmount <= 0 {
 			continue
 		}
-		unitID, unitCfg, ok := FindFactionUnitByName(state.Player.Faction, record.RewardUnit)
+		_, unitID, unitCfg, ok := FindUnitByName(record.RewardUnit)
 		if !ok {
 			skippedUnits[record.RewardUnit] += record.RemainingAmount
 			skippedRecords++
@@ -831,7 +945,7 @@ func (r *MemoryRepository) RedeemAllFactionMiniGameRecords(playerID string, game
 		}
 		amount := record.RemainingAmount
 		records[i].RemainingAmount = 0
-		AddArmyUnit(&state, unitID, amount)
+		AddOwnedRewardUnit(&state, unitID, amount)
 		redeemedUnits[unitCfg.Name] += amount
 		redeemedRecords++
 	}

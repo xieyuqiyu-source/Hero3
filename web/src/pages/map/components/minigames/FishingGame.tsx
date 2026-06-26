@@ -1,3 +1,5 @@
+/* Hero3 钓鱼小游戏页面，处理押注、库存兑换和奖励入兵。 */
+
 import { useEffect, useMemo, useRef, useState, type FC } from 'react'
 import { Award, TrendingUp } from 'lucide-react'
 import { gameApi } from '@/api/game'
@@ -112,7 +114,7 @@ const FishingGame: FC = () => {
 
   const handleRedeemGroup = async (unitName: string, groupRecords: MiniGameRecord[]) => {
     if (!activePlayerId || redeemingId) return
-    const targets = groupRecords.filter(record => record.remainingAmount > 0 && isFactionUnit(record.rewardUnit))
+    const targets = groupRecords.filter(record => record.remainingAmount > 0)
     const totalAmount = targets.reduce((sum, record) => sum + record.remainingAmount, 0)
     if (targets.length === 0 || totalAmount <= 0) {
       toast.error('没有可兑换库存')
@@ -129,9 +131,9 @@ const FishingGame: FC = () => {
         setRecords(prev => prev.map(item => item.id === result.record.id ? result.record : item))
       }
       if (latestState) {
-        patchState({ army: latestState.army, serverTime: latestState.serverTime })
+        patchState({ army: latestState.army, garrisonArmy: latestState.garrisonArmy, serverTime: latestState.serverTime })
       }
-      toast.success(`${unitName} ×${redeemed.toLocaleString()} 已加入军队`)
+      toast.success(`${unitName} ×${redeemed.toLocaleString()} 已兑换${isFactionUnit(unitName) ? '到军队' : '到驻防军队'}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '兑换失败')
     } finally {
@@ -145,11 +147,11 @@ const FishingGame: FC = () => {
     try {
       const result = await gameApi.redeemAllMiniGameRewards(activePlayerId, 'fishing')
       if (result.redeemedAmount <= 0) {
-        toast.error('没有本阵营可兑换库存')
+        toast.error('没有可兑换库存')
         return
       }
 
-      patchState({ army: result.state.army, serverTime: result.state.serverTime })
+      patchState({ army: result.state.army, garrisonArmy: result.state.garrisonArmy, serverTime: result.state.serverTime })
       await loadRecords(0)
 
       const summary = Object.entries(result.redeemedUnits)

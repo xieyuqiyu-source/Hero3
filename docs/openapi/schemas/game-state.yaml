@@ -7,6 +7,7 @@ GameState:
   - resourceSettledAt
   - buildings
   - army
+  - garrisonArmy
   - recruitQueues
   - mapTargets
   - recentBattleReports
@@ -30,6 +31,12 @@ GameState:
         $ref: '#/components/schemas/Building'
     army:
       type: array
+      description: 玩家自己的主军队。本阶段增援兵不会并入这里。
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    garrisonArmy:
+      type: array
+      description: 驻防军队。来自其他玩家增援，或玩家通过奖励等非增援渠道获得的非本阵营兵种。
       items:
         $ref: '#/components/schemas/ArmyUnit'
     recruitQueues:
@@ -204,6 +211,26 @@ BattleReport:
       type: integer
     lostUnits:
       type: object
+      additionalProperties:
+        type: integer
+    defenderUnits:
+      type: object
+      description: 防守方主军队与驻防军队聚合后的展示数量。
+      additionalProperties:
+        type: integer
+    defenderGarrisonUnits:
+      type: object
+      description: 防守方驻防军队参战数量。
+      additionalProperties:
+        type: integer
+    defenderLostUnits:
+      type: object
+      description: 防守方总战损，含主军队与驻防军队。
+      additionalProperties:
+        type: integer
+    defenderGarrisonLostUnits:
+      type: object
+      description: 防守方驻防军队战损，后端会从 garrisonArmy 扣除。
       additionalProperties:
         type: integer
     rewards:
