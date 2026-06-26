@@ -85,7 +85,7 @@ const FishingGame: FC = () => {
     if (!activePlayerId) return
     setRecordsLoading(true)
     try {
-      const result = await gameApi.listMiniGameRecords(activePlayerId, RECORD_PAGE_SIZE, offset, 'fishing')
+      const result = await gameApi.listMiniGameRecords(activePlayerId, RECORD_PAGE_SIZE, offset, 'fishing', true)
       setRecords(Array.isArray(result.records) ? result.records : [])
       setRecordsTotal(result.totalRecords)
       setRecordsHasMore(result.hasMore)

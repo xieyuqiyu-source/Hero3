@@ -369,8 +369,7 @@ func (s *Service) settlePvpMarch(marchID string, now time.Time) error {
 		SameFaction:       attackerState.Player.Faction == defenderState.Player.Faction,
 	}
 	general.Dispatch(beforeAttackCtx, attackerTraits)
-	capturedToArmy := applyPvpCapturedUnits(&attackerState, &defenderState, defenderSources, beforeAttackCtx.CapturedToArmy, false)
-	capturedToGarrison := applyPvpCapturedUnits(&attackerState, &defenderState, defenderSources, beforeAttackCtx.CapturedToGarrison, true)
+	capturedToArmy, capturedToGarrison := applyPvpCapturedUnitsByFaction(&attackerState, &defenderState, defenderSources, mergeCapturedUnitMaps(beforeAttackCtx.CapturedToArmy, beforeAttackCtx.CapturedToGarrison))
 
 	beforeDefenseCtx := &general.BeforeBattleContext{
 		Attacker:          &attackerArmy,
@@ -615,15 +614,34 @@ func copyIntMap(source map[string]int) map[string]int {
 	return next
 }
 
-func applyPvpCapturedUnits(attackerState *GameState, defenderState *GameState, sources []defenderUnitSource, captured map[string]int, toGarrison bool) map[string]int {
-	if len(captured) == 0 {
+// mergeCapturedUnitMaps 合并 trait 输出的俘虏明细，保留 combatID 便于回扣来源池。
+func mergeCapturedUnitMaps(maps ...map[string]int) map[string]int {
+	merged := map[string]int{}
+	for _, source := range maps {
+		for combatID, count := range source {
+			if count <= 0 {
+				continue
+			}
+			merged[combatID] += count
+		}
+	}
+	if len(merged) == 0 {
 		return nil
+	}
+	return merged
+}
+
+// applyPvpCapturedUnitsByFaction 按兵种阵营分流 PVP 俘虏：本阵营入军队，非本阵营入驻防。
+func applyPvpCapturedUnitsByFaction(attackerState *GameState, defenderState *GameState, sources []defenderUnitSource, captured map[string]int) (map[string]int, map[string]int) {
+	if len(captured) == 0 {
+		return nil, nil
 	}
 	sourceByID := map[string]defenderUnitSource{}
 	for _, source := range sources {
 		sourceByID[source.CombatID] = source
 	}
-	applied := map[string]int{}
+	appliedToArmy := map[string]int{}
+	appliedToGarrison := map[string]int{}
 	for combatID, count := range captured {
 		if count <= 0 {
 			continue
@@ -641,21 +659,26 @@ func applyPvpCapturedUnits(attackerState *GameState, defenderState *GameState, s
 		} else {
 			deductArmyUnit(&defenderState.Army, source.UnitType, count)
 		}
-		if toGarrison {
-			addToArmy(&attackerState.GarrisonArmy, source.UnitType, count)
-		} else {
+		unitFaction, _, ok := FindUnitConfigByID(source.UnitType)
+		if ok && unitFaction == attackerState.Player.Faction {
 			addToArmy(&attackerState.Army, source.UnitType, count)
+			appliedToArmy[source.UnitType] += count
+		} else {
+			addToArmy(&attackerState.GarrisonArmy, source.UnitType, count)
+			appliedToGarrison[source.UnitType] += count
 		}
-		applied[source.UnitType] += count
 	}
 	cleanArmyUnits(&attackerState.Army)
 	cleanArmyUnits(&attackerState.GarrisonArmy)
 	cleanArmyUnits(&defenderState.Army)
 	cleanArmyUnits(&defenderState.GarrisonArmy)
-	if len(applied) == 0 {
-		return nil
+	if len(appliedToArmy) == 0 {
+		appliedToArmy = nil
 	}
-	return applied
+	if len(appliedToGarrison) == 0 {
+		appliedToGarrison = nil
+	}
+	return appliedToArmy, appliedToGarrison
 }
 
 func applyPvpAfterBattleTraits(report *BattleReport, attackerState *GameState, defenderState *GameState, attackerTraits []general.ActiveTrait, defenderTraits []general.ActiveTrait) {

@@ -198,16 +198,18 @@
   - `limit`：默认 100，最大 500。
   - `offset`：默认 0。
   - `gameType`：可选，支持按 `fishing` / `gambling` 筛选。
-- GM 接口 `GET /api/v1/admin/minigame/records` 支持同样分页和类型筛选。
+  - `stockOnly`：可选，传 `true` 时只返回仍可兑换库存，过滤已兑换历史。
+- GM 接口 `GET /api/v1/admin/minigame/records` 支持同样分页、类型筛选和库存筛选。
 - `MiniGameSummary` 增加：
   - `limit`
   - `offset`
   - `hasMore`
+  - `stockOnly`
 - `totalRecords` 改为符合筛选条件的真实总数，不再是当前页条数。
 
 ### Web 改动
 
-- 玩家钓鱼库存查询改为 `gameType=fishing&limit=100&offset=...`。
+- 玩家钓鱼库存查询改为 `gameType=fishing&limit=100&offset=...&stockOnly=true`，只翻可兑换库存页。
 - 钓鱼库存弹窗底部增加上一页/下一页分页控件。
 - 钓鱼库存每页加载 100 条记录，切页时替换当前页数据，避免记录过多时前端持续堆积。
 - 钓鱼库存一键兑换基于当前页记录聚合，避免一次拉取过多历史数据。

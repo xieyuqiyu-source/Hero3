@@ -213,10 +213,11 @@ export const adminApi = {
       method: 'DELETE',
     })
   },
-  getMiniGameRecords(playerId: string, limit = 100, offset = 0, gameType = '') {
+  getMiniGameRecords(playerId: string, limit = 100, offset = 0, gameType = '', stockOnly = false) {
     const typeQuery = gameType ? `&gameType=${encodeURIComponent(gameType)}` : ''
-    return request<{ totalRecords: number; limit: number; offset: number; hasMore: boolean; records: Array<{ id: string; playerId: string; gameType: string; resultName: string; rarity: string; rewardUnit: string; rewardAmount: number; remainingAmount: number; createdAt: string }>; rewardTotals: Record<string, number> }>(
-      `${API_BASE}/admin/minigame/records?playerId=${encodeURIComponent(playerId)}&limit=${limit}&offset=${offset}${typeQuery}`,
+    const stockQuery = stockOnly ? '&stockOnly=true' : ''
+    return request<{ totalRecords: number; limit: number; offset: number; hasMore: boolean; stockOnly: boolean; records: Array<{ id: string; playerId: string; gameType: string; resultName: string; rarity: string; rewardUnit: string; rewardAmount: number; remainingAmount: number; createdAt: string }>; rewardTotals: Record<string, number> }>(
+      `${API_BASE}/admin/minigame/records?playerId=${encodeURIComponent(playerId)}&limit=${limit}&offset=${offset}${typeQuery}${stockQuery}`,
     )
   },
   getGeneralsConfig() {

@@ -50,6 +50,7 @@ MiniGameSummary:
   - limit
   - offset
   - hasMore
+  - stockOnly
   - records
   - rewardTotals
   properties:
@@ -65,6 +66,9 @@ MiniGameSummary:
     hasMore:
       type: boolean
       description: 是否还有下一页。
+    stockOnly:
+      type: boolean
+      description: 是否只返回可兑换库存记录。
     records:
       type: array
       items:

@@ -362,9 +362,10 @@ export const gameApi = {
   },
 
   /** 获取自己的小游戏库存/记录 */
-  listMiniGameRecords(playerId: string, limit = 100, offset = 0, gameType = '') {
+  listMiniGameRecords(playerId: string, limit = 100, offset = 0, gameType = '', stockOnly = false) {
     const typeQuery = gameType ? `&gameType=${encodeURIComponent(gameType)}` : ''
-    return api.get<MiniGameSummary>(`/minigame/records?playerId=${playerId}&limit=${limit}&offset=${offset}${typeQuery}`)
+    const stockQuery = stockOnly ? '&stockOnly=true' : ''
+    return api.get<MiniGameSummary>(`/minigame/records?playerId=${playerId}&limit=${limit}&offset=${offset}${typeQuery}${stockQuery}`)
   },
 
   /** 使用钓鱼鱼饵并扣除城金 */

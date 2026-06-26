@@ -1,3 +1,4 @@
+// Hero3 小游戏服务，负责钓鱼、赌博记录存储和奖励兑换。
 package game
 
 import (
@@ -26,6 +27,7 @@ type MiniGameSummary struct {
 	Limit        int              `json:"limit"`
 	Offset       int              `json:"offset"`
 	HasMore      bool             `json:"hasMore"`
+	StockOnly    bool             `json:"stockOnly"`
 	Records      []MiniGameRecord `json:"records"`
 	RewardTotals map[string]int   `json:"rewardTotals"` // 兵种名 → 总可兑换数量
 }
@@ -160,8 +162,8 @@ func (s *Service) RedeemAllFactionMiniGameRewards(playerID string, gameType stri
 	return s.repo.RedeemAllFactionMiniGameRecords(playerID, gameType, time.Now())
 }
 
-// GetMiniGameRecords GM 查询某玩家的小游戏记录（含汇总）
-func (s *Service) GetMiniGameRecords(playerID string, gameType string, limit int, offset int) (MiniGameSummary, error) {
+// GetMiniGameRecords 查询某玩家的小游戏记录（含汇总），stockOnly 只返回可兑换库存。
+func (s *Service) GetMiniGameRecords(playerID string, gameType string, limit int, offset int, stockOnly bool) (MiniGameSummary, error) {
 	playerID = strings.TrimSpace(playerID)
 	gameType = strings.TrimSpace(gameType)
 	if playerID == "" {
@@ -178,7 +180,7 @@ func (s *Service) GetMiniGameRecords(playerID string, gameType string, limit int
 		offset = 0
 	}
 
-	records, total, err := s.repo.ListMiniGameRecords(playerID, gameType, limit, offset)
+	records, total, err := s.repo.ListMiniGameRecords(playerID, gameType, limit, offset, stockOnly)
 	if err != nil {
 		return MiniGameSummary{}, err
 	}
@@ -199,6 +201,7 @@ func (s *Service) GetMiniGameRecords(playerID string, gameType string, limit int
 		Limit:        limit,
 		Offset:       offset,
 		HasMore:      offset+len(records) < total,
+		StockOnly:    stockOnly,
 		Records:      records,
 		RewardTotals: totals,
 	}, nil

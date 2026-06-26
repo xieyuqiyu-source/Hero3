@@ -1488,12 +1488,65 @@ func TestRedeemMiniGameRewardAddsCrossFactionUnitToGarrison(t *testing.T) {
 	if armyUnitAmount(result.State.GarrisonArmy, "southernElephant") != 1000 {
 		t.Fatalf("expected cross faction unit in garrison, got %+v", result.State.GarrisonArmy)
 	}
-	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "fishing", 10, 0)
+	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "fishing", 10, 0, false)
 	if err != nil {
 		t.Fatalf("list records: %v", err)
 	}
 	if len(records) != 1 || records[0].RemainingAmount != 49000 {
 		t.Fatalf("expected stock reduced, got %+v", records)
+	}
+}
+
+func TestGetMiniGameRecordsStockOnlySkipsRedeemedHistory(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_fishing_stock_only", Username: "fishing_stock_only", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_fishing_stock_only", "Fisher", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+	redeemed, err := svc.SaveMiniGameRecord(state.Player.ID, "fishing", "旧鱼", "common", "青州军", 100, "", 0)
+	if err != nil {
+		t.Fatalf("save redeemed record: %v", err)
+	}
+	if _, err := svc.RedeemMiniGameReward(state.Player.ID, redeemed.ID, 100); err != nil {
+		t.Fatalf("redeem old record: %v", err)
+	}
+	if _, err := svc.SaveMiniGameRecord(state.Player.ID, "fishing", "金龙鱼", "rare", "骁骑营", 500, "", 0); err != nil {
+		t.Fatalf("save first stock record: %v", err)
+	}
+	if _, err := svc.SaveMiniGameRecord(state.Player.ID, "fishing", "银鲤", "common", "青州军", 200, "", 0); err != nil {
+		t.Fatalf("save second stock record: %v", err)
+	}
+
+	allSummary, err := svc.GetMiniGameRecords(state.Player.ID, "fishing", 10, 0, false)
+	if err != nil {
+		t.Fatalf("GetMiniGameRecords all failed: %v", err)
+	}
+	if allSummary.TotalRecords != 3 {
+		t.Fatalf("expected 3 history records, got %+v", allSummary)
+	}
+	stockSummary, err := svc.GetMiniGameRecords(state.Player.ID, "fishing", 10, 0, true)
+	if err != nil {
+		t.Fatalf("GetMiniGameRecords stock failed: %v", err)
+	}
+	if !stockSummary.StockOnly || stockSummary.TotalRecords != 2 || len(stockSummary.Records) != 2 {
+		t.Fatalf("expected only 2 stock records, got %+v", stockSummary)
+	}
+	for _, record := range stockSummary.Records {
+		if record.RemainingAmount <= 0 {
+			t.Fatalf("expected no redeemed history in stock page, got %+v", stockSummary.Records)
+		}
+	}
+	if stockSummary.RewardTotals["骁骑营"] != 500 || stockSummary.RewardTotals["青州军"] != 200 {
+		t.Fatalf("unexpected stock totals: %+v", stockSummary.RewardTotals)
 	}
 }
 
@@ -1545,7 +1598,7 @@ func TestRedeemAllFactionMiniGameRewardsRoutesCrossFactionStockToGarrison(t *tes
 		t.Fatalf("expected cross faction stock in garrison, got %+v", result.State.GarrisonArmy)
 	}
 
-	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "fishing", 10, 0)
+	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "fishing", 10, 0, false)
 	if err != nil {
 		t.Fatalf("list records: %v", err)
 	}
@@ -2055,6 +2108,78 @@ func TestPvpSettlementAppliesGeneralTraitsAndExperience(t *testing.T) {
 	storedAttacker, _ := repo.GetState(attacker.Player.ID)
 	if armyUnitAmount(storedAttacker.GarrisonArmy, "shuInfantry") != 10 {
 		t.Fatalf("expected captured cross-faction units in attacker garrison, got %+v", storedAttacker.GarrisonArmy)
+	}
+}
+
+func TestPvpMeirenRoutesCapturedNonFactionGarrisonUnitsToGarrison(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	setTestFactionsAndGenerals(t, FactionsConfig{
+		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "zhenmi", Name: "甄宓"}, {ID: "caocao", Name: "曹操"}}},
+	}, GeneralsConfig{
+		Enabled: true,
+		Common:  GeneralsCommonConfig{ExpCurve: []int{0, 1000}},
+		Heroes: map[string]GeneralHeroConfig{
+			"zhenmi": {
+				ID:      "zhenmi",
+				Name:    "甄宓",
+				Faction: "wei",
+				Enabled: true,
+				Traits: []GeneralTraitConfig{{
+					TraitID: "meiren",
+					Enabled: true,
+					Params:  map[string]float64{"captureRate": 0.5, "captureMax": 1000, "triggerChance": 1},
+				}},
+			},
+			"caocao": {ID: "caocao", Name: "曹操", Faction: "wei", Enabled: true},
+		},
+	})
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	attacker, defender := createPvpTestPlayers(t, svc, now, "player_pvp_trait_same_attacker", "player_pvp_trait_same_defender")
+	attacker.Player.Faction = "wei"
+	attacker.General = newGeneral("wei", "zhenmi")
+	attacker.Army = []ArmyUnit{{UnitType: "weiCavalry", Amount: 100}}
+	defender.Player.Faction = "wei"
+	defender.General = newGeneral("wei", "caocao")
+	defender.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 20}}
+	defender.GarrisonArmy = []ArmyUnit{{UnitType: "shuInfantry", Amount: 20}}
+	_ = repo.SaveState(attacker, now)
+	_ = repo.SaveState(defender, now)
+
+	result, err := svc.AttackPlayer(AttackPlayerRequest{PlayerID: attacker.Player.ID, TargetPlayerID: defender.Player.ID, Units: map[string]int{"weiCavalry": 100}})
+	if err != nil {
+		t.Fatalf("AttackPlayer failed: %v", err)
+	}
+	march := result.March
+	settleAt := time.Now().Add(time.Second)
+	march.ArrivesAt = settleAt.Add(-time.Second).UTC().Format(time.RFC3339)
+	_ = repo.UpdateMarch(march)
+	if err := svc.SettleDueMarches(settleAt); err != nil {
+		t.Fatalf("SettleDueMarches failed: %v", err)
+	}
+
+	reports, total, err := repo.ListReports(attacker.Player.ID, 10, 0)
+	if err != nil || total != 1 {
+		t.Fatalf("expected one attacker report, total=%d err=%v", total, err)
+	}
+	report := reports[0]
+	if !containsString(report.TraitTriggered, "meiren") {
+		t.Fatalf("expected meiren trait, got %+v", report)
+	}
+	if report.CapturedToGarrison["shuInfantry"] != 10 {
+		t.Fatalf("expected captured shu garrison units to stay in garrison report, got %+v", report)
+	}
+	if report.CapturedUnits["shuInfantry"] != 0 {
+		t.Fatalf("expected no non-faction captured units in army report, got %+v", report)
+	}
+	storedAttacker, _ := repo.GetState(attacker.Player.ID)
+	if armyUnitAmount(storedAttacker.Army, "shuInfantry") != 0 {
+		t.Fatalf("expected captured shu units not in main army, got %+v", storedAttacker.Army)
+	}
+	if armyUnitAmount(storedAttacker.GarrisonArmy, "shuInfantry") != 10 {
+		t.Fatalf("expected captured shu units in garrison, got %+v", storedAttacker.GarrisonArmy)
 	}
 }
 

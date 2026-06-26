@@ -74,7 +74,7 @@ type Repository interface {
 
 	// MiniGame Records
 	SaveMiniGameRecord(record MiniGameRecord) error
-	ListMiniGameRecords(playerID string, gameType string, limit int, offset int) ([]MiniGameRecord, int, error)
+	ListMiniGameRecords(playerID string, gameType string, limit int, offset int, stockOnly bool) ([]MiniGameRecord, int, error)
 	RedeemMiniGameRecord(playerID string, recordID string, amount int, redeemedAt time.Time) (MiniGameRedeemResult, error)
 	RedeemAllFactionMiniGameRecords(playerID string, gameType string, redeemedAt time.Time) (MiniGameRedeemAllResult, error)
 
@@ -991,17 +991,22 @@ func (r *MemoryRepository) SaveMiniGameRecord(record MiniGameRecord) error {
 	return nil
 }
 
-func (r *MemoryRepository) ListMiniGameRecords(playerID string, gameType string, limit int, offset int) ([]MiniGameRecord, int, error) {
+// ListMiniGameRecords 按条件分页查询小游戏记录，stockOnly 只返回可兑换库存。
+func (r *MemoryRepository) ListMiniGameRecords(playerID string, gameType string, limit int, offset int, stockOnly bool) ([]MiniGameRecord, int, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	all := r.miniGameRecords[playerID]
-	if gameType != "" {
+	if gameType != "" || stockOnly {
 		filtered := make([]MiniGameRecord, 0, len(all))
 		for _, record := range all {
-			if record.GameType == gameType {
-				filtered = append(filtered, record)
+			if gameType != "" && record.GameType != gameType {
+				continue
 			}
+			if stockOnly && (record.RewardUnit == "" || record.RemainingAmount <= 0) {
+				continue
+			}
+			filtered = append(filtered, record)
 		}
 		all = filtered
 	}

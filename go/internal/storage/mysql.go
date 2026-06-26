@@ -1959,7 +1959,8 @@ func (r *MySQLRepository) SaveMiniGameRecord(record game.MiniGameRecord) error {
 	return err
 }
 
-func (r *MySQLRepository) ListMiniGameRecords(playerID string, gameType string, limit int, offset int) ([]game.MiniGameRecord, int, error) {
+// ListMiniGameRecords 分页查询小游戏记录，stockOnly 只查仍可兑换的库存记录。
+func (r *MySQLRepository) ListMiniGameRecords(playerID string, gameType string, limit int, offset int, stockOnly bool) ([]game.MiniGameRecord, int, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -1975,6 +1976,9 @@ func (r *MySQLRepository) ListMiniGameRecords(playerID string, gameType string, 
 	if gameType != "" {
 		where += ` AND game_type = ?`
 		args = append(args, gameType)
+	}
+	if stockOnly {
+		where += ` AND remaining_amount > 0 AND reward_unit <> ''`
 	}
 
 	var total int

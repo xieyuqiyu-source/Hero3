@@ -289,6 +289,7 @@ export interface MiniGameSummary {
   limit: number
   offset: number
   hasMore: boolean
+  stockOnly: boolean
   records: MiniGameRecord[]
   rewardTotals: Record<string, number>
 }

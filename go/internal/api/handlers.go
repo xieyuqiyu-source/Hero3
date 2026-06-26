@@ -1901,7 +1901,7 @@ func (h *Handlers) ListMiniGameRecords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := parseLimitOffset(r, 100, 500)
-	summary, err := h.gameService.GetMiniGameRecords(playerID, r.URL.Query().Get("gameType"), limit, offset)
+	summary, err := h.gameService.GetMiniGameRecords(playerID, r.URL.Query().Get("gameType"), limit, offset, parseQueryBool(r, "stockOnly"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -1996,13 +1996,19 @@ func (h *Handlers) AdminMiniGameRecords(w http.ResponseWriter, r *http.Request) 
 	}
 
 	limit, offset := parseLimitOffset(r, 100, 500)
-	summary, err := h.gameService.GetMiniGameRecords(playerID, r.URL.Query().Get("gameType"), limit, offset)
+	summary, err := h.gameService.GetMiniGameRecords(playerID, r.URL.Query().Get("gameType"), limit, offset, parseQueryBool(r, "stockOnly"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	writeJSON(w, http.StatusOK, summary)
+}
+
+// parseQueryBool 解析查询字符串里的布尔开关，兼容 true 和 1。
+func parseQueryBool(r *http.Request, key string) bool {
+	value := r.URL.Query().Get(key)
+	return value == "true" || value == "1"
 }
 
 // --- 归属校验辅助函数 ---

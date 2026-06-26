@@ -47,6 +47,13 @@
       schema:
         type: integer
         default: 0
+    - name: stockOnly
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: false
+      description: 传 true 时只返回仍可兑换的库存记录，过滤已兑换历史。
     responses:
       '200':
         description: 小游戏记录汇总
@@ -110,6 +117,13 @@
       schema:
         type: integer
         default: 0
+    - name: stockOnly
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: false
+      description: 传 true 时只返回仍可兑换的库存记录，便于排查玩家库存。
     responses:
       '200':
         description: 小游戏记录汇总

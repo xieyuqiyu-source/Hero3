@@ -114,7 +114,7 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
                   <p className="truncate text-sm font-bold leading-4 text-[var(--color-text-primary)]">钓鱼库存</p>
                   <p className="mt-0.5 truncate text-[10px] leading-4 text-[var(--color-text-muted)]">
                     {recordsTotal > 0
-                      ? `第 ${currentPage}/${totalPages} 页 · 本页 ${records.length} 条`
+                      ? `库存第 ${currentPage}/${totalPages} 页 · 本页 ${records.length} 条`
                       : '钓到奖励后会存入这里'}
                   </p>
                 </div>
@@ -161,7 +161,7 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
             )}
             {inventoryRecords.length > 0 && (
               <p className="mt-2 text-[9px] leading-4 text-[var(--color-text-muted)]">
-                全部兑换会扫描所有存储记录，目前只取出本阵营兵种。
+                全部兑换会扫描所有库存，本阵营进入军队，非本阵营进入驻防军队。
               </p>
             )}
           </div>
