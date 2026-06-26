@@ -755,6 +755,100 @@ func (r *MySQLRepository) SaveStates(states []game.GameState, updatedAt time.Tim
 	return tx.Commit()
 }
 
+func (r *MySQLRepository) SaveStateAndCreateMarch(state game.GameState, march game.PvpMarch, updatedAt time.Time) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := saveStateInTx(tx, state, updatedAt); err != nil {
+		return err
+	}
+	if err := createMarchInTx(tx, march); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (r *MySQLRepository) SavePvpSettlement(attackerState game.GameState, defenderState game.GameState, attackerReport game.BattleReport, defenderReport game.BattleReport, march game.PvpMarch, updatedAt time.Time) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := saveStateInTx(tx, attackerState, updatedAt); err != nil {
+		return err
+	}
+	if err := saveStateInTx(tx, defenderState, updatedAt); err != nil {
+		return err
+	}
+	if err := saveReportInTx(tx, attackerReport); err != nil {
+		return err
+	}
+	if err := saveReportInTx(tx, defenderReport); err != nil {
+		return err
+	}
+	if err := updateMarchInTx(tx, march); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func saveStateInTx(tx *sql.Tx, state game.GameState, updatedAt time.Time) error {
+	game.NormalizeGameState(&state)
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+	result, err := tx.Exec(
+		`UPDATE players
+		 SET nickname = ?, faction = ?, mail_code = ?, state_json = ?, updated_at = ?
+		 WHERE id = ?`,
+		state.Player.Nickname,
+		state.Player.Faction,
+		state.Player.MailCode,
+		stateJSON,
+		updatedAt.UTC(),
+		state.Player.ID,
+	)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return game.ErrPlayerNotFound
+	}
+	return nil
+}
+
+func saveReportInTx(tx *sql.Tx, report game.BattleReport) error {
+	reportJSON, err := json.Marshal(report)
+	if err != nil {
+		return err
+	}
+	createdAt, _ := time.Parse(time.RFC3339, report.CreatedAt)
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+	_, err = tx.Exec(
+		`INSERT INTO battle_reports (id, player_id, report_json, type, is_read, deleted_by_player, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		report.ID,
+		report.PlayerID,
+		reportJSON,
+		report.Type,
+		report.Read,
+		false,
+		createdAt.UTC(),
+	)
+	return err
+}
+
 func isDuplicateEntry(err error) bool {
 	var mysqlErr *mysql.MySQLError
 	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
@@ -936,6 +1030,16 @@ func (r *MySQLRepository) CountUnreadReports(playerID string) (int, error) {
 // --- March Methods ---
 
 func (r *MySQLRepository) CreateMarch(march game.PvpMarch) error {
+	return createMarchWithExec(r.db, march)
+}
+
+func createMarchInTx(tx *sql.Tx, march game.PvpMarch) error {
+	return createMarchWithExec(tx, march)
+}
+
+func createMarchWithExec(execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}, march game.PvpMarch) error {
 	unitsJSON, err := json.Marshal(march.Units)
 	if err != nil {
 		return err
@@ -956,7 +1060,7 @@ func (r *MySQLRepository) CreateMarch(march game.PvpMarch) error {
 	if err != nil {
 		return game.ErrInvalidMarch
 	}
-	_, err = r.db.Exec(
+	_, err = execer.Exec(
 		`INSERT INTO pvp_marches (
 			id, attacker_player_id, attacker_name, attacker_faction,
 			defender_player_id, defender_name, defender_faction,
@@ -1001,6 +1105,16 @@ func (r *MySQLRepository) CreateMarch(march game.PvpMarch) error {
 }
 
 func (r *MySQLRepository) UpdateMarch(march game.PvpMarch) error {
+	return updateMarchWithExec(r.db, march)
+}
+
+func updateMarchInTx(tx *sql.Tx, march game.PvpMarch) error {
+	return updateMarchWithExec(tx, march)
+}
+
+func updateMarchWithExec(execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}, march game.PvpMarch) error {
 	unitsJSON, err := json.Marshal(march.Units)
 	if err != nil {
 		return err
@@ -1021,7 +1135,7 @@ func (r *MySQLRepository) UpdateMarch(march game.PvpMarch) error {
 	if err != nil {
 		return game.ErrInvalidMarch
 	}
-	result, err := r.db.Exec(
+	result, err := execer.Exec(
 		`UPDATE pvp_marches
 		 SET attacker_name = ?, attacker_faction = ?, defender_name = ?, defender_faction = ?,
 			type = ?, units_json = ?, slowest_speed = ?, duration_seconds = ?,

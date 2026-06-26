@@ -26,6 +26,8 @@ type Repository interface {
 	GetState(playerID string) (GameState, error)
 	SaveState(state GameState, updatedAt time.Time) error
 	SaveStates(states []GameState, updatedAt time.Time) error
+	SaveStateAndCreateMarch(state GameState, march PvpMarch, updatedAt time.Time) error
+	SavePvpSettlement(attackerState GameState, defenderState GameState, attackerReport BattleReport, defenderReport BattleReport, march PvpMarch, updatedAt time.Time) error
 	// 城金原子操作
 	AddCityGold(playerID string, amount int) (int, error)    // 返回操作后余额
 	DeductCityGold(playerID string, amount int) (int, error) // 余额不足返回 ErrInsufficientCityGold
@@ -459,6 +461,48 @@ func (r *MemoryRepository) SaveStates(states []GameState, updatedAt time.Time) e
 		r.players[state.Player.ID] = state
 		r.playerUpdatedAt[state.Player.ID] = updatedAt
 	}
+	return nil
+}
+
+func (r *MemoryRepository) SaveStateAndCreateMarch(state GameState, march PvpMarch, updatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.players[state.Player.ID]; !exists {
+		return ErrPlayerNotFound
+	}
+	if march.ID == "" {
+		return ErrInvalidMarch
+	}
+	NormalizeGameState(&state)
+	r.players[state.Player.ID] = state
+	r.playerUpdatedAt[state.Player.ID] = updatedAt
+	r.marches[march.ID] = march
+	return nil
+}
+
+func (r *MemoryRepository) SavePvpSettlement(attackerState GameState, defenderState GameState, attackerReport BattleReport, defenderReport BattleReport, march PvpMarch, updatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.players[attackerState.Player.ID]; !exists {
+		return ErrPlayerNotFound
+	}
+	if _, exists := r.players[defenderState.Player.ID]; !exists {
+		return ErrPlayerNotFound
+	}
+	if _, exists := r.marches[march.ID]; !exists {
+		return ErrMarchNotFound
+	}
+	NormalizeGameState(&attackerState)
+	NormalizeGameState(&defenderState)
+	r.players[attackerState.Player.ID] = attackerState
+	r.players[defenderState.Player.ID] = defenderState
+	r.playerUpdatedAt[attackerState.Player.ID] = updatedAt
+	r.playerUpdatedAt[defenderState.Player.ID] = updatedAt
+	r.reports[attackerReport.PlayerID] = append([]BattleReport{attackerReport}, r.reports[attackerReport.PlayerID]...)
+	r.reports[defenderReport.PlayerID] = append([]BattleReport{defenderReport}, r.reports[defenderReport.PlayerID]...)
+	r.marches[march.ID] = march
 	return nil
 }
 

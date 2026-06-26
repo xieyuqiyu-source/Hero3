@@ -191,10 +191,7 @@ func (s *Service) StartPvpAttack(req AttackPlayerRequest) (AttackPlayerResponse,
 	}
 
 	attackerState.ServerTime = nowStr
-	if err := s.repo.SaveState(attackerState, now); err != nil {
-		return AttackPlayerResponse{}, err
-	}
-	if err := s.repo.CreateMarch(march); err != nil {
+	if err := s.repo.SaveStateAndCreateMarch(attackerState, march, now); err != nil {
 		return AttackPlayerResponse{}, err
 	}
 	s.attachReportSummary(&attackerState, attackerState.Player.ID)
@@ -446,21 +443,15 @@ func (s *Service) settlePvpMarch(marchID string, now time.Time) error {
 	nowStr := now.UTC().Format(resourceDateLayout)
 	attackerState.ServerTime = nowStr
 	defenderState.ServerTime = nowStr
-	if err := s.repo.SaveStates([]GameState{attackerState, defenderState}, now); err != nil {
-		return s.restoreMarching(claimed, now, err)
-	}
-	if err := s.repo.SaveReport(report); err != nil {
-		return s.restoreMarching(claimed, now, err)
-	}
-	if err := s.repo.SaveReport(defenderReport); err != nil {
-		return s.restoreMarching(claimed, now, err)
-	}
 	claimed.Status = MarchStatusResolved
 	claimed.ResolvedAt = nowStr
 	claimed.AttackerReportID = report.ID
 	claimed.DefenderReportID = defenderReport.ID
 	claimed.UpdatedAt = nowStr
-	return s.repo.UpdateMarch(claimed)
+	if err := s.repo.SavePvpSettlement(attackerState, defenderState, report, defenderReport, claimed, now); err != nil {
+		return s.restoreMarching(claimed, now, err)
+	}
+	return nil
 }
 
 func (s *Service) restoreMarching(march PvpMarch, now time.Time, cause error) error {
