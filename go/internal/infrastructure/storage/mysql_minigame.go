@@ -129,6 +129,7 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 	defer rows.Close()
 
 	records := []game.MiniGameRecord{}
+	previousRemainingByRecordID := map[string]int{}
 	for rows.Next() {
 		var record game.MiniGameRecord
 		var createdAt time.Time
@@ -149,6 +150,7 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 		}
 		record.CreatedAt = createdAt.UTC().Format(time.RFC3339)
 		records = append(records, record)
+		previousRemainingByRecordID[record.ID] = record.RemainingAmount
 	}
 	if err := rows.Err(); err != nil {
 		return game.GameState{}, nil, err
@@ -162,6 +164,9 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 	}
 
 	for _, record := range records {
+		if !miniGameRemainingAmountChanged(previousRemainingByRecordID, record) {
+			continue
+		}
 		if _, err := tx.Exec(
 			`UPDATE minigame_records SET remaining_amount = ? WHERE id = ? AND player_id = ?`,
 			record.RemainingAmount, record.ID, playerID,
@@ -192,6 +197,12 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 		return game.GameState{}, nil, err
 	}
 	return state, records, nil
+}
+
+// miniGameRemainingAmountChanged 判断小游戏库存数量是否真正变化。
+func miniGameRemainingAmountChanged(previous map[string]int, record game.MiniGameRecord) bool {
+	before, ok := previous[record.ID]
+	return !ok || before != record.RemainingAmount
 }
 
 // --- Gold Ledger Methods ---
