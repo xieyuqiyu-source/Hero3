@@ -142,11 +142,11 @@ jobs:
           systemctl restart hero3
           nginx -t
           systemctl reload nginx
-          curl --fail --show-error --silent --retry 5 --retry-delay 3 http://127.0.0.1:8081/healthz
+          curl --fail --show-error --silent --retry 10 --retry-delay 2 --retry-connrefused http://127.0.0.1:8081/healthz
 
           rm -f "$SERVER_BIN"
           EOF
 
       - name: Health check
         run: |
-          curl --fail --show-error --silent --retry 5 --retry-delay 3 "$HERO3_HEALTH_URL"
+          curl --fail --show-error --silent --retry 10 --retry-delay 2 --retry-connrefused "$HERO3_HEALTH_URL"
