@@ -181,7 +181,7 @@ ssh $SERVER "chmod +x /tmp/hero3-server.$STAMP; mv -f /tmp/hero3-server.$STAMP /
 
 当前 workflow 的 job 超时时间为 5 分钟。GitHub Actions 不再负责构建产物和上传 `dist`，而是通过 SSH 在服务器上同步执行构建发布脚本。只要服务器上的源码更新、`go build`、`pnpm build`、`systemctl restart hero3`、`nginx -t` 或健康检查任一步失败，GitHub Actions 会直接失败。
 
-服务器部署脚本会使用 `/tmp/hero3-deploy.lock` 防止多个部署同时运行。源码同步阶段使用 120 秒 timeout；如果服务器从 GitHub 拉取源码过慢，会直接失败，不会继续占用服务器进程。
+服务器部署脚本会使用 `/tmp/hero3-deploy.lock` 防止多个部署同时运行。源码同步阶段使用 120 秒 timeout；如果服务器从 GitHub 拉取源码过慢，会直接失败，不会继续占用服务器进程，也不会删除已有的可用源码工作副本。
 
 部署流程：
 

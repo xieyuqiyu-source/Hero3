@@ -93,9 +93,10 @@ jobs:
           log "Updating source"
           if [ -d "$SOURCE_DIR/.git" ]; then
             git -C "$SOURCE_DIR" remote set-url origin "$REPO_URL"
-            if ! timeout --kill-after=10s 120s git -C "$SOURCE_DIR" fetch --depth 1 --prune origin "$HERO3_REF_NAME"; then
-              rm -rf "$SOURCE_DIR"
-              timeout --kill-after=10s 120s git clone --depth 1 --single-branch --branch "$HERO3_REF_NAME" "$REPO_URL" "$SOURCE_DIR"
+            if git -C "$SOURCE_DIR" cat-file -e "$HERO3_SHA^{commit}" 2>/dev/null; then
+              log "Source already has target commit"
+            else
+              timeout --kill-after=10s 120s git -C "$SOURCE_DIR" fetch --depth 1 --prune origin "$HERO3_REF_NAME"
             fi
           else
             rm -rf "$SOURCE_DIR"
