@@ -128,7 +128,7 @@ func cloneMySQLData(ctx context.Context, options cloneDataOptions) (cloneDataRes
 
 	result := cloneDataResult{}
 	for _, tableName := range tables {
-		columns, err := listTableColumns(ctx, sourceDB, sourceName, tableName)
+		sourceColumns, err := listTableColumns(ctx, sourceDB, sourceName, tableName)
 		if err != nil {
 			return cloneDataResult{}, err
 		}
@@ -136,8 +136,12 @@ func cloneMySQLData(ctx context.Context, options cloneDataOptions) (cloneDataRes
 		if err != nil {
 			return cloneDataResult{}, err
 		}
-		if !sameStringSlice(columns, targetColumns) {
-			return cloneDataResult{}, fmt.Errorf("table %s columns mismatch between source and target", tableName)
+		columns, skippedTargetColumns, err := cloneableColumns(tableName, sourceColumns, targetColumns)
+		if err != nil {
+			return cloneDataResult{}, err
+		}
+		if len(skippedTargetColumns) > 0 {
+			fmt.Printf("表 %s 跳过目标新增列：%s\n", tableName, strings.Join(skippedTargetColumns, ","))
 		}
 		rows, err := cloneTableData(ctx, sourceDB, targetDB, tableName, columns, options.BatchSize)
 		if err != nil {
@@ -148,6 +152,37 @@ func cloneMySQLData(ctx context.Context, options cloneDataOptions) (cloneDataRes
 		fmt.Printf("已复制表：%s，行 %d\n", tableName, rows)
 	}
 	return result, nil
+}
+
+// cloneableColumns 返回源库和目标库都存在的可复制列，并报告目标库新增列。
+func cloneableColumns(tableName string, sourceColumns []string, targetColumns []string) ([]string, []string, error) {
+	targetColumnSet := map[string]struct{}{}
+	for _, column := range targetColumns {
+		targetColumnSet[column] = struct{}{}
+	}
+	sourceColumnSet := map[string]struct{}{}
+	for _, column := range sourceColumns {
+		sourceColumnSet[column] = struct{}{}
+	}
+
+	cloneColumns := make([]string, 0, len(sourceColumns))
+	for _, column := range sourceColumns {
+		if _, ok := targetColumnSet[column]; !ok {
+			return nil, nil, fmt.Errorf("table %s source column %s is missing in target", tableName, column)
+		}
+		cloneColumns = append(cloneColumns, column)
+	}
+	if len(cloneColumns) == 0 {
+		return nil, nil, fmt.Errorf("table %s has no cloneable columns", tableName)
+	}
+
+	skippedTargetColumns := []string{}
+	for _, column := range targetColumns {
+		if _, ok := sourceColumnSet[column]; !ok {
+			skippedTargetColumns = append(skippedTargetColumns, column)
+		}
+	}
+	return cloneColumns, skippedTargetColumns, nil
 }
 
 // listBaseTables 列出源库普通表。

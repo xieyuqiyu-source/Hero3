@@ -62,6 +62,7 @@ go build ./cmd/server
 - 本地开发模式应连接 `test_` 前缀测试库，例如 `test_hero3`，不要直接写稳定玩家库。
 - `make migrate` 迁移当前 DSN 指向的库，`make migrate-test` 创建并迁移 `test_` 前缀测试库。
 - `make clone-data` 可从 `HERO3_SOURCE_DATABASE_DSN` 复制数据到当前 `test_` 目标库。
+- `clone-data` 允许目标测试库比源库多出迁移后的新列，复制时只写公共列；源库列在目标库不存在时会中止。
 
 示例：
 
