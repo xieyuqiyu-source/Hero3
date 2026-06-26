@@ -17,6 +17,7 @@
 ```text
 /opt/hero3/go/bin/hero3-server     # Go 后端可执行文件
 /opt/hero3/go/config/              # 后端生产配置，如 balance/factions/units
+/opt/hero3/source/                 # 服务器本地构建使用的源码工作副本
 /var/www/hero3/web/                # 玩家前端静态文件
 /var/www/hero3/admin/              # GM 后台静态文件
 /var/www/hero3/backups/            # 前端静态文件备份
@@ -174,23 +175,24 @@ ssh $SERVER "chmod +x /tmp/hero3-server.$STAMP; mv -f /tmp/hero3-server.$STAMP /
 
 静态资源使用覆盖发布，不在上线过程中清空目录，避免用户刷新时遇到空白站点。Vite 生成的旧 hash 资源会保留，可在确认版本稳定且已有备份后定期清理。
 
-## GitHub Actions 自动部署
+## GitHub Actions 服务器本地构建部署
 
-仓库已配置 `.github/workflows/deploy.yml`。推送到 `main` 分支时会自动执行生产部署，也可以在 GitHub 仓库的 **Actions** 页面手动点击 `Deploy Hero3` 运行。
-首次把这份 workflow 推到 `main` 后，GitHub Actions 会自动跑一轮，方便先验证链路是否通。
+仓库已配置 `.github/workflows/deploy.yml`。当前只支持在 GitHub 仓库的 **Actions** 页面手动点击 `Deploy Hero3` 运行，不会在 push `main` 时自动发布。
 
-自动部署流程：
+当前 workflow 的 job 超时时间为 5 分钟。GitHub Actions 不再负责构建产物和上传 `dist`，而是通过 SSH 在服务器上同步执行构建发布脚本。只要服务器上的源码更新、`go build`、`pnpm build`、`systemctl restart hero3`、`nginx -t` 或健康检查任一步失败，GitHub Actions 会直接失败。
+
+部署流程：
 
 ```text
-push main
-  -> GitHub Actions checkout
-  -> 构建 Go Linux 后端
-  -> 构建玩家前端 web
-  -> 构建 GM 后台 admin
-  -> 打包 release
-  -> SSH 上传到服务器
+手动运行 Deploy Hero3
+  -> GitHub Actions 配置 SSH
+  -> SSH 登录服务器
+  -> 服务器更新 /opt/hero3/source 源码到本次 GitHub SHA
+  -> 服务器本地构建 Go Linux 后端
+  -> 服务器本地构建玩家前端 web
+  -> 服务器本地构建 GM 后台 admin
   -> 服务器备份旧版本
-  -> 覆盖后端、配置和静态资源
+  -> 覆盖后端、配置和静态资源目录
   -> 重启 hero3.service
   -> reload Nginx
   -> 检查 /healthz
@@ -221,10 +223,12 @@ ssh-keygen -t ed25519 -C "github-actions-hero3"
 
 注意事项：
 
-- 自动部署只在 `main` 分支 push 时触发，普通开发分支不会发布线上。
+- 当前 workflow 只支持手动触发，普通 push 不会发布线上。
+- 服务器必须能通过 `https://github.com/xieyuqiyu-source/Hero3.git` 拉取仓库代码。如果仓库改成私有，需要给服务器配置可拉取该仓库的凭据或部署密钥。
+- 服务器需要安装并维护构建工具：Git、Go、Node.js、pnpm、rsync。
 - 如果 Actions 失败，先看 GitHub Actions 日志；如果已经连上服务器，再看 `journalctl -u hero3 -f`。
 - 服务器上的数据库密码、环境变量、证书不进入 GitHub，仍然保留在 `/etc/hero3/hero3.env` 和 Nginx 证书目录。
-- 当前 workflow 使用覆盖发布静态资源，不清空 `/var/www/hero3/web/` 和 `/var/www/hero3/admin/`，避免刷新时短暂空白。
+- 当前 workflow 在服务器构建成功后才替换线上文件；如果构建失败，不会覆盖当前线上版本。
 
 ## 验证发布
 
