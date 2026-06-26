@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"sort"
+	"strings"
 	"time"
 
 	"hero3/internal/app/game"
@@ -146,6 +148,7 @@ func (r *MySQLRepository) UpdatePlayerState(playerID string, updatedAt time.Time
 	if err = json.Unmarshal(stateJSON, &state); err != nil {
 		return game.GameState{}, err
 	}
+	previousResourceSnapshot := resourceSnapshotsFromStorageState(state.Resources)
 	if state.Player.MailCode == "" {
 		state.Player.MailCode = mailCode
 	}
@@ -159,8 +162,10 @@ func (r *MySQLRepository) UpdatePlayerState(playerID string, updatedAt time.Time
 	if err != nil {
 		return game.GameState{}, err
 	}
-	if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
-		return game.GameState{}, err
+	if resourceSnapshotChanged(previousResourceSnapshot, state.Resources) {
+		if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
+			return game.GameState{}, err
+		}
 	}
 	if bytes.Equal(stateJSON, nextStateJSON) {
 		if err = tx.Commit(); err != nil {
@@ -217,6 +222,7 @@ func (r *MySQLRepository) UpdateAccountPlayerState(accountID string, playerID st
 	if err != nil {
 		return game.Account{}, game.GameState{}, err
 	}
+	previousAccountGold := account.Gold
 
 	var stateJSON []byte
 	var mailCode string
@@ -240,6 +246,7 @@ func (r *MySQLRepository) UpdateAccountPlayerState(accountID string, playerID st
 	if err = json.Unmarshal(stateJSON, &state); err != nil {
 		return game.Account{}, game.GameState{}, err
 	}
+	previousResourceSnapshot := resourceSnapshotsFromStorageState(state.Resources)
 	if state.Player.MailCode == "" {
 		state.Player.MailCode = mailCode
 	}
@@ -254,35 +261,41 @@ func (r *MySQLRepository) UpdateAccountPlayerState(accountID string, playerID st
 	if err != nil {
 		return game.Account{}, game.GameState{}, err
 	}
-	if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
-		return game.Account{}, game.GameState{}, err
+	if resourceSnapshotChanged(previousResourceSnapshot, state.Resources) {
+		if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
+			return game.Account{}, game.GameState{}, err
+		}
 	}
-	if _, err = tx.Exec(
-		`UPDATE accounts SET gold = ? WHERE id = ?`,
-		account.Gold,
-		accountID,
-	); err != nil {
-		return game.Account{}, game.GameState{}, err
+	if account.Gold != previousAccountGold {
+		if _, err = tx.Exec(
+			`UPDATE accounts SET gold = ? WHERE id = ?`,
+			account.Gold,
+			accountID,
+		); err != nil {
+			return game.Account{}, game.GameState{}, err
+		}
 	}
-	result, err := tx.Exec(
-		`UPDATE players
-		 SET nickname = ?, faction = ?, mail_code = ?, state_json = ?, updated_at = ?
-		 WHERE id = ? AND account_id = ?`,
-		state.Player.Nickname,
-		state.Player.Faction,
-		state.Player.MailCode,
-		nextStateJSON,
-		updatedAt.UTC(),
-		playerID,
-		accountID,
-	)
-	if err != nil {
-		return game.Account{}, game.GameState{}, err
-	}
-	if affected, err := result.RowsAffected(); err != nil {
-		return game.Account{}, game.GameState{}, err
-	} else if affected == 0 {
-		return game.Account{}, game.GameState{}, game.ErrPlayerNotFound
+	if !bytes.Equal(stateJSON, nextStateJSON) {
+		result, err := tx.Exec(
+			`UPDATE players
+			 SET nickname = ?, faction = ?, mail_code = ?, state_json = ?, updated_at = ?
+			 WHERE id = ? AND account_id = ?`,
+			state.Player.Nickname,
+			state.Player.Faction,
+			state.Player.MailCode,
+			nextStateJSON,
+			updatedAt.UTC(),
+			playerID,
+			accountID,
+		)
+		if err != nil {
+			return game.Account{}, game.GameState{}, err
+		}
+		if affected, err := result.RowsAffected(); err != nil {
+			return game.Account{}, game.GameState{}, err
+		} else if affected == 0 {
+			return game.Account{}, game.GameState{}, game.ErrPlayerNotFound
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return game.Account{}, game.GameState{}, err
@@ -292,20 +305,20 @@ func (r *MySQLRepository) UpdateAccountPlayerState(accountID string, playerID st
 
 // syncPlayerResourcesTx 把主状态中的资源快照同步到规范化资源表。
 func syncPlayerResourcesTx(tx *sql.Tx, playerID string, resources game.ResourceState, updatedAt time.Time) error {
-	if _, err := tx.Exec(`DELETE FROM player_resources WHERE player_id = ?`, playerID); err != nil {
+	resourceTypes := resourceTypesFromState(resources)
+	if len(resourceTypes) == 0 {
+		_, err := tx.Exec(`DELETE FROM player_resources WHERE player_id = ?`, playerID)
 		return err
 	}
-	resourceTypes := map[string]struct{}{}
-	for resourceType := range resources.Items {
-		resourceTypes[resourceType] = struct{}{}
-	}
-	for resourceType := range resources.Capacity {
-		resourceTypes[resourceType] = struct{}{}
-	}
-	for resourceType := range resourceTypes {
+
+	for _, resourceType := range resourceTypes {
 		if _, err := tx.Exec(
 			`INSERT INTO player_resources (player_id, resource_type, amount, capacity, updated_at)
-			 VALUES (?, ?, ?, ?, ?)`,
+			 VALUES (?, ?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+				amount = VALUES(amount),
+				capacity = VALUES(capacity),
+				updated_at = VALUES(updated_at)`,
 			playerID,
 			resourceType,
 			resources.Items[resourceType],
@@ -315,5 +328,83 @@ func syncPlayerResourcesTx(tx *sql.Tx, playerID string, resources game.ResourceS
 			return err
 		}
 	}
+	if err := deleteStalePlayerResourcesTx(tx, playerID, resourceTypes); err != nil {
+		return err
+	}
 	return nil
+}
+
+// resourceSnapshotChanged 判断资源数量或容量是否发生变化。
+func resourceSnapshotChanged(before map[string]storageResourceSnapshot, after game.ResourceState) bool {
+	return !resourceSnapshotMapsEqual(
+		before,
+		resourceSnapshotsFromStorageState(after),
+	)
+}
+
+// resourceTypesFromState 合并资源数量和容量里的资源类型，保证资源注册扩展后也能同步。
+func resourceTypesFromState(resources game.ResourceState) []string {
+	resourceTypeSet := map[string]struct{}{}
+	for resourceType := range resources.Items {
+		if strings.TrimSpace(resourceType) != "" {
+			resourceTypeSet[resourceType] = struct{}{}
+		}
+	}
+	for resourceType := range resources.Capacity {
+		if strings.TrimSpace(resourceType) != "" {
+			resourceTypeSet[resourceType] = struct{}{}
+		}
+	}
+	resourceTypes := make([]string, 0, len(resourceTypeSet))
+	for resourceType := range resourceTypeSet {
+		resourceTypes = append(resourceTypes, resourceType)
+	}
+	sort.Strings(resourceTypes)
+	return resourceTypes
+}
+
+type storageResourceSnapshot struct {
+	Amount   int
+	Capacity int
+}
+
+// resourceSnapshotsFromStorageState 从 ResourceState 生成同步比较快照。
+func resourceSnapshotsFromStorageState(resources game.ResourceState) map[string]storageResourceSnapshot {
+	snapshots := map[string]storageResourceSnapshot{}
+	for _, resourceType := range resourceTypesFromState(resources) {
+		snapshots[resourceType] = storageResourceSnapshot{
+			Amount:   resources.Items[resourceType],
+			Capacity: resources.Capacity[resourceType],
+		}
+	}
+	return snapshots
+}
+
+// resourceSnapshotMapsEqual 比较两个资源快照集合是否一致。
+func resourceSnapshotMapsEqual(a map[string]storageResourceSnapshot, b map[string]storageResourceSnapshot) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for resourceType, left := range a {
+		if right, ok := b[resourceType]; !ok || left != right {
+			return false
+		}
+	}
+	return true
+}
+
+// deleteStalePlayerResourcesTx 删除主状态里已经不存在的资源类型。
+func deleteStalePlayerResourcesTx(tx *sql.Tx, playerID string, resourceTypes []string) error {
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(resourceTypes)), ",")
+	args := make([]any, 0, len(resourceTypes)+1)
+	args = append(args, playerID)
+	for _, resourceType := range resourceTypes {
+		args = append(args, resourceType)
+	}
+	_, err := tx.Exec(
+		`DELETE FROM player_resources
+		 WHERE player_id = ? AND resource_type NOT IN (`+placeholders+`)`,
+		args...,
+	)
+	return err
 }

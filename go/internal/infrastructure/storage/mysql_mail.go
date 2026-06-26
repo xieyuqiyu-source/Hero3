@@ -2,6 +2,7 @@
 package storage
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -206,6 +207,7 @@ func (r *MySQLRepository) UpdateMailPlayerState(playerID string, mailID string, 
 	if err = json.Unmarshal(stateJSON, &state); err != nil {
 		return game.Account{}, game.GameState{}, game.Mail{}, err
 	}
+	previousResourceSnapshot := resourceSnapshotsFromStorageState(state.Resources)
 	if state.Player.MailCode == "" {
 		state.Player.MailCode = mailCode
 	}
@@ -225,6 +227,7 @@ func (r *MySQLRepository) UpdateMailPlayerState(playerID string, mailID string, 
 	if err != nil {
 		return game.Account{}, game.GameState{}, game.Mail{}, err
 	}
+	previousAccountGold := account.Gold
 
 	if update != nil {
 		if err = update(&account, &state, &mail); err != nil {
@@ -232,22 +235,28 @@ func (r *MySQLRepository) UpdateMailPlayerState(playerID string, mailID string, 
 		}
 	}
 
-	if _, err = tx.Exec(`UPDATE accounts SET gold = ? WHERE id = ?`, account.Gold, account.ID); err != nil {
-		return game.Account{}, game.GameState{}, game.Mail{}, err
+	if account.Gold != previousAccountGold {
+		if _, err = tx.Exec(`UPDATE accounts SET gold = ? WHERE id = ?`, account.Gold, account.ID); err != nil {
+			return game.Account{}, game.GameState{}, game.Mail{}, err
+		}
 	}
 
 	nextStateJSON, err := json.Marshal(state)
 	if err != nil {
 		return game.Account{}, game.GameState{}, game.Mail{}, err
 	}
-	if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
-		return game.Account{}, game.GameState{}, game.Mail{}, err
+	if resourceSnapshotChanged(previousResourceSnapshot, state.Resources) {
+		if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
+			return game.Account{}, game.GameState{}, game.Mail{}, err
+		}
 	}
-	if _, err = tx.Exec(
-		`UPDATE players SET state_json = ?, mail_code = ?, updated_at = ? WHERE id = ?`,
-		nextStateJSON, state.Player.MailCode, updatedAt.UTC(), playerID,
-	); err != nil {
-		return game.Account{}, game.GameState{}, game.Mail{}, err
+	if !bytes.Equal(stateJSON, nextStateJSON) {
+		if _, err = tx.Exec(
+			`UPDATE players SET state_json = ?, mail_code = ?, updated_at = ? WHERE id = ?`,
+			nextStateJSON, state.Player.MailCode, updatedAt.UTC(), playerID,
+		); err != nil {
+			return game.Account{}, game.GameState{}, game.Mail{}, err
+		}
 	}
 
 	if _, err = tx.Exec(

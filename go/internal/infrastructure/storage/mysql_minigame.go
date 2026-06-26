@@ -2,6 +2,7 @@
 package storage
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -112,6 +113,7 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 	if err = json.Unmarshal(stateJSON, &state); err != nil {
 		return game.GameState{}, nil, err
 	}
+	previousResourceSnapshot := resourceSnapshotsFromStorageState(state.Resources)
 
 	rows, err := tx.Query(
 		`SELECT id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, remaining_amount, bet_unit, bet_amount, created_at
@@ -172,14 +174,18 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 	if err != nil {
 		return game.GameState{}, nil, err
 	}
-	if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
-		return game.GameState{}, nil, err
+	if resourceSnapshotChanged(previousResourceSnapshot, state.Resources) {
+		if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
+			return game.GameState{}, nil, err
+		}
 	}
-	if _, err = tx.Exec(
-		`UPDATE players SET state_json = ?, updated_at = ? WHERE id = ?`,
-		nextStateJSON, updatedAt.UTC(), playerID,
-	); err != nil {
-		return game.GameState{}, nil, err
+	if !bytes.Equal(stateJSON, nextStateJSON) {
+		if _, err = tx.Exec(
+			`UPDATE players SET state_json = ?, updated_at = ? WHERE id = ?`,
+			nextStateJSON, updatedAt.UTC(), playerID,
+		); err != nil {
+			return game.GameState{}, nil, err
+		}
 	}
 
 	if err = tx.Commit(); err != nil {
