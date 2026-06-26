@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 
@@ -30,11 +30,7 @@ export default function PlayerSelector({ value, onChange, placeholder = '选择�
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    loadAccounts()
-  }, [])
-
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     setLoading(true)
     try {
       const result = await adminApi.getAccounts()
@@ -57,7 +53,13 @@ export default function PlayerSelector({ value, onChange, placeholder = '选择�
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void loadAccounts()
+    })
+  }, [loadAccounts])
 
   const selected = options.find(o => o.playerId === value)
   const filtered = search

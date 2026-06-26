@@ -1,28 +1,34 @@
+// Package storage 提供 Hero3 的 MySQL 持久化实现。
 package storage
 
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
-
-	"hero3/internal/app/game"
 )
 
 type MySQLRepository struct {
 	db *sql.DB
 }
 
+// NewMySQLRepository 创建 MySQL 仓储实例。
 func NewMySQLRepository(db *sql.DB) *MySQLRepository {
 	return &MySQLRepository{db: db}
 }
 
+// OpenMySQL 打开 MySQL 连接池，并为连接、读写操作补齐默认超时。
 func OpenMySQL(ctx context.Context, dsn string) (*sql.DB, error) {
-	db, err := sql.Open("mysql", dsn)
+	normalizedDSN, err := withMySQLTimeouts(dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := sql.Open("mysql", normalizedDSN)
 	if err != nil {
 		return nil, err
 	}
@@ -30,6 +36,7 @@ func OpenMySQL(ctx context.Context, dsn string) (*sql.DB, error) {
 	db.SetMaxOpenConns(20)
 	db.SetMaxIdleConns(10)
 	db.SetConnMaxLifetime(30 * time.Minute)
+	db.SetConnMaxIdleTime(5 * time.Minute)
 
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
@@ -39,6 +46,153 @@ func OpenMySQL(ctx context.Context, dsn string) (*sql.DB, error) {
 	return db, nil
 }
 
+// withMySQLTimeouts 为旧 DSN 自动补上默认超时，避免数据库半断开时请求长时间挂起。
+func withMySQLTimeouts(dsn string) (string, error) {
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return "", err
+	}
+
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 5 * time.Second
+	}
+	if cfg.ReadTimeout == 0 {
+		cfg.ReadTimeout = 5 * time.Second
+	}
+	if cfg.WriteTimeout == 0 {
+		cfg.WriteTimeout = 5 * time.Second
+	}
+
+	return cfg.FormatDSN(), nil
+}
+
+// MySQLDatabaseName 从 DSN 中解析当前数据库名。
+func MySQLDatabaseName(dsn string) (string, error) {
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(cfg.DBName) == "" {
+		return "", errors.New("mysql database name is required")
+	}
+	return cfg.DBName, nil
+}
+
+// MySQLDSNWithDatabase 返回替换数据库名后的 DSN。
+func MySQLDSNWithDatabase(dsn string, databaseName string) (string, error) {
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return "", err
+	}
+	databaseName = strings.TrimSpace(databaseName)
+	if databaseName == "" {
+		return "", errors.New("mysql database name is required")
+	}
+	cfg.DBName = databaseName
+	return cfg.FormatDSN(), nil
+}
+
+// MySQLTestDatabaseName 根据当前库名生成 test 前缀库名。
+func MySQLTestDatabaseName(databaseName string) (string, error) {
+	databaseName = strings.TrimSpace(databaseName)
+	if databaseName == "" {
+		return "", errors.New("mysql database name is required")
+	}
+	if strings.HasPrefix(databaseName, "test_") {
+		return databaseName, nil
+	}
+	return "test_" + databaseName, nil
+}
+
+// MySQLTestDatabaseDSN 根据当前 DSN 生成 test 前缀库 DSN。
+func MySQLTestDatabaseDSN(dsn string) (string, string, error) {
+	databaseName, err := MySQLDatabaseName(dsn)
+	if err != nil {
+		return "", "", err
+	}
+	testDatabaseName, err := MySQLTestDatabaseName(databaseName)
+	if err != nil {
+		return "", "", err
+	}
+	testDSN, err := MySQLDSNWithDatabase(dsn, testDatabaseName)
+	if err != nil {
+		return "", "", err
+	}
+	return testDatabaseName, testDSN, nil
+}
+
+// RedactMySQLDSN 隐藏 DSN 密码，便于日志输出。
+func RedactMySQLDSN(dsn string) string {
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return "<invalid mysql dsn>"
+	}
+	if cfg.Passwd != "" {
+		cfg.Passwd = "******"
+	}
+	return cfg.FormatDSN()
+}
+
+// CreateMySQLDatabaseFromDSN 使用 DSN 的账号创建指定数据库。
+func CreateMySQLDatabaseFromDSN(ctx context.Context, dsn string, databaseName string) error {
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return err
+	}
+	databaseName = strings.TrimSpace(databaseName)
+	if databaseName == "" {
+		return errors.New("mysql database name is required")
+	}
+	cfg.DBName = ""
+	serverDSN, err := withMySQLTimeouts(cfg.FormatDSN())
+	if err != nil {
+		return err
+	}
+	db, err := sql.Open("mysql", serverDSN)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if err := db.PingContext(ctx); err != nil {
+		return err
+	}
+	query := fmt.Sprintf(
+		"CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci",
+		escapeMySQLIdentifier(databaseName),
+	)
+	_, err = db.ExecContext(ctx, query)
+	return err
+}
+
+// escapeMySQLIdentifier 转义 MySQL 标识符中的反引号。
+func escapeMySQLIdentifier(value string) string {
+	return strings.ReplaceAll(value, "`", "``")
+}
+
+func isDuplicateEntry(err error) bool {
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
+}
+
+func addColumnIfMissing(ctx context.Context, db *sql.DB, statement string) error {
+	_, err := db.ExecContext(ctx, statement)
+	if err == nil || isDuplicateColumn(err) {
+		return nil
+	}
+	return err
+}
+
+func isDuplicateColumn(err error) bool {
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1060
+}
+
+func isDuplicateKeyName(err error) bool {
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1061
+}
+
+// MigrateMySQL 执行 MySQL 表结构初始化和轻量兼容迁移。
 func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS accounts (
@@ -61,6 +215,18 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			INDEX idx_players_mail_address (nickname, mail_code),
 			CONSTRAINT fk_players_account
 				FOREIGN KEY (account_id) REFERENCES accounts(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS player_resources (
+			player_id VARCHAR(64) NOT NULL,
+			resource_type VARCHAR(64) NOT NULL,
+			amount INT NOT NULL DEFAULT 0,
+			capacity INT NOT NULL DEFAULT 0,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (player_id, resource_type),
+			INDEX idx_player_resources_type (resource_type),
+			CONSTRAINT fk_player_resources_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
 				ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS battle_reports (
@@ -162,1262 +328,4 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 	}
 
 	return nil
-}
-
-func (r *MySQLRepository) CreateAccount(account game.Account) error {
-	_, err := r.db.Exec(
-		`INSERT INTO accounts (id, username, password_hash, gold, created_at) VALUES (?, ?, ?, ?, ?)`,
-		account.ID,
-		account.Username,
-		account.PasswordHash,
-		account.Gold,
-		account.CreatedAt.UTC(),
-	)
-	if isDuplicateEntry(err) {
-		return game.ErrAccountExists
-	}
-	return err
-}
-
-func (r *MySQLRepository) GetAccountByUsername(username string) (game.Account, error) {
-	var account game.Account
-	err := r.db.QueryRow(
-		`SELECT id, username, password_hash, gold, created_at FROM accounts WHERE username = ? LIMIT 1`,
-		username,
-	).Scan(&account.ID, &account.Username, &account.PasswordHash, &account.Gold, &account.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return game.Account{}, game.ErrAccountNotFound
-	}
-	return account, err
-}
-
-func (r *MySQLRepository) GetAccountByID(accountID string) (game.Account, error) {
-	var account game.Account
-	err := r.db.QueryRow(
-		`SELECT id, username, password_hash, gold, created_at FROM accounts WHERE id = ? LIMIT 1`,
-		accountID,
-	).Scan(&account.ID, &account.Username, &account.PasswordHash, &account.Gold, &account.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return game.Account{}, game.ErrAccountNotFound
-	}
-	return account, err
-}
-
-func (r *MySQLRepository) UpdateAccountGold(accountID string, gold int) error {
-	result, err := r.db.Exec(`UPDATE accounts SET gold = ? WHERE id = ?`, gold, accountID)
-	if err != nil {
-		return err
-	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
-		return game.ErrAccountNotFound
-	}
-	return nil
-}
-
-func (r *MySQLRepository) AddAccountGold(accountID string, amount int) error {
-	result, err := r.db.Exec(`UPDATE accounts SET gold = gold + ? WHERE id = ?`, amount, accountID)
-	if err != nil {
-		return err
-	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
-		return game.ErrAccountNotFound
-	}
-	return nil
-}
-
-func (r *MySQLRepository) DeductAccountGold(accountID string, amount int) error {
-	result, err := r.db.Exec(`UPDATE accounts SET gold = gold - ? WHERE id = ? AND gold >= ?`, amount, accountID, amount)
-	if err != nil {
-		return err
-	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
-		// 区分：账户不存在 vs 余额不足
-		var exists int
-		if scanErr := r.db.QueryRow(`SELECT 1 FROM accounts WHERE id = ? LIMIT 1`, accountID).Scan(&exists); scanErr != nil {
-			return game.ErrAccountNotFound
-		}
-		return game.ErrInsufficientGold
-	}
-	return nil
-}
-
-func (r *MySQLRepository) AccountExists(accountID string) (bool, error) {
-	var exists int
-	err := r.db.QueryRow(`SELECT 1 FROM accounts WHERE id = ? LIMIT 1`, accountID).Scan(&exists)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	return err == nil, err
-}
-
-func (r *MySQLRepository) MailAddressExists(nickname string, mailCode string) (bool, error) {
-	var exists int
-	err := r.db.QueryRow(
-		`SELECT 1 FROM players WHERE nickname = ? AND mail_code = ? LIMIT 1`,
-		nickname, mailCode,
-	).Scan(&exists)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	return err == nil, err
-}
-
-func (r *MySQLRepository) FindPlayerByMailAddress(nickname string, mailCode string) (game.PlayerSummary, error) {
-	var summary game.PlayerSummary
-	var updatedAt time.Time
-	err := r.db.QueryRow(
-		`SELECT id, nickname, faction, mail_code, updated_at
-		 FROM players
-		 WHERE nickname = ? AND mail_code = ?
-		 LIMIT 1`,
-		nickname, mailCode,
-	).Scan(&summary.ID, &summary.Nickname, &summary.Faction, &summary.MailCode, &updatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return game.PlayerSummary{}, game.ErrPlayerNotFound
-	}
-	if err != nil {
-		return game.PlayerSummary{}, err
-	}
-	summary.UpdatedAt = updatedAt.UTC().Format(time.RFC3339)
-	return summary, nil
-}
-
-func (r *MySQLRepository) ListAccounts() ([]game.AccountSummary, error) {
-	rows, err := r.db.Query(
-		`SELECT
-			a.id,
-			a.username,
-			a.created_at,
-			p.id,
-			p.nickname,
-			p.faction,
-			p.mail_code,
-			p.updated_at
-		FROM accounts a
-		LEFT JOIN players p ON p.account_id = a.id
-		ORDER BY a.created_at DESC, p.updated_at DESC`,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	accountOrder := []string{}
-	accountMap := map[string]*game.AccountSummary{}
-	for rows.Next() {
-		var accountID string
-		var username string
-		var createdAt time.Time
-		var playerID sql.NullString
-		var nickname sql.NullString
-		var faction sql.NullString
-		var mailCode sql.NullString
-		var updatedAt sql.NullTime
-
-		if err := rows.Scan(&accountID, &username, &createdAt, &playerID, &nickname, &faction, &mailCode, &updatedAt); err != nil {
-			return nil, err
-		}
-
-		account, exists := accountMap[accountID]
-		if !exists {
-			accountOrder = append(accountOrder, accountID)
-			account = &game.AccountSummary{
-				ID:        accountID,
-				Username:  username,
-				CreatedAt: createdAt.UTC().Format(time.RFC3339),
-				Players:   []game.PlayerSummary{},
-			}
-			accountMap[accountID] = account
-		}
-
-		if playerID.Valid {
-			player := game.PlayerSummary{
-				ID:       playerID.String,
-				Nickname: nickname.String,
-				Faction:  faction.String,
-				MailCode: mailCode.String,
-			}
-			if updatedAt.Valid {
-				player.UpdatedAt = updatedAt.Time.UTC().Format(time.RFC3339)
-			}
-			account.Players = append(account.Players, player)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	accounts := make([]game.AccountSummary, 0, len(accountOrder))
-	for _, accountID := range accountOrder {
-		accounts = append(accounts, *accountMap[accountID])
-	}
-	return accounts, nil
-}
-
-func (r *MySQLRepository) ListPlayers(accountID string) ([]game.PlayerSummary, error) {
-	exists, err := r.AccountExists(accountID)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, game.ErrAccountNotFound
-	}
-
-	rows, err := r.db.Query(
-		`SELECT id, nickname, faction, mail_code, state_json, updated_at
-		 FROM players
-		 WHERE account_id = ?
-		 ORDER BY updated_at DESC`,
-		accountID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	players := []game.PlayerSummary{}
-	for rows.Next() {
-		var id, nickname, faction, mailCode string
-		var stateJSON []byte
-		var updatedAt time.Time
-		if err := rows.Scan(&id, &nickname, &faction, &mailCode, &stateJSON, &updatedAt); err != nil {
-			return nil, err
-		}
-
-		summary := game.PlayerSummary{
-			ID:        id,
-			Nickname:  nickname,
-			Faction:   faction,
-			MailCode:  mailCode,
-			UpdatedAt: updatedAt.UTC().Format(time.RFC3339),
-		}
-
-		// 从 state_json 提取摘要
-		var state game.GameState
-		if err := json.Unmarshal(stateJSON, &state); err == nil {
-			for _, unit := range state.Army {
-				summary.TotalArmy += unit.Amount
-			}
-			for _, b := range state.Buildings {
-				summary.BuildingLevel += b.Level
-			}
-		}
-
-		players = append(players, summary)
-	}
-
-	return players, rows.Err()
-}
-
-func (r *MySQLRepository) CreatePlayer(accountID string, state game.GameState, updatedAt time.Time) error {
-	stateJSON, err := json.Marshal(state)
-	if err != nil {
-		return err
-	}
-
-	now := updatedAt.UTC()
-	_, err = r.db.Exec(
-		`INSERT INTO players (id, account_id, nickname, faction, mail_code, state_json, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		state.Player.ID,
-		accountID,
-		state.Player.Nickname,
-		state.Player.Faction,
-		state.Player.MailCode,
-		stateJSON,
-		now,
-		now,
-	)
-	return err
-}
-
-func (r *MySQLRepository) DeleteAccount(accountID string) error {
-	rows, err := r.db.Query(`SELECT id FROM players WHERE account_id = ?`, accountID)
-	if err != nil {
-		return err
-	}
-	playerIDs := []string{}
-	for rows.Next() {
-		var playerID string
-		if err := rows.Scan(&playerID); err != nil {
-			_ = rows.Close()
-			return err
-		}
-		playerIDs = append(playerIDs, playerID)
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	for _, playerID := range playerIDs {
-		_, _ = r.db.Exec(`DELETE FROM battle_reports WHERE player_id = ?`, playerID)
-		_, _ = r.db.Exec(`DELETE FROM mails WHERE player_id = ?`, playerID)
-	}
-
-	result, err := r.db.Exec(`DELETE FROM accounts WHERE id = ?`, accountID)
-	if err != nil {
-		return err
-	}
-
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return game.ErrAccountNotFound
-	}
-	return nil
-}
-
-func (r *MySQLRepository) DeletePlayer(playerID string) error {
-	// 先删独立存储
-	_, _ = r.db.Exec(`DELETE FROM battle_reports WHERE player_id = ?`, playerID)
-	_, _ = r.db.Exec(`DELETE FROM mails WHERE player_id = ?`, playerID)
-
-	result, err := r.db.Exec(`DELETE FROM players WHERE id = ?`, playerID)
-	if err != nil {
-		return err
-	}
-
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return game.ErrPlayerNotFound
-	}
-	return nil
-}
-
-func (r *MySQLRepository) GetState(playerID string) (game.GameState, error) {
-	var stateJSON []byte
-	var mailCode string
-	err := r.db.QueryRow(`SELECT state_json, mail_code FROM players WHERE id = ? LIMIT 1`, playerID).Scan(&stateJSON, &mailCode)
-	if errors.Is(err, sql.ErrNoRows) {
-		return game.GameState{}, game.ErrPlayerNotFound
-	}
-	if err != nil {
-		return game.GameState{}, err
-	}
-
-	var state game.GameState
-	if err := json.Unmarshal(stateJSON, &state); err != nil {
-		return game.GameState{}, err
-	}
-	if state.Player.MailCode == "" {
-		state.Player.MailCode = mailCode
-	}
-	return state, nil
-}
-
-func (r *MySQLRepository) UpdatePlayerState(playerID string, updatedAt time.Time, update func(state *game.GameState) error) (game.GameState, error) {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return game.GameState{}, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	var stateJSON []byte
-	var mailCode string
-	err = tx.QueryRow(
-		`SELECT state_json, mail_code FROM players WHERE id = ? LIMIT 1 FOR UPDATE`,
-		playerID,
-	).Scan(&stateJSON, &mailCode)
-	if errors.Is(err, sql.ErrNoRows) {
-		return game.GameState{}, game.ErrPlayerNotFound
-	}
-	if err != nil {
-		return game.GameState{}, err
-	}
-
-	var state game.GameState
-	if err = json.Unmarshal(stateJSON, &state); err != nil {
-		return game.GameState{}, err
-	}
-	if state.Player.MailCode == "" {
-		state.Player.MailCode = mailCode
-	}
-	if update != nil {
-		if err = update(&state); err != nil {
-			return game.GameState{}, err
-		}
-	}
-
-	nextStateJSON, err := json.Marshal(state)
-	if err != nil {
-		return game.GameState{}, err
-	}
-	result, err := tx.Exec(
-		`UPDATE players
-		 SET nickname = ?, faction = ?, mail_code = ?, state_json = ?, updated_at = ?
-		 WHERE id = ?`,
-		state.Player.Nickname,
-		state.Player.Faction,
-		state.Player.MailCode,
-		nextStateJSON,
-		updatedAt.UTC(),
-		playerID,
-	)
-	if err != nil {
-		return game.GameState{}, err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return game.GameState{}, err
-	}
-	if affected == 0 {
-		return game.GameState{}, game.ErrPlayerNotFound
-	}
-	if err = tx.Commit(); err != nil {
-		return game.GameState{}, err
-	}
-	return state, nil
-}
-
-func (r *MySQLRepository) UpdateAccountPlayerState(accountID string, playerID string, updatedAt time.Time, update func(account *game.Account, state *game.GameState) error) (game.Account, game.GameState, error) {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return game.Account{}, game.GameState{}, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	var account game.Account
-	err = tx.QueryRow(
-		`SELECT id, username, password_hash, gold, created_at
-		 FROM accounts
-		 WHERE id = ?
-		 LIMIT 1
-		 FOR UPDATE`,
-		accountID,
-	).Scan(&account.ID, &account.Username, &account.PasswordHash, &account.Gold, &account.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return game.Account{}, game.GameState{}, game.ErrAccountNotFound
-	}
-	if err != nil {
-		return game.Account{}, game.GameState{}, err
-	}
-
-	var stateJSON []byte
-	var mailCode string
-	err = tx.QueryRow(
-		`SELECT state_json, mail_code
-		 FROM players
-		 WHERE id = ? AND account_id = ?
-		 LIMIT 1
-		 FOR UPDATE`,
-		playerID,
-		accountID,
-	).Scan(&stateJSON, &mailCode)
-	if errors.Is(err, sql.ErrNoRows) {
-		return game.Account{}, game.GameState{}, game.ErrPlayerNotFound
-	}
-	if err != nil {
-		return game.Account{}, game.GameState{}, err
-	}
-
-	var state game.GameState
-	if err = json.Unmarshal(stateJSON, &state); err != nil {
-		return game.Account{}, game.GameState{}, err
-	}
-	if state.Player.MailCode == "" {
-		state.Player.MailCode = mailCode
-	}
-
-	if update != nil {
-		if err = update(&account, &state); err != nil {
-			return game.Account{}, game.GameState{}, err
-		}
-	}
-
-	nextStateJSON, err := json.Marshal(state)
-	if err != nil {
-		return game.Account{}, game.GameState{}, err
-	}
-	if _, err = tx.Exec(
-		`UPDATE accounts SET gold = ? WHERE id = ?`,
-		account.Gold,
-		accountID,
-	); err != nil {
-		return game.Account{}, game.GameState{}, err
-	}
-	result, err := tx.Exec(
-		`UPDATE players
-		 SET nickname = ?, faction = ?, mail_code = ?, state_json = ?, updated_at = ?
-		 WHERE id = ? AND account_id = ?`,
-		state.Player.Nickname,
-		state.Player.Faction,
-		state.Player.MailCode,
-		nextStateJSON,
-		updatedAt.UTC(),
-		playerID,
-		accountID,
-	)
-	if err != nil {
-		return game.Account{}, game.GameState{}, err
-	}
-	if affected, err := result.RowsAffected(); err != nil {
-		return game.Account{}, game.GameState{}, err
-	} else if affected == 0 {
-		return game.Account{}, game.GameState{}, game.ErrPlayerNotFound
-	}
-	if err = tx.Commit(); err != nil {
-		return game.Account{}, game.GameState{}, err
-	}
-	return account, state, nil
-}
-
-func isDuplicateEntry(err error) bool {
-	var mysqlErr *mysql.MySQLError
-	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
-}
-
-func addColumnIfMissing(ctx context.Context, db *sql.DB, statement string) error {
-	_, err := db.ExecContext(ctx, statement)
-	if err == nil || isDuplicateColumn(err) {
-		return nil
-	}
-	return err
-}
-
-func isDuplicateColumn(err error) bool {
-	var mysqlErr *mysql.MySQLError
-	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1060
-}
-
-func isDuplicateKeyName(err error) bool {
-	var mysqlErr *mysql.MySQLError
-	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1061
-}
-
-// --- Battle Report Methods ---
-
-func (r *MySQLRepository) SaveReport(report game.BattleReport) error {
-	reportJSON, err := json.Marshal(report)
-	if err != nil {
-		return err
-	}
-
-	createdAt, _ := time.Parse(time.RFC3339, report.CreatedAt)
-	if createdAt.IsZero() {
-		createdAt = time.Now()
-	}
-
-	_, err = r.db.Exec(
-		`INSERT INTO battle_reports (id, player_id, report_json, type, is_read, deleted_by_player, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		report.ID,
-		report.PlayerID,
-		reportJSON,
-		report.Type,
-		report.Read,
-		false,
-		createdAt.UTC(),
-	)
-	return err
-}
-
-func (r *MySQLRepository) GetReportByID(reportID string) (game.BattleReport, error) {
-	var reportJSON []byte
-	err := r.db.QueryRow(`SELECT report_json FROM battle_reports WHERE id = ? LIMIT 1`, reportID).Scan(&reportJSON)
-	if err != nil {
-		return game.BattleReport{}, errors.New("report not found")
-	}
-	var report game.BattleReport
-	if err := json.Unmarshal(reportJSON, &report); err != nil {
-		return game.BattleReport{}, err
-	}
-	return report, nil
-}
-
-func (r *MySQLRepository) ListReports(playerID string, limit int, offset int) ([]game.BattleReport, int, error) {
-	threeDaysAgo := time.Now().Add(-3 * 24 * time.Hour).UTC()
-	if limit <= 0 {
-		limit = 10
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	var total int
-	if err := r.db.QueryRow(
-		`SELECT COUNT(*) FROM battle_reports
-		 WHERE player_id = ? AND deleted_by_player = 0 AND created_at > ?`,
-		playerID, threeDaysAgo,
-	).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-
-	rows, err := r.db.Query(
-		`SELECT report_json, is_read FROM battle_reports
-		 WHERE player_id = ? AND deleted_by_player = 0 AND created_at > ?
-		 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-		playerID, threeDaysAgo, limit, offset,
-	)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	var reports []game.BattleReport
-	for rows.Next() {
-		var reportJSON []byte
-		var isRead bool
-		if err := rows.Scan(&reportJSON, &isRead); err != nil {
-			return nil, 0, err
-		}
-		var report game.BattleReport
-		if err := json.Unmarshal(reportJSON, &report); err != nil {
-			continue
-		}
-		report.Read = isRead
-		reports = append(reports, report)
-	}
-	return reports, total, rows.Err()
-}
-
-func (r *MySQLRepository) ListAllReports(playerID string) ([]game.BattleReport, error) {
-	rows, err := r.db.Query(
-		`SELECT report_json FROM battle_reports
-		 WHERE player_id = ?
-		 ORDER BY created_at DESC`,
-		playerID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var reports []game.BattleReport
-	for rows.Next() {
-		var reportJSON []byte
-		if err := rows.Scan(&reportJSON); err != nil {
-			return nil, err
-		}
-		var report game.BattleReport
-		if err := json.Unmarshal(reportJSON, &report); err != nil {
-			continue
-		}
-		reports = append(reports, report)
-	}
-	return reports, rows.Err()
-}
-
-func (r *MySQLRepository) MarkReportsRead(playerID string) error {
-	_, err := r.db.Exec(
-		`UPDATE battle_reports SET is_read = 1 WHERE player_id = ? AND is_read = 0 AND deleted_by_player = 0`,
-		playerID,
-	)
-	return err
-}
-
-func (r *MySQLRepository) MarkSingleReportRead(playerID string, reportID string) error {
-	_, err := r.db.Exec(
-		`UPDATE battle_reports SET is_read = 1 WHERE id = ? AND player_id = ?`,
-		reportID, playerID,
-	)
-	return err
-}
-
-func (r *MySQLRepository) DeleteReport(playerID string, reportID string) error {
-	_, err := r.db.Exec(
-		`UPDATE battle_reports SET deleted_by_player = 1 WHERE id = ? AND player_id = ?`,
-		reportID, playerID,
-	)
-	return err
-}
-
-func (r *MySQLRepository) DeleteAllReports(playerID string) error {
-	_, err := r.db.Exec(
-		`UPDATE battle_reports SET deleted_by_player = 1 WHERE player_id = ? AND deleted_by_player = 0`,
-		playerID,
-	)
-	return err
-}
-
-func (r *MySQLRepository) CountUnreadReports(playerID string) (int, error) {
-	threeDaysAgo := time.Now().Add(-3 * 24 * time.Hour).UTC()
-	var count int
-	err := r.db.QueryRow(
-		`SELECT COUNT(*) FROM battle_reports WHERE player_id = ? AND is_read = 0 AND deleted_by_player = 0 AND created_at > ?`,
-		playerID, threeDaysAgo,
-	).Scan(&count)
-	return count, err
-}
-
-// --- Mail Methods ---
-
-func (r *MySQLRepository) SaveMail(mail game.Mail) error {
-	attachmentsJSON, err := json.Marshal(mail.Attachments)
-	if err != nil {
-		return err
-	}
-
-	createdAt, _ := time.Parse(time.RFC3339, mail.CreatedAt)
-	if createdAt.IsZero() {
-		createdAt = time.Now()
-	}
-
-	var expiresAt any
-	if mail.ExpiresAt != "" {
-		if parsed, err := time.Parse(time.RFC3339, mail.ExpiresAt); err == nil {
-			expiresAt = parsed.UTC()
-		}
-	}
-
-	_, err = r.db.Exec(
-		`INSERT INTO mails (
-			id, player_id, mail_type, sender_type, sender_id, sender_name,
-			title, content, attachments_json, source_type, source_id,
-			is_read, is_claimed, deleted_by_player, expires_at, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		mail.ID,
-		mail.PlayerID,
-		mail.MailType,
-		mail.SenderType,
-		mail.SenderID,
-		mail.SenderName,
-		mail.Title,
-		mail.Content,
-		attachmentsJSON,
-		mail.SourceType,
-		mail.SourceID,
-		mail.IsRead,
-		mail.IsClaimed,
-		false,
-		expiresAt,
-		createdAt.UTC(),
-	)
-	return err
-}
-
-func (r *MySQLRepository) GetMailByID(mailID string) (game.Mail, error) {
-	row := r.db.QueryRow(
-		`SELECT id, player_id, mail_type, sender_type, sender_id, sender_name,
-			title, content, attachments_json, source_type, source_id,
-			is_read, is_claimed, deleted_by_player, expires_at, created_at, read_at, claimed_at
-		 FROM mails WHERE id = ? LIMIT 1`,
-		mailID,
-	)
-	return scanMail(row)
-}
-
-func (r *MySQLRepository) ListMails(playerID string, mailType string, limit int, offset int) ([]game.Mail, int, error) {
-	if limit <= 0 {
-		limit = 10
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	mailType = strings.TrimSpace(mailType)
-
-	var total int
-	var rows *sql.Rows
-	var err error
-	if mailType == "" {
-		if err := r.db.QueryRow(
-			`SELECT COUNT(*) FROM mails WHERE player_id = ? AND deleted_by_player = 0`,
-			playerID,
-		).Scan(&total); err != nil {
-			return nil, 0, err
-		}
-		rows, err = r.db.Query(
-			`SELECT id, player_id, mail_type, sender_type, sender_id, sender_name,
-				title, content, attachments_json, source_type, source_id,
-				is_read, is_claimed, deleted_by_player, expires_at, created_at, read_at, claimed_at
-			 FROM mails
-			 WHERE player_id = ? AND deleted_by_player = 0
-			 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-			playerID, limit, offset,
-		)
-	} else {
-		if err := r.db.QueryRow(
-			`SELECT COUNT(*) FROM mails WHERE player_id = ? AND mail_type = ? AND deleted_by_player = 0`,
-			playerID, mailType,
-		).Scan(&total); err != nil {
-			return nil, 0, err
-		}
-		rows, err = r.db.Query(
-			`SELECT id, player_id, mail_type, sender_type, sender_id, sender_name,
-				title, content, attachments_json, source_type, source_id,
-				is_read, is_claimed, deleted_by_player, expires_at, created_at, read_at, claimed_at
-			 FROM mails
-			 WHERE player_id = ? AND mail_type = ? AND deleted_by_player = 0
-			 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-			playerID, mailType, limit, offset,
-		)
-	}
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	mails := []game.Mail{}
-	for rows.Next() {
-		mail, err := scanMail(rows)
-		if err != nil {
-			return nil, 0, err
-		}
-		mails = append(mails, mail)
-	}
-	return mails, total, rows.Err()
-}
-
-func (r *MySQLRepository) CountUnreadMails(playerID string) (int, error) {
-	var count int
-	err := r.db.QueryRow(
-		`SELECT COUNT(*) FROM mails WHERE player_id = ? AND is_read = 0 AND deleted_by_player = 0`,
-		playerID,
-	).Scan(&count)
-	return count, err
-}
-
-func (r *MySQLRepository) MarkMailRead(playerID string, mailID string, readAt time.Time) error {
-	result, err := r.db.Exec(
-		`UPDATE mails
-		 SET is_read = 1, read_at = COALESCE(read_at, ?)
-		 WHERE id = ? AND player_id = ? AND deleted_by_player = 0`,
-		readAt.UTC(), mailID, playerID,
-	)
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err == nil && affected == 0 {
-		return errors.New("mail not found")
-	}
-	return err
-}
-
-func (r *MySQLRepository) DeleteMail(playerID string, mailID string) error {
-	result, err := r.db.Exec(
-		`UPDATE mails SET deleted_by_player = 1 WHERE id = ? AND player_id = ?`,
-		mailID, playerID,
-	)
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err == nil && affected == 0 {
-		return errors.New("mail not found")
-	}
-	return err
-}
-
-func (r *MySQLRepository) UpdateMailPlayerState(playerID string, mailID string, updatedAt time.Time, update func(account *game.Account, state *game.GameState, mail *game.Mail) error) (game.Account, game.GameState, game.Mail, error) {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return game.Account{}, game.GameState{}, game.Mail{}, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	mail, err := scanMail(tx.QueryRow(
-		`SELECT id, player_id, mail_type, sender_type, sender_id, sender_name,
-			title, content, attachments_json, source_type, source_id,
-			is_read, is_claimed, deleted_by_player, expires_at, created_at, read_at, claimed_at
-		 FROM mails
-		 WHERE id = ? AND player_id = ? AND deleted_by_player = 0
-		 LIMIT 1 FOR UPDATE`,
-		mailID, playerID,
-	))
-	if err != nil {
-		return game.Account{}, game.GameState{}, game.Mail{}, game.ErrMailNotFound
-	}
-
-	var accountID string
-	var mailCode string
-	var stateJSON []byte
-	err = tx.QueryRow(
-		`SELECT account_id, mail_code, state_json FROM players WHERE id = ? LIMIT 1 FOR UPDATE`,
-		playerID,
-	).Scan(&accountID, &mailCode, &stateJSON)
-	if errors.Is(err, sql.ErrNoRows) {
-		return game.Account{}, game.GameState{}, game.Mail{}, game.ErrPlayerNotFound
-	}
-	if err != nil {
-		return game.Account{}, game.GameState{}, game.Mail{}, err
-	}
-
-	var state game.GameState
-	if err = json.Unmarshal(stateJSON, &state); err != nil {
-		return game.Account{}, game.GameState{}, game.Mail{}, err
-	}
-	if state.Player.MailCode == "" {
-		state.Player.MailCode = mailCode
-	}
-
-	var account game.Account
-	err = tx.QueryRow(
-		`SELECT id, username, password_hash, gold, created_at
-		 FROM accounts
-		 WHERE id = ?
-		 LIMIT 1
-		 FOR UPDATE`,
-		accountID,
-	).Scan(&account.ID, &account.Username, &account.PasswordHash, &account.Gold, &account.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return game.Account{}, game.GameState{}, game.Mail{}, game.ErrAccountNotFound
-	}
-	if err != nil {
-		return game.Account{}, game.GameState{}, game.Mail{}, err
-	}
-
-	if update != nil {
-		if err = update(&account, &state, &mail); err != nil {
-			return game.Account{}, game.GameState{}, game.Mail{}, err
-		}
-	}
-
-	if _, err = tx.Exec(`UPDATE accounts SET gold = ? WHERE id = ?`, account.Gold, account.ID); err != nil {
-		return game.Account{}, game.GameState{}, game.Mail{}, err
-	}
-
-	nextStateJSON, err := json.Marshal(state)
-	if err != nil {
-		return game.Account{}, game.GameState{}, game.Mail{}, err
-	}
-	if _, err = tx.Exec(
-		`UPDATE players SET state_json = ?, mail_code = ?, updated_at = ? WHERE id = ?`,
-		nextStateJSON, state.Player.MailCode, updatedAt.UTC(), playerID,
-	); err != nil {
-		return game.Account{}, game.GameState{}, game.Mail{}, err
-	}
-
-	if _, err = tx.Exec(
-		`UPDATE mails
-		 SET is_claimed = 1, claimed_at = ?
-		 WHERE id = ? AND player_id = ? AND deleted_by_player = 0`,
-		updatedAt.UTC(), mailID, playerID,
-	); err != nil {
-		return game.Account{}, game.GameState{}, game.Mail{}, err
-	}
-
-	if err = tx.Commit(); err != nil {
-		return game.Account{}, game.GameState{}, game.Mail{}, err
-	}
-	return account, state, mail, nil
-}
-
-type mailScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanMail(scanner mailScanner) (game.Mail, error) {
-	var mail game.Mail
-	var attachmentsJSON []byte
-	var expiresAt sql.NullTime
-	var createdAt time.Time
-	var readAt sql.NullTime
-	var claimedAt sql.NullTime
-
-	err := scanner.Scan(
-		&mail.ID,
-		&mail.PlayerID,
-		&mail.MailType,
-		&mail.SenderType,
-		&mail.SenderID,
-		&mail.SenderName,
-		&mail.Title,
-		&mail.Content,
-		&attachmentsJSON,
-		&mail.SourceType,
-		&mail.SourceID,
-		&mail.IsRead,
-		&mail.IsClaimed,
-		&mail.DeletedByPlayer,
-		&expiresAt,
-		&createdAt,
-		&readAt,
-		&claimedAt,
-	)
-	if err != nil {
-		return game.Mail{}, err
-	}
-
-	if len(attachmentsJSON) > 0 {
-		_ = json.Unmarshal(attachmentsJSON, &mail.Attachments)
-	}
-	if expiresAt.Valid {
-		mail.ExpiresAt = expiresAt.Time.UTC().Format(time.RFC3339)
-	}
-	mail.CreatedAt = createdAt.UTC().Format(time.RFC3339)
-	if readAt.Valid {
-		mail.ReadAt = readAt.Time.UTC().Format(time.RFC3339)
-	}
-	if claimedAt.Valid {
-		mail.ClaimedAt = claimedAt.Time.UTC().Format(time.RFC3339)
-	}
-
-	return mail, nil
-}
-
-// --- MiniGame Record Methods ---
-
-func (r *MySQLRepository) SaveMiniGameRecord(record game.MiniGameRecord) error {
-	createdAt, _ := time.Parse(time.RFC3339, record.CreatedAt)
-	if createdAt.IsZero() {
-		createdAt = time.Now()
-	}
-	if record.GameType == "fishing" && record.RemainingAmount == 0 && record.RewardAmount > 0 {
-		record.RemainingAmount = record.RewardAmount
-	}
-
-	_, err := r.db.Exec(
-		`INSERT INTO minigame_records (id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, remaining_amount, bet_unit, bet_amount, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		record.ID,
-		record.PlayerID,
-		record.GameType,
-		record.ResultName,
-		record.Rarity,
-		record.RewardUnit,
-		record.RewardAmount,
-		record.RemainingAmount,
-		record.BetUnit,
-		record.BetAmount,
-		createdAt.UTC(),
-	)
-	return err
-}
-
-func (r *MySQLRepository) ListMiniGameRecords(playerID string, gameType string, limit int, offset int) ([]game.MiniGameRecord, int, error) {
-	if limit <= 0 {
-		limit = 100
-	}
-	if limit > 500 {
-		limit = 500
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	where := `WHERE player_id = ?`
-	args := []any{playerID}
-	if gameType != "" {
-		where += ` AND game_type = ?`
-		args = append(args, gameType)
-	}
-
-	var total int
-	countArgs := append([]any{}, args...)
-	if err := r.db.QueryRow(
-		`SELECT COUNT(*)
-		 FROM minigame_records
-		 `+where,
-		countArgs...,
-	).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-
-	queryArgs := append(append([]any{}, args...), limit, offset)
-	rows, err := r.db.Query(
-		`SELECT id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, remaining_amount, bet_unit, bet_amount, created_at
-		 FROM minigame_records
-		 `+where+`
-		 ORDER BY created_at DESC
-		 LIMIT ? OFFSET ?`,
-		queryArgs...,
-	)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	records := []game.MiniGameRecord{}
-	for rows.Next() {
-		var r game.MiniGameRecord
-		var createdAt time.Time
-		if err := rows.Scan(&r.ID, &r.PlayerID, &r.GameType, &r.ResultName, &r.Rarity, &r.RewardUnit, &r.RewardAmount, &r.RemainingAmount, &r.BetUnit, &r.BetAmount, &createdAt); err != nil {
-			return nil, 0, err
-		}
-		r.CreatedAt = createdAt.UTC().Format(time.RFC3339)
-		records = append(records, r)
-	}
-	return records, total, rows.Err()
-}
-
-func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt time.Time, update func(state *game.GameState, records []game.MiniGameRecord) ([]game.MiniGameRecord, error)) (game.GameState, []game.MiniGameRecord, error) {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return game.GameState{}, nil, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	var stateJSON []byte
-	err = tx.QueryRow(`SELECT state_json FROM players WHERE id = ? LIMIT 1 FOR UPDATE`, playerID).Scan(&stateJSON)
-	if errors.Is(err, sql.ErrNoRows) {
-		return game.GameState{}, nil, game.ErrPlayerNotFound
-	}
-	if err != nil {
-		return game.GameState{}, nil, err
-	}
-	var state game.GameState
-	if err = json.Unmarshal(stateJSON, &state); err != nil {
-		return game.GameState{}, nil, err
-	}
-
-	rows, err := tx.Query(
-		`SELECT id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, remaining_amount, bet_unit, bet_amount, created_at
-		 FROM minigame_records
-		 WHERE player_id = ?
-		 ORDER BY created_at DESC
-		 FOR UPDATE`,
-		playerID,
-	)
-	if err != nil {
-		return game.GameState{}, nil, err
-	}
-	defer rows.Close()
-
-	records := []game.MiniGameRecord{}
-	for rows.Next() {
-		var record game.MiniGameRecord
-		var createdAt time.Time
-		if err := rows.Scan(
-			&record.ID,
-			&record.PlayerID,
-			&record.GameType,
-			&record.ResultName,
-			&record.Rarity,
-			&record.RewardUnit,
-			&record.RewardAmount,
-			&record.RemainingAmount,
-			&record.BetUnit,
-			&record.BetAmount,
-			&createdAt,
-		); err != nil {
-			return game.GameState{}, nil, err
-		}
-		record.CreatedAt = createdAt.UTC().Format(time.RFC3339)
-		records = append(records, record)
-	}
-	if err := rows.Err(); err != nil {
-		return game.GameState{}, nil, err
-	}
-
-	if update != nil {
-		records, err = update(&state, records)
-		if err != nil {
-			return game.GameState{}, nil, err
-		}
-	}
-
-	for _, record := range records {
-		if _, err := tx.Exec(
-			`UPDATE minigame_records SET remaining_amount = ? WHERE id = ? AND player_id = ?`,
-			record.RemainingAmount, record.ID, playerID,
-		); err != nil {
-			return game.GameState{}, nil, err
-		}
-	}
-
-	nextStateJSON, err := json.Marshal(state)
-	if err != nil {
-		return game.GameState{}, nil, err
-	}
-	if _, err = tx.Exec(
-		`UPDATE players SET state_json = ?, updated_at = ? WHERE id = ?`,
-		nextStateJSON, updatedAt.UTC(), playerID,
-	); err != nil {
-		return game.GameState{}, nil, err
-	}
-
-	if err = tx.Commit(); err != nil {
-		return game.GameState{}, nil, err
-	}
-	return state, records, nil
-}
-
-// --- Gold Ledger Methods ---
-
-func (r *MySQLRepository) WriteGoldLedger(entry game.GoldLedgerEntry) error {
-	createdAt, _ := time.Parse(time.RFC3339, entry.CreatedAt)
-	if createdAt.IsZero() {
-		createdAt = time.Now()
-	}
-
-	_, err := r.db.Exec(
-		`INSERT INTO gold_ledger
-		 (account_id, player_id, currency, direction, amount, balance_after, ref_type, ref_id, reason, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		entry.AccountID,
-		entry.PlayerID,
-		entry.Currency,
-		entry.Direction,
-		entry.Amount,
-		entry.BalanceAfter,
-		entry.RefType,
-		entry.RefID,
-		entry.Reason,
-		createdAt.UTC(),
-	)
-	return err
-}
-
-func (r *MySQLRepository) ListGoldLedger(filter game.GoldLedgerFilter) ([]game.GoldLedgerEntry, error) {
-	limit := filter.Limit
-	if limit <= 0 || limit > 1000 {
-		limit = 200
-	}
-
-	query := `SELECT id, account_id, player_id, currency, direction, amount, balance_after, ref_type, ref_id, reason, created_at
-		FROM gold_ledger WHERE 1=1`
-	args := []interface{}{}
-	if filter.AccountID != "" {
-		query += " AND account_id = ?"
-		args = append(args, filter.AccountID)
-	}
-	if filter.PlayerID != "" {
-		query += " AND player_id = ?"
-		args = append(args, filter.PlayerID)
-	}
-	if filter.Currency != "" {
-		query += " AND currency = ?"
-		args = append(args, filter.Currency)
-	}
-	if filter.RefType != "" {
-		query += " AND ref_type = ?"
-		args = append(args, filter.RefType)
-	}
-	if !filter.From.IsZero() {
-		query += " AND created_at >= ?"
-		args = append(args, filter.From.UTC())
-	}
-	if !filter.To.IsZero() {
-		query += " AND created_at <= ?"
-		args = append(args, filter.To.UTC())
-	}
-	query += " ORDER BY id DESC LIMIT ?"
-	args = append(args, limit)
-
-	rows, err := r.db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var entries []game.GoldLedgerEntry
-	for rows.Next() {
-		var e game.GoldLedgerEntry
-		var createdAt time.Time
-		if err := rows.Scan(
-			&e.ID, &e.AccountID, &e.PlayerID, &e.Currency, &e.Direction,
-			&e.Amount, &e.BalanceAfter, &e.RefType, &e.RefID, &e.Reason, &createdAt,
-		); err != nil {
-			return nil, err
-		}
-		e.CreatedAt = createdAt.UTC().Format(time.RFC3339)
-		entries = append(entries, e)
-	}
-	return entries, rows.Err()
-}
-
-func (r *MySQLRepository) GetAccountIDByPlayerID(playerID string) (string, error) {
-	var accountID string
-	err := r.db.QueryRow(`SELECT account_id FROM players WHERE id = ? LIMIT 1`, playerID).Scan(&accountID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", game.ErrPlayerNotFound
-	}
-	return accountID, err
 }

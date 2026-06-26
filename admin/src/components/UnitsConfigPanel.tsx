@@ -1,26 +1,19 @@
 import { useEffect, useState } from 'react'
 import { Shield, Save, ChevronDown, ChevronUp } from 'lucide-react'
 import { adminApi } from '@/api/admin'
-
-interface UnitConfig {
-  name: string
-  description: string
-  category: string
-  icon: string
-  stats: Record<string, number>
-  cost: Record<string, number>
-  trainSeconds: number
-  unlock: Record<string, any>
-}
-
-type FactionUnits = Record<string, UnitConfig>
-type UnitsConfig = Record<string, FactionUnits>
+import type { FactionUnits, UnitConfig, UnitsConfig } from '@/types'
 
 const CATEGORY_LABELS: Record<string, string> = {
   infantry: '步兵',
   cavalry: '骑兵',
   siege: '攻城',
   special: '特殊',
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  combat: '战斗',
+  scout: '侦察',
+  transport: '运输',
 }
 
 const STAT_LABELS: Record<string, string> = {
@@ -93,6 +86,17 @@ export default function UnitsConfigPanel() {
     })
   }
 
+  const updateUnitField = <K extends keyof UnitConfig,>(unitId: string, field: K, value: UnitConfig[K]) => {
+    if (!config || !activeFaction) return
+    setConfig({
+      ...config,
+      [activeFaction]: {
+        ...config[activeFaction],
+        [unitId]: { ...config[activeFaction][unitId], [field]: value },
+      },
+    })
+  }
+
   const updateCost = (unitId: string, resKey: string, value: number) => {
     if (!config || !activeFaction) return
     setConfig({
@@ -114,6 +118,20 @@ export default function UnitsConfigPanel() {
       [activeFaction]: {
         ...config[activeFaction],
         [unitId]: { ...config[activeFaction][unitId], trainSeconds: value },
+      },
+    })
+  }
+
+  const updateUnlock = (unitId: string, key: string, value: string | number) => {
+    if (!config || !activeFaction) return
+    setConfig({
+      ...config,
+      [activeFaction]: {
+        ...config[activeFaction],
+        [unitId]: {
+          ...config[activeFaction][unitId],
+          unlock: { ...config[activeFaction][unitId].unlock, [key]: value },
+        },
       },
     })
   }
@@ -198,7 +216,58 @@ export default function UnitsConfigPanel() {
               {/* Expanded Detail */}
               {isExpanded && (
                 <div className="px-3 pb-3 border-t border-[var(--color-border)]">
-                  <p className="text-[11px] text-[var(--color-text-secondary)] mt-2 mb-3">{unit.description}</p>
+                  <div className="mt-3 mb-3 grid gap-2 lg:grid-cols-[minmax(160px,1fr)_minmax(120px,0.7fr)_minmax(120px,0.7fr)_minmax(88px,0.45fr)]">
+                    <label className="grid gap-1">
+                      <span className="text-[9px] font-bold text-[var(--color-text-muted)]">名称</span>
+                      <input
+                        type="text"
+                        value={unit.name}
+                        onChange={(e) => updateUnitField(unitId, 'name', e.target.value)}
+                        className="h-7 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-primary)]"
+                      />
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-[9px] font-bold text-[var(--color-text-muted)]">分类</span>
+                      <select
+                        value={unit.category}
+                        onChange={(e) => updateUnitField(unitId, 'category', e.target.value)}
+                        className="h-7 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-primary)]"
+                      >
+                        {Object.entries(CATEGORY_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                        {!CATEGORY_LABELS[unit.category] && <option value={unit.category}>{unit.category}</option>}
+                      </select>
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-[9px] font-bold text-[var(--color-text-muted)]">角色</span>
+                      <select
+                        value={unit.role ?? 'combat'}
+                        onChange={(e) => updateUnitField(unitId, 'role', e.target.value === 'combat' ? undefined : e.target.value)}
+                        className="h-7 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-primary)]"
+                      >
+                        {Object.entries(ROLE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                        {unit.role && !ROLE_LABELS[unit.role] && <option value={unit.role}>{unit.role}</option>}
+                      </select>
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-[9px] font-bold text-[var(--color-text-muted)]">图标</span>
+                      <input
+                        type="text"
+                        value={unit.icon}
+                        onChange={(e) => updateUnitField(unitId, 'icon', e.target.value)}
+                        className="h-7 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-primary)]"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="mb-3 grid gap-1">
+                    <span className="text-[9px] font-bold text-[var(--color-text-muted)]">描述</span>
+                    <input
+                      type="text"
+                      value={unit.description}
+                      onChange={(e) => updateUnitField(unitId, 'description', e.target.value)}
+                      className="h-7 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-primary)]"
+                    />
+                  </label>
 
                   {/* Stats */}
                   <div className="mb-3">
@@ -246,8 +315,28 @@ export default function UnitsConfigPanel() {
                   </div>
 
                   {/* Unlock */}
-                  <div className="text-[10px] text-[var(--color-text-muted)]">
-                    解锁条件：{unit.unlock.building} Lv.{unit.unlock.level}
+                  <div>
+                    <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">解锁条件</span>
+                    <div className="mt-1 grid gap-1.5 sm:grid-cols-2">
+                      <label className="grid gap-0.5">
+                        <span className="text-[9px] text-[var(--color-text-muted)]">建筑</span>
+                        <input
+                          type="text"
+                          value={String(unit.unlock.building ?? '')}
+                          onChange={(e) => updateUnlock(unitId, 'building', e.target.value)}
+                          className="h-6 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 text-[11px] text-[var(--color-text-primary)]"
+                        />
+                      </label>
+                      <label className="grid gap-0.5">
+                        <span className="text-[9px] text-[var(--color-text-muted)]">等级</span>
+                        <input
+                          type="number"
+                          value={Number(unit.unlock.level ?? 0)}
+                          onChange={(e) => updateUnlock(unitId, 'level', parseInt(e.target.value) || 0)}
+                          className="h-6 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 text-[11px] text-[var(--color-text-primary)]"
+                        />
+                      </label>
+                    </div>
                   </div>
                 </div>
               )}

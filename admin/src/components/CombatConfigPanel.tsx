@@ -1,26 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Swords, Save } from 'lucide-react'
+import { Swords, Save, Plus, Trash2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
-
-interface RuleConfig {
-  id: string
-  name: string
-  mode: string
-  exponent: number
-  equalResult: string
-  lossDistribution: string
-  defenseFormula: string
-}
-
-interface WallEntry {
-  base: number
-}
-
-interface CombatConfig {
-  activeCombatRules: Record<string, string>
-  rules: Record<string, RuleConfig>
-  wallConfig: Record<string, WallEntry>
-}
+import type { CombatConfig, CombatRuleConfig } from '@/types'
 
 const SCENE_LABELS: Record<string, string> = {
   pve_attack: 'PVE 攻击',
@@ -45,7 +26,7 @@ export default function CombatConfigPanel() {
   useEffect(() => {
     let cancelled = false
     adminApi.getCombatConfig()
-      .then((data) => { if (!cancelled) setConfig(data as CombatConfig) })
+      .then((data) => { if (!cancelled) setConfig(data) })
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : '加载失败') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -58,7 +39,7 @@ export default function CombatConfigPanel() {
     setError(null)
     try {
       const result = await adminApi.updateCombatConfig(config)
-      setConfig(result as CombatConfig)
+      setConfig(result)
       setMessage('战斗配置已保存')
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败')
@@ -67,7 +48,7 @@ export default function CombatConfigPanel() {
     }
   }
 
-  const updateRule = (ruleId: string, field: keyof RuleConfig, value: string | number) => {
+  const updateRule = (ruleId: string, field: keyof CombatRuleConfig, value: string | number) => {
     if (!config) return
     setConfig({
       ...config,
@@ -76,6 +57,38 @@ export default function CombatConfigPanel() {
         [ruleId]: { ...config.rules[ruleId], [field]: value },
       },
     })
+  }
+
+  const addRule = () => {
+    if (!config) return
+    const id = `custom_rule_${Date.now()}`
+    setConfig({
+      ...config,
+      rules: {
+        ...config.rules,
+        [id]: {
+          id,
+          name: '自定义规则',
+          mode: 'attack',
+          exponent: 1.422,
+          equalResult: 'mutual_destruction',
+          lossDistribution: 'proportional',
+          defenseFormula: 'weighted',
+        },
+      },
+    })
+  }
+
+  const removeRule = (ruleId: string) => {
+    if (!config) return
+    const activeScenes = Object.entries(config.activeCombatRules).filter(([, activeRuleId]) => activeRuleId === ruleId)
+    if (activeScenes.length > 0) {
+      setError('该规则仍被场景引用，先调整场景规则映射')
+      return
+    }
+    const rules = { ...config.rules }
+    delete rules[ruleId]
+    setConfig({ ...config, rules })
   }
 
   const updateActiveRule = (scene: string, ruleId: string) => {
@@ -107,15 +120,21 @@ export default function CombatConfigPanel() {
           <Swords size={16} className="text-[var(--color-accent)]" />
           <h2 className="text-base font-bold text-[var(--color-text-primary)]">战斗规则</h2>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleSave()}
-          disabled={saving}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-[var(--color-accent)] to-indigo-600 border border-indigo-600/30 cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Save size={12} />
-          {saving ? '保存中...' : '保存'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={addRule} className="flex items-center gap-1.5 rounded-xl border border-[var(--color-border)] px-3 py-1.5 text-xs font-bold text-[var(--color-accent)]">
+            <Plus size={12} />
+            新规则
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={saving}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-[var(--color-accent)] to-indigo-600 border border-indigo-600/30 cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Save size={12} />
+            {saving ? '保存中...' : '保存'}
+          </button>
+        </div>
       </div>
 
       {/* Active Rules Mapping */}
@@ -147,9 +166,15 @@ export default function CombatConfigPanel() {
         <div className="grid gap-3">
           {Object.entries(config.rules).map(([ruleId, rule]) => (
             <div key={ruleId} className="p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
-              <div className="flex items-center gap-2 mb-2">
-                <strong className="text-sm text-[var(--color-text-primary)]">{rule.name}</strong>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent-light)] text-[var(--color-accent)] font-bold">{rule.mode}</span>
+              <div className="grid gap-2 mb-2 sm:grid-cols-[minmax(160px,1fr)_minmax(120px,0.45fr)_36px]">
+                <input value={rule.name} onChange={(e) => updateRule(ruleId, 'name', e.target.value)} className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm font-bold text-[var(--color-text-primary)]" />
+                <select value={rule.mode} onChange={(e) => updateRule(ruleId, 'mode', e.target.value)} className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-primary)]">
+                  <option value="attack">attack</option>
+                  <option value="plunder">plunder</option>
+                </select>
+                <button type="button" onClick={() => removeRule(ruleId)} className="grid h-8 place-items-center rounded-lg text-red-500 hover:bg-red-500/10">
+                  <Trash2 size={14} />
+                </button>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <label className="grid gap-1">

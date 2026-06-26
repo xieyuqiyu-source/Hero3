@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Coins, RefreshCw, Search, ArrowDownCircle, ArrowUpCircle } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import type { GoldLedgerEntry } from '@/types'
@@ -30,7 +30,7 @@ export default function GoldLedgerPanel() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -47,11 +47,13 @@ export default function GoldLedgerPanel() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [accountId, currency, limit, playerId, refType])
 
   useEffect(() => {
-    void load()
-  }, [])
+    queueMicrotask(() => {
+      void load()
+    })
+  }, [load])
 
   const totals = useMemo(() => {
     return (Array.isArray(entries) ? entries : []).reduce<Record<string, { credit: number; debit: number }>>((acc, entry) => {
@@ -84,7 +86,7 @@ export default function GoldLedgerPanel() {
           </button>
         </div>
 
-        <div className="grid gap-2 lg:grid-cols-[1fr_1fr_120px_150px_100px_auto] px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(150px,1fr)_minmax(150px,1fr)_minmax(120px,0.65fr)_minmax(150px,0.8fr)_minmax(96px,0.5fr)_auto] px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface-dim)]">
           <FilterInput value={accountId} onChange={setAccountId} placeholder="账号 ID" />
           <FilterInput value={playerId} onChange={setPlayerId} placeholder="玩家 ID" />
           <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={controlClass}>

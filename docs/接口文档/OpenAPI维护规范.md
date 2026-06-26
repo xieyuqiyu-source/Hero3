@@ -33,11 +33,11 @@ docs/接口文档/openapi/
 make openapi
 ```
 
-5. 将生成的 `docs/接口文档/openapi打包.yaml` 导入 Apifox。
+5. 刷新 Go 后端在线文档页面 `http://localhost:8080/docs`，或将生成的 `docs/接口文档/openapi打包.yaml` 导入 Apifox。
 
 ## <span style="color:#4f46e5">约定</span>
 
 - `docs/接口文档/openapi/openapi.yaml` 是维护入口。
-- `docs/接口文档/openapi打包.yaml` 是 Apifox 导入文件，由脚本生成，不手动编辑。
+- `docs/接口文档/openapi打包.yaml` 是 Apifox 导入文件，也是 Go 后端 `/docs` 在线文档的数据源，由脚本生成，不手动编辑。
 - 后端新增接口前，先补 OpenAPI；接口路径、参数、响应状态码必须和 Go handler 对齐。
 - admin 的接口诊断面板后续应从 OpenAPI 生成，避免维护两份接口清单。

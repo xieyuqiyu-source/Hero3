@@ -28,7 +28,9 @@ export default function PlayerDrawer({ playerId, onClose }: PlayerDrawerProps) {
   }, [playerId])
 
   useEffect(() => {
-    void loadState()
+    queueMicrotask(() => {
+      void loadState()
+    })
   }, [loadState])
 
   // Close on Escape

@@ -106,13 +106,13 @@ export default function AdminLayout({
       {/* Mobile Nav */}
       <nav className="
         fixed bottom-0 left-0 right-0 z-40
-        flex items-center justify-around
+        flex items-center gap-1 overflow-x-auto
         h-14 px-2
         bg-[var(--color-surface)]/90 backdrop-blur-md
         border-t border-[var(--color-border)]
-        lg:hidden
+        scrollbar-none lg:hidden
       ">
-        {navItems.slice(0, 5).map((item) => {
+        {navItems.map((item) => {
           const Icon = item.icon
           const isActive = item.key === activePage
           return (
@@ -121,7 +121,7 @@ export default function AdminLayout({
               type="button"
               onClick={() => onNavigate(item.key)}
               className={`
-                flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg
+                flex min-w-[58px] flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg
                 cursor-pointer transition-colors duration-200
                 ${isActive ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]'}
               `}

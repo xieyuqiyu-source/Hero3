@@ -59,11 +59,14 @@ go build ./cmd/server
 
 - 默认不配置数据库时使用内存存储，适合快速开发。
 - 配置 `HERO3_DATABASE_DSN` 后启用 MySQL/MariaDB，启动时会自动创建当前需要的账号和存档表。
+- 本地开发模式应连接 `test_` 前缀测试库，例如 `test_hero3`，不要直接写稳定玩家库。
+- `make migrate` 迁移当前 DSN 指向的库，`make migrate-test` 创建并迁移 `test_` 前缀测试库。
+- `make clone-data` 可从 `HERO3_SOURCE_DATABASE_DSN` 复制数据到当前 `test_` 目标库。
 
 示例：
 
 ```bash
-export HERO3_DATABASE_DSN='hero3_user:hero3_password@tcp(127.0.0.1:3306)/hero3?parseTime=true&charset=utf8mb4&loc=UTC'
+export HERO3_DATABASE_DSN='hero3_user:hero3_password@tcp(127.0.0.1:3306)/test_hero3?parseTime=true&charset=utf8mb4&loc=UTC'
 go run ./cmd/server
 ```
 
@@ -72,6 +75,14 @@ go run ./cmd/server
 ```text
 http://localhost:8080
 ```
+
+在线接口文档：
+
+```text
+http://localhost:8080/docs
+```
+
+后端启动后会通过 Scalar 展示 `docs/接口文档/openapi打包.yaml`，可在浏览器内查看接口并直接调试请求。
 
 基础接口：
 
@@ -138,6 +149,14 @@ make openapi
 ```
 
 它会校验拆分后的 OpenAPI 并生成 `docs/接口文档/openapi打包.yaml`。在 Apifox 中选择“导入数据”，格式选择 `OpenAPI/Swagger`，导入 `docs/接口文档/openapi打包.yaml` 即可。
+
+Go 后端启动后也会挂载在线接口文档：
+
+```text
+http://localhost:8080/docs
+```
+
+页面使用 Scalar 读取 `/openapi.yaml`，实际内容来自打包后的 `docs/接口文档/openapi打包.yaml`。
 
 本地调试环境：
 

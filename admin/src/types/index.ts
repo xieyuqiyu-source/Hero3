@@ -118,6 +118,100 @@ export interface UnitConfig {
   unlock: Record<string, unknown>
 }
 
+export type FactionUnits = Record<string, UnitConfig>
+export type UnitsConfig = Record<string, FactionUnits>
+
+export interface FactionGeneralInfo {
+  id: string
+  name: string
+  title: string
+}
+
+export interface FactionConfig {
+  name: string
+  description: string
+  icon: string
+  traits: Record<string, number>
+  generals: FactionGeneralInfo[]
+}
+
+export type FactionsConfig = Record<string, FactionConfig>
+
+export interface CombatRuleConfig {
+  id: string
+  name: string
+  mode: string
+  exponent: number
+  equalResult: string
+  lossDistribution: string
+  defenseFormula: string
+}
+
+export interface CombatWallEntry {
+  base: number
+}
+
+export interface CombatConfig {
+  activeCombatRules: Record<string, string>
+  rules: Record<string, CombatRuleConfig>
+  wallConfig: Record<string, CombatWallEntry>
+}
+
+export interface ModifierConfig {
+  key: string
+  value: number
+  mode: string
+}
+
+export interface GeneralTraitConfig {
+  traitId: string
+  enabled: boolean
+  params: Record<string, number>
+}
+
+export interface GeneralHeroConfig {
+  id: string
+  name: string
+  faction: string
+  title: string
+  rarity: string
+  enabled: boolean
+  buffs: Record<string, number>
+  traits: GeneralTraitConfig[]
+}
+
+export interface GeneralsCommonConfig {
+  expCurve: number[]
+  levelBuffs: Record<string, Record<string, number>>
+}
+
+export interface GeneralsConfig {
+  enabled: boolean
+  common: GeneralsCommonConfig
+  heroes: Record<string, GeneralHeroConfig>
+}
+
+export interface TraitParamField {
+  key: string
+  label: string
+  description: string
+  default: number
+  min: number
+  max: number
+  step: number
+}
+
+export interface TraitMeta {
+  id: string
+  name: string
+  description: string
+  paramSchema: TraitParamField[]
+}
+
+export interface TraitRegistryResponse {
+  traits: TraitMeta[]
+}
+
 export interface FishingRarityConfig {
   label: string
   color: string
@@ -290,6 +384,7 @@ export interface BuildingConfig {
   resourceType?: string
   productionByLevel?: number[]
   capacityByLevel?: number[]
+  modifiersByLevel?: Record<string, ModifierConfig[]>
   upgradeCostByLevel?: Record<string, Record<string, number>>
   upgradeSecondsByLevel?: Record<string, number>
 }

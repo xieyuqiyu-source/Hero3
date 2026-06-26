@@ -1,5 +1,18 @@
 /* Admin-specific utilities that complement Tailwind */
 
+#root input:not([type="checkbox"]):not([type="radio"]),
+#root select,
+#root textarea {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+#root input:not([type="checkbox"]):not([type="radio"]),
+#root select {
+  width: 100%;
+}
+
 .config-editor {
   width: 100%;
   min-height: 400px;

@@ -209,6 +209,7 @@ func (s *Service) UpdateNpcConfig(config NpcConfig) error {
 	return SetNpcConfig(config)
 }
 
+// RegisterAccount 注册轻账号，并保存密码哈希。
 func (s *Service) RegisterAccount(username string, password string) (Account, error) {
 	username = strings.TrimSpace(username)
 	if username == "" || strings.TrimSpace(password) == "" {
@@ -228,12 +229,16 @@ func (s *Service) RegisterAccount(username string, password string) (Account, er
 	return account, nil
 }
 
+// LoginAccount 校验账号密码，数据库异常会原样返回给接口层处理。
 func (s *Service) LoginAccount(username string, password string) (Account, error) {
 	username = strings.TrimSpace(username)
 
 	account, err := s.repo.GetAccountByUsername(username)
 	if err != nil {
-		return Account{}, ErrInvalidCredentials
+		if errors.Is(err, ErrAccountNotFound) {
+			return Account{}, ErrInvalidCredentials
+		}
+		return Account{}, err
 	}
 
 	if account.PasswordHash != hashPassword(password) {

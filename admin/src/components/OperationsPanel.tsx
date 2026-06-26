@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Package, Zap, Coins, Gift, RefreshCcw, Repeat2 } from 'lucide-react'
+import { Package, Zap, Coins, Gift, RefreshCcw, Repeat2, MinusCircle } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import PlayerSelector from './PlayerSelector'
-import type { ItemDefinition } from '@/types'
+import type { FactionsConfig, ItemDefinition } from '@/types'
+
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : '未知错误'
 
 export function ResourceToolsPanel() {
   const [playerId, setPlayerId] = useState('')
@@ -11,7 +13,7 @@ export function ResourceToolsPanel() {
   const [items, setItems] = useState<Record<string, ItemDefinition>>({})
   const [itemId, setItemId] = useState('')
   const [itemAmount, setItemAmount] = useState(1)
-  const [factionsConfig, setFactionsConfig] = useState<Record<string, any>>({})
+  const [factionsConfig, setFactionsConfig] = useState<FactionsConfig>({})
   const [playerFaction, setPlayerFaction] = useState('')
   const [currentGeneralId, setCurrentGeneralId] = useState('')
   const [generalId, setGeneralId] = useState('')
@@ -22,7 +24,7 @@ export function ResourceToolsPanel() {
     void Promise.all([adminApi.getItemsConfig(), adminApi.getFactionsConfig()])
       .then(([itemResult, factionResult]) => {
         setItems(itemResult)
-        setFactionsConfig(factionResult as Record<string, any>)
+        setFactionsConfig(factionResult)
         const first = Object.keys(itemResult)[0] ?? ''
         setItemId((current) => current || first)
       })
@@ -33,7 +35,7 @@ export function ResourceToolsPanel() {
   }, [])
 
   const generalOptions = playerFaction
-    ? ((factionsConfig[playerFaction]?.generals ?? []) as Array<{ id: string; name: string }>).filter((item) => item.id !== currentGeneralId)
+    ? (factionsConfig[playerFaction]?.generals ?? []).filter((item) => item.id !== currentGeneralId)
     : []
 
   const loadPlayerMeta = async (pid: string) => {
@@ -49,7 +51,7 @@ export function ResourceToolsPanel() {
       const current = state.general?.id ?? ''
       setPlayerFaction(faction)
       setCurrentGeneralId(current)
-      const generals = ((factionsConfig[faction]?.generals ?? []) as Array<{ id: string; name: string }>)
+      const generals = factionsConfig[faction]?.generals ?? []
       setGeneralId(generals.find((item) => item.id !== current)?.id || '')
     } catch {
       setPlayerFaction('')
@@ -69,9 +71,9 @@ export function ResourceToolsPanel() {
     setLoading(true)
     try {
       const result = await adminApi.addAccountGold(accountId, goldAmount)
-      showMsg(`✅ 赠送成功，账户金币余额: ${result.gold}`)
-    } catch (e: any) {
-      showMsg(`❌ 失败: ${e.message}`)
+      showMsg(`赠送成功，账户金币余额: ${result.gold}`)
+    } catch (e: unknown) {
+      showMsg(`失败: ${errorMessage(e)}`)
     } finally {
       setLoading(false)
     }
@@ -83,9 +85,23 @@ export function ResourceToolsPanel() {
     setLoading(true)
     try {
       await adminApi.addCityGold(playerId, goldAmount)
-      showMsg(`✅ 城金补发成功`)
-    } catch (e: any) {
-      showMsg(`❌ 失败: ${e.message}`)
+      showMsg('城金补发成功')
+    } catch (e: unknown) {
+      showMsg(`失败: ${errorMessage(e)}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeductCityGold = async () => {
+    if (!playerId || goldAmount <= 0) return
+    if (!confirm(`确认扣减玩家 ${playerId} 的 ${goldAmount} 城金？`)) return
+    setLoading(true)
+    try {
+      await adminApi.deductCityGold(playerId, goldAmount)
+      showMsg('城金扣减成功')
+    } catch (e: unknown) {
+      showMsg(`失败: ${errorMessage(e)}`)
     } finally {
       setLoading(false)
     }
@@ -97,9 +113,9 @@ export function ResourceToolsPanel() {
     setLoading(true)
     try {
       await adminApi.adjustResources(playerId, { wood: 30000, stone: 30000, iron: 30000, food: 30000 })
-      showMsg(`✅ 资源补发成功（各 +30000）`)
-    } catch (e: any) {
-      showMsg(`❌ 失败: ${e.message}`)
+      showMsg('资源补发成功（各 +30000）')
+    } catch (e: unknown) {
+      showMsg(`失败: ${errorMessage(e)}`)
     } finally {
       setLoading(false)
     }
@@ -112,9 +128,9 @@ export function ResourceToolsPanel() {
     setLoading(true)
     try {
       await adminApi.grantItem(playerId, itemId, itemAmount)
-      showMsg(`✅ 物品发放成功：${itemName} x${itemAmount}`)
-    } catch (e: any) {
-      showMsg(`❌ 失败: ${e.message}`)
+      showMsg(`物品发放成功：${itemName} x${itemAmount}`)
+    } catch (e: unknown) {
+      showMsg(`失败: ${errorMessage(e)}`)
     } finally {
       setLoading(false)
     }
@@ -126,9 +142,9 @@ export function ResourceToolsPanel() {
     setLoading(true)
     try {
       const result = await adminApi.resetGeneralStats(playerId)
-      showMsg(`✅ 洗点成功，账户金币余额: ${result.accountGold}`)
-    } catch (e: any) {
-      showMsg(`❌ 失败: ${e.message}`)
+      showMsg(`洗点成功，账户金币余额: ${result.accountGold}`)
+    } catch (e: unknown) {
+      showMsg(`失败: ${errorMessage(e)}`)
     } finally {
       setLoading(false)
     }
@@ -141,10 +157,10 @@ export function ResourceToolsPanel() {
     setLoading(true)
     try {
       await adminApi.changeGeneral(playerId, generalId)
-      showMsg(`✅ 换将成功：${name}`)
+      showMsg(`换将成功：${name}`)
       await loadPlayerMeta(playerId)
-    } catch (e: any) {
-      showMsg(`❌ 失败: ${e.message}`)
+    } catch (e: unknown) {
+      showMsg(`失败: ${errorMessage(e)}`)
     } finally {
       setLoading(false)
     }
@@ -212,6 +228,19 @@ export function ResourceToolsPanel() {
 
         <button
           type="button"
+          onClick={handleDeductCityGold}
+          disabled={loading || !playerId || goldAmount <= 0}
+          className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-left border border-red-500/30 bg-red-500/5 hover:bg-red-500/10 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <MinusCircle size={14} className="text-red-500" />
+          <div>
+            <strong className="text-sm text-red-600">扣减城金</strong>
+            <span className="text-[10px] text-[var(--color-text-muted)] ml-2">按当前数量从玩家存档扣城金</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
           onClick={handleQuickResources}
           disabled={loading || !playerId}
           className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-left border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -228,7 +257,7 @@ export function ResourceToolsPanel() {
             <Gift size={14} className="text-violet-500" />
             <strong className="text-sm text-violet-600">发放物品</strong>
           </div>
-          <div className="grid gap-2 sm:grid-cols-[1fr_96px_auto]">
+          <div className="grid gap-2 sm:grid-cols-[minmax(160px,1fr)_minmax(88px,0.35fr)_auto]">
             <select
               value={itemId}
               onChange={(e) => setItemId(e.target.value)}
@@ -262,7 +291,7 @@ export function ResourceToolsPanel() {
             <strong className="text-sm text-amber-600">将领操作</strong>
             {playerFaction && <span className="ml-auto text-[10px] text-[var(--color-text-muted)]">{playerFaction}</span>}
           </div>
-          <div className="grid gap-2 sm:grid-cols-[auto_1fr_auto]">
+          <div className="grid gap-2 sm:grid-cols-[auto_minmax(150px,1fr)_auto]">
             <button
               type="button"
               onClick={handleResetGeneralStats}

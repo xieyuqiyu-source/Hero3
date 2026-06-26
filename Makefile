@@ -1,7 +1,7 @@
 # Hero3 项目 Makefile
 # 统一开发环境启动、构建、部署命令
 
-.PHONY: dev dev-go dev-web dev-admin build build-go build-web build-admin clean install openapi openapi-lint openapi-bundle
+.PHONY: dev dev-go dev-web dev-admin build build-go build-web build-admin clean install migrate migrate-test print-test-dsn clone-data backfill-resources verify-resources openapi openapi-lint openapi-bundle
 
 # ===== 开发 =====
 
@@ -58,7 +58,27 @@ clean:
 
 ## 运行数据库迁移
 migrate:
-	cd go && go run ./cmd/server migrate
+	cd go && go run ./cmd/dbtool migrate
+
+## 创建并迁移 test_ 前缀测试库
+migrate-test:
+	cd go && go run ./cmd/dbtool migrate-test
+
+## 输出 test_ 前缀测试库 DSN（默认隐藏密码）
+print-test-dsn:
+	cd go && go run ./cmd/dbtool print-test-dsn
+
+## 从 HERO3_SOURCE_DATABASE_DSN 复制数据到当前 test_ 目标库
+clone-data:
+	cd go && go run ./cmd/dbtool clone-data --truncate
+
+## 从 state_json 回填 player_resources 影子表
+backfill-resources:
+	cd go && go run ./cmd/dbtool backfill-resources
+
+## 校验 player_resources 与 state_json.resources 是否一致
+verify-resources:
+	cd go && go run ./cmd/dbtool verify-resources
 
 # ===== 接口文档 =====
 

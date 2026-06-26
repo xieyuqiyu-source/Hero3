@@ -55,7 +55,7 @@ export default function BuffPanel() {
   }
 
   const handleGrant = async () => {
-    if (!playerId) { showMsg('❌ 请输入玩家 ID'); return }
+    if (!playerId) { showMsg('请输入玩家 ID'); return }
     const desc = `${BUFF_KEY_OPTIONS.find(o => o.value === key)?.label ?? key} ${mode === 'flat' ? `+${value}` : `+${Math.round(value * 100)}%`}${permanent ? '（永久）' : `（${hours}小时）`}`
     if (!confirm(`确认给玩家 ${playerId} 发放加成？\n\n${desc}\n备注：${note || '无'}`)) return
 
@@ -63,9 +63,9 @@ export default function BuffPanel() {
     try {
       const result = await adminApi.grantBuff(playerId, key, value, mode, permanent ? 0 : hours, note)
       setPlayerBuffs(result.state.buffs ?? [])
-      showMsg(`✅ 加成发放成功`)
+      showMsg('加成发放成功')
     } catch (e: unknown) {
-      showMsg(`❌ 失败: ${e instanceof Error ? e.message : '未知错误'}`)
+      showMsg(`失败: ${e instanceof Error ? e.message : '未知错误'}`)
     } finally {
       setLoading(false)
     }
@@ -78,9 +78,9 @@ export default function BuffPanel() {
     try {
       const result = await adminApi.revokeBuff(playerId, buffId)
       setPlayerBuffs(result.state.buffs ?? [])
-      showMsg('✅ 已撤销')
+      showMsg('已撤销')
     } catch (e: unknown) {
-      showMsg(`❌ 失败: ${e instanceof Error ? e.message : '未知错误'}`)
+      showMsg(`失败: ${e instanceof Error ? e.message : '未知错误'}`)
     } finally {
       setLoading(false)
     }
@@ -93,7 +93,7 @@ export default function BuffPanel() {
       const state = await adminApi.getPlayerState(playerId)
       setPlayerBuffs(state.buffs ?? [])
     } catch (e: unknown) {
-      showMsg(`❌ 加载失败: ${e instanceof Error ? e.message : '未知错误'}`)
+      showMsg(`加载失败: ${e instanceof Error ? e.message : '未知错误'}`)
     } finally {
       setLoading(false)
     }

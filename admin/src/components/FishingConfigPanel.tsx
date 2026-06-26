@@ -19,6 +19,19 @@ const emptyFish = (): FishingFishConfig => ({
   emoji: '🐟',
 })
 
+const emptyBait = (): FishingBaitConfig => ({
+  id: `bait_${Date.now()}`,
+  name: '新鱼饵',
+  tier: 'common',
+  description: '',
+  rarityBoost: 1,
+  cityGoldCost: 0,
+  biteChance: 0.7,
+  biteWindowMs: 1200,
+  sweetStart: 35,
+  sweetEnd: 65,
+})
+
 export default function FishingConfigPanel() {
   const [config, setConfig] = useState<FishingConfig | null>(null)
   const [unitsConfig, setUnitsConfig] = useState<Record<string, Record<string, UnitConfig>>>({})
@@ -98,6 +111,16 @@ export default function FishingConfigPanel() {
     updateConfig({ ...config, baits })
   }
 
+  const addBait = () => {
+    if (!config) return
+    updateConfig({ ...config, baits: [...config.baits, emptyBait()] })
+  }
+
+  const removeBait = (index: number) => {
+    if (!config) return
+    updateConfig({ ...config, baits: config.baits.filter((_, i) => i !== index) })
+  }
+
   const updateFish = (index: number, field: keyof FishingFishConfig, value: string | number) => {
     if (!config) return
     const fishPool = [...config.fishPool]
@@ -159,32 +182,42 @@ export default function FishingConfigPanel() {
 
       <section className="mb-5">
         <h3 className="mb-2 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">稀有度概率权重</h3>
-        <div className="grid gap-2 md:grid-cols-4">
+        <div className="grid gap-2 md:grid-cols-2">
           {Object.entries(config.rarities).map(([rarityId, rarity]) => (
             <label key={rarityId} className="grid gap-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2">
-              <span className="text-[10px] text-[var(--color-text-muted)]">{RARITY_LABELS[rarityId] ?? rarity.label}</span>
-              <input
-                type="number"
-                min={0.1}
-                step={0.1}
-                value={rarity.weight}
-                onChange={(e) => updateRarity(rarityId, 'weight', Number(e.target.value))}
-                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm font-bold text-[var(--color-text-primary)] outline-none"
-              />
+              <span className="text-[10px] font-bold text-[var(--color-text-muted)]">{RARITY_LABELS[rarityId] ?? rarity.label}</span>
+              <div className="grid grid-cols-2 gap-2">
+                <TextField label="标签" value={rarity.label} onChange={(value) => updateRarity(rarityId, 'label', value)} />
+                <NumberField label="权重" value={rarity.weight} step={0.1} onChange={(value) => updateRarity(rarityId, 'weight', value)} />
+                <TextField label="文字色" value={rarity.color} onChange={(value) => updateRarity(rarityId, 'color', value)} />
+                <TextField label="背景" value={rarity.bg} onChange={(value) => updateRarity(rarityId, 'bg', value)} />
+                <TextField label="边框" value={rarity.border} onChange={(value) => updateRarity(rarityId, 'border', value)} />
+                <TextField label="光效" value={rarity.glow} onChange={(value) => updateRarity(rarityId, 'glow', value)} />
+              </div>
             </label>
           ))}
         </div>
       </section>
 
       <section className="mb-5">
-        <h3 className="mb-2 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">鱼饵规则</h3>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">鱼饵规则</h3>
+          <button type="button" onClick={addBait} className="flex items-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-2 py-1 text-xs font-bold text-[var(--color-text-primary)]">
+            <Plus size={12} />
+            加鱼饵
+          </button>
+        </div>
         <div className="grid gap-3 lg:grid-cols-2">
           {config.baits.map((bait, index) => (
             <div key={bait.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">
-              <div className="mb-2 grid gap-2 sm:grid-cols-3">
+              <div className="mb-2 grid gap-2 sm:grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(100px,0.8fr)_minmax(90px,0.55fr)_32px]">
+                <input value={bait.id} onChange={(e) => updateBait(index, 'id', e.target.value)} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm" />
                 <input value={bait.name} onChange={(e) => updateBait(index, 'name', e.target.value)} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm font-bold" />
                 <input value={bait.tier} onChange={(e) => updateBait(index, 'tier', e.target.value)} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm" />
                 <input type="number" min={0} value={bait.cityGoldCost} onChange={(e) => updateBait(index, 'cityGoldCost', Number(e.target.value))} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm" />
+                <button type="button" onClick={() => removeBait(index)} className="grid place-items-center rounded-lg border border-red-500/20 bg-red-500/8 text-red-600">
+                  <Trash2 size={14} />
+                </button>
               </div>
               <input value={bait.description} onChange={(e) => updateBait(index, 'description', e.target.value)} className="mb-2 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm" />
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -209,7 +242,7 @@ export default function FishingConfigPanel() {
         </div>
         <div className="grid gap-2">
           {config.fishPool.map((fish, index) => (
-            <div key={`${fish.name}-${index}`} className="grid gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-2 lg:grid-cols-[70px_1fr_110px_1.2fr_110px_1.4fr_40px]">
+            <div key={`${fish.name}-${index}`} className="grid gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-2 lg:grid-cols-[minmax(56px,0.4fr)_minmax(130px,1fr)_minmax(110px,0.7fr)_minmax(150px,1.1fr)_minmax(100px,0.65fr)_minmax(180px,1.2fr)_40px]">
               <input value={fish.emoji} onChange={(e) => updateFish(index, 'emoji', e.target.value)} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm" />
               <input value={fish.name} onChange={(e) => updateFish(index, 'name', e.target.value)} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm font-bold" />
               <select value={fish.rarity} onChange={(e) => updateFish(index, 'rarity', e.target.value)} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm">
@@ -242,6 +275,20 @@ export default function FishingConfigPanel() {
         </button>
       </details>
     </div>
+  )
+}
+
+function TextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="grid gap-1">
+      <span className="text-[10px] text-[var(--color-text-muted)]">{label}</span>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm"
+      />
+    </label>
   )
 }
 

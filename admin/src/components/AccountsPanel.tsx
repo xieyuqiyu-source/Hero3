@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { Users, Trash2, Eye, Coins, Gift, ChevronDown, ChevronRight } from 'lucide-react'
+import { Users, Trash2, Eye, Coins, Gift, ChevronDown, ChevronRight, MinusCircle } from 'lucide-react'
 import PlayerDrawer from '@/components/PlayerDrawer'
 import { adminApi } from '@/api/admin'
 import type { AccountSummary, PlayerSummary } from '@/types'
+
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : '操作失败'
 
 interface AccountsPanelProps {
   accounts: AccountSummary[]
@@ -33,9 +35,9 @@ export default function AccountsPanel({
     if (!confirm(`确认给账户赠送 ${amount} 金币？`)) return
     try {
       const result = await adminApi.addAccountGold(accountId, amount)
-      showFeedback(`✅ 赠送成功，余额: ${result.gold}`)
-    } catch (e: any) {
-      showFeedback(`❌ ${e.message}`)
+      showFeedback(`赠送成功，余额: ${result.gold}`)
+    } catch (e: unknown) {
+      showFeedback(errorMessage(e))
     }
   }
 
@@ -44,9 +46,20 @@ export default function AccountsPanel({
     if (!confirm(`确认补发 ${amount} 城金？`)) return
     try {
       await adminApi.addCityGold(playerId, amount)
-      showFeedback(`✅ 城金补发成功`)
-    } catch (e: any) {
-      showFeedback(`❌ ${e.message}`)
+      showFeedback('城金补发成功')
+    } catch (e: unknown) {
+      showFeedback(errorMessage(e))
+    }
+  }
+
+  const handleDeductCityGold = async (playerId: string) => {
+    const amount = cityGoldInput[playerId] || 100
+    if (!confirm(`确认扣减 ${amount} 城金？`)) return
+    try {
+      await adminApi.deductCityGold(playerId, amount)
+      showFeedback('城金扣减成功')
+    } catch (e: unknown) {
+      showFeedback(errorMessage(e))
     }
   }
 
@@ -129,7 +142,7 @@ export default function AccountsPanel({
                             value={goldInput[account.id] ?? 10}
                             onChange={(e) => setGoldInput({ ...goldInput, [account.id]: parseInt(e.target.value) || 0 })}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-20 px-2 py-1 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] outline-none"
+                            className="min-w-[72px] max-w-[120px] px-2 py-1 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] outline-none"
                           />
                           <span className="text-[10px] text-[var(--color-text-muted)]">金币</span>
                         </div>
@@ -153,7 +166,7 @@ export default function AccountsPanel({
                                     value={cityGoldInput[player.id] ?? 100}
                                     onChange={(e) => setCityGoldInput({ ...cityGoldInput, [player.id]: parseInt(e.target.value) || 0 })}
                                     onClick={(e) => e.stopPropagation()}
-                                    className="w-14 px-1.5 py-1 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] outline-none text-center"
+                                    className="min-w-[56px] max-w-[88px] px-1.5 py-1 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] outline-none text-center"
                                   />
                                   <button
                                     type="button"
@@ -162,7 +175,16 @@ export default function AccountsPanel({
                                     title="补发城金"
                                   >
                                     <Gift size={10} />
-                                    城金
+                                    加
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleDeductCityGold(player.id) }}
+                                    className="flex items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-bold text-red-600 bg-red-500/8 border border-red-500/20 hover:bg-red-500/15 cursor-pointer transition-colors"
+                                    title="扣减城金"
+                                  >
+                                    <MinusCircle size={10} />
+                                    扣
                                   </button>
                                   <button
                                     type="button"

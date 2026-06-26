@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Key, Eye, EyeOff } from 'lucide-react'
 
 /**
@@ -6,22 +6,17 @@ import { Key, Eye, EyeOff } from 'lucide-react'
  * 用于配置 X-Admin-Token，存储在 localStorage 中
  */
 export default function AdminTokenPanel() {
-  const [token, setToken] = useState('')
+  const [token, setToken] = useState(() => localStorage.getItem('hero3_admin_token') ?? '')
   const [showToken, setShowToken] = useState(false)
   const [savedMsg, setSavedMsg] = useState('')
-
-  useEffect(() => {
-    const stored = localStorage.getItem('hero3_admin_token') ?? ''
-    setToken(stored)
-  }, [])
 
   const handleSave = () => {
     if (token.trim()) {
       localStorage.setItem('hero3_admin_token', token.trim())
-      setSavedMsg('✅ 已保存，刷新页面后生效')
+      setSavedMsg('已保存，刷新页面后生效')
     } else {
       localStorage.removeItem('hero3_admin_token')
-      setSavedMsg('✅ 已清除 admin token')
+      setSavedMsg('已清除 admin token')
     }
     setTimeout(() => setSavedMsg(''), 3000)
   }

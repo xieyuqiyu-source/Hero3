@@ -26,6 +26,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   'player not found': '玩家不存在',
   'account not found': '账号不存在',
   'account already exists': '账号已存在',
+  'account service unavailable': '账号服务暂不可用，请稍后重试',
   'invalid username or password': '用户名或密码错误',
   'invalid json body': '请求数据格式错误',
   'unit not found': '兵种不存在',

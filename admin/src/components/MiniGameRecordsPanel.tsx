@@ -55,7 +55,7 @@ export default function MiniGameRecordsPanel() {
       setSummary(result)
       setOffset(result.offset)
     } catch (e: unknown) {
-      setMessage(`❌ 查询失败: ${e instanceof Error ? e.message : '未知错误'}`)
+      setMessage(`查询失败: ${e instanceof Error ? e.message : '未知错误'}`)
       setSummary(null)
     } finally {
       setLoading(false)

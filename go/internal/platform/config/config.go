@@ -21,6 +21,7 @@ type Config struct {
 	Addr           string
 	AllowedOrigins []string
 	DatabaseDSN    string
+	AllowDevDB     bool
 	BalancePath    string
 	FactionsPath   string
 	UnitsDir       string
@@ -48,6 +49,7 @@ func Load() Config {
 		Addr:           ":" + port,
 		AllowedOrigins: splitCSV(getEnv("HERO3_ALLOWED_ORIGINS", defaultAllowedOrigins)),
 		DatabaseDSN:    getEnv("HERO3_DATABASE_DSN", ""),
+		AllowDevDB:     getBoolEnv("HERO3_ALLOW_DEVELOPMENT_DATABASE", false),
 		BalancePath:    getEnv("HERO3_BALANCE_PATH", "config/balance.json"),
 		FactionsPath:   getEnv("HERO3_FACTIONS_PATH", "config/factions.json"),
 		UnitsDir:       getEnv("HERO3_UNITS_DIR", "config/units"),
@@ -101,6 +103,21 @@ func getDurationEnv(key string, fallback time.Duration) time.Duration {
 	}
 
 	return fallback
+}
+
+func getBoolEnv(key string, fallback bool) bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if value == "" {
+		return fallback
+	}
+	switch value {
+	case "1", "true", "yes", "y", "on":
+		return true
+	case "0", "false", "no", "n", "off":
+		return false
+	default:
+		return fallback
+	}
 }
 
 func getLogLevel(value string) slog.Level {

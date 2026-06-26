@@ -110,6 +110,9 @@ HERO3_VERSION=0.1.0
 HERO3_LOG_LEVEL=info
 HERO3_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
 # HERO3_DATABASE_DSN=hero3_user:hero3_password@tcp(127.0.0.1:3306)/hero3?parseTime=true&charset=utf8mb4&loc=UTC
+# 本地开发建议使用 test_ 前缀测试库。
+# HERO3_DATABASE_DSN=hero3_user:hero3_password@tcp(127.0.0.1:3306)/test_hero3?parseTime=true&charset=utf8mb4&loc=UTC
+# HERO3_ALLOW_DEVELOPMENT_DATABASE=false
 ```
 
 ## 数据库
@@ -146,6 +149,26 @@ go run ./cmd/server
 
 项目根目录的 `dev.sh` 会自动读取 `go/.env`，本机可把实际 DSN 放在 `go/.env` 中。该文件已被 Git 忽略，不要提交数据库密码。
 
+本地开发约定：
+
+- 稳定玩家库使用 `hero3`。
+- 本地开发库使用 `test_hero3`，避免开发调试误写稳定玩家数据。
+- `HERO3_ENV=development` 时，后端默认拒绝连接非 `test_` 前缀数据库。
+- 如确需临时连接非测试库，必须显式设置 `HERO3_ALLOW_DEVELOPMENT_DATABASE=true`。
+- `make migrate` 只迁移当前 `HERO3_DATABASE_DSN` 指向的库。
+- `make migrate-test` 会按当前库名生成 `test_` 前缀库并执行迁移；执行该命令的数据库账号必须拥有 `CREATE DATABASE` 权限。
+- 如果数据库账号没有建库权限，需要先由服务器管理员创建并授权 `test_hero3`，再把 `go/.env` 的 DSN 改到该库。
+- `make clone-data` 会从 `HERO3_SOURCE_DATABASE_DSN` 复制数据到当前 `HERO3_DATABASE_DSN` 指向的 `test_` 库，并清空目标库旧数据；复制完成后会自动回填并校验 `player_resources`。
+
+数据库维护命令：
+
+```bash
+make migrate
+make migrate-test
+make print-test-dsn
+HERO3_SOURCE_DATABASE_DSN='源库DSN' make clone-data
+```
+
 日常开发只需要：
 
 ```bash
@@ -153,6 +176,34 @@ go run ./cmd/server
 ```
 
 如果后续关闭公网 `3306`，可以把 `go/.env` 的 `HERO3_DB_TUNNEL_ENABLED` 改为 `true`，让 `dev.sh` 自动启动 SSH 隧道。
+
+## 在线接口文档
+
+Go 后端启动后会同时提供 Scalar 在线接口文档：
+
+```text
+http://localhost:8080/docs
+```
+
+文档页面读取：
+
+```text
+http://localhost:8080/openapi.yaml
+```
+
+默认读取项目根目录的 `docs/接口文档/openapi打包.yaml`。如果启动目录特殊，或者需要临时读取其他文件，可以设置：
+
+```bash
+export HERO3_OPENAPI_PATH='../docs/接口文档/openapi打包.yaml'
+```
+
+每次新增或修改接口后，先在项目根目录运行：
+
+```bash
+make openapi
+```
+
+再刷新 `/docs` 页面查看最新接口。
 
 ## 基础接口
 

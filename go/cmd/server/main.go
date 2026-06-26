@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -61,6 +63,11 @@ func main() {
 		os.Exit(1)
 	}
 	if cfg.DatabaseDSN != "" {
+		if err := validateDevelopmentDatabase(cfg); err != nil {
+			logger.Error("database safety check failed", "error", err)
+			os.Exit(1)
+		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
@@ -148,4 +155,19 @@ func main() {
 	}
 
 	logger.Info("Hero3 API server stopped")
+}
+
+// validateDevelopmentDatabase 防止本地开发模式误连稳定玩家库。
+func validateDevelopmentDatabase(cfg config.Config) error {
+	if !strings.EqualFold(strings.TrimSpace(cfg.Environment), "development") || cfg.AllowDevDB {
+		return nil
+	}
+	databaseName, err := storage.MySQLDatabaseName(cfg.DatabaseDSN)
+	if err != nil {
+		return err
+	}
+	if strings.HasPrefix(databaseName, "test_") {
+		return nil
+	}
+	return errors.New("development database must use test_ prefix or set HERO3_ALLOW_DEVELOPMENT_DATABASE=true")
 }

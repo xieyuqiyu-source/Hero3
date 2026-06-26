@@ -110,7 +110,7 @@ export default function MailAdminPanel() {
       </div>
 
       <form onSubmit={handleSubmit} className="grid gap-3 p-4">
-        <div className="grid gap-3 md:grid-cols-[1fr_160px]">
+        <div className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_minmax(150px,0.45fr)]">
           <PlayerSelector
             value={playerId}
             onChange={(pid) => setPlayerId(pid)}
@@ -160,7 +160,7 @@ export default function MailAdminPanel() {
               {attachments.map((item, index) => {
                 const selected = `${item.type}:${item.itemId}`
                 return (
-                  <div key={index} className="grid gap-2 md:grid-cols-[1fr_140px_36px]">
+                  <div key={index} className="grid gap-2 md:grid-cols-[minmax(160px,1fr)_minmax(120px,0.5fr)_36px]">
                     <select
                       value={selected}
                       onChange={(event) => {

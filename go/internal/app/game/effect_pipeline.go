@@ -30,6 +30,12 @@ type EffectExecutionResult struct {
 	Apply EffectApplyResult `json:"apply"`
 }
 
+type AccountEffectExecutionResult struct {
+	Account Account           `json:"account"`
+	State   GameState         `json:"state"`
+	Apply   EffectApplyResult `json:"apply"`
+}
+
 // ExecuteEffects 在玩家状态事务中执行标准效果，并发布核心资产变化。
 func (s *Service) ExecuteEffects(playerID string, effects []Effect, ctx EffectContext) (EffectExecutionResult, error) {
 	playerID = strings.TrimSpace(playerID)
@@ -64,6 +70,60 @@ func (s *Service) ExecuteEffects(playerID string, effects []Effect, ctx EffectCo
 	s.publishCoreAssetDiff(playerID, firstNonEmpty(ctx.RefType, "effect"), ctx.RefID, before, after, now)
 	hydrateStateForResponse(&state, now)
 	return EffectExecutionResult{State: state, Apply: applyResult}, nil
+}
+
+// ExecuteEffectsWithAccount 在账号 + 玩家组合事务中执行标准效果，支持账号级奖励。
+func (s *Service) ExecuteEffectsWithAccount(accountID string, playerID string, effects []Effect, ctx EffectContext) (AccountEffectExecutionResult, error) {
+	accountID = strings.TrimSpace(accountID)
+	playerID = strings.TrimSpace(playerID)
+	if accountID == "" {
+		return AccountEffectExecutionResult{}, ErrAccountNotFound
+	}
+	if playerID == "" {
+		return AccountEffectExecutionResult{}, ErrPlayerNotFound
+	}
+	ctx.AccountID = firstNonEmpty(ctx.AccountID, accountID)
+	ctx.PlayerID = firstNonEmpty(ctx.PlayerID, playerID)
+	now := time.Now()
+
+	var before, after coreAssetSnapshot
+	var applyResult EffectApplyResult
+	account, state, err := s.repo.UpdateAccountPlayerState(accountID, playerID, now, func(account *Account, state *GameState) error {
+		nextState, _ := settleResources(*state, now)
+		*state = nextState
+		before = snapshotCoreAssets(state)
+		result, err := ExecuteEffectsOnState(state, effects, ctx, now)
+		if err != nil {
+			return err
+		}
+		if result.Reward.AccountGold > 0 {
+			account.Gold += result.Reward.AccountGold
+			result.Reward.LedgerEntries = append(result.Reward.LedgerEntries, GoldLedgerEntry{
+				AccountID:    accountID,
+				PlayerID:     playerID,
+				Currency:     LedgerCurrencyGold,
+				Direction:    LedgerDirectionCredit,
+				Amount:       result.Reward.AccountGold,
+				BalanceAfter: account.Gold,
+				RefType:      ctx.RefType,
+				RefID:        ctx.RefID,
+				Reason:       ctx.Reason,
+				CreatedAt:    now.UTC().Format(resourceDateLayout),
+			})
+		}
+		nextState, _ = settleResources(*state, now)
+		*state = nextState
+		after = snapshotCoreAssets(state)
+		applyResult = result
+		return nil
+	})
+	if err != nil {
+		return AccountEffectExecutionResult{}, err
+	}
+	s.flushRewardSideEffects(applyResult.Reward)
+	s.publishCoreAssetDiff(playerID, firstNonEmpty(ctx.RefType, "effect"), ctx.RefID, before, after, now)
+	hydrateStateForResponse(&state, now)
+	return AccountEffectExecutionResult{Account: account, State: state, Apply: applyResult}, nil
 }
 
 // ExecuteEffectsOnState 执行标准效果列表，所有长期资产变更必须复用既有核心入口。

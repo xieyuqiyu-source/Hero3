@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Sliders, Save, ChevronDown, ChevronUp } from 'lucide-react'
+import { Sliders, Save, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
-import type { BalanceConfig, BuildingConfig } from '@/types'
+import type { BalanceConfig, BuildingConfig, ModifierConfig } from '@/types'
 
 const BUILDING_LABELS: Record<string, string> = {
   wood_camp: '伐木场',
@@ -16,6 +16,31 @@ const RES_LABELS: Record<string, string> = {
   stone: '石料',
   iron: '铁矿',
   food: '粮食',
+}
+
+const STAT_LABELS: Record<string, string> = {
+  productionBonus: '全资源产量',
+  woodProductionBonus: '木材产量',
+  stoneProductionBonus: '石料产量',
+  ironProductionBonus: '铁矿产量',
+  foodProductionBonus: '粮食产量',
+  capacityBonus: '仓库容量',
+  attackBonus: '攻击',
+  defenseBonus: '防御',
+  infantryDefenseBonus: '步防',
+  cavalryDefenseBonus: '骑防',
+  infantryRecruitSpeedBonus: '步兵征兵',
+  cavalryRecruitSpeedBonus: '骑兵征兵',
+  buildSpeedBonus: '建造速度',
+  recruitSpeedBonus: '征兵速度',
+  marchSpeedBonus: '行军速度',
+  exchangeRateBonus: '兑换比例',
+}
+
+const MODIFIER_MODES = ['flat', 'percentAdd', 'percentMultiply']
+
+const levelRecordValue = <T,>(record: Record<string, T> | undefined, level: number) => {
+  return record?.[String(level)]
 }
 
 export default function BalanceConfigPanel() {
@@ -80,6 +105,95 @@ export default function BalanceConfigPanel() {
     })
   }
 
+  const updateBoostFactor = (field: 'boostMultiplierFactor' | 'boostDurationFactor', key: string, value: number) => {
+    if (!balance) return
+    setBalance({ ...balance, [field]: { ...balance[field], [key]: value } })
+  }
+
+  const updateUpgradeSeconds = (buildingType: string, level: number, value: number) => {
+    if (!balance) return
+    const building = balance.buildings[buildingType]
+    setBalance({
+      ...balance,
+      buildings: {
+        ...balance.buildings,
+        [buildingType]: {
+          ...building,
+          upgradeSecondsByLevel: { ...building.upgradeSecondsByLevel, [String(level)]: value },
+        },
+      },
+    })
+  }
+
+  const updateUpgradeCost = (buildingType: string, level: number, resource: string, value: number) => {
+    if (!balance) return
+    const building = balance.buildings[buildingType]
+    const currentCost = levelRecordValue(building.upgradeCostByLevel, level) ?? {}
+    setBalance({
+      ...balance,
+      buildings: {
+        ...balance.buildings,
+        [buildingType]: {
+          ...building,
+          upgradeCostByLevel: {
+            ...building.upgradeCostByLevel,
+            [String(level)]: { ...currentCost, [resource]: value },
+          },
+        },
+      },
+    })
+  }
+
+  const updateModifier = (buildingType: string, level: number, index: number, next: ModifierConfig) => {
+    if (!balance) return
+    const building = balance.buildings[buildingType]
+    const modifiers = [...(levelRecordValue(building.modifiersByLevel, level) ?? [])]
+    modifiers[index] = next
+    setBalance({
+      ...balance,
+      buildings: {
+        ...balance.buildings,
+        [buildingType]: {
+          ...building,
+          modifiersByLevel: { ...building.modifiersByLevel, [String(level)]: modifiers },
+        },
+      },
+    })
+  }
+
+  const addModifier = (buildingType: string, level: number) => {
+    if (!balance) return
+    const building = balance.buildings[buildingType]
+    const modifiers = [...(levelRecordValue(building.modifiersByLevel, level) ?? [])]
+    modifiers.push({ key: 'attackBonus', value: 0, mode: 'percentAdd' })
+    setBalance({
+      ...balance,
+      buildings: {
+        ...balance.buildings,
+        [buildingType]: {
+          ...building,
+          modifiersByLevel: { ...building.modifiersByLevel, [String(level)]: modifiers },
+        },
+      },
+    })
+  }
+
+  const removeModifier = (buildingType: string, level: number, index: number) => {
+    if (!balance) return
+    const building = balance.buildings[buildingType]
+    const modifiers = (levelRecordValue(building.modifiersByLevel, level) ?? []).filter((_, idx) => idx !== index)
+    setBalance({
+      ...balance,
+      buildings: {
+        ...balance.buildings,
+        [buildingType]: {
+          ...building,
+          modifiersByLevel: { ...building.modifiersByLevel, [String(level)]: modifiers },
+        },
+      },
+    })
+  }
+
   if (loading) return <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4"><p className="text-sm text-[var(--color-text-muted)]">加载中...</p></div>
   if (!balance) return <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4"><p className="text-sm text-red-600">{error ?? '加载失败'}</p></div>
 
@@ -105,7 +219,7 @@ export default function BalanceConfigPanel() {
       {/* Base Production */}
       <section className="mb-4">
         <h3 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">基础产量 (每小时)</h3>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {Object.entries(balance.baseProduction).map(([res, val]) => (
             <label key={res} className="grid gap-1 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
               <span className="text-[10px] font-bold text-[var(--color-text-muted)]">{RES_LABELS[res] ?? res}</span>
@@ -123,13 +237,13 @@ export default function BalanceConfigPanel() {
       {/* Overflow to CityGold */}
       <section className="mb-4">
         <h3 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">溢出转城金</h3>
-        <label className="flex items-center gap-3 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+        <label className="grid gap-2 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] sm:grid-cols-[auto_minmax(80px,1fr)_auto] sm:items-center">
           <span className="text-[10px] font-bold text-[var(--color-text-muted)] whitespace-nowrap">兑换比例</span>
           <input
             type="number"
             value={balance.overflowToCityGold ?? 200}
             onChange={(e) => setBalance({ ...balance, overflowToCityGold: parseInt(e.target.value) || 200 })}
-            className="h-7 w-20 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+            className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
           />
           <span className="text-[10px] text-[var(--color-text-muted)]">资源 = 1 城金</span>
         </label>
@@ -139,58 +253,72 @@ export default function BalanceConfigPanel() {
       <section className="mb-4">
         <h3 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">金币兑换配置</h3>
         <div className="grid gap-2">
-          <label className="flex items-center gap-3 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+          <label className="grid gap-2 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] sm:grid-cols-[auto_auto_minmax(70px,1fr)_auto] sm:items-center">
             <span className="text-[10px] font-bold text-[var(--color-text-muted)] whitespace-nowrap">金币→城金</span>
             <span className="text-[10px] text-[var(--color-text-muted)]">1 金币 =</span>
             <input
               type="number"
               value={balance.exchangeRate ?? 10}
               onChange={(e) => setBalance({ ...balance, exchangeRate: parseInt(e.target.value) || 10 })}
-              className="h-7 w-16 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+              className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
             />
             <span className="text-[10px] text-[var(--color-text-muted)]">城金</span>
           </label>
-          <label className="flex items-center gap-3 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+          <label className="grid gap-2 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] sm:grid-cols-[auto_minmax(70px,1fr)_auto] sm:items-center">
             <span className="text-[10px] font-bold text-[var(--color-text-muted)] whitespace-nowrap">城金→金币</span>
             <input
               type="number"
               value={balance.reverseExchangeRate ?? 15}
               onChange={(e) => setBalance({ ...balance, reverseExchangeRate: parseInt(e.target.value) || 15 })}
-              className="h-7 w-16 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+              className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
             />
             <span className="text-[10px] text-[var(--color-text-muted)]">城金 = 1 金币</span>
           </label>
-          <label className="flex items-center gap-3 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+          <label className="grid gap-2 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] sm:grid-cols-[auto_minmax(80px,1fr)_auto] sm:items-center">
             <span className="text-[10px] font-bold text-[var(--color-text-muted)] whitespace-nowrap">兑换冷却</span>
             <input
               type="number"
               value={balance.exchangeCooldownSecs ?? 3600}
               onChange={(e) => setBalance({ ...balance, exchangeCooldownSecs: parseInt(e.target.value) || 0 })}
-              className="h-7 w-20 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+              className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
             />
             <span className="text-[10px] text-[var(--color-text-muted)]">秒（0=无冷却）</span>
           </label>
-          <label className="flex items-center gap-3 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+          <label className="grid gap-2 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] sm:grid-cols-[auto_auto_minmax(70px,1fr)_auto] sm:items-center">
             <span className="text-[10px] font-bold text-[var(--color-text-muted)] whitespace-nowrap">加速折抵</span>
             <span className="text-[10px] text-[var(--color-text-muted)]">1 城金 =</span>
             <input
               type="number"
               value={balance.cityGoldPerSecond ?? 120}
               onChange={(e) => setBalance({ ...balance, cityGoldPerSecond: parseInt(e.target.value) || 120 })}
-              className="h-7 w-16 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+              className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
             />
             <span className="text-[10px] text-[var(--color-text-muted)]">秒（征兵/建筑加速）</span>
           </label>
-          <label className="flex items-center gap-3 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+          <label className="grid gap-2 px-2.5 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] sm:grid-cols-[auto_minmax(70px,1fr)_auto] sm:items-center">
             <span className="text-[10px] font-bold text-[var(--color-text-muted)] whitespace-nowrap">加成基价</span>
             <input
               type="number"
               value={balance.boostBaseCost ?? 30}
               onChange={(e) => setBalance({ ...balance, boostBaseCost: parseInt(e.target.value) || 30 })}
-              className="h-7 w-16 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+              className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
             />
             <span className="text-[10px] text-[var(--color-text-muted)]">城金（产量加成基础价）</span>
           </label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <FactorEditor
+              title="产量加成倍率因子"
+              factors={balance.boostMultiplierFactor}
+              suffix="倍"
+              onChange={(key, value) => updateBoostFactor('boostMultiplierFactor', key, value)}
+            />
+            <FactorEditor
+              title="产量加成时长因子"
+              factors={balance.boostDurationFactor}
+              suffix="小时"
+              onChange={(key, value) => updateBoostFactor('boostDurationFactor', key, value)}
+            />
+          </div>
         </div>
       </section>
 
@@ -232,6 +360,11 @@ export default function BalanceConfigPanel() {
                       buildingType={type}
                       onProductionChange={updateProductionAtLevel}
                       onCapacityChange={updateCapacityAtLevel}
+                      onUpgradeSecondsChange={updateUpgradeSeconds}
+                      onUpgradeCostChange={updateUpgradeCost}
+                      onModifierChange={updateModifier}
+                      onModifierAdd={addModifier}
+                      onModifierRemove={removeModifier}
                     />
                   </div>
                 )}
@@ -252,15 +385,33 @@ function BuildingLevelTable({
   buildingType,
   onProductionChange,
   onCapacityChange,
+  onUpgradeSecondsChange,
+  onUpgradeCostChange,
+  onModifierChange,
+  onModifierAdd,
+  onModifierRemove,
 }: {
   building: BuildingConfig
   buildingType: string
   onProductionChange: (type: string, level: number, value: number) => void
   onCapacityChange: (type: string, level: number, value: number) => void
+  onUpgradeSecondsChange: (type: string, level: number, value: number) => void
+  onUpgradeCostChange: (type: string, level: number, resource: string, value: number) => void
+  onModifierChange: (type: string, level: number, index: number, modifier: ModifierConfig) => void
+  onModifierAdd: (type: string, level: number) => void
+  onModifierRemove: (type: string, level: number, index: number) => void
 }) {
-  const levels = building.productionByLevel?.length ?? building.capacityByLevel?.length ?? 0
+  const levelKeys = [
+    ...(building.productionByLevel?.map((_, index) => index) ?? []),
+    ...(building.capacityByLevel?.map((_, index) => index) ?? []),
+    ...Object.keys(building.upgradeCostByLevel ?? {}).map(Number),
+    ...Object.keys(building.upgradeSecondsByLevel ?? {}).map(Number),
+    ...Object.keys(building.modifiersByLevel ?? {}).map(Number),
+  ].filter((level) => Number.isFinite(level))
+  const levels = levelKeys.length > 0 ? Math.max(...levelKeys) + 1 : 0
   const hasProduction = (building.productionByLevel?.length ?? 0) > 0
   const hasCapacity = (building.capacityByLevel?.length ?? 0) > 0
+  const hasModifiers = Object.keys(building.modifiersByLevel ?? {}).length > 0
 
   return (
     <div className="mt-2 overflow-x-auto">
@@ -272,12 +423,14 @@ function BuildingLevelTable({
             {hasCapacity && <th className="text-left py-1 pr-2 font-bold">容量</th>}
             <th className="text-left py-1 pr-2 font-bold">升级时间(s)</th>
             <th className="text-left py-1 font-bold">升级消耗</th>
+            {hasModifiers && <th className="text-left py-1 pl-2 font-bold">属性加成</th>}
           </tr>
         </thead>
         <tbody>
           {Array.from({ length: levels }, (_, i) => {
-            const upgradeCost = building.upgradeCostByLevel?.[String(i)] ?? building.upgradeCostByLevel?.[i as unknown as string]
-            const upgradeSeconds = building.upgradeSecondsByLevel?.[String(i)] ?? building.upgradeSecondsByLevel?.[i as unknown as string]
+            const upgradeCost = levelRecordValue(building.upgradeCostByLevel, i)
+            const upgradeSeconds = levelRecordValue(building.upgradeSecondsByLevel, i)
+            const modifiers = levelRecordValue(building.modifiersByLevel, i) ?? []
             return (
               <tr key={i} className="border-t border-[var(--color-border)]/50">
                 <td className="py-1.5 pr-2 font-bold text-[var(--color-text-primary)]">{i}</td>
@@ -287,7 +440,7 @@ function BuildingLevelTable({
                       type="number"
                       value={building.productionByLevel?.[i] ?? 0}
                       onChange={(e) => onProductionChange(buildingType, i, parseInt(e.target.value) || 0)}
-                      className="h-5 w-16 px-1 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                      className="h-6 min-w-[64px] px-1 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
                     />
                   </td>
                 )}
@@ -297,19 +450,108 @@ function BuildingLevelTable({
                       type="number"
                       value={building.capacityByLevel?.[i] ?? 0}
                       onChange={(e) => onCapacityChange(buildingType, i, parseInt(e.target.value) || 0)}
-                      className="h-5 w-20 px-1 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                      className="h-6 min-w-[72px] px-1 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
                     />
                   </td>
                 )}
-                <td className="py-1.5 pr-2 text-[var(--color-text-secondary)]">{upgradeSeconds ?? '-'}</td>
-                <td className="py-1.5 text-[var(--color-text-muted)]">
-                  {upgradeCost ? Object.entries(upgradeCost).map(([r, v]) => `${r}:${v}`).join(' ') : '-'}
+                <td className="py-1.5 pr-2">
+                  <input
+                    type="number"
+                    value={upgradeSeconds ?? 0}
+                    onChange={(e) => onUpgradeSecondsChange(buildingType, i, parseInt(e.target.value) || 0)}
+                    className="h-6 min-w-[72px] px-1 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                  />
                 </td>
+                <td className="py-1.5">
+                  <div className="grid min-w-[220px] grid-cols-2 gap-1">
+                    {Object.keys(RES_LABELS).map((res) => (
+                      <label key={res} className="flex items-center gap-1">
+                        <span className="shrink-0 text-[9px] text-[var(--color-text-muted)]">{RES_LABELS[res]}</span>
+                        <input
+                          type="number"
+                          value={upgradeCost?.[res] ?? 0}
+                          onChange={(e) => onUpgradeCostChange(buildingType, i, res, parseInt(e.target.value) || 0)}
+                          className="h-6 min-w-[64px] px-1 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </td>
+                {hasModifiers && (
+                  <td className="py-1.5 pl-2">
+                    <div className="grid gap-1 min-w-[360px]">
+                      {modifiers.map((modifier, index) => (
+                        <div key={`${modifier.key}-${index}`} className="grid grid-cols-[minmax(120px,1fr)_minmax(72px,0.55fr)_minmax(112px,0.7fr)_24px] gap-1">
+                          <select
+                            value={modifier.key}
+                            onChange={(e) => onModifierChange(buildingType, i, index, { ...modifier, key: e.target.value })}
+                            className="h-6 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                          >
+                            {Object.entries(STAT_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                            {!STAT_LABELS[modifier.key] && <option value={modifier.key}>{modifier.key}</option>}
+                          </select>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={modifier.value}
+                            onChange={(e) => onModifierChange(buildingType, i, index, { ...modifier, value: parseFloat(e.target.value) || 0 })}
+                            className="h-6 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                          />
+                          <select
+                            value={modifier.mode}
+                            onChange={(e) => onModifierChange(buildingType, i, index, { ...modifier, mode: e.target.value })}
+                            className="h-6 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                          >
+                            {MODIFIER_MODES.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+                          </select>
+                          <button type="button" onClick={() => onModifierRemove(buildingType, i, index)} className="grid h-6 place-items-center rounded text-red-500 hover:bg-red-500/10">
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      ))}
+                      <button type="button" onClick={() => onModifierAdd(buildingType, i)} className="inline-flex h-6 w-fit items-center gap-1 rounded border border-[var(--color-border)] px-2 text-[10px] font-bold text-[var(--color-accent)]">
+                        <Plus size={10} />
+                        加成
+                      </button>
+                    </div>
+                  </td>
+                )}
               </tr>
             )
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function FactorEditor({
+  title,
+  factors,
+  suffix,
+  onChange,
+}: {
+  title: string
+  factors: Record<string, number>
+  suffix: string
+  onChange: (key: string, value: number) => void
+}) {
+  return (
+    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-2.5 py-2">
+      <h4 className="mb-2 text-[10px] font-bold text-[var(--color-text-muted)]">{title}</h4>
+      <div className="grid gap-1.5 sm:grid-cols-2">
+        {Object.entries(factors ?? {}).map(([key, value]) => (
+          <label key={key} className="grid grid-cols-[auto_minmax(72px,1fr)] items-center gap-1">
+            <span className="text-[10px] text-[var(--color-text-muted)]">{key}{suffix}</span>
+            <input
+              type="number"
+              value={value}
+              onChange={(e) => onChange(key, parseInt(e.target.value) || 0)}
+              className="h-7 min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-primary)]"
+            />
+          </label>
+        ))}
+      </div>
     </div>
   )
 }

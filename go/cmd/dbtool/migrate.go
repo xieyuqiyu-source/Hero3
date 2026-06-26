@@ -1,0 +1,113 @@
+// 本文件归口数据库迁移和测试库 DSN 命令。
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"time"
+
+	"hero3/internal/infrastructure/storage"
+)
+
+const commandTimeout = 30 * time.Second
+
+// runMigrate 迁移当前 HERO3_DATABASE_DSN 指向的数据库。
+func runMigrate(args []string) error {
+	flags := flag.NewFlagSet("migrate", flag.ContinueOnError)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	dsn, err := configuredDSN()
+	if err != nil {
+		return err
+	}
+	return migrateDSN(dsn)
+}
+
+// runCreateTestDB 创建当前库对应的 test 前缀数据库。
+func runCreateTestDB(args []string) error {
+	flags := flag.NewFlagSet("create-test-db", flag.ContinueOnError)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	dsn, err := configuredDSN()
+	if err != nil {
+		return err
+	}
+	testDatabaseName, _, err := storage.MySQLTestDatabaseDSN(dsn)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+	if err := storage.CreateMySQLDatabaseFromDSN(ctx, dsn, testDatabaseName); err != nil {
+		return err
+	}
+	fmt.Printf("已创建或确认测试库：%s\n", testDatabaseName)
+	return nil
+}
+
+// runMigrateTest 创建并迁移当前库对应的 test 前缀数据库。
+func runMigrateTest(args []string) error {
+	flags := flag.NewFlagSet("migrate-test", flag.ContinueOnError)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	dsn, err := configuredDSN()
+	if err != nil {
+		return err
+	}
+	testDatabaseName, testDSN, err := storage.MySQLTestDatabaseDSN(dsn)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+	if err := storage.CreateMySQLDatabaseFromDSN(ctx, dsn, testDatabaseName); err != nil {
+		return err
+	}
+	return migrateDSN(testDSN)
+}
+
+// runPrintTestDSN 输出当前 DSN 对应的 test 前缀库 DSN。
+func runPrintTestDSN(args []string) error {
+	flags := flag.NewFlagSet("print-test-dsn", flag.ContinueOnError)
+	redact := flags.Bool("redact", true, "是否隐藏密码")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	dsn, err := configuredDSN()
+	if err != nil {
+		return err
+	}
+	_, testDSN, err := storage.MySQLTestDatabaseDSN(dsn)
+	if err != nil {
+		return err
+	}
+	if *redact {
+		testDSN = storage.RedactMySQLDSN(testDSN)
+	}
+	fmt.Println(testDSN)
+	return nil
+}
+
+// migrateDSN 对指定 DSN 执行迁移。
+func migrateDSN(dsn string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
+	db, err := storage.OpenMySQL(ctx, dsn)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if err := storage.MigrateMySQL(ctx, db); err != nil {
+		return err
+	}
+	databaseName, err := storage.MySQLDatabaseName(dsn)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("数据库迁移完成：%s\n", databaseName)
+	return nil
+}

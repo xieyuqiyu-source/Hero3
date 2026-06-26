@@ -28,7 +28,9 @@ export default function PlayerDetailPanel({ playerId, onClose }: PlayerDetailPan
   }, [playerId])
 
   useEffect(() => {
-    void loadState()
+    queueMicrotask(() => {
+      void loadState()
+    })
   }, [loadState])
 
   return (

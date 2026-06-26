@@ -1,4 +1,22 @@
-import type { AccountSummary, BalanceConfig, FishingConfig, GameState, GoldLedgerEntry, HealthState, ItemDefinition, Mail, MailAttachment, MailPage, NpcConfig, NpcState, UnitConfig } from '@/types'
+import type {
+  AccountSummary,
+  BalanceConfig,
+  CombatConfig,
+  FactionsConfig,
+  FishingConfig,
+  GameState,
+  GeneralsConfig,
+  GoldLedgerEntry,
+  HealthState,
+  ItemDefinition,
+  Mail,
+  MailAttachment,
+  MailPage,
+  NpcConfig,
+  NpcState,
+  TraitRegistryResponse,
+  UnitsConfig,
+} from '@/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1'
 const ROOT_BASE = API_BASE.replace(/\/api\/v1$/, '')
@@ -120,30 +138,30 @@ export const adminApi = {
     })
   },
   getCombatConfig() {
-    return request<object>(`${API_BASE}/admin/combat-config`)
+    return request<CombatConfig>(`${API_BASE}/admin/combat-config`)
   },
-  updateCombatConfig(config: object) {
-    return request<object>(`${API_BASE}/admin/combat-config`, {
+  updateCombatConfig(config: CombatConfig) {
+    return request<CombatConfig>(`${API_BASE}/admin/combat-config`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
     })
   },
   getFactionsConfig() {
-    return request<object>(`${API_BASE}/admin/factions-config`)
+    return request<FactionsConfig>(`${API_BASE}/admin/factions-config`)
   },
-  updateFactionsConfig(config: object) {
-    return request<object>(`${API_BASE}/admin/factions-config`, {
+  updateFactionsConfig(config: FactionsConfig) {
+    return request<FactionsConfig>(`${API_BASE}/admin/factions-config`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
     })
   },
   getUnitsConfig() {
-    return request<Record<string, Record<string, UnitConfig>>>(`${API_BASE}/admin/units-config`)
+    return request<UnitsConfig>(`${API_BASE}/admin/units-config`)
   },
-  updateUnitsConfig(faction: string, config: object) {
-    return request<object>(`${API_BASE}/admin/units-config/${faction}`, {
+  updateUnitsConfig(faction: string, config: UnitsConfig[string]) {
+    return request<UnitsConfig[string]>(`${API_BASE}/admin/units-config/${faction}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
@@ -171,6 +189,13 @@ export const adminApi = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId, amount, reason: 'GM补发' }),
+    })
+  },
+  deductCityGold(playerId: string, amount: number) {
+    return request<{ state: GameState }>(`${API_BASE}/admin/gold/deduct`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, amount, reason: 'GM扣减' }),
     })
   },
   getGoldLedger(filter: {
@@ -208,17 +233,17 @@ export const adminApi = {
     )
   },
   getGeneralsConfig() {
-    return request<object>(`${API_BASE}/admin/generals-config`)
+    return request<GeneralsConfig>(`${API_BASE}/admin/generals-config`)
   },
-  updateGeneralsConfig(config: object) {
-    return request<object>(`${API_BASE}/admin/generals-config`, {
+  updateGeneralsConfig(config: GeneralsConfig) {
+    return request<GeneralsConfig>(`${API_BASE}/admin/generals-config`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
     })
   },
   getGeneralTraitRegistry() {
-    return request<object>(`${API_BASE}/admin/general-traits`)
+    return request<TraitRegistryResponse>(`${API_BASE}/admin/general-traits`)
   },
   getFishingConfig() {
     return request<FishingConfig>(`${API_BASE}/admin/fishing-config`)

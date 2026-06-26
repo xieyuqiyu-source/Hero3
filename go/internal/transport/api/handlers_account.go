@@ -7,6 +7,7 @@ import (
 	"net/http"
 )
 
+// RegisterAccount 处理玩家轻账号注册。
 func (h *Handlers) RegisterAccount(w http.ResponseWriter, r *http.Request) {
 	var payload accountRequest
 	if !decodeJSON(w, r, &payload) {
@@ -19,11 +20,17 @@ func (h *Handlers) RegisterAccount(w http.ResponseWriter, r *http.Request) {
 
 	account, err := h.gameService.RegisterAccount(payload.Username, payload.Password)
 	if err != nil {
-		status := http.StatusBadRequest
-		if errors.Is(err, game.ErrAccountExists) {
+		status := http.StatusInternalServerError
+		message := "account service unavailable"
+		switch {
+		case errors.Is(err, game.ErrInvalidCredentials):
+			status = http.StatusBadRequest
+			message = err.Error()
+		case errors.Is(err, game.ErrAccountExists):
 			status = http.StatusConflict
+			message = err.Error()
 		}
-		writeError(w, status, err.Error())
+		writeError(w, status, message)
 		return
 	}
 
@@ -44,6 +51,7 @@ func (h *Handlers) RegisterAccount(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// LoginAccount 处理玩家轻账号登录并签发 JWT。
 func (h *Handlers) LoginAccount(w http.ResponseWriter, r *http.Request) {
 	var payload accountRequest
 	if !decodeJSON(w, r, &payload) {
@@ -56,7 +64,11 @@ func (h *Handlers) LoginAccount(w http.ResponseWriter, r *http.Request) {
 
 	account, err := h.gameService.LoginAccount(payload.Username, payload.Password)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "invalid username or password")
+		if errors.Is(err, game.ErrInvalidCredentials) {
+			writeError(w, http.StatusUnauthorized, "invalid username or password")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "account service unavailable")
 		return
 	}
 

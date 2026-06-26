@@ -99,3 +99,45 @@ func TestServiceExecuteEffectsPublishesAssetDiff(t *testing.T) {
 		t.Fatalf("expected one building event, got %+v", events)
 	}
 }
+
+func TestServiceExecuteEffectsWithAccountAppliesAccountGold(t *testing.T) {
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	now := time.Now()
+	account := Account{ID: "account_effect_gold", Username: "effect_gold_user", PasswordHash: "hash", Gold: 3, CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_effect_gold", "EffectGold", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := service.ExecuteEffectsWithAccount(account.ID, state.Player.ID, rewardsToEffects("test_gold_effect", []Reward{
+		{Type: RewardTypeGold, ID: RewardTypeGold, Amount: 12},
+	}), EffectContext{RefType: "test_gold_effect", RefID: "gold_reward", Reason: "effect_account_gold"})
+	if err != nil {
+		t.Fatalf("ExecuteEffectsWithAccount failed: %v", err)
+	}
+	if result.Account.Gold != 15 {
+		t.Fatalf("expected account gold 15, got %d", result.Account.Gold)
+	}
+	if result.Apply.Reward.AccountGold != 12 {
+		t.Fatalf("expected account gold apply 12, got %+v", result.Apply.Reward)
+	}
+
+	accountAfter, err := service.GetAccountByID(account.ID)
+	if err != nil {
+		t.Fatalf("GetAccountByID failed: %v", err)
+	}
+	if accountAfter.Gold != 15 {
+		t.Fatalf("expected persisted account gold 15, got %d", accountAfter.Gold)
+	}
+	entries, err := service.ListGoldLedger(GoldLedgerFilter{AccountID: account.ID, RefType: "test_gold_effect"})
+	if err != nil {
+		t.Fatalf("ListGoldLedger failed: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Amount != 12 || entries[0].BalanceAfter != 15 {
+		t.Fatalf("expected one gold ledger entry, got %+v", entries)
+	}
+}

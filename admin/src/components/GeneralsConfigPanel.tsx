@@ -1,55 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Users, Save, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
+import { Users, Save, ChevronDown, ChevronUp, AlertCircle, Plus, Trash2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
-
-// 将领配置结构
-interface GeneralTraitConfig {
-  traitId: string
-  enabled: boolean
-  params: Record<string, number>
-}
-
-interface GeneralHeroConfig {
-  id: string
-  name: string
-  faction: string
-  title: string
-  rarity: string
-  enabled: boolean
-  buffs: Record<string, number>
-  traits: GeneralTraitConfig[]
-}
-
-interface GeneralsCommonConfig {
-  expCurve: number[]
-  levelBuffs: Record<number, Record<string, number>>
-}
-
-interface GeneralsConfig {
-  enabled: boolean
-  common: GeneralsCommonConfig
-  heroes: Record<string, GeneralHeroConfig>
-}
-
-// 特性元信息（从特性注册表获取）
-interface TraitMeta {
-  id: string
-  name: string
-  description: string
-  paramSchema: Array<{
-    key: string
-    label: string
-    description: string
-    default: number
-    min: number
-    max: number
-    step: number
-  }>
-}
-
-interface TraitRegistryResponse {
-  traits: TraitMeta[]
-}
+import type { GeneralHeroConfig, GeneralsConfig, GeneralTraitConfig, TraitMeta } from '@/types'
 
 const RARITY_LABELS: Record<string, string> = {
   common: '普通',
@@ -77,7 +29,13 @@ const BUFF_LABELS: Record<string, string> = {
   defenseBonus: '防御加成',
   economyBonus: '经济加成',
   militaryBonus: '军事加成',
+  capacityBonus: '容量加成',
+  recruitSpeedBonus: '征兵速度',
+  marchSpeedBonus: '行军速度',
+  buildSpeedBonus: '建造速度',
 }
+
+const BUFF_OPTIONS = Object.keys(BUFF_LABELS)
 
 export default function GeneralsConfigPanel() {
   const [config, setConfig] = useState<GeneralsConfig | null>(null)
@@ -98,8 +56,8 @@ export default function GeneralsConfigPanel() {
     ])
       .then(([configData, registryData]) => {
         if (!cancelled) {
-          setConfig(configData as GeneralsConfig)
-          setTraitRegistry((registryData as TraitRegistryResponse).traits)
+          setConfig(configData)
+          setTraitRegistry(registryData.traits)
         }
       })
       .catch((err) => {
@@ -118,7 +76,7 @@ export default function GeneralsConfigPanel() {
     setError(null)
     try {
       const result = await adminApi.updateGeneralsConfig(config)
-      setConfig(result as GeneralsConfig)
+      setConfig(result)
       setMessage('将领配置已保存')
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败')
@@ -175,6 +133,44 @@ export default function GeneralsConfigPanel() {
     })
   }
 
+  const updateTraitId = (heroId: string, traitIndex: number, traitId: string) => {
+    if (!config) return
+    const hero = config.heroes[heroId]
+    const meta = traitRegistry.find((item) => item.id === traitId)
+    const params = Object.fromEntries((meta?.paramSchema ?? []).map((field) => [field.key, field.default]))
+    const traits = [...hero.traits]
+    traits[traitIndex] = { traitId, enabled: true, params }
+    setConfig({
+      ...config,
+      heroes: { ...config.heroes, [heroId]: { ...hero, traits } },
+    })
+  }
+
+  const addTrait = (heroId: string) => {
+    if (!config) return
+    const hero = config.heroes[heroId]
+    const meta = traitRegistry.find((item) => !hero.traits.some((trait) => trait.traitId === item.id)) ?? traitRegistry[0]
+    if (!meta) return
+    const nextTrait: GeneralTraitConfig = {
+      traitId: meta.id,
+      enabled: true,
+      params: Object.fromEntries(meta.paramSchema.map((field) => [field.key, field.default])),
+    }
+    setConfig({
+      ...config,
+      heroes: { ...config.heroes, [heroId]: { ...hero, traits: [...hero.traits, nextTrait] } },
+    })
+  }
+
+  const removeTrait = (heroId: string, traitIndex: number) => {
+    if (!config) return
+    const hero = config.heroes[heroId]
+    setConfig({
+      ...config,
+      heroes: { ...config.heroes, [heroId]: { ...hero, traits: hero.traits.filter((_, index) => index !== traitIndex) } },
+    })
+  }
+
   const updateHeroBuff = (heroId: string, buffKey: string, value: number) => {
     if (!config) return
     const hero = config.heroes[heroId]
@@ -188,6 +184,70 @@ export default function GeneralsConfigPanel() {
         },
       },
     })
+  }
+
+  const updateHeroField = <K extends keyof GeneralHeroConfig,>(heroId: string, field: K, value: GeneralHeroConfig[K]) => {
+    if (!config) return
+    const hero = config.heroes[heroId]
+    setConfig({
+      ...config,
+      heroes: { ...config.heroes, [heroId]: { ...hero, [field]: value } },
+    })
+  }
+
+  const addHeroBuff = (heroId: string) => {
+    if (!config) return
+    const hero = config.heroes[heroId]
+    const buffKey = BUFF_OPTIONS.find((key) => !(key in hero.buffs)) ?? `customBuff${Object.keys(hero.buffs).length + 1}`
+    setConfig({
+      ...config,
+      heroes: { ...config.heroes, [heroId]: { ...hero, buffs: { ...hero.buffs, [buffKey]: 0 } } },
+    })
+  }
+
+  const removeHeroBuff = (heroId: string, buffKey: string) => {
+    if (!config) return
+    const hero = config.heroes[heroId]
+    const buffs = { ...hero.buffs }
+    delete buffs[buffKey]
+    setConfig({
+      ...config,
+      heroes: { ...config.heroes, [heroId]: { ...hero, buffs } },
+    })
+  }
+
+  const updateLevelBuff = (level: string, buffKey: string, value: number) => {
+    if (!config) return
+    setConfig({
+      ...config,
+      common: {
+        ...config.common,
+        levelBuffs: {
+          ...config.common.levelBuffs,
+          [level]: { ...(config.common.levelBuffs[level] ?? {}), [buffKey]: value },
+        },
+      },
+    })
+  }
+
+  const addLevelBuff = () => {
+    if (!config) return
+    const existing = Object.keys(config.common.levelBuffs).map(Number).filter(Number.isFinite)
+    const level = String((existing.length > 0 ? Math.max(...existing) : 0) + 1)
+    setConfig({
+      ...config,
+      common: {
+        ...config.common,
+        levelBuffs: { ...config.common.levelBuffs, [level]: { productionBonus: 0 } },
+      },
+    })
+  }
+
+  const removeLevelBuff = (level: string) => {
+    if (!config) return
+    const levelBuffs = { ...config.common.levelBuffs }
+    delete levelBuffs[level]
+    setConfig({ ...config, common: { ...config.common, levelBuffs } })
   }
 
   const updateExpCurve = (value: string) => {
@@ -279,6 +339,44 @@ export default function GeneralsConfigPanel() {
         </p>
       </div>
 
+      <div className="mb-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="text-xs font-bold text-[var(--color-text-primary)]">等级通用加成</span>
+          <button type="button" onClick={addLevelBuff} className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-[10px] font-bold text-[var(--color-accent)]">
+            <Plus size={10} />
+            添加等级
+          </button>
+        </div>
+        <div className="grid gap-2 md:grid-cols-2">
+          {Object.entries(config.common.levelBuffs)
+            .sort(([a], [b]) => Number(a) - Number(b))
+            .map(([level, buffs]) => (
+              <div key={level} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-[var(--color-text-muted)]">Lv.{level}</span>
+                  <button type="button" onClick={() => removeLevelBuff(level)} className="grid h-6 w-6 place-items-center rounded text-red-500 hover:bg-red-500/10">
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {BUFF_OPTIONS.map((buffKey) => (
+                    <label key={buffKey} className="grid gap-0.5">
+                      <span className="text-[9px] text-[var(--color-text-muted)]">{BUFF_LABELS[buffKey]}</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={buffs[buffKey] ?? 0}
+                        onChange={(e) => updateLevelBuff(level, buffKey, parseFloat(e.target.value) || 0)}
+                        className="h-6 rounded border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-1.5 text-[11px] text-[var(--color-text-primary)]"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+        </div>
+      </div>
+
       <div className="flex gap-2 mb-4 border-b border-[var(--color-border)]">
         {(['wei', 'shu', 'wu'] as const).map((faction) => (
           <button
@@ -361,36 +459,53 @@ export default function GeneralsConfigPanel() {
               {/* Hero Details (Expanded) */}
               {isExpanded && (
                 <div className="px-3.5 pb-3.5 space-y-3 border-t border-[var(--color-border)]">
+                  <div className="grid gap-2 pt-3 md:grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(110px,0.7fr)_minmax(110px,0.7fr)]">
+                    <input value={hero.name} onChange={(e) => updateHeroField(hero.id, 'name', e.target.value)} className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-primary)]" />
+                    <input value={hero.title} onChange={(e) => updateHeroField(hero.id, 'title', e.target.value)} className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-primary)]" />
+                    <select value={hero.faction} onChange={(e) => updateHeroField(hero.id, 'faction', e.target.value)} className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-primary)]">
+                      {Object.entries(FACTION_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                      {!FACTION_LABELS[hero.faction] && <option value={hero.faction}>{hero.faction}</option>}
+                    </select>
+                    <select value={hero.rarity} onChange={(e) => updateHeroField(hero.id, 'rarity', e.target.value)} className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-primary)]">
+                      {Object.entries(RARITY_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                      {!RARITY_LABELS[hero.rarity] && <option value={hero.rarity}>{hero.rarity}</option>}
+                    </select>
+                  </div>
                   {/* Buffs */}
-                  {Object.keys(hero.buffs).length > 0 && (
-                    <div className="pt-3">
+                  <div>
+                    <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
                         固定属性加成
                       </span>
+                      <button type="button" onClick={() => addHeroBuff(hero.id)} className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-[10px] font-bold text-[var(--color-accent)]">
+                        <Plus size={10} />
+                        添加
+                      </button>
+                    </div>
                       <div className="grid grid-cols-3 gap-2 mt-1.5">
                         {Object.entries(hero.buffs).map(([buffKey, value]) => (
                           <label key={buffKey} className="grid gap-0.5">
-                            <span className="text-[10px] text-[var(--color-text-muted)]">
+                            <span className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)]">
                               {BUFF_LABELS[buffKey] || buffKey}
+                              <button type="button" onClick={() => removeHeroBuff(hero.id, buffKey)} className="text-red-500">
+                                <Trash2 size={10} />
+                              </button>
                             </span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={value}
-                              onChange={(e) => updateHeroBuff(hero.id, buffKey, parseFloat(e.target.value) || 0)}
-                              className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
-                            />
+                            <input type="number" step="0.01" value={value} onChange={(e) => updateHeroBuff(hero.id, buffKey, parseFloat(e.target.value) || 0)} className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
                           </label>
                         ))}
                       </div>
-                    </div>
-                  )}
+                  </div>
 
                   {/* Traits */}
                   <div>
-                    <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
-                      特性配置
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">特性配置</span>
+                      <button type="button" onClick={() => addTrait(hero.id)} className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-[10px] font-bold text-[var(--color-accent)]">
+                        <Plus size={10} />
+                        添加特性
+                      </button>
+                    </div>
                     <div className="space-y-2 mt-1.5">
                       {hero.traits.map((trait, traitIndex) => {
                         const meta = traitMetas[traitIndex]
@@ -411,9 +526,10 @@ export default function GeneralsConfigPanel() {
                             {/* Trait Header */}
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-[var(--color-text-primary)]">
-                                  {meta?.name || trait.traitId}
-                                </span>
+                                <select value={trait.traitId} onChange={(e) => updateTraitId(hero.id, traitIndex, e.target.value)} className="h-7 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs font-bold text-[var(--color-text-primary)]">
+                                  {traitRegistry.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                                  {!meta && <option value={trait.traitId}>{trait.traitId}</option>}
+                                </select>
                                 {hasInvalidParams && (
                                   <span className="flex items-center gap-1 text-[10px] text-amber-600">
                                     <AlertCircle size={12} />
@@ -430,6 +546,9 @@ export default function GeneralsConfigPanel() {
                                 />
                                 <span className="text-[10px] text-[var(--color-text-muted)]">启用</span>
                               </label>
+                              <button type="button" onClick={() => removeTrait(hero.id, traitIndex)} className="grid h-7 w-7 place-items-center rounded text-red-500 hover:bg-red-500/10">
+                                <Trash2 size={12} />
+                              </button>
                             </div>
 
                             {/* Trait Description */}

@@ -1,22 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Flag, Save } from 'lucide-react'
+import { Flag, Save, Plus, Trash2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
-
-interface GeneralInfo {
-  id: string
-  name: string
-  title: string
-}
-
-interface FactionConfig {
-  name: string
-  description: string
-  icon: string
-  traits: Record<string, number>
-  generals: GeneralInfo[]
-}
-
-type FactionsConfig = Record<string, FactionConfig>
+import type { FactionConfig, FactionGeneralInfo, FactionsConfig } from '@/types'
 
 const TRAIT_LABELS: Record<string, string> = {
   economyBonus: '经济加成',
@@ -67,6 +52,31 @@ export default function FactionsConfigPanel() {
     })
   }
 
+  const updateFactionField = <K extends keyof FactionConfig,>(factionId: string, field: K, value: FactionConfig[K]) => {
+    if (!config) return
+    setConfig({
+      ...config,
+      [factionId]: { ...config[factionId], [field]: value },
+    })
+  }
+
+  const updateGeneral = <K extends keyof FactionGeneralInfo,>(factionId: string, index: number, field: K, value: FactionGeneralInfo[K]) => {
+    if (!config) return
+    const generals = [...config[factionId].generals]
+    generals[index] = { ...generals[index], [field]: value }
+    updateFactionField(factionId, 'generals', generals)
+  }
+
+  const addGeneral = (factionId: string) => {
+    if (!config) return
+    updateFactionField(factionId, 'generals', [...config[factionId].generals, { id: '', name: '新将领', title: '' }])
+  }
+
+  const removeGeneral = (factionId: string, index: number) => {
+    if (!config) return
+    updateFactionField(factionId, 'generals', config[factionId].generals.filter((_, idx) => idx !== index))
+  }
+
   if (loading) return <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4"><p className="text-sm text-[var(--color-text-muted)]">加载中...</p></div>
 
   if (!config) return <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4"><p className="text-sm text-red-600">{error ?? '加载失败'}</p></div>
@@ -98,9 +108,25 @@ export default function FactionsConfigPanel() {
               <span className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--color-accent-light)] text-[var(--color-accent)] text-xs font-black uppercase">
                 {factionId.slice(0, 2)}
               </span>
-              <div>
-                <strong className="text-sm text-[var(--color-text-primary)]">{faction.name}</strong>
-                <p className="text-[11px] text-[var(--color-text-muted)]">{faction.description}</p>
+              <div className="grid flex-1 gap-2 md:grid-cols-[minmax(120px,0.7fr)_minmax(180px,1.4fr)_minmax(80px,0.45fr)]">
+                <input
+                  type="text"
+                  value={faction.name}
+                  onChange={(e) => updateFactionField(factionId, 'name', e.target.value)}
+                  className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm font-bold text-[var(--color-text-primary)]"
+                />
+                <input
+                  type="text"
+                  value={faction.description}
+                  onChange={(e) => updateFactionField(factionId, 'description', e.target.value)}
+                  className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-primary)]"
+                />
+                <input
+                  type="text"
+                  value={faction.icon}
+                  onChange={(e) => updateFactionField(factionId, 'icon', e.target.value)}
+                  className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-primary)]"
+                />
               </div>
             </div>
 
@@ -125,13 +151,23 @@ export default function FactionsConfigPanel() {
 
             {/* Generals */}
             <div>
-              <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">将领 ({faction.generals.length})</span>
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {faction.generals.map((g) => (
-                  <span key={g.id} className="px-2 py-1 rounded-lg text-[11px] font-bold bg-[var(--color-gold-soft)] text-amber-700">
-                    {g.name}
-                    <span className="ml-1 text-[10px] font-normal text-amber-600/70">{g.title}</span>
-                  </span>
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">将领 ({faction.generals.length})</span>
+                <button type="button" onClick={() => addGeneral(factionId)} className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-[10px] font-bold text-[var(--color-accent)]">
+                  <Plus size={10} />
+                  添加
+                </button>
+              </div>
+              <div className="grid gap-1.5">
+                {faction.generals.map((g, index) => (
+                  <div key={`${g.id}-${index}`} className="grid gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 md:grid-cols-[minmax(120px,1fr)_minmax(100px,1fr)_minmax(100px,1fr)_28px]">
+                    <input value={g.id} onChange={(e) => updateGeneral(factionId, index, 'id', e.target.value)} placeholder="general id" className="h-7 rounded border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-2 text-xs text-[var(--color-text-primary)]" />
+                    <input value={g.name} onChange={(e) => updateGeneral(factionId, index, 'name', e.target.value)} placeholder="名称" className="h-7 rounded border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-2 text-xs text-[var(--color-text-primary)]" />
+                    <input value={g.title} onChange={(e) => updateGeneral(factionId, index, 'title', e.target.value)} placeholder="称号" className="h-7 rounded border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-2 text-xs text-[var(--color-text-primary)]" />
+                    <button type="button" onClick={() => removeGeneral(factionId, index)} className="grid h-7 place-items-center rounded text-red-500 hover:bg-red-500/10">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
