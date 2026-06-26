@@ -44,6 +44,11 @@ var (
 	ErrMailRecipientSelf     = errors.New("cannot send mail to yourself")
 	ErrAnnouncementNotFound  = errors.New("announcement not found")
 	ErrInvalidAnnouncement   = errors.New("invalid announcement")
+	ErrMarchNotFound         = errors.New("march not found")
+	ErrInvalidMarch          = errors.New("invalid march")
+	ErrMarchNotDue           = errors.New("march is not due")
+	ErrMarchNotAccelerable   = errors.New("march cannot be accelerated")
+	ErrSameAccountTarget     = errors.New("cannot attack another save under the same account")
 	ErrMiniGameNotFound      = errors.New("minigame record not found")
 	ErrInvalidMiniGame       = errors.New("invalid minigame record")
 	ErrInvalidBait           = errors.New("invalid fishing bait")
@@ -345,6 +350,8 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 	if playerID == "" {
 		return GameState{}, ErrPlayerNotFound
 	}
+	now := time.Now()
+	_ = s.SettleDueMarches(now)
 
 	state, err := s.repo.GetState(playerID)
 	if err != nil {
@@ -355,7 +362,7 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 		applyHeroConfigToGeneral(state.General)
 	}
 
-	state, changed := settleResources(state, time.Now())
+	state, changed := settleResources(state, now)
 	if strings.TrimSpace(state.Player.MailCode) == "" {
 		mailCode, codeErr := s.generateMailCode(state.Player.Nickname)
 		if codeErr != nil {
@@ -386,7 +393,7 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 	}
 
 	if changed {
-		if err := s.repo.SaveState(state, time.Now()); err != nil {
+		if err := s.repo.SaveState(state, now); err != nil {
 			return GameState{}, err
 		}
 	}
@@ -399,7 +406,7 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 	s.attachReportSummary(&state, playerID)
 	s.attachMailSummary(&state, playerID)
 
-	hydrateStateForResponse(&state, time.Now())
+	hydrateStateForResponse(&state, now)
 
 	return state, nil
 }

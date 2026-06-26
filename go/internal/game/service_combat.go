@@ -4,6 +4,7 @@ package game
 import (
 	"errors"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -41,10 +42,16 @@ type AttackPlayerRequest struct {
 	Units          map[string]int `json:"units"`
 }
 
-// AttackPlayerResponse 返回玩家互攻战报和攻击方最新状态。
+// AttackPlayerResponse 返回已创建的 PVP 行军和攻击方最新状态。
 type AttackPlayerResponse struct {
-	BattleReport BattleReport `json:"battleReport"`
-	State        GameState    `json:"state"`
+	MarchID         string         `json:"marchId"`
+	StartedAt       string         `json:"startedAt"`
+	ArrivesAt       string         `json:"arrivesAt"`
+	DurationSeconds int            `json:"durationSeconds"`
+	SlowestSpeed    int            `json:"slowestSpeed"`
+	Units           map[string]int `json:"units"`
+	March           PvpMarch       `json:"march"`
+	State           GameState      `json:"state"`
 }
 
 // ReinforcePlayerRequest 玩家增援其他玩家的请求。
@@ -362,91 +369,9 @@ func (s *Service) ReinforcePlayer(req ReinforcePlayerRequest) (ReinforcePlayerRe
 	}, nil
 }
 
-// AttackPlayer 执行玩家之间的基础攻城战斗，防守方主军队和驻防军队共同参战。
+// AttackPlayer 创建玩家互攻行军，战斗在行军到达后统一结算。
 func (s *Service) AttackPlayer(req AttackPlayerRequest) (AttackPlayerResponse, error) {
-	playerID := strings.TrimSpace(req.PlayerID)
-	targetPlayerID := strings.TrimSpace(req.TargetPlayerID)
-	mode := strings.TrimSpace(req.Mode)
-	if playerID == "" {
-		return AttackPlayerResponse{}, ErrPlayerNotFound
-	}
-	if targetPlayerID == "" || targetPlayerID == playerID {
-		return AttackPlayerResponse{}, ErrInvalidPlayerTarget
-	}
-	if mode == "" {
-		mode = "attack"
-	}
-	if mode != "attack" && mode != "plunder" {
-		mode = "attack"
-	}
-
-	attackerState, err := s.repo.GetState(playerID)
-	if err != nil {
-		return AttackPlayerResponse{}, err
-	}
-	if isNpcTargetID(attackerState, targetPlayerID) {
-		return AttackPlayerResponse{}, ErrInvalidPlayerTarget
-	}
-	defenderState, err := s.repo.GetState(targetPlayerID)
-	if err != nil {
-		return AttackPlayerResponse{}, err
-	}
-	if attackerState.General != nil {
-		applyHeroConfigToGeneral(attackerState.General)
-	}
-	if defenderState.General != nil {
-		applyHeroConfigToGeneral(defenderState.General)
-	}
-
-	now := time.Now()
-	attackerState, _ = settleResources(attackerState, now)
-	defenderState, _ = settleResources(defenderState, now)
-	attackerUnits, err := validateAndConsumeArmy(&attackerState, req.Units)
-	if err != nil {
-		return AttackPlayerResponse{}, err
-	}
-	defenderUnits, defenderSources := buildPlayerDefenseCombatUnits(defenderState, now)
-	if len(defenderUnits) == 0 {
-		defenderUnits = []combat.Unit{}
-	}
-
-	ruleID := "official_attack"
-	if mode == "plunder" {
-		ruleID = "official_plunder"
-	}
-	input := combat.CombatInput{
-		RuleID:   ruleID,
-		Attacker: buildCombatArmy(attackerState.Player.Faction, attackerUnits),
-		Defender: buildCombatArmy(defenderState.Player.Faction, defenderUnits),
-	}
-	result := combat.Resolve(input)
-	report := applyPlayerBattleResult(&attackerState, &defenderState, result, attackerUnits, defenderSources, mode, now)
-
-	nowStr := now.UTC().Format(resourceDateLayout)
-	attackerState.ServerTime = nowStr
-	defenderState.ServerTime = nowStr
-	if err := s.repo.SaveStates([]GameState{attackerState, defenderState}, now); err != nil {
-		return AttackPlayerResponse{}, err
-	}
-	if err := s.repo.SaveReport(report); err != nil {
-		slog.Warn("player battle report save failed", "error", err, "reportId", report.ID)
-	}
-	defenderReport := report
-	defenderReport.ID = "br_" + randomID(8)
-	defenderReport.PlayerID = defenderState.Player.ID
-	defenderReport.PlayerFaction = defenderState.Player.Faction
-	defenderReport.PlayerName = defenderState.Player.Nickname
-	defenderReport.TargetID = attackerState.Player.ID
-	defenderReport.TargetName = attackerState.Player.Nickname
-	if err := s.repo.SaveReport(defenderReport); err != nil {
-		slog.Warn("player defense report save failed", "error", err, "reportId", defenderReport.ID)
-	}
-
-	s.attachReportSummary(&attackerState, attackerState.Player.ID)
-	return AttackPlayerResponse{
-		BattleReport: report,
-		State:        attackerState,
-	}, nil
+	return s.StartPvpAttack(req)
 }
 
 // SimulateBattle 使用和 NPC 进攻一致的战斗规则计算结果，但不改变任何玩家状态。
@@ -1151,6 +1076,7 @@ func applyPlayerBattleResult(attackerState *GameState, defenderState *GameState,
 
 	defenderUnits := mergeArmyMaps(armySliceToMap(defenderState.Army), armySliceToMap(defenderState.GarrisonArmy))
 	defenderGarrisonUnits := armySliceToMap(defenderState.GarrisonArmy)
+	defenderNoGuard := totalMapAmount(defenderUnits) == 0
 	lossByCombatID := map[string]int{}
 	for _, loss := range result.DefenderLosses {
 		lossByCombatID[loss.ID] = loss.Losses
@@ -1177,21 +1103,25 @@ func applyPlayerBattleResult(attackerState *GameState, defenderState *GameState,
 	cleanArmyUnits(&defenderState.Army)
 	cleanArmyUnits(&defenderState.GarrisonArmy)
 
-	totalDefenderBefore := 0
-	for _, amount := range defenderUnits {
-		totalDefenderBefore += amount
+	plundered := map[string]int{}
+	if result.Winner == "attacker" && result.SurvivingCarry > 0 {
+		plundered = calculatePlayerPlunder(defenderState.Resources.Items, result.SurvivingCarry)
+		for resType, amount := range plundered {
+			if amount <= 0 {
+				continue
+			}
+			defenderState.Resources.Items[resType] -= amount
+			if defenderState.Resources.Items[resType] < 0 {
+				defenderState.Resources.Items[resType] = 0
+			}
+			attackerState.Resources.Items[resType] += amount
+			if cap := attackerState.Resources.Capacity[resType]; cap > 0 && attackerState.Resources.Items[resType] > cap {
+				attackerState.Resources.Items[resType] = cap
+			}
+		}
 	}
-	totalDefenderLost := 0
-	for _, amount := range defenderLostUnits {
-		totalDefenderLost += amount
-	}
-	defenderRevealed := totalDefenderBefore == 0 || float64(totalDefenderLost)/float64(totalDefenderBefore) >= 0.25
-	if !defenderRevealed {
-		defenderUnits = map[string]int{}
-		defenderGarrisonUnits = map[string]int{}
-		defenderLostUnits = map[string]int{}
-		defenderGarrisonLostUnits = map[string]int{}
-	}
+
+	defenderRevealed := true
 
 	reportResult := "attacker_victory"
 	if result.Winner == "defender" {
@@ -1217,12 +1147,83 @@ func applyPlayerBattleResult(attackerState *GameState, defenderState *GameState,
 		DefenderGarrisonUnits:     defenderGarrisonUnits,
 		DefenderLostUnits:         defenderLostUnits,
 		DefenderGarrisonLostUnits: defenderGarrisonLostUnits,
+		DefenderNoGuard:           defenderNoGuard,
 		DefenderRevealed:          defenderRevealed,
 		DefenderResources:         copyResources(defenderState.Resources.Items),
-		Rewards:                   map[string]int{},
+		Rewards:                   plundered,
 		Read:                      false,
 		CreatedAt:                 nowStr,
 	}
+}
+
+func calculatePlayerPlunder(resources map[string]int, carryCapacity int) map[string]int {
+	if carryCapacity <= 0 {
+		return map[string]int{}
+	}
+	total := 0
+	for _, amount := range resources {
+		if amount > 0 {
+			total += amount
+		}
+	}
+	if total <= 0 {
+		return map[string]int{}
+	}
+	effectiveCarry := carryCapacity
+	if effectiveCarry > total {
+		effectiveCarry = total
+	}
+	plundered := map[string]int{}
+	assigned := 0
+	type entry struct {
+		key      string
+		amount   int
+		fraction float64
+	}
+	entries := []entry{}
+	for resType, amount := range resources {
+		if amount <= 0 {
+			continue
+		}
+		exact := float64(effectiveCarry) * float64(amount) / float64(total)
+		whole := int(exact)
+		if whole > amount {
+			whole = amount
+		}
+		plundered[resType] = whole
+		assigned += whole
+		entries = append(entries, entry{key: resType, amount: amount, fraction: exact - float64(whole)})
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		return entries[i].fraction > entries[j].fraction
+	})
+	remaining := effectiveCarry - assigned
+	for remaining > 0 {
+		changed := false
+		for _, item := range entries {
+			if remaining <= 0 {
+				break
+			}
+			if plundered[item.key] >= item.amount {
+				continue
+			}
+			plundered[item.key]++
+			remaining--
+			changed = true
+		}
+		if !changed {
+			break
+		}
+	}
+	return plundered
+}
+
+func totalMapAmount(values map[string]int) int {
+	total := 0
+	for _, amount := range values {
+		total += amount
+	}
+	return total
 }
 
 func calculatePlunder(npc *NpcCity, carryCapacity int) map[string]int {
@@ -1446,6 +1447,7 @@ func (s *Service) ListReports(playerID string, page int, pageSize int) (BattleRe
 	if pageSize > 50 {
 		pageSize = 50
 	}
+	_ = s.SettleDueMarches(time.Now())
 
 	offset := (page - 1) * pageSize
 	reports, total, err := s.repo.ListReports(playerID, pageSize, offset)

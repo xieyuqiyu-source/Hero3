@@ -45,6 +45,14 @@ type Repository interface {
 	DeleteAllReports(playerID string) error
 	CountUnreadReports(playerID string) (int, error)
 
+	// Marches
+	CreateMarch(march PvpMarch) error
+	UpdateMarch(march PvpMarch) error
+	GetMarchByID(marchID string) (PvpMarch, error)
+	ListMarchesForPlayer(playerID string) ([]PvpMarch, error)
+	ListDueMarches(now time.Time, limit int) ([]PvpMarch, error)
+	ClaimMarchForResolution(marchID string, now time.Time) (PvpMarch, error)
+
 	// Mails
 	SaveMail(mail Mail) error
 	GetMailByID(mailID string) (Mail, error)
@@ -82,7 +90,8 @@ type MemoryRepository struct {
 	players           map[string]GameState
 	playerUpdatedAt   map[string]time.Time
 	reports           map[string][]BattleReport // playerID → reports
-	mails             map[string][]Mail         // playerID → mails
+	marches           map[string]PvpMarch
+	mails             map[string][]Mail // playerID → mails
 	announcements     map[string]Announcement
 	announcementReads map[string]map[string]time.Time
 	miniGameRecords   map[string][]MiniGameRecord // playerID → records
@@ -98,6 +107,7 @@ func NewMemoryRepository() *MemoryRepository {
 		players:           make(map[string]GameState),
 		playerUpdatedAt:   make(map[string]time.Time),
 		reports:           make(map[string][]BattleReport),
+		marches:           make(map[string]PvpMarch),
 		mails:             make(map[string][]Mail),
 		announcements:     make(map[string]Announcement),
 		announcementReads: make(map[string]map[string]time.Time),
@@ -582,6 +592,101 @@ func (r *MemoryRepository) CountUnreadReports(playerID string) (int, error) {
 		}
 	}
 	return count, nil
+}
+
+// --- March Methods (MemoryRepository) ---
+
+func (r *MemoryRepository) CreateMarch(march PvpMarch) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if march.ID == "" {
+		return ErrInvalidMarch
+	}
+	r.marches[march.ID] = march
+	return nil
+}
+
+func (r *MemoryRepository) UpdateMarch(march PvpMarch) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.marches[march.ID]; !exists {
+		return ErrMarchNotFound
+	}
+	r.marches[march.ID] = march
+	return nil
+}
+
+func (r *MemoryRepository) GetMarchByID(marchID string) (PvpMarch, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	march, exists := r.marches[marchID]
+	if !exists {
+		return PvpMarch{}, ErrMarchNotFound
+	}
+	return march, nil
+}
+
+func (r *MemoryRepository) ListMarchesForPlayer(playerID string) ([]PvpMarch, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	marches := []PvpMarch{}
+	for _, march := range r.marches {
+		if march.AttackerPlayerID == playerID || march.DefenderPlayerID == playerID {
+			marches = append(marches, march)
+		}
+	}
+	sortMarches(marches)
+	return marches, nil
+}
+
+func (r *MemoryRepository) ListDueMarches(now time.Time, limit int) ([]PvpMarch, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if limit <= 0 {
+		limit = 100
+	}
+	marches := []PvpMarch{}
+	for _, march := range r.marches {
+		if march.Status != MarchStatusMarching {
+			continue
+		}
+		arrivesAt, ok := parseMarchTime(march.ArrivesAt)
+		if !ok || arrivesAt.After(now.UTC()) {
+			continue
+		}
+		marches = append(marches, march)
+	}
+	sortMarchesByArrival(marches)
+	if len(marches) > limit {
+		marches = marches[:limit]
+	}
+	return marches, nil
+}
+
+func (r *MemoryRepository) ClaimMarchForResolution(marchID string, now time.Time) (PvpMarch, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	march, exists := r.marches[marchID]
+	if !exists {
+		return PvpMarch{}, ErrMarchNotFound
+	}
+	if march.Status != MarchStatusMarching {
+		return PvpMarch{}, ErrMarchNotDue
+	}
+	arrivesAt, ok := parseMarchTime(march.ArrivesAt)
+	if !ok || arrivesAt.After(now.UTC()) {
+		return PvpMarch{}, ErrMarchNotDue
+	}
+	march.Status = MarchStatusResolving
+	march.UpdatedAt = now.UTC().Format(resourceDateLayout)
+	r.marches[march.ID] = march
+	return march, nil
 }
 
 // --- Mail Methods (MemoryRepository) ---

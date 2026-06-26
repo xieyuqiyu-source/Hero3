@@ -209,6 +209,7 @@ func setTestCombatUnitsConfig(t *testing.T) {
 					"attack":          10,
 					"infantryDefense": 10,
 					"cavalryDefense":  8,
+					"speed":           6,
 					"carryCapacity":   5,
 					"upkeep":          1,
 				},
@@ -220,6 +221,7 @@ func setTestCombatUnitsConfig(t *testing.T) {
 					"attack":          14,
 					"infantryDefense": 8,
 					"cavalryDefense":  10,
+					"speed":           10,
 					"carryCapacity":   6,
 					"upkeep":          2,
 				},
@@ -233,6 +235,7 @@ func setTestCombatUnitsConfig(t *testing.T) {
 					"attack":          9,
 					"infantryDefense": 9,
 					"cavalryDefense":  7,
+					"speed":           6,
 					"carryCapacity":   5,
 					"upkeep":          1,
 				},
@@ -1639,19 +1642,23 @@ func TestAttackPlayerUsesGarrisonAndDeductsGarrisonLosses(t *testing.T) {
 	svc := NewService()
 	repo := svc.repo.(*MemoryRepository)
 	now := time.Now()
-	account := Account{ID: "acc_attack_garrison", Username: "attack_garrison", PasswordHash: "x", CreatedAt: now}
-	if err := repo.CreateAccount(account); err != nil {
-		t.Fatalf("create account: %v", err)
+	attackerAccount := Account{ID: "acc_attack_garrison_attacker", Username: "attack_garrison_attacker", PasswordHash: "x", CreatedAt: now}
+	defenderAccount := Account{ID: "acc_attack_garrison_defender", Username: "attack_garrison_defender", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(attackerAccount); err != nil {
+		t.Fatalf("create attacker account: %v", err)
+	}
+	if err := repo.CreateAccount(defenderAccount); err != nil {
+		t.Fatalf("create defender account: %v", err)
 	}
 	attacker := newPlayerState("player_attack_garrison_attacker", "Attacker", "wei", "caocao", now)
 	attacker.Army = []ArmyUnit{{UnitType: "weiCavalry", Amount: 200}}
 	defender := newPlayerState("player_attack_garrison_defender", "Defender", "wei", "caocao", now)
 	defender.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 10}}
 	defender.GarrisonArmy = []ArmyUnit{{UnitType: "weiInfantry", Amount: 90}}
-	if err := repo.CreatePlayer(account.ID, attacker, now); err != nil {
+	if err := repo.CreatePlayer(attackerAccount.ID, attacker, now); err != nil {
 		t.Fatalf("create attacker: %v", err)
 	}
-	if err := repo.CreatePlayer(account.ID, defender, now); err != nil {
+	if err := repo.CreatePlayer(defenderAccount.ID, defender, now); err != nil {
 		t.Fatalf("create defender: %v", err)
 	}
 
@@ -1664,8 +1671,29 @@ func TestAttackPlayerUsesGarrisonAndDeductsGarrisonLosses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AttackPlayer failed: %v", err)
 	}
-	if result.BattleReport.EnemyPower <= 100 {
-		t.Fatalf("expected garrison to contribute to defense power, got %d", result.BattleReport.EnemyPower)
+	if result.MarchID == "" || result.March.Status != MarchStatusMarching {
+		t.Fatalf("expected marching result, got %+v", result)
+	}
+	storedAttacker, _ := repo.GetState(attacker.Player.ID)
+	if armyUnitAmount(storedAttacker.Army, "weiCavalry") != 0 {
+		t.Fatalf("expected dispatched army deducted before arrival, got %+v", storedAttacker.Army)
+	}
+	reportsBefore, totalBefore, err := repo.ListReports(attacker.Player.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list reports before settlement: %v", err)
+	}
+	if totalBefore != 0 || len(reportsBefore) != 0 {
+		t.Fatalf("expected no battle reports before arrival, got total=%d reports=%+v", totalBefore, reportsBefore)
+	}
+
+	march := result.March
+	settleAt := now.Add(time.Minute)
+	march.ArrivesAt = settleAt.Add(-time.Second).UTC().Format(time.RFC3339)
+	if err := repo.UpdateMarch(march); err != nil {
+		t.Fatalf("update march arrival: %v", err)
+	}
+	if err := svc.SettleDueMarches(settleAt); err != nil {
+		t.Fatalf("SettleDueMarches failed: %v", err)
 	}
 	storedDefender, _ := repo.GetState(defender.Player.ID)
 	if armyUnitAmount(storedDefender.GarrisonArmy, "weiInfantry") != 0 {
@@ -1674,8 +1702,18 @@ func TestAttackPlayerUsesGarrisonAndDeductsGarrisonLosses(t *testing.T) {
 	if armyUnitAmount(storedDefender.Army, "weiInfantry") != 0 {
 		t.Fatalf("expected main army losses deducted separately, got %+v", storedDefender.Army)
 	}
-	if result.BattleReport.DefenderGarrisonLostUnits["weiInfantry"] != 90 {
-		t.Fatalf("expected report to track garrison losses, got %+v", result.BattleReport.DefenderGarrisonLostUnits)
+	reportsAfter, totalAfter, err := repo.ListReports(attacker.Player.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("list reports after settlement: %v", err)
+	}
+	if totalAfter != 1 || len(reportsAfter) != 1 {
+		t.Fatalf("expected one attacker report after settlement, got total=%d reports=%+v", totalAfter, reportsAfter)
+	}
+	if reportsAfter[0].EnemyPower <= 100 {
+		t.Fatalf("expected garrison to contribute to defense power, got %d", reportsAfter[0].EnemyPower)
+	}
+	if reportsAfter[0].DefenderGarrisonLostUnits["weiInfantry"] != 90 {
+		t.Fatalf("expected report to track garrison losses, got %+v", reportsAfter[0].DefenderGarrisonLostUnits)
 	}
 }
 

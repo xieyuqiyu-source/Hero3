@@ -94,7 +94,7 @@ export interface BattleReport {
   playerName?: string
   targetId: string
   targetName: string
-  type: 'attack' | 'plunder' | 'scout' | 'reinforce'
+  type: 'attack' | 'plunder' | 'scout' | 'reinforce' | 'pvp_attack'
   result: 'attacker_victory' | 'defender_victory' | 'draw'
   playerPower: number
   enemyPower: number
@@ -105,6 +105,7 @@ export interface BattleReport {
   defenderGarrisonUnits?: Record<string, number>
   defenderLostUnits: Record<string, number>
   defenderGarrisonLostUnits?: Record<string, number>
+  defenderNoGuard?: boolean
   defenderRevealed: boolean
   defenderResources: Record<string, number>
   rewards: Record<string, number>
@@ -124,6 +125,80 @@ export interface BattleReport {
   }>
   read: boolean
   createdAt: string
+}
+
+export type MarchStatus = 'marching' | 'resolving' | 'resolved' | 'canceled'
+
+export type MarchType = 'pvp_attack'
+
+export interface PvpTarget {
+  playerId: string
+  nickname: string
+  faction: string
+  totalArmy: number
+  buildingLevel: number
+  updatedAt: string
+}
+
+export interface PvpTargetPage {
+  targets: PvpTarget[]
+  page: number
+  pageSize: number
+  total: number
+}
+
+export interface PvpMarch {
+  id: string
+  attackerPlayerId: string
+  attackerName: string
+  attackerFaction: string
+  defenderPlayerId: string
+  defenderName: string
+  defenderFaction: string
+  type: MarchType
+  units: Record<string, number>
+  slowestSpeed: number
+  durationSeconds: number
+  startedAt: string
+  arrivesAt: string
+  acceleratedTimes: number
+  status: MarchStatus
+  resolvedAt?: string
+  attackerReportId?: string
+  defenderReportId?: string
+}
+
+export interface PvpMarchView {
+  id: string
+  direction: 'outgoing' | 'incoming'
+  type: MarchType
+  status: MarchStatus
+  sourcePlayerId: string
+  sourceName: string
+  sourceFaction: string
+  targetPlayerId: string
+  targetName: string
+  targetFaction: string
+  units?: Record<string, number>
+  startedAt: string
+  arrivesAt: string
+  remainingSeconds: number
+  acceleratedTimes: number
+  canAccelerate: boolean
+  accelerateCost: number
+  attackerReportId?: string
+  defenderReportId?: string
+}
+
+export interface PvpAttackResponse {
+  marchId: string
+  startedAt: string
+  arrivesAt: string
+  durationSeconds: number
+  slowestSpeed: number
+  units: Record<string, number>
+  march: PvpMarch
+  state: GameState
 }
 
 export interface MailAttachment {

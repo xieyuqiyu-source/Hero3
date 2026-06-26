@@ -74,6 +74,37 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			created_at DATETIME(6) NOT NULL,
 			INDEX idx_reports_player (player_id, deleted_by_player, created_at DESC)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS pvp_marches (
+			id VARCHAR(64) PRIMARY KEY,
+			attacker_player_id VARCHAR(64) NOT NULL,
+			attacker_name VARCHAR(64) NOT NULL DEFAULT '',
+			attacker_faction VARCHAR(32) NOT NULL DEFAULT '',
+			defender_player_id VARCHAR(64) NOT NULL,
+			defender_name VARCHAR(64) NOT NULL DEFAULT '',
+			defender_faction VARCHAR(32) NOT NULL DEFAULT '',
+			type VARCHAR(32) NOT NULL,
+			units_json JSON NOT NULL,
+			slowest_speed INT NOT NULL,
+			duration_seconds INT NOT NULL,
+			started_at DATETIME(6) NOT NULL,
+			arrives_at DATETIME(6) NOT NULL,
+			accelerated_times INT NOT NULL DEFAULT 0,
+			status VARCHAR(32) NOT NULL,
+			resolved_at DATETIME(6) NULL,
+			attacker_report_id VARCHAR(64) NOT NULL DEFAULT '',
+			defender_report_id VARCHAR(64) NOT NULL DEFAULT '',
+			max_duration_seconds INT NOT NULL,
+			min_duration_seconds INT NOT NULL,
+			speed_scale DOUBLE NOT NULL,
+			accelerate_cost_city_gold INT NOT NULL,
+			accelerate_reduce_rate DOUBLE NOT NULL,
+			accelerate_min_remaining_seconds INT NOT NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			INDEX idx_pvp_marches_attacker (attacker_player_id, status, arrives_at),
+			INDEX idx_pvp_marches_defender (defender_player_id, status, arrives_at),
+			INDEX idx_pvp_marches_due (status, arrives_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS mails (
 			id VARCHAR(64) PRIMARY KEY,
 			player_id VARCHAR(64) NOT NULL,
@@ -900,6 +931,310 @@ func (r *MySQLRepository) CountUnreadReports(playerID string) (int, error) {
 		playerID, threeDaysAgo,
 	).Scan(&count)
 	return count, err
+}
+
+// --- March Methods ---
+
+func (r *MySQLRepository) CreateMarch(march game.PvpMarch) error {
+	unitsJSON, err := json.Marshal(march.Units)
+	if err != nil {
+		return err
+	}
+	startedAt, err := requiredTime(march.StartedAt)
+	if err != nil {
+		return game.ErrInvalidMarch
+	}
+	arrivesAt, err := requiredTime(march.ArrivesAt)
+	if err != nil {
+		return game.ErrInvalidMarch
+	}
+	createdAt, err := requiredTime(march.CreatedAt)
+	if err != nil {
+		return game.ErrInvalidMarch
+	}
+	updatedAt, err := requiredTime(march.UpdatedAt)
+	if err != nil {
+		return game.ErrInvalidMarch
+	}
+	_, err = r.db.Exec(
+		`INSERT INTO pvp_marches (
+			id, attacker_player_id, attacker_name, attacker_faction,
+			defender_player_id, defender_name, defender_faction,
+			type, units_json, slowest_speed, duration_seconds,
+			started_at, arrives_at, accelerated_times, status, resolved_at,
+			attacker_report_id, defender_report_id,
+			max_duration_seconds, min_duration_seconds, speed_scale,
+			accelerate_cost_city_gold, accelerate_reduce_rate, accelerate_min_remaining_seconds,
+			created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		march.ID,
+		march.AttackerPlayerID,
+		march.AttackerName,
+		march.AttackerFaction,
+		march.DefenderPlayerID,
+		march.DefenderName,
+		march.DefenderFaction,
+		string(march.Type),
+		unitsJSON,
+		march.SlowestSpeed,
+		march.DurationSeconds,
+		startedAt,
+		arrivesAt,
+		march.AcceleratedTimes,
+		string(march.Status),
+		optionalTimeValue(march.ResolvedAt),
+		march.AttackerReportID,
+		march.DefenderReportID,
+		march.MaxDurationSeconds,
+		march.MinDurationSeconds,
+		march.SpeedScale,
+		march.AccelerateCostCityGold,
+		march.AccelerateReduceRate,
+		march.AccelerateMinRemainingSeconds,
+		createdAt,
+		updatedAt,
+	)
+	if isDuplicateEntry(err) {
+		return game.ErrInvalidMarch
+	}
+	return err
+}
+
+func (r *MySQLRepository) UpdateMarch(march game.PvpMarch) error {
+	unitsJSON, err := json.Marshal(march.Units)
+	if err != nil {
+		return err
+	}
+	startedAt, err := requiredTime(march.StartedAt)
+	if err != nil {
+		return game.ErrInvalidMarch
+	}
+	arrivesAt, err := requiredTime(march.ArrivesAt)
+	if err != nil {
+		return game.ErrInvalidMarch
+	}
+	createdAt, err := requiredTime(march.CreatedAt)
+	if err != nil {
+		return game.ErrInvalidMarch
+	}
+	updatedAt, err := requiredTime(march.UpdatedAt)
+	if err != nil {
+		return game.ErrInvalidMarch
+	}
+	result, err := r.db.Exec(
+		`UPDATE pvp_marches
+		 SET attacker_name = ?, attacker_faction = ?, defender_name = ?, defender_faction = ?,
+			type = ?, units_json = ?, slowest_speed = ?, duration_seconds = ?,
+			started_at = ?, arrives_at = ?, accelerated_times = ?, status = ?, resolved_at = ?,
+			attacker_report_id = ?, defender_report_id = ?,
+			max_duration_seconds = ?, min_duration_seconds = ?, speed_scale = ?,
+			accelerate_cost_city_gold = ?, accelerate_reduce_rate = ?, accelerate_min_remaining_seconds = ?,
+			created_at = ?, updated_at = ?
+		 WHERE id = ?`,
+		march.AttackerName,
+		march.AttackerFaction,
+		march.DefenderName,
+		march.DefenderFaction,
+		string(march.Type),
+		unitsJSON,
+		march.SlowestSpeed,
+		march.DurationSeconds,
+		startedAt,
+		arrivesAt,
+		march.AcceleratedTimes,
+		string(march.Status),
+		optionalTimeValue(march.ResolvedAt),
+		march.AttackerReportID,
+		march.DefenderReportID,
+		march.MaxDurationSeconds,
+		march.MinDurationSeconds,
+		march.SpeedScale,
+		march.AccelerateCostCityGold,
+		march.AccelerateReduceRate,
+		march.AccelerateMinRemainingSeconds,
+		createdAt,
+		updatedAt,
+		march.ID,
+	)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err == nil && affected == 0 {
+		return game.ErrMarchNotFound
+	}
+	return err
+}
+
+func (r *MySQLRepository) GetMarchByID(marchID string) (game.PvpMarch, error) {
+	march, err := scanMarch(r.db.QueryRow(marchSelectSQL()+` WHERE id = ? LIMIT 1`, marchID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return game.PvpMarch{}, game.ErrMarchNotFound
+	}
+	return march, err
+}
+
+func (r *MySQLRepository) ListMarchesForPlayer(playerID string) ([]game.PvpMarch, error) {
+	rows, err := r.db.Query(
+		marchSelectSQL()+` WHERE attacker_player_id = ? OR defender_player_id = ? ORDER BY arrives_at ASC, created_at ASC`,
+		playerID, playerID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanMarchRows(rows)
+}
+
+func (r *MySQLRepository) ListDueMarches(now time.Time, limit int) ([]game.PvpMarch, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := r.db.Query(
+		marchSelectSQL()+` WHERE status = ? AND arrives_at <= ? ORDER BY arrives_at ASC LIMIT ?`,
+		string(game.MarchStatusMarching), now.UTC(), limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanMarchRows(rows)
+}
+
+func (r *MySQLRepository) ClaimMarchForResolution(marchID string, now time.Time) (game.PvpMarch, error) {
+	result, err := r.db.Exec(
+		`UPDATE pvp_marches
+		 SET status = ?, updated_at = ?
+		 WHERE id = ? AND status = ? AND arrives_at <= ?`,
+		string(game.MarchStatusResolving),
+		now.UTC(),
+		marchID,
+		string(game.MarchStatusMarching),
+		now.UTC(),
+	)
+	if err != nil {
+		return game.PvpMarch{}, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return game.PvpMarch{}, err
+	}
+	if affected == 0 {
+		if _, err := r.GetMarchByID(marchID); err != nil {
+			return game.PvpMarch{}, err
+		}
+		return game.PvpMarch{}, game.ErrMarchNotDue
+	}
+	return r.GetMarchByID(marchID)
+}
+
+type marchScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanMarchRows(rows *sql.Rows) ([]game.PvpMarch, error) {
+	marches := []game.PvpMarch{}
+	for rows.Next() {
+		march, err := scanMarch(rows)
+		if err != nil {
+			return nil, err
+		}
+		marches = append(marches, march)
+	}
+	return marches, rows.Err()
+}
+
+func scanMarch(scanner marchScanner) (game.PvpMarch, error) {
+	var march game.PvpMarch
+	var marchType string
+	var status string
+	var unitsJSON []byte
+	var startedAt time.Time
+	var arrivesAt time.Time
+	var resolvedAt sql.NullTime
+	var createdAt time.Time
+	var updatedAt time.Time
+
+	err := scanner.Scan(
+		&march.ID,
+		&march.AttackerPlayerID,
+		&march.AttackerName,
+		&march.AttackerFaction,
+		&march.DefenderPlayerID,
+		&march.DefenderName,
+		&march.DefenderFaction,
+		&marchType,
+		&unitsJSON,
+		&march.SlowestSpeed,
+		&march.DurationSeconds,
+		&startedAt,
+		&arrivesAt,
+		&march.AcceleratedTimes,
+		&status,
+		&resolvedAt,
+		&march.AttackerReportID,
+		&march.DefenderReportID,
+		&march.MaxDurationSeconds,
+		&march.MinDurationSeconds,
+		&march.SpeedScale,
+		&march.AccelerateCostCityGold,
+		&march.AccelerateReduceRate,
+		&march.AccelerateMinRemainingSeconds,
+		&createdAt,
+		&updatedAt,
+	)
+	if err != nil {
+		return game.PvpMarch{}, err
+	}
+	if err := json.Unmarshal(unitsJSON, &march.Units); err != nil {
+		return game.PvpMarch{}, err
+	}
+	march.Type = game.MarchType(marchType)
+	march.Status = game.MarchStatus(status)
+	march.StartedAt = startedAt.UTC().Format(time.RFC3339)
+	march.ArrivesAt = arrivesAt.UTC().Format(time.RFC3339)
+	if resolvedAt.Valid {
+		march.ResolvedAt = resolvedAt.Time.UTC().Format(time.RFC3339)
+	}
+	march.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+	march.UpdatedAt = updatedAt.UTC().Format(time.RFC3339)
+	return march, nil
+}
+
+func marchSelectSQL() string {
+	return `SELECT id, attacker_player_id, attacker_name, attacker_faction,
+		defender_player_id, defender_name, defender_faction,
+		type, units_json, slowest_speed, duration_seconds,
+		started_at, arrives_at, accelerated_times, status, resolved_at,
+		attacker_report_id, defender_report_id,
+		max_duration_seconds, min_duration_seconds, speed_scale,
+		accelerate_cost_city_gold, accelerate_reduce_rate, accelerate_min_remaining_seconds,
+		created_at, updated_at
+	 FROM pvp_marches`
+}
+
+func requiredTime(value string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, errors.New("time is required")
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return parsed.UTC(), nil
+}
+
+func optionalTimeValue(value string) any {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil
+	}
+	return parsed.UTC()
 }
 
 // --- Mail Methods ---

@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, Announcement, AnnouncementPage, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition, GeneralActionResult } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, Announcement, AnnouncementPage, PvpAttackResponse, PvpMarchView, PvpTarget, PvpTargetPage, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition, GeneralActionResult } from '@/types/game'
 import type { BalanceConfig, FactionConfig, FishingConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -213,9 +213,29 @@ export const gameApi = {
 
   /** 攻击其他玩家城池 */
   attackPlayer(playerId: string, targetPlayerId: string, mode: 'attack' | 'plunder', units: Record<string, number>) {
-    return api.post<{ battleReport: BattleReport; state: GameState }>('/map/players/attack', {
+    return api.post<PvpAttackResponse>('/pvp/attack', {
       playerId, targetPlayerId, mode, units,
     })
+  },
+
+  /** 获取 PVP 目标列表 */
+  listPvpTargets(playerId: string, page = 1, pageSize = 20) {
+    return api.get<PvpTargetPage>(`/pvp/targets?playerId=${playerId}&page=${page}&pageSize=${pageSize}`)
+  },
+
+  /** 获取 PVP 目标简要信息 */
+  getPvpTarget(playerId: string, targetPlayerId: string) {
+    return api.get<PvpTarget>(`/pvp/targets/${targetPlayerId}?playerId=${playerId}`)
+  },
+
+  /** 获取当前玩家相关 PVP 行军 */
+  listPvpMarches(playerId: string) {
+    return api.get<{ marches: PvpMarchView[] }>(`/pvp/marches?playerId=${playerId}`)
+  },
+
+  /** 加速 PVP 出征行军 */
+  acceleratePvpMarch(playerId: string, marchId: string) {
+    return api.post<{ march: PvpMarchView; state: GameState }>(`/pvp/marches/${marchId}/accelerate`, { playerId })
   },
 
   /** 增援其他玩家，抵达后进入目标驻防军队 */

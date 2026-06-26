@@ -9,6 +9,7 @@ import {
   Package,
   Warehouse,
   Shield,
+  ShieldAlert,
   Menu,
   Settings,
   LoaderCircle,
@@ -188,6 +189,7 @@ const MobileSidebarContent: FC<{
     { key: 'city', label: '城池', icon: Castle },
     { key: 'military', label: '军事', icon: Swords },
     { key: 'map', label: '地图', icon: Map },
+    { key: 'pvp', label: '征战', icon: ShieldAlert },
     { key: 'settings', label: '设置', icon: Settings },
   ]
 

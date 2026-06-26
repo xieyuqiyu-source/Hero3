@@ -187,6 +187,7 @@ type BattleReport struct {
 	DefenderGarrisonUnits     map[string]int                `json:"defenderGarrisonUnits,omitempty"`
 	DefenderLostUnits         map[string]int                `json:"defenderLostUnits"`
 	DefenderGarrisonLostUnits map[string]int                `json:"defenderGarrisonLostUnits,omitempty"`
+	DefenderNoGuard           bool                          `json:"defenderNoGuard,omitempty"`
 	DefenderRevealed          bool                          `json:"defenderRevealed"`
 	DefenderResources         map[string]int                `json:"defenderResources"`
 	Rewards                   map[string]int                `json:"rewards"`
@@ -210,6 +211,88 @@ type BattleReportPage struct {
 	Page     int            `json:"page"`
 	PageSize int            `json:"pageSize"`
 	Total    int            `json:"total"`
+}
+
+type MarchStatus string
+
+const (
+	MarchStatusMarching  MarchStatus = "marching"
+	MarchStatusResolving MarchStatus = "resolving"
+	MarchStatusResolved  MarchStatus = "resolved"
+	MarchStatusCanceled  MarchStatus = "canceled"
+)
+
+type MarchType string
+
+const (
+	MarchTypePvpAttack MarchType = "pvp_attack"
+)
+
+type PvpMarch struct {
+	ID                            string         `json:"id"`
+	AttackerPlayerID              string         `json:"attackerPlayerId"`
+	AttackerName                  string         `json:"attackerName"`
+	AttackerFaction               string         `json:"attackerFaction"`
+	DefenderPlayerID              string         `json:"defenderPlayerId"`
+	DefenderName                  string         `json:"defenderName"`
+	DefenderFaction               string         `json:"defenderFaction"`
+	Type                          MarchType      `json:"type"`
+	Units                         map[string]int `json:"units"`
+	SlowestSpeed                  int            `json:"slowestSpeed"`
+	DurationSeconds               int            `json:"durationSeconds"`
+	StartedAt                     string         `json:"startedAt"`
+	ArrivesAt                     string         `json:"arrivesAt"`
+	AcceleratedTimes              int            `json:"acceleratedTimes"`
+	Status                        MarchStatus    `json:"status"`
+	ResolvedAt                    string         `json:"resolvedAt,omitempty"`
+	AttackerReportID              string         `json:"attackerReportId,omitempty"`
+	DefenderReportID              string         `json:"defenderReportId,omitempty"`
+	MaxDurationSeconds            int            `json:"maxDurationSeconds"`
+	MinDurationSeconds            int            `json:"minDurationSeconds"`
+	SpeedScale                    float64        `json:"speedScale"`
+	AccelerateCostCityGold        int            `json:"accelerateCostCityGold"`
+	AccelerateReduceRate          float64        `json:"accelerateReduceRate"`
+	AccelerateMinRemainingSeconds int            `json:"accelerateMinRemainingSeconds"`
+	CreatedAt                     string         `json:"createdAt"`
+	UpdatedAt                     string         `json:"updatedAt"`
+}
+
+type PvpMarchView struct {
+	ID               string         `json:"id"`
+	Direction        string         `json:"direction"`
+	Type             MarchType      `json:"type"`
+	Status           MarchStatus    `json:"status"`
+	SourcePlayerID   string         `json:"sourcePlayerId"`
+	SourceName       string         `json:"sourceName"`
+	SourceFaction    string         `json:"sourceFaction"`
+	TargetPlayerID   string         `json:"targetPlayerId"`
+	TargetName       string         `json:"targetName"`
+	TargetFaction    string         `json:"targetFaction"`
+	Units            map[string]int `json:"units,omitempty"`
+	StartedAt        string         `json:"startedAt"`
+	ArrivesAt        string         `json:"arrivesAt"`
+	RemainingSeconds int            `json:"remainingSeconds"`
+	AcceleratedTimes int            `json:"acceleratedTimes"`
+	CanAccelerate    bool           `json:"canAccelerate"`
+	AccelerateCost   int            `json:"accelerateCost"`
+	AttackerReportID string         `json:"attackerReportId,omitempty"`
+	DefenderReportID string         `json:"defenderReportId,omitempty"`
+}
+
+type PvpTarget struct {
+	PlayerID      string `json:"playerId"`
+	Nickname      string `json:"nickname"`
+	Faction       string `json:"faction"`
+	TotalArmy     int    `json:"totalArmy"`
+	BuildingLevel int    `json:"buildingLevel"`
+	UpdatedAt     string `json:"updatedAt"`
+}
+
+type PvpTargetPage struct {
+	Targets  []PvpTarget `json:"targets"`
+	Page     int         `json:"page"`
+	PageSize int         `json:"pageSize"`
+	Total    int         `json:"total"`
 }
 
 type MailAttachment struct {

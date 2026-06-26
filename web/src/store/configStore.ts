@@ -24,6 +24,21 @@ export interface BalanceConfig {
   boostBaseCost: number // 产量加成基础价格
   boostMultiplierFactor: Record<string, number> // 倍率系数
   boostDurationFactor: Record<string, number> // 时长系数
+  march: MarchConfig
+}
+
+export interface MarchAccelerateConfig {
+  enabled: boolean
+  costCityGold: number
+  reduceRate: number
+  minRemainingSeconds: number
+}
+
+export interface MarchConfig {
+  maxDurationSeconds: number
+  minDurationSeconds: number
+  speedScale: number
+  accelerate: MarchAccelerateConfig
 }
 
 export interface UnitConfig {

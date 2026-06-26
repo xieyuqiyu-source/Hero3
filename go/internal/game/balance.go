@@ -32,6 +32,21 @@ type BalanceConfig struct {
 	BoostBaseCost         int                       `json:"boostBaseCost"`         // 产量加成基础价格（默认 30）
 	BoostMultiplierFactor map[int]int               `json:"boostMultiplierFactor"` // 倍率系数 {2:1, 4:3, 8:8, 16:20}
 	BoostDurationFactor   map[int]int               `json:"boostDurationFactor"`   // 时长系数 {1:1, 6:5, 12:9, 24:16}
+	March                 MarchConfig               `json:"march"`                 // PVP 行军时间和加速配置
+}
+
+type MarchAccelerateConfig struct {
+	Enabled             bool    `json:"enabled"`
+	CostCityGold        int     `json:"costCityGold"`
+	ReduceRate          float64 `json:"reduceRate"`
+	MinRemainingSeconds int     `json:"minRemainingSeconds"`
+}
+
+type MarchConfig struct {
+	MaxDurationSeconds int                   `json:"maxDurationSeconds"`
+	MinDurationSeconds int                   `json:"minDurationSeconds"`
+	SpeedScale         float64               `json:"speedScale"`
+	Accelerate         MarchAccelerateConfig `json:"accelerate"`
 }
 
 type ResourceMap map[string]int
@@ -56,6 +71,17 @@ var defaultBalance = BalanceConfig{
 	BoostBaseCost:         30,   // 产量加成基础价格
 	BoostMultiplierFactor: map[int]int{2: 1, 4: 3, 8: 8, 16: 20},
 	BoostDurationFactor:   map[int]int{1: 1, 6: 5, 12: 9, 24: 16},
+	March: MarchConfig{
+		MaxDurationSeconds: 10800,
+		MinDurationSeconds: 300,
+		SpeedScale:         1,
+		Accelerate: MarchAccelerateConfig{
+			Enabled:             true,
+			CostCityGold:        50,
+			ReduceRate:          0.5,
+			MinRemainingSeconds: 300,
+		},
+	},
 	Buildings: map[string]BuildingConfig{
 		"wood_camp": {
 			Type:              "wood_camp",
@@ -242,6 +268,7 @@ func GetBalanceConfig() BalanceConfig {
 }
 
 func SetBalanceConfig(config BalanceConfig) error {
+	config = normalizeBalance(config)
 	if err := validateBalance(config); err != nil {
 		return err
 	}
@@ -273,6 +300,7 @@ func LoadBalanceConfig(path string) error {
 }
 
 func SaveBalanceConfig(path string, config BalanceConfig) error {
+	config = normalizeBalance(config)
 	if err := validateBalance(config); err != nil {
 		return err
 	}
@@ -306,6 +334,21 @@ func validateBalance(config BalanceConfig) error {
 	if _, exists := config.Buildings["warehouse"]; !exists {
 		return errors.New("warehouse config is required")
 	}
+	if config.March.MaxDurationSeconds <= 0 || config.March.MinDurationSeconds <= 0 {
+		return errors.New("march duration config is required")
+	}
+	if config.March.MinDurationSeconds > config.March.MaxDurationSeconds {
+		return errors.New("march minDurationSeconds cannot exceed maxDurationSeconds")
+	}
+	if config.March.SpeedScale <= 0 {
+		return errors.New("march speedScale must be positive")
+	}
+	if config.March.Accelerate.ReduceRate <= 0 || config.March.Accelerate.ReduceRate >= 1 {
+		return errors.New("march accelerate reduceRate must be between 0 and 1")
+	}
+	if config.March.Accelerate.MinRemainingSeconds <= 0 {
+		return errors.New("march accelerate minRemainingSeconds must be positive")
+	}
 	for buildingKey, building := range config.Buildings {
 		for level, modifiers := range building.ModifiersByLevel {
 			for i, modifier := range modifiers {
@@ -321,6 +364,55 @@ func validateBalance(config BalanceConfig) error {
 	return nil
 }
 
+func normalizeBalance(config BalanceConfig) BalanceConfig {
+	if config.OverflowToCityGold <= 0 {
+		config.OverflowToCityGold = defaultBalance.OverflowToCityGold
+	}
+	if config.ExchangeRate <= 0 {
+		config.ExchangeRate = defaultBalance.ExchangeRate
+	}
+	if config.ReverseExchangeRate <= 0 {
+		config.ReverseExchangeRate = defaultBalance.ReverseExchangeRate
+	}
+	if config.CityGoldPerSecond <= 0 {
+		config.CityGoldPerSecond = defaultBalance.CityGoldPerSecond
+	}
+	if config.BoostBaseCost <= 0 {
+		config.BoostBaseCost = defaultBalance.BoostBaseCost
+	}
+	if config.BoostMultiplierFactor == nil {
+		config.BoostMultiplierFactor = cloneIntMap(defaultBalance.BoostMultiplierFactor)
+	}
+	if config.BoostDurationFactor == nil {
+		config.BoostDurationFactor = cloneIntMap(defaultBalance.BoostDurationFactor)
+	}
+	config.March = normalizeMarchConfig(config.March)
+	return config
+}
+
+func normalizeMarchConfig(config MarchConfig) MarchConfig {
+	defaultConfig := defaultBalance.March
+	if config.MaxDurationSeconds <= 0 {
+		config.MaxDurationSeconds = defaultConfig.MaxDurationSeconds
+	}
+	if config.MinDurationSeconds <= 0 {
+		config.MinDurationSeconds = defaultConfig.MinDurationSeconds
+	}
+	if config.SpeedScale <= 0 {
+		config.SpeedScale = defaultConfig.SpeedScale
+	}
+	if config.Accelerate.CostCityGold <= 0 {
+		config.Accelerate.CostCityGold = defaultConfig.Accelerate.CostCityGold
+	}
+	if config.Accelerate.ReduceRate <= 0 {
+		config.Accelerate.ReduceRate = defaultConfig.Accelerate.ReduceRate
+	}
+	if config.Accelerate.MinRemainingSeconds <= 0 {
+		config.Accelerate.MinRemainingSeconds = defaultConfig.Accelerate.MinRemainingSeconds
+	}
+	return config
+}
+
 func cloneBalance(source BalanceConfig) BalanceConfig {
 	next := BalanceConfig{
 		BaseProduction:        cloneResourceMap(source.BaseProduction),
@@ -333,6 +425,7 @@ func cloneBalance(source BalanceConfig) BalanceConfig {
 		BoostBaseCost:         source.BoostBaseCost,
 		BoostMultiplierFactor: cloneIntMap(source.BoostMultiplierFactor),
 		BoostDurationFactor:   cloneIntMap(source.BoostDurationFactor),
+		March:                 source.March,
 	}
 	for key, building := range source.Buildings {
 		next.Buildings[key] = cloneBuildingConfig(building)

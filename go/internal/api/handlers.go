@@ -328,6 +328,23 @@ func (h *Handlers) UpdateAdminBalance(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.gameService.GetBalance())
 }
 
+func (h *Handlers) AdminMarchConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.gameService.GetMarchConfig())
+}
+
+func (h *Handlers) UpdateAdminMarchConfig(w http.ResponseWriter, r *http.Request) {
+	var payload game.MarchConfig
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	config, err := h.gameService.UpdateMarchConfig(payload)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, config)
+}
+
 func (h *Handlers) AdminNpcConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.gameService.GetNpcConfig())
 }
@@ -789,24 +806,84 @@ func (h *Handlers) AttackPlayer(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.gameService.AttackPlayer(payload)
 	if err != nil {
-		status := http.StatusBadRequest
-		switch {
-		case errors.Is(err, game.ErrPlayerNotFound):
-			status = http.StatusNotFound
-		case errors.Is(err, game.ErrInvalidPlayerTarget):
-			status = http.StatusBadRequest
-		case errors.Is(err, game.ErrNoUnitsSelected):
-			status = http.StatusBadRequest
-		case errors.Is(err, game.ErrNonCombatUnit):
-			status = http.StatusBadRequest
-		case errors.Is(err, game.ErrInsufficientArmy):
-			status = http.StatusUnprocessableEntity
-		}
-		writeError(w, status, err.Error())
+		writeError(w, pvpErrorStatus(err), err.Error())
 		return
 	}
 
+	writeJSON(w, http.StatusCreated, result)
+}
+
+func (h *Handlers) ListPvpTargets(w http.ResponseWriter, r *http.Request) {
+	playerID := r.URL.Query().Get("playerId")
+	if playerID == "" {
+		writeError(w, http.StatusBadRequest, "playerId is required")
+		return
+	}
+	if !h.requireOwnership(w, r, playerID) {
+		return
+	}
+	page, pageSize, ok := parsePageQuery(w, r)
+	if !ok {
+		return
+	}
+	result, err := h.gameService.ListPvpTargets(playerID, page, pageSize)
+	if err != nil {
+		writeError(w, pvpErrorStatus(err), err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handlers) GetPvpTarget(w http.ResponseWriter, r *http.Request) {
+	playerID := r.URL.Query().Get("playerId")
+	if playerID == "" {
+		writeError(w, http.StatusBadRequest, "playerId is required")
+		return
+	}
+	if !h.requireOwnership(w, r, playerID) {
+		return
+	}
+	target, err := h.gameService.GetPvpTarget(playerID, r.PathValue("targetPlayerId"))
+	if err != nil {
+		writeError(w, pvpErrorStatus(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, target)
+}
+
+func (h *Handlers) ListPvpMarches(w http.ResponseWriter, r *http.Request) {
+	playerID := r.URL.Query().Get("playerId")
+	if playerID == "" {
+		writeError(w, http.StatusBadRequest, "playerId is required")
+		return
+	}
+	if !h.requireOwnership(w, r, playerID) {
+		return
+	}
+	marches, err := h.gameService.ListPvpMarches(playerID, time.Now())
+	if err != nil {
+		writeError(w, pvpErrorStatus(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"marches": marches})
+}
+
+func (h *Handlers) AcceleratePvpMarch(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+	march, state, err := h.gameService.AcceleratePvpMarch(payload.PlayerID, r.PathValue("marchId"), time.Now())
+	if err != nil {
+		writeError(w, pvpErrorStatus(err), err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"march": march, "state": state})
 }
 
 func (h *Handlers) ReinforcePlayer(w http.ResponseWriter, r *http.Request) {
@@ -838,6 +915,21 @@ func (h *Handlers) ReinforcePlayer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+func pvpErrorStatus(err error) int {
+	switch {
+	case errors.Is(err, game.ErrPlayerNotFound), errors.Is(err, game.ErrMarchNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, game.ErrInsufficientArmy), errors.Is(err, game.ErrInsufficientCityGold):
+		return http.StatusUnprocessableEntity
+	case errors.Is(err, game.ErrMarchNotAccelerable), errors.Is(err, game.ErrMarchNotDue):
+		return http.StatusConflict
+	case errors.Is(err, game.ErrInvalidPlayerTarget), errors.Is(err, game.ErrSameAccountTarget), errors.Is(err, game.ErrNoUnitsSelected), errors.Is(err, game.ErrNonCombatUnit), errors.Is(err, game.ErrInvalidMarch):
+		return http.StatusBadRequest
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 func (h *Handlers) SimulateBattle(w http.ResponseWriter, r *http.Request) {
