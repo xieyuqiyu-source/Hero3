@@ -130,7 +130,9 @@ func (r *MySQLRepository) MarkReportsRead(playerID string) error {
 
 func (r *MySQLRepository) MarkSingleReportRead(playerID string, reportID string) error {
 	_, err := r.db.Exec(
-		`UPDATE battle_reports SET is_read = 1 WHERE id = ? AND player_id = ?`,
+		`UPDATE battle_reports
+		 SET is_read = 1
+		 WHERE id = ? AND player_id = ? AND is_read = 0 AND deleted_by_player = 0`,
 		reportID, playerID,
 	)
 	return err
@@ -138,7 +140,9 @@ func (r *MySQLRepository) MarkSingleReportRead(playerID string, reportID string)
 
 func (r *MySQLRepository) DeleteReport(playerID string, reportID string) error {
 	_, err := r.db.Exec(
-		`UPDATE battle_reports SET deleted_by_player = 1 WHERE id = ? AND player_id = ?`,
+		`UPDATE battle_reports
+		 SET deleted_by_player = 1
+		 WHERE id = ? AND player_id = ? AND deleted_by_player = 0`,
 		reportID, playerID,
 	)
 	return err
