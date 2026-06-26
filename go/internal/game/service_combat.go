@@ -176,13 +176,10 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 		AttackerOwnsTrait: true, // 进攻方就是当前玩家
 		DefenderOwnsTrait: false,
 		IsPvP:             false,
-		SameFaction:       true, // PvE 视为同阵营，俘虏入军队
+		SameFaction:       true, // PvE 的 trait 只负责计算俘虏数量，最终归属按兵种阵营分流
 	}
 	general.Dispatch(beforeCtx, activeTraits)
-	// 应用美人计俘虏到玩家军队
-	for unitType, count := range beforeCtx.CapturedToArmy {
-		mergeIntoArmy(&state, unitType, count)
-	}
+	capturedToArmy, capturedToGarrison := applyNpcCapturedUnitsByFaction(&state, npc, mergeCapturedUnitMaps(beforeCtx.CapturedToArmy, beforeCtx.CapturedToGarrison))
 
 	combatInput := combat.CombatInput{
 		RuleID:    ruleID,
@@ -209,9 +206,8 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 	report := applyNpcBattleResult(&state, npc, result, attackerUnits, mode, now)
 
 	// 记录俘虏信息到战报
-	if len(beforeCtx.CapturedToArmy) > 0 {
-		report.CapturedUnits = beforeCtx.CapturedToArmy
-	}
+	report.CapturedUnits = capturedToArmy
+	report.CapturedToGarrison = capturedToGarrison
 	// 把 before/afterCombat 的触发结果合并到战报
 	mergeTraitOutcomes(&report, beforeCtx.Triggered)
 	mergeTraitOutcomes(&report, afterCombatCtx.Triggered)
@@ -907,6 +903,43 @@ func buildPlayerDefenseCombatUnits(state GameState, now time.Time) ([]combat.Uni
 	appendUnits(defenderPoolArmy, state.Army)
 	appendUnits(defenderPoolGarrison, state.GarrisonArmy)
 	return units, sources
+}
+
+// applyNpcCapturedUnitsByFaction 按兵种阵营分流 NPC 俘虏：本阵营入军队，非本阵营入驻防。
+func applyNpcCapturedUnitsByFaction(state *GameState, npc *NpcCity, captured map[string]int) (map[string]int, map[string]int) {
+	if len(captured) == 0 {
+		return nil, nil
+	}
+	appliedToArmy := map[string]int{}
+	appliedToGarrison := map[string]int{}
+	for combatID, count := range captured {
+		if count <= 0 {
+			continue
+		}
+		unitType := strings.TrimSpace(strings.Split(combatID, "@")[0])
+		if unitType == "" {
+			continue
+		}
+		deductArmyUnit(&npc.Army, unitType, count)
+		unitFaction, _, ok := FindUnitConfigByID(unitType)
+		if ok && unitFaction == state.Player.Faction {
+			addToArmy(&state.Army, unitType, count)
+			appliedToArmy[unitType] += count
+		} else {
+			addToArmy(&state.GarrisonArmy, unitType, count)
+			appliedToGarrison[unitType] += count
+		}
+	}
+	cleanArmyUnits(&state.Army)
+	cleanArmyUnits(&state.GarrisonArmy)
+	cleanArmyUnits(&npc.Army)
+	if len(appliedToArmy) == 0 {
+		appliedToArmy = nil
+	}
+	if len(appliedToGarrison) == 0 {
+		appliedToGarrison = nil
+	}
+	return appliedToArmy, appliedToGarrison
 }
 
 func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatResult, attackerUnits []combat.Unit, mode string, now time.Time) BattleReport {

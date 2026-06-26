@@ -1736,6 +1736,83 @@ func TestReinforcePlayerRejectsNpcTarget(t *testing.T) {
 	}
 }
 
+func TestNpcMeirenRoutesCapturedNonFactionUnitsToGarrison(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	setTestFactionsAndGenerals(t, FactionsConfig{
+		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "zhenmi", Name: "甄宓"}}},
+		"shu": {Name: "蜀国", Generals: []GeneralInfo{{ID: "liubei", Name: "刘备"}}},
+	}, GeneralsConfig{
+		Enabled: true,
+		Common:  GeneralsCommonConfig{ExpCurve: []int{0, 1000}},
+		Heroes: map[string]GeneralHeroConfig{
+			"zhenmi": {
+				ID:      "zhenmi",
+				Name:    "甄宓",
+				Faction: "wei",
+				Enabled: true,
+				Traits: []GeneralTraitConfig{{
+					TraitID: "meiren",
+					Enabled: true,
+					Params:  map[string]float64{"captureRate": 0.5, "captureMax": 1000, "triggerChance": 1},
+				}},
+			},
+			"liubei": {ID: "liubei", Name: "刘备", Faction: "shu", Enabled: true},
+		},
+	})
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_npc_meiren", Username: "npc_meiren", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_npc_meiren", "Attacker", "wei", "zhenmi", now)
+	state.General = newGeneral("wei", "zhenmi")
+	state.Army = []ArmyUnit{{UnitType: "weiCavalry", Amount: 100}}
+	state.NpcState = &NpcState{Cities: []NpcCity{{
+		ID:                "npc-shu",
+		Name:              "蜀国 NPC",
+		Faction:           "shu",
+		Resources:         map[string]int{"wood": 0, "stone": 0, "iron": 0, "food": 0},
+		StorageCapacity:   map[string]int{"wood": 1000, "stone": 1000, "iron": 1000, "food": 1000},
+		ProductionPerHour: map[string]int{"wood": 0, "stone": 0, "iron": 0, "food": 0},
+		Army:              []ArmyUnit{{UnitType: "shuInfantry", Amount: 20}},
+		MaxArmy:           []ArmyUnit{{UnitType: "shuInfantry", Amount: 20}},
+	}}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.AttackNpc(AttackNpcRequest{
+		PlayerID: state.Player.ID,
+		NpcID:    "npc-shu",
+		Mode:     "attack",
+		Units:    map[string]int{"weiCavalry": 100},
+	})
+	if err != nil {
+		t.Fatalf("AttackNpc failed: %v", err)
+	}
+	if !containsString(result.BattleReport.TraitTriggered, "meiren") {
+		t.Fatalf("expected meiren trait in report, got %+v", result.BattleReport)
+	}
+	if result.BattleReport.CapturedToGarrison["shuInfantry"] != 10 {
+		t.Fatalf("expected NPC captured shu units in garrison report, got %+v", result.BattleReport)
+	}
+	if result.BattleReport.CapturedUnits["shuInfantry"] != 0 {
+		t.Fatalf("expected no captured shu units in army report, got %+v", result.BattleReport)
+	}
+	if armyUnitAmount(result.State.Army, "shuInfantry") != 0 {
+		t.Fatalf("expected NPC captured shu units not in main army, got %+v", result.State.Army)
+	}
+	if armyUnitAmount(result.State.GarrisonArmy, "shuInfantry") != 10 {
+		t.Fatalf("expected NPC captured shu units in garrison, got %+v", result.State.GarrisonArmy)
+	}
+	if armyUnitAmount(result.State.NpcState.Cities[0].Army, "shuInfantry") > 10 {
+		t.Fatalf("expected NPC army to deduct captured units, got %+v", result.State.NpcState.Cities[0].Army)
+	}
+}
+
 func TestAttackPlayerUsesGarrisonAndDeductsGarrisonLosses(t *testing.T) {
 	setTestCombatUnitsConfig(t)
 
