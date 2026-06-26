@@ -1,5 +1,6 @@
+// 玩家抽屉用于在 Admin 工作台中快速查看和调试核心资产。
 import { useCallback, useEffect, useState } from 'react'
-import { X, RefreshCw, Coins, Swords, Building2 } from 'lucide-react'
+import { X, RefreshCw, Coins, Swords, Building2, Package, Users, Sparkles } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import type { GameState } from '@/types'
 import ResourceAdjustForm from '@/components/ResourceAdjustForm'
@@ -9,11 +10,13 @@ interface PlayerDrawerProps {
   onClose: () => void
 }
 
+// PlayerDrawer 以侧边栏形式展示玩家权威状态和常用 GM 操作。
 export default function PlayerDrawer({ playerId, onClose }: PlayerDrawerProps) {
   const [state, setState] = useState<GameState | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // loadState 从 Admin API 重新拉取玩家状态。
   const loadState = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -159,6 +162,28 @@ export default function PlayerDrawer({ playerId, onClose }: PlayerDrawerProps) {
               </button>
             </section>
 
+            {/* Inventory */}
+            {state.inventory && Object.keys(state.inventory).length > 0 && (
+              <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Package size={13} className="text-sky-500" />
+                  <h4 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
+                    背包 ({Object.keys(state.inventory).length})
+                  </h4>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(state.inventory).map(([itemId, stack]) => (
+                    <span
+                      key={itemId}
+                      className="px-2 py-1 rounded-lg text-[10px] font-bold bg-sky-500/10 text-sky-700 border border-sky-500/10"
+                    >
+                      {itemId} ×{stack.amount}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* Buildings */}
             <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">
               <div className="flex items-center gap-1.5 mb-2">
@@ -179,6 +204,93 @@ export default function PlayerDrawer({ playerId, onClose }: PlayerDrawerProps) {
                 ))}
               </div>
             </section>
+
+            {/* Resource Slots */}
+            {state.resourceSlots && state.resourceSlots.length > 0 && (
+              <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Building2 size={13} className="text-emerald-500" />
+                  <h4 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
+                    资源田格子 ({state.resourceSlots.length})
+                  </h4>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {state.resourceSlots.map((slot) => (
+                    <span
+                      key={slot.id}
+                      className="px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-700 border border-emerald-500/10"
+                    >
+                      {slot.resourceType} · {slot.buildingId || slot.id}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Generals */}
+            {state.generals && state.generals.length > 0 && (
+              <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Users size={13} className="text-violet-500" />
+                  <h4 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
+                    武将 ({state.generals.length})
+                  </h4>
+                </div>
+                <div className="space-y-1.5">
+                  {state.generals.map((general) => (
+                    <div key={general.id} className="px-2.5 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-[var(--color-text-primary)] font-bold">{general.name || general.id}</span>
+                        <span className="text-[10px] text-[var(--color-text-muted)]">Lv.{general.level}</span>
+                      </div>
+                      <div className="mt-1 text-[10px] text-[var(--color-text-muted)]">
+                        EXP {general.exp.toLocaleString()} · 可分配 {general.availableStatPoints ?? 0}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* General Assignments */}
+            {state.generalAssignments && state.generalAssignments.length > 0 && (
+              <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Users size={13} className="text-cyan-500" />
+                  <h4 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
+                    武将派驻 ({state.generalAssignments.length})
+                  </h4>
+                </div>
+                <div className="space-y-1.5">
+                  {state.generalAssignments.map((assignment) => (
+                    <div key={assignment.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
+                      <span className="text-[11px] text-[var(--color-text-primary)] font-bold">{assignment.generalId}</span>
+                      <span className="text-[10px] text-[var(--color-text-muted)]">{assignment.slot} · {assignment.status ?? 'active'}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Buffs */}
+            {state.buffs && state.buffs.length > 0 && (
+              <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Sparkles size={13} className="text-amber-500" />
+                  <h4 className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
+                    Buff ({state.buffs.length})
+                  </h4>
+                </div>
+                <div className="space-y-1.5">
+                  {state.buffs.map((buff) => (
+                    <div key={buff.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
+                      <span className="text-[11px] text-[var(--color-text-primary)] font-bold">{buff.key} {buff.mode}</span>
+                      <span className="text-[10px] text-[var(--color-text-muted)]">{buff.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* Army */}
             <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">

@@ -30,6 +30,7 @@ type Config struct {
 	GeneralsPath   string
 	ItemsPath      string
 	FishingPath    string
+	HelpDocsDir    string
 	JWTSecret      string
 	AdminToken     string
 	TokenTTL       time.Duration
@@ -58,6 +59,7 @@ func Load() Config {
 		GeneralsPath:   getEnv("HERO3_GENERALS_PATH", "config/generals.json"),
 		ItemsPath:      getEnv("HERO3_ITEMS_PATH", "config/items.json"),
 		FishingPath:    getEnv("HERO3_FISHING_PATH", "config/fishing.json"),
+		HelpDocsDir:    getEnv("HERO3_HELP_DOCS_DIR", "helpdocs/content"),
 		JWTSecret:      getEnv("HERO3_JWT_SECRET", ""),
 		AdminToken:     getEnv("HERO3_ADMIN_TOKEN", ""),
 		TokenTTL:       getDurationEnv("HERO3_TOKEN_TTL", 7*24*time.Hour),

@@ -207,10 +207,42 @@ func (r *MySQLRepository) UpdateMailPlayerState(playerID string, mailID string, 
 	if err = json.Unmarshal(stateJSON, &state); err != nil {
 		return game.Account{}, game.GameState{}, game.Mail{}, err
 	}
-	previousResourceSnapshot := resourceSnapshotsFromStorageState(state.Resources)
 	if state.Player.MailCode == "" {
 		state.Player.MailCode = mailCode
 	}
+	if err := overlayAuthoritativeResourcesTx(tx, &state, playerID); err != nil {
+		return game.Account{}, game.GameState{}, game.Mail{}, err
+	}
+	if err := overlayAuthoritativeInventoryTx(tx, &state, playerID); err != nil {
+		return game.Account{}, game.GameState{}, game.Mail{}, err
+	}
+	if err := overlayAuthoritativeBuildingsTx(tx, &state, playerID); err != nil {
+		return game.Account{}, game.GameState{}, game.Mail{}, err
+	}
+	if err := overlayAuthoritativeResourceSlotsTx(tx, &state, playerID); err != nil {
+		return game.Account{}, game.GameState{}, game.Mail{}, err
+	}
+	if err := overlayAuthoritativeArmyTx(tx, &state, playerID); err != nil {
+		return game.Account{}, game.GameState{}, game.Mail{}, err
+	}
+	if err := overlayAuthoritativeRecruitQueuesTx(tx, &state, playerID); err != nil {
+		return game.Account{}, game.GameState{}, game.Mail{}, err
+	}
+	if err := overlayAuthoritativeGeneralsTx(tx, &state, playerID); err != nil {
+		return game.Account{}, game.GameState{}, game.Mail{}, err
+	}
+	if err := overlayAuthoritativeBuffsTx(tx, &state, playerID); err != nil {
+		return game.Account{}, game.GameState{}, game.Mail{}, err
+	}
+	previousResourceSnapshot := resourceSnapshotsFromStorageState(state.Resources)
+	previousInventorySnapshot := inventorySnapshotsFromStorageState(state.Inventory)
+	previousBuildingSnapshot := buildingSnapshotsFromStorageState(state.Buildings)
+	previousResourceSlotSnapshot := resourceSlotSnapshotsFromStorageState(state.ResourceSlots)
+	previousArmySnapshot := armySnapshotsFromStorageState(state.Army)
+	previousRecruitQueueSnapshot := recruitQueueSnapshotsFromStorageState(state.RecruitQueues)
+	previousGeneralSnapshot := generalSnapshotsFromStorageState(state.Generals)
+	previousGeneralAssignmentSnapshot := generalAssignmentSnapshotsFromStorageState(state.GeneralAssignments)
+	previousBuffSnapshot := buffSnapshotsFromStorageState(state.Buffs)
 
 	var account game.Account
 	err = tx.QueryRow(
@@ -234,6 +266,10 @@ func (r *MySQLRepository) UpdateMailPlayerState(playerID string, mailID string, 
 			return game.Account{}, game.GameState{}, game.Mail{}, err
 		}
 	}
+	if len(state.ResourceSlots) == 0 {
+		state.ResourceSlots = game.BuildResourceSlotsFromBuildings(state.Buildings, updatedAt)
+	}
+	game.EnsureGeneralRoster(&state, updatedAt)
 
 	if account.Gold != previousAccountGold {
 		if _, err = tx.Exec(`UPDATE accounts SET gold = ? WHERE id = ?`, account.Gold, account.ID); err != nil {
@@ -241,12 +277,52 @@ func (r *MySQLRepository) UpdateMailPlayerState(playerID string, mailID string, 
 		}
 	}
 
-	nextStateJSON, err := json.Marshal(state)
+	nextStateJSON, err := marshalPlayerStateSnapshot(state)
 	if err != nil {
 		return game.Account{}, game.GameState{}, game.Mail{}, err
 	}
 	if resourceSnapshotChanged(previousResourceSnapshot, state.Resources) {
 		if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
+			return game.Account{}, game.GameState{}, game.Mail{}, err
+		}
+	}
+	if inventorySnapshotChanged(previousInventorySnapshot, state.Inventory) {
+		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, updatedAt.UTC()); err != nil {
+			return game.Account{}, game.GameState{}, game.Mail{}, err
+		}
+	}
+	if buildingSnapshotChanged(previousBuildingSnapshot, state.Buildings) {
+		if err := syncPlayerBuildingsTx(tx, playerID, state.Buildings, updatedAt.UTC()); err != nil {
+			return game.Account{}, game.GameState{}, game.Mail{}, err
+		}
+	}
+	if resourceSlotSnapshotChanged(previousResourceSlotSnapshot, state.ResourceSlots) || buildingSnapshotChanged(previousBuildingSnapshot, state.Buildings) {
+		if err := syncPlayerResourceSlotsTx(tx, playerID, state.ResourceSlots, updatedAt.UTC()); err != nil {
+			return game.Account{}, game.GameState{}, game.Mail{}, err
+		}
+	}
+	if armySnapshotChanged(previousArmySnapshot, state.Army) {
+		if err := syncPlayerArmyTx(tx, playerID, state.Army, updatedAt.UTC()); err != nil {
+			return game.Account{}, game.GameState{}, game.Mail{}, err
+		}
+	}
+	if recruitQueueSnapshotChanged(previousRecruitQueueSnapshot, state.RecruitQueues) {
+		if err := syncPlayerRecruitQueuesTx(tx, playerID, state.RecruitQueues, updatedAt.UTC()); err != nil {
+			return game.Account{}, game.GameState{}, game.Mail{}, err
+		}
+	}
+	if generalSnapshotChanged(previousGeneralSnapshot, state.Generals) {
+		if err := syncPlayerGeneralsTx(tx, playerID, state.Generals, updatedAt.UTC()); err != nil {
+			return game.Account{}, game.GameState{}, game.Mail{}, err
+		}
+	}
+	if generalAssignmentSnapshotChanged(previousGeneralAssignmentSnapshot, state.GeneralAssignments) {
+		if err := syncPlayerGeneralAssignmentsTx(tx, playerID, state.GeneralAssignments, updatedAt.UTC()); err != nil {
+			return game.Account{}, game.GameState{}, game.Mail{}, err
+		}
+	}
+	if buffSnapshotChanged(previousBuffSnapshot, state.Buffs) {
+		if err := syncPlayerBuffsTx(tx, playerID, state.Buffs, updatedAt.UTC()); err != nil {
 			return game.Account{}, game.GameState{}, game.Mail{}, err
 		}
 	}

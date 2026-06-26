@@ -6,6 +6,7 @@ const (
 	TypeGold       = "gold"
 	TypeItem       = "item"
 	TypeUnit       = "unit"
+	TypeGeneral    = "general"
 	TypeGeneralExp = "general_exp"
 	TypeBuff       = "buff"
 )

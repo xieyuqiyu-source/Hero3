@@ -20,16 +20,9 @@ func (s *Service) AdjustResources(playerID string, adjustments map[string]int) (
 		before = snapshotCoreAssets(state)
 
 		for resType, delta := range adjustments {
-			current := state.Resources.Items[resType]
-			next := current + delta
-			if next < 0 {
-				next = 0
+			if _, err := adjustResourceCapped(state, resType, delta); err != nil {
+				return err
 			}
-			cap := state.Resources.Capacity[resType]
-			if cap > 0 && next > cap {
-				next = cap
-			}
-			state.Resources.Items[resType] = next
 		}
 
 		state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
@@ -58,8 +51,8 @@ func (s *Service) FillResources(playerID string) (GameState, error) {
 		*state = nextState
 		before = snapshotCoreAssets(state)
 
-		for resType, cap := range state.Resources.Capacity {
-			state.Resources.Items[resType] = cap
+		if err := fillResourcesToCapacity(state); err != nil {
+			return err
 		}
 
 		state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
@@ -113,8 +106,8 @@ func (s *Service) FillResourcesPaid(playerID string) (GameState, int, error) {
 		}
 		state.CityGold -= FlexInt(cost)
 
-		for resType, cap := range state.Resources.Capacity {
-			state.Resources.Items[resType] = cap
+		if err := fillResourcesToCapacity(state); err != nil {
+			return err
 		}
 
 		state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
@@ -146,8 +139,8 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 	now = now.UTC()
 	changed := false
 
-	if state.Resources.Items == nil {
-		state.Resources.Items = map[string]int{}
+	if state.Resources.Items == nil || state.Resources.Capacity == nil {
+		_ = ensureResourceState(&state)
 		changed = true
 	}
 
@@ -186,6 +179,7 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 			state.Buildings[i].Level++
 			state.Buildings[i].UpgradeEndsAt = nil
 			state.Buildings[i].Status = BuildingStatusNormal
+			ApplyConstructionBureauResourceSlots(&state, now)
 			changed = true
 		}
 	}
@@ -241,6 +235,7 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 				state.Buildings[event.buildingIdx].Level++
 				state.Buildings[event.buildingIdx].UpgradeEndsAt = nil
 				state.Buildings[event.buildingIdx].Status = BuildingStatusNormal
+				ApplyConstructionBureauResourceSlots(&state, event.endsAt)
 				changed = true
 			}
 
@@ -263,7 +258,9 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 		}
 
 		if !reflect.DeepEqual(resources, state.Resources.Items) || len(sliceEvents) > 0 {
-			state.Resources.Items = resources
+			if err := replaceResourceItems(&state, resources); err != nil {
+				return state, changed
+			}
 			state.ResourceSettledAt = now.Format(resourceDateLayout)
 			changed = true
 		}
@@ -284,7 +281,9 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 	capacity := calculateResourceCapacity(state.Buildings)
 	capacity = applyCapacityModifiers(capacity, now, modSources)
 	if !reflect.DeepEqual(state.Resources.Capacity, capacity) {
-		state.Resources.Capacity = capacity
+		if err := replaceResourceCapacity(&state, capacity); err != nil {
+			return state, changed
+		}
 		changed = true
 	}
 

@@ -151,7 +151,9 @@ func (s *Service) PurchaseCapacityBoost(playerID string, multiplier int, hours i
 		modSources := CollectModifierSources(state)
 		capacity := calculateResourceCapacity(state.Buildings)
 		capacity = applyCapacityModifiers(capacity, now, modSources)
-		state.Resources.Capacity = capacity
+		if err := replaceResourceCapacity(state, capacity); err != nil {
+			return err
+		}
 		state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
 		return nil
 	})

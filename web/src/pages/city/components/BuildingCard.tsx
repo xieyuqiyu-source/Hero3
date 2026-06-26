@@ -5,6 +5,7 @@ import { useConfigStore } from '@/store/configStore'
 import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
+import { getErrorMessage } from '@/utils/error'
 import ConfirmCityGoldModal from '@/components/ConfirmCityGoldModal'
 
 interface BuildingCardProps {
@@ -100,8 +101,8 @@ const BuildingCard: FC<BuildingCardProps> = ({
       const result = await gameApi.instantCompleteBuilding(playerId, buildingId)
       useGameStore.getState().setState(result.state)
       toast.success(`${name} 升级完成`)
-    } catch (e: any) {
-      const msg = e?.message || '加速失败'
+    } catch (e: unknown) {
+      const msg = getErrorMessage(e, '加速失败')
       if (msg.includes('insufficient')) {
         toast.error('城金不足')
       } else {

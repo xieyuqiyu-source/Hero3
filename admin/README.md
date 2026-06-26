@@ -21,6 +21,8 @@
 
 GM 接口依赖请求头 `X-Admin-Token`，其值需要和 Go 后端 `HERO3_ADMIN_TOKEN` 环境变量保持一致。后台提供本地 token 面板，保存后刷新页面生效。
 
+使用项目根目录 `./dev.sh` 启动时，脚本会把 `go/.env` 中的 `HERO3_ADMIN_TOKEN` 自动桥接为 `VITE_ADMIN_TOKEN`，本地 GM 后台可直接访问；单独运行 `pnpm dev` 时，需要手动设置 `VITE_ADMIN_TOKEN` 或在后台 token 面板保存。
+
 ## 本地开发
 
 安装依赖：

@@ -5,6 +5,7 @@ import { useConfigStore } from '@/store/configStore'
 import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import { Tooltip, toast } from '@/components/ui'
 import { gameApi } from '@/api/game'
+import { getErrorMessage } from '@/utils/error'
 import ConfirmCityGoldModal from '@/components/ConfirmCityGoldModal'
 import {
   getProductionAtLevel,
@@ -108,8 +109,8 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
       if (!playerId) return
       const result = await gameApi.instantCompleteBuilding(playerId, buildingId)
       useGameStore.getState().setState(result.state)
-    } catch (e: any) {
-      const msg = e?.message || '加速失败'
+    } catch (e: unknown) {
+      const msg = getErrorMessage(e, '加速失败')
       if (msg.includes('insufficient')) {
         toast.error('城金不足')
       } else {

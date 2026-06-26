@@ -301,14 +301,13 @@ func (s *Service) CreatePlayer(accountID string, nickname string, faction string
 		return "", GameState{}, ErrPlayerNotFound
 	}
 
-	// 校验 generalID 是否属于所选阵营
-	if generalID == "" {
-		return "", GameState{}, ErrInvalidGeneral
-	}
 	factions := GetFactionsConfig()
 	fc, factionExists := factions[faction]
 	if !factionExists {
 		return "", GameState{}, ErrInvalidGeneral
+	}
+	if generalID == "" {
+		generalID = defaultGeneralForFaction(faction, fc)
 	}
 	valid := false
 	for _, g := range fc.Generals {
@@ -361,6 +360,17 @@ func (s *Service) CreatePlayer(accountID string, nickname string, faction string
 	return playerID, state, nil
 }
 
+// defaultGeneralForFaction 返回阵营第一个可用将领，用于兼容未显式选择将领的旧客户端。
+func defaultGeneralForFaction(faction string, fc FactionConfig) string {
+	for _, general := range fc.Generals {
+		hero, ok := GetHeroConfig(general.ID)
+		if ok && hero.Enabled && hero.Faction == faction {
+			return general.ID
+		}
+	}
+	return ""
+}
+
 func (s *Service) DeleteAccount(accountID string) error {
 	accountID = strings.TrimSpace(accountID)
 	if accountID == "" {
@@ -398,7 +408,8 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 			}
 			state.Player.MailCode = mailCode
 		}
-		ensureCoreBuildings(state)
+		EnsureCoreBuildings(state)
+		ApplyConstructionBureauResourceSlots(state, now)
 		if state.Inventory == nil {
 			state.Inventory = map[string]ItemStack{}
 		}
@@ -413,6 +424,7 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 				state.General = newGeneral(state.Player.Faction, gid)
 			}
 		}
+		EnsureGeneralRoster(state, now)
 
 		return nil
 	})
@@ -424,6 +436,7 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 	if state.General != nil {
 		applyHeroConfigToGeneral(state.General)
 	}
+	EnsureGeneralRoster(&state, now)
 
 	s.attachReportSummary(&state, playerID)
 	s.attachMailSummary(&state, playerID)

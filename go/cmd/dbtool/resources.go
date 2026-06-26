@@ -1,4 +1,4 @@
-// 本文件归口 player_resources 影子表回填和一致性校验。
+// 本文件归口 player_resources 权威表回填和兼容快照一致性校验。
 package main
 
 import (
@@ -33,7 +33,7 @@ type resourceSnapshot struct {
 	Capacity int
 }
 
-// runBackfillResources 从 players.state_json 回填 player_resources 影子表。
+// runBackfillResources 从旧 players.state_json 兼容快照回填 player_resources 权威表。
 func runBackfillResources(args []string) error {
 	flags := flag.NewFlagSet("backfill-resources", flag.ContinueOnError)
 	dsn := flags.String("dsn", "", "目标数据库 DSN，默认使用 HERO3_DATABASE_DSN")
@@ -61,11 +61,11 @@ func runBackfillResources(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("资源影子表回填完成：数据库 %s，玩家 %d，资源行 %d\n", databaseName, result.Players, result.Rows)
+	fmt.Printf("资源权威表回填完成：数据库 %s，玩家 %d，资源行 %d\n", databaseName, result.Players, result.Rows)
 	return nil
 }
 
-// runVerifyResources 校验 player_resources 是否和 state_json.resources 一致。
+// runVerifyResources 校验 player_resources 权威表是否和 state_json.resources 兼容快照一致。
 func runVerifyResources(args []string) error {
 	flags := flag.NewFlagSet("verify-resources", flag.ContinueOnError)
 	dsn := flags.String("dsn", "", "目标数据库 DSN，默认使用 HERO3_DATABASE_DSN")
@@ -86,17 +86,17 @@ func runVerifyResources(args []string) error {
 		return err
 	}
 	if result.Mismatches > 0 {
-		return fmt.Errorf("资源影子表校验失败：玩家 %d，期望资源行 %d，实际资源行 %d，不一致 %d", result.Players, result.ExpectedRows, result.ActualRows, result.Mismatches)
+		return fmt.Errorf("资源权威表兼容快照校验失败：玩家 %d，期望资源行 %d，实际资源行 %d，不一致 %d", result.Players, result.ExpectedRows, result.ActualRows, result.Mismatches)
 	}
 	databaseName, err := storage.MySQLDatabaseName(*dsn)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("资源影子表校验通过：数据库 %s，玩家 %d，资源行 %d\n", databaseName, result.Players, result.ActualRows)
+	fmt.Printf("资源权威表兼容快照校验通过：数据库 %s，玩家 %d，资源行 %d\n", databaseName, result.Players, result.ActualRows)
 	return nil
 }
 
-// backfillPlayerResources 从玩家主状态回填资源影子表。
+// backfillPlayerResources 从玩家主状态兼容快照回填资源权威表。
 func backfillPlayerResources(ctx context.Context, dsn string) (resourceBackfillResult, error) {
 	db, err := storage.OpenMySQL(ctx, dsn)
 	if err != nil {
@@ -141,7 +141,7 @@ func backfillPlayerResources(ctx context.Context, dsn string) (resourceBackfillR
 	return result, nil
 }
 
-// verifyPlayerResources 校验资源影子表与玩家主状态是否一致。
+// verifyPlayerResources 校验资源权威表与玩家主状态兼容快照是否一致。
 func verifyPlayerResources(ctx context.Context, dsn string) (resourceVerifyResult, error) {
 	db, err := storage.OpenMySQL(ctx, dsn)
 	if err != nil {

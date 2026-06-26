@@ -1534,6 +1534,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Building'
+        resourceSlots:
+          type: array
+          description: 玩家资源田格子快照，权威来源为 player_resource_slots。
+          items:
+            $ref: '#/components/schemas/ResourceSlot'
         army:
           type: array
           items:
@@ -1542,6 +1547,25 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RecruitQueue'
+        general:
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/General'
+        generals:
+          type: array
+          description: 玩家已拥有武将快照，权威来源为 player_generals。
+          items:
+            $ref: '#/components/schemas/General'
+        generalAssignments:
+          type: array
+          description: 武将上阵、驻守、派遣等占用快照，权威来源为 player_general_assignments。
+          items:
+            $ref: '#/components/schemas/GeneralAssignment'
+        buffs:
+          type: array
+          description: 玩家动态 Buff/Modifier 快照，权威来源为 player_buffs。
+          items:
+            $ref: '#/components/schemas/Buff'
         npcState:
           nullable: true
           allOf:
@@ -1637,7 +1661,14 @@ components:
         level:
           type: integer
           example: 3
+        status:
+          type: string
+          example: upgrading
         upgradeEndsAt:
+          type: string
+          nullable: true
+          example: null
+        statusEndsAt:
           type: string
           nullable: true
           example: null
@@ -2288,6 +2319,13 @@ components:
               stone: 80
               iron: 30
               food: 20
+        goldUpgradeCostByLevel:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            '1': 12
+            '2': 14
         upgradeSecondsByLevel:
           type: object
           additionalProperties:

@@ -24,7 +24,16 @@ export interface GameState {
     id: string
     type: string
     level: number
+    status?: string
     upgradeEndsAt: string | null
+    statusEndsAt?: string | null
+  }>
+  resourceSlots?: Array<{
+    id: string
+    resourceType: string
+    buildingId?: string
+    unlockedBy?: string
+    unlockedAt?: string
   }>
   army: Array<{
     unitType: string
@@ -38,6 +47,23 @@ export interface GameState {
     availableStatPoints?: number
     stats?: Record<string, number>
   } | null
+  generals?: Array<{
+    id: string
+    name: string
+    level: number
+    exp: number
+    availableStatPoints?: number
+    stats?: Record<string, number>
+  }>
+  generalAssignments?: Array<{
+    id: string
+    generalId: string
+    slot: string
+    moduleId?: string
+    status?: string
+    assignedAt?: string
+    endsAt?: string
+  }>
   recruitQueues: Array<{
     id: string
     unitType: string
@@ -386,6 +412,7 @@ export interface BuildingConfig {
   capacityByLevel?: number[]
   modifiersByLevel?: Record<string, ModifierConfig[]>
   upgradeCostByLevel?: Record<string, Record<string, number>>
+  goldUpgradeCostByLevel?: Record<string, number>
   upgradeSecondsByLevel?: Record<string, number>
 }
 

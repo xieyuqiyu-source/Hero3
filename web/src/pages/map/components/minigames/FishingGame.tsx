@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FC } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FC } from 'react'
 import { Award, TrendingUp } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import ConfirmCityGoldModal from '@/components/ConfirmCityGoldModal'
@@ -79,7 +79,7 @@ const FishingGame: FC = () => {
     }
   }, [])
 
-  const loadRecords = async (offset = 0) => {
+  const loadRecords = useCallback(async (offset = 0) => {
     if (!activePlayerId) return
     setRecordsLoading(true)
     try {
@@ -91,11 +91,11 @@ const FishingGame: FC = () => {
     } finally {
       setRecordsLoading(false)
     }
-  }
+  }, [activePlayerId])
 
   useEffect(() => {
     void loadRecords()
-  }, [activePlayerId])
+  }, [loadRecords])
 
   useEffect(() => {
     const nextBait = baits.find(bait => bait.id === selectedBait.id) ?? baits[0]

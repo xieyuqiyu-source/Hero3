@@ -1,4 +1,4 @@
-import { useState, useEffect, type FC } from 'react'
+import { useState, useEffect, useCallback, type FC } from 'react'
 import { RefreshCw, LoaderCircle, Swords } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { gameApi } from '@/api/game'
@@ -37,7 +37,7 @@ const NpcCityTab: FC = () => {
   const [battleReport, setBattleReport] = useState<BattleReport | null>(null)
   const [scoutReport, setScoutReport] = useState<BattleReport | null>(null)
 
-  const loadCities = async () => {
+  const loadCities = useCallback(async () => {
     if (!activePlayerId) return
     try {
       const data = await gameApi.getNpcCities(activePlayerId)
@@ -45,11 +45,11 @@ const NpcCityTab: FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [activePlayerId])
 
   useEffect(() => {
     loadCities()
-  }, [activePlayerId])
+  }, [loadCities])
 
   const handleRefresh = async () => {
     if (!activePlayerId || refreshing || sweeping) return

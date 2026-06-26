@@ -68,6 +68,10 @@ type GoldLedgerRepository interface {
 	ListGoldLedger(filter GoldLedgerFilter) ([]GoldLedgerEntry, error)
 }
 
+type EventProcessingRepository interface {
+	ClaimEventProcessing(moduleID string, handlerKey string, eventKey string, processedAt time.Time) (bool, error)
+}
+
 type Repository interface {
 	AccountRepository
 	PlayerStateRepository
@@ -76,6 +80,7 @@ type Repository interface {
 	MailRepository
 	MiniGameRecordRepository
 	GoldLedgerRepository
+	EventProcessingRepository
 }
 
 type MemoryRepository struct {
@@ -90,6 +95,7 @@ type MemoryRepository struct {
 	miniGameRecords map[string][]MiniGameRecord // playerID → records
 	ledger          []GoldLedgerEntry
 	ledgerNextID    int64
+	eventClaims     map[string]struct{}
 }
 
 func NewMemoryRepository() *MemoryRepository {
@@ -102,6 +108,7 @@ func NewMemoryRepository() *MemoryRepository {
 		reports:         make(map[string][]BattleReport),
 		mails:           make(map[string][]Mail),
 		miniGameRecords: make(map[string][]MiniGameRecord),
+		eventClaims:     make(map[string]struct{}),
 	}
 }
 
@@ -413,6 +420,17 @@ func (r *MemoryRepository) UpdateAccountPlayerState(accountID string, playerID s
 	r.players[playerID] = state
 	r.playerUpdatedAt[playerID] = updatedAt.UTC()
 	return account, state, nil
+}
+
+func (r *MemoryRepository) ClaimEventProcessing(moduleID string, handlerKey string, eventKey string, processedAt time.Time) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := strings.TrimSpace(moduleID) + "|" + strings.TrimSpace(handlerKey) + "|" + strings.TrimSpace(eventKey)
+	if _, exists := r.eventClaims[key]; exists {
+		return false, nil
+	}
+	r.eventClaims[key] = struct{}{}
+	return true, nil
 }
 
 // --- Battle Report Methods (MemoryRepository) ---

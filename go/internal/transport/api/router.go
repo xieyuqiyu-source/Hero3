@@ -7,9 +7,11 @@ import (
 	"slices"
 
 	"hero3/internal/app/game"
+	"hero3/internal/app/helpdocs"
 	"hero3/internal/platform/auth"
 	"hero3/internal/platform/config"
 	"hero3/internal/transport/apidocs"
+	helpdocstransport "hero3/internal/transport/helpdocs"
 )
 
 type RouterOptions struct {
@@ -40,6 +42,7 @@ func NewRouter(options RouterOptions) http.Handler {
 	registerItemRoutes(mux, handlers)
 	registerMiniGameRoutes(mux, handlers)
 	registerAdminRoutes(mux, handlers)
+	helpdocstransport.RegisterRoutes(mux, helpdocs.NewService(options.Config.HelpDocsDir))
 
 	// 公开路径白名单（不需要认证）
 	publicPaths := []string{

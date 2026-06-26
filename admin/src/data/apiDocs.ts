@@ -70,6 +70,7 @@ export const apiDocs: ApiDocItem[] = [
       accountId: 'acc_958538e3bc17faf00407ddcc',
       nickname: '接口测试主公',
       faction: 'wei',
+      generalId: 'caocao',
     },
   },
   {

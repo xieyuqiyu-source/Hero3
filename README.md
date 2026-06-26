@@ -8,7 +8,8 @@
 Hero3/
 ├── web/    # React + TypeScript + Vite 玩家前端
 ├── admin/  # React + TypeScript + Vite GM 后台
-└── go/     # Go 后端 API 服务
+├── go/     # Go 后端 API 服务
+└── helpdocs/ # 玩家端帮助文档站内容
 ```
 
 Go 后端当前采用模块化单体目录：
@@ -61,7 +62,7 @@ go build ./cmd/server
 - 配置 `HERO3_DATABASE_DSN` 后启用 MySQL/MariaDB，启动时会自动创建当前需要的账号和存档表。
 - 本地开发模式应连接 `test_` 前缀测试库，例如 `test_hero3`，不要直接写稳定玩家库。
 - `make migrate` 迁移当前 DSN 指向的库，`make migrate-test` 创建并迁移 `test_` 前缀测试库。
-- `make clone-data` 可从 `HERO3_SOURCE_DATABASE_DSN` 复制数据到当前 `test_` 目标库。
+- `make clone-data` 可从 `HERO3_SOURCE_DATABASE_DSN` 复制数据到当前 `test_` 目标库，复制后自动回填并校验资源、背包、建筑、资源田格子、兵力、征兵队列、武将和 Buff 权威表。
 - `clone-data` 允许目标测试库比源库多出迁移后的新列，复制时只写公共列；源库列在目标库不存在时会中止。
 - `clone-data` 不复制或清空 `schema_migrations`，测试库迁移记录由测试库自己的迁移命令维护。
 
@@ -85,6 +86,14 @@ http://localhost:8080/docs
 ```
 
 后端启动后会通过 Scalar 展示 `docs/接口文档/openapi打包.yaml`，可在浏览器内查看接口并直接调试请求。
+
+玩家端帮助文档：
+
+```text
+http://localhost:5173/help
+```
+
+帮助页入口位于玩家端侧栏顶部快捷入口。内容来自 `helpdocs/content/*.md`，可以直接手动新增、修改和删除 Markdown 文件；后端通过 `/api/v1/help/docs` 提供文档列表和正文读取。
 
 基础接口：
 
@@ -127,11 +136,13 @@ http://localhost:5174
 ## 设计文档
 
 - [文档目录](./docs/文档目录.md)：按产品、系统、运维、流程、素材和接口文档分类。
-- [MVP 设计文档](./docs/产品/MVP设计.md)：记录第一版核心循环、数据归属、页面范围、接口边界、代码规模规范、移动端适配要求和开发顺序。
+- [项目最终目的](./docs/产品/项目最终目的.md)：记录长期项目目标、核心边界、模块化方向和生产级要求。
+- [未来开发规划](./docs/产品/未来开发规划.md)：记录后续功能点和玩法模块规划。
 - [核心地基设计](./docs/架构/核心地基设计.md)：记录稳定核心、玩法模块接入、事务、奖励、事件和 Modifier 管线。
 - [服务器部署文档](./docs/运维部署/服务器部署文档.md)：记录当前线上部署结构、发版流程、回滚和排查命令。
 - [OpenAPI 入口文档](./docs/接口文档/openapi/openapi.yaml)：按模块拆分维护，用于接口调试、文档查看和前后端对齐。
 - [OpenAPI 打包文档](./docs/接口文档/openapi打包.yaml)：由 `make openapi` 生成，导入 Apifox 使用。
+- [帮助文档站内容](./helpdocs/README.md)：玩家端帮助页读取的 Wiki 内容源。
 
 ## Apifox
 

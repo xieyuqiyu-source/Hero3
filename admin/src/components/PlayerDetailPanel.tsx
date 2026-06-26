@@ -1,3 +1,4 @@
+// 玩家详情弹层用于查看核心资产权威状态并执行轻量 GM 调试。
 import { useCallback, useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { adminApi } from '@/api/admin'
@@ -9,11 +10,13 @@ interface PlayerDetailPanelProps {
   onClose: () => void
 }
 
+// PlayerDetailPanel 展示单个玩家的资源、建筑、军队、武将和通用资产状态。
 export default function PlayerDetailPanel({ playerId, onClose }: PlayerDetailPanelProps) {
   const [state, setState] = useState<GameState | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // loadState 从 Admin API 拉取玩家当前权威状态。
   const loadState = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -85,6 +88,20 @@ export default function PlayerDetailPanel({ playerId, onClose }: PlayerDetailPan
             {/* Resource Adjust */}
             <ResourceAdjustForm playerId={playerId} onSuccess={(s) => setState(s)} />
 
+            {/* Inventory */}
+            {state.inventory && Object.keys(state.inventory).length > 0 && (
+              <section className="mb-4 p-3.5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+                <h4 className="text-xs font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2.5">背包 ({Object.keys(state.inventory).length})</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(state.inventory).map(([itemId, stack]) => (
+                    <span key={itemId} className="px-2 py-1 rounded-lg text-[11px] font-bold bg-sky-500/10 text-sky-700">
+                      {itemId} ×{stack.amount}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* Buildings */}
             <section className="mb-4 p-3.5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
               <h4 className="text-xs font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2.5">建筑 ({state.buildings.length})</h4>
@@ -96,6 +113,70 @@ export default function PlayerDetailPanel({ playerId, onClose }: PlayerDetailPan
                 ))}
               </div>
             </section>
+
+            {/* Resource Slots */}
+            {state.resourceSlots && state.resourceSlots.length > 0 && (
+              <section className="mb-4 p-3.5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+                <h4 className="text-xs font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2.5">资源田格子 ({state.resourceSlots.length})</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {state.resourceSlots.map((slot) => (
+                    <span key={slot.id} className="px-2 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/10 text-emerald-700">
+                      {slot.resourceType} · {slot.buildingId || slot.id}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Generals */}
+            {state.generals && state.generals.length > 0 && (
+              <section className="mb-4 p-3.5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+                <h4 className="text-xs font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2.5">武将 ({state.generals.length})</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {state.generals.map((general) => (
+                    <div key={general.id} className="px-2.5 py-2 rounded-xl bg-white/70 dark:bg-white/5 border border-[var(--color-border)]">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-[var(--color-text-primary)]">{general.name || general.id}</span>
+                        <span className="text-[10px] text-[var(--color-text-muted)]">Lv.{general.level}</span>
+                      </div>
+                      <div className="mt-1 text-[10px] text-[var(--color-text-muted)]">
+                        EXP {general.exp.toLocaleString()} · 点数 {general.availableStatPoints ?? 0}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* General Assignments */}
+            {state.generalAssignments && state.generalAssignments.length > 0 && (
+              <section className="mb-4 p-3.5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+                <h4 className="text-xs font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2.5">武将派驻 ({state.generalAssignments.length})</h4>
+                <div className="space-y-1.5">
+                  {state.generalAssignments.map((assignment) => (
+                    <div key={assignment.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white/70 dark:bg-white/5 border border-[var(--color-border)]">
+                      <span className="text-[11px] text-[var(--color-text-primary)] font-bold">{assignment.generalId}</span>
+                      <span className="text-[10px] text-[var(--color-text-muted)]">{assignment.slot} · {assignment.status ?? 'active'}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Buffs */}
+            {state.buffs && state.buffs.length > 0 && (
+              <section className="mb-4 p-3.5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+                <h4 className="text-xs font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2.5">Buff ({state.buffs.length})</h4>
+                <div className="space-y-1.5">
+                  {state.buffs.map((buff) => (
+                    <div key={buff.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white/70 dark:bg-white/5 border border-[var(--color-border)]">
+                      <span className="text-[11px] text-[var(--color-text-primary)] font-bold">{buff.key} {buff.mode}</span>
+                      <span className="text-[10px] text-[var(--color-text-muted)]">{buff.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* Army */}
             <section className="mb-4 p-3.5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">

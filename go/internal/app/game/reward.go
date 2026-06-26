@@ -14,6 +14,7 @@ const (
 	RewardTypeGold       = corereward.TypeGold
 	RewardTypeItem       = corereward.TypeItem
 	RewardTypeUnit       = corereward.TypeUnit
+	RewardTypeGeneral    = corereward.TypeGeneral
 	RewardTypeGeneralExp = corereward.TypeGeneralExp
 	RewardTypeBuff       = corereward.TypeBuff
 )
@@ -44,8 +45,8 @@ func ApplyRewardsToStateWithContext(state *GameState, rewards []Reward, ctx Rewa
 	if state == nil {
 		return RewardApplyResult{}, ErrPlayerNotFound
 	}
-	if state.Resources.Items == nil {
-		state.Resources.Items = map[string]int{}
+	if err := ensureResourceState(state); err != nil {
+		return RewardApplyResult{}, err
 	}
 	if state.Inventory == nil {
 		state.Inventory = map[string]ItemStack{}
@@ -70,15 +71,12 @@ func ApplyRewardsToStateWithContext(state *GameState, rewards []Reward, ctx Rewa
 			if !isCoreResourceType(rewardID) {
 				return RewardApplyResult{}, ErrMailInvalidAttachment
 			}
-			capacity := state.Resources.Capacity[rewardID]
-			current := state.Resources.Items[rewardID]
-			next := current + reward.Amount
-			if capacity > 0 && next > capacity {
-				next = capacity
+			granted, _, err := addResourceCapped(state, rewardID, reward.Amount)
+			if err != nil {
+				return RewardApplyResult{}, err
 			}
-			state.Resources.Items[rewardID] = next
-			result.Granted[rewardID] += next - current
-			result.Events = append(result.Events, buildRewardEvent(ctx, state.Player.ID, reward, next-current, now))
+			result.Granted[rewardID] += granted
+			result.Events = append(result.Events, buildRewardEvent(ctx, state.Player.ID, reward, granted, now))
 		case RewardTypeCityGold:
 			if rewardID != RewardTypeCityGold {
 				return RewardApplyResult{}, ErrMailInvalidAttachment
@@ -119,6 +117,15 @@ func ApplyRewardsToStateWithContext(state *GameState, rewards []Reward, ctx Rewa
 			AddArmyUnit(state, rewardID, reward.Amount)
 			result.Granted[rewardID] += reward.Amount
 			result.Events = append(result.Events, buildRewardEvent(ctx, state.Player.ID, reward, reward.Amount, now))
+		case RewardTypeGeneral:
+			if reward.Amount != 1 {
+				return RewardApplyResult{}, ErrMailInvalidAttachment
+			}
+			if err := AddOwnedGeneral(state, rewardID, now); err != nil {
+				return RewardApplyResult{}, err
+			}
+			result.Granted[rewardID] += 1
+			result.Events = append(result.Events, buildRewardEvent(ctx, state.Player.ID, reward, 1, now))
 		case RewardTypeGeneralExp:
 			if rewardID != "" && rewardID != "current_general" && (state.General == nil || rewardID != state.General.ID) {
 				return RewardApplyResult{}, ErrGeneralNotFound
@@ -127,6 +134,7 @@ func ApplyRewardsToStateWithContext(state *GameState, rewards []Reward, ctx Rewa
 				return RewardApplyResult{}, ErrGeneralNotFound
 			}
 			expResult := applyGeneralBattleExp(state.General, reward.Amount)
+			syncActiveGeneralToRoster(state)
 			result.Granted[RewardTypeGeneralExp] += expResult.Gained
 			refreshGeneralDerivedState(state, now)
 			result.Events = append(result.Events, buildRewardEvent(ctx, state.Player.ID, reward, expResult.Gained, now))

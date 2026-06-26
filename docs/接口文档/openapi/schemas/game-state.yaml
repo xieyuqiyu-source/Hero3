@@ -28,6 +28,11 @@ GameState:
       type: array
       items:
         $ref: '#/components/schemas/Building'
+    resourceSlots:
+      type: array
+      description: 玩家资源田格子快照，权威来源为 player_resource_slots。
+      items:
+        $ref: '#/components/schemas/ResourceSlot'
     army:
       type: array
       items:
@@ -36,6 +41,25 @@ GameState:
       type: array
       items:
         $ref: '#/components/schemas/RecruitQueue'
+    general:
+      nullable: true
+      allOf:
+      - $ref: '#/components/schemas/General'
+    generals:
+      type: array
+      description: 玩家已拥有武将快照，权威来源为 player_generals。
+      items:
+        $ref: '#/components/schemas/General'
+    generalAssignments:
+      type: array
+      description: 武将上阵、驻守、派遣等占用快照，权威来源为 player_general_assignments。
+      items:
+        $ref: '#/components/schemas/GeneralAssignment'
+    buffs:
+      type: array
+      description: 玩家动态 Buff/Modifier 快照，权威来源为 player_buffs。
+      items:
+        $ref: '#/components/schemas/Buff'
     npcState:
       nullable: true
       allOf:
@@ -131,10 +155,39 @@ Building:
     level:
       type: integer
       example: 3
+    status:
+      type: string
+      example: upgrading
     upgradeEndsAt:
       type: string
       nullable: true
       example: null
+    statusEndsAt:
+      type: string
+      nullable: true
+      example: null
+ResourceSlot:
+  type: object
+  required:
+  - id
+  - resourceType
+  properties:
+    id:
+      type: string
+      example: construction_resource_slot-1
+    resourceType:
+      type: string
+      example: wood
+    buildingId:
+      type: string
+      example: construction_resource_slot-1
+    unlockedBy:
+      type: string
+      example: construction_bureau
+    unlockedAt:
+      type: string
+      format: date-time
+      example: '2026-06-26T12:00:00Z'
 ArmyUnit:
   type: object
   required:
@@ -164,6 +217,106 @@ RecruitQueue:
     endsAt:
       type: string
       format: date-time
+General:
+  type: object
+  required:
+  - id
+  - name
+  - level
+  - exp
+  properties:
+    id:
+      type: string
+      example: caocao
+    name:
+      type: string
+      example: 曹操
+    level:
+      type: integer
+      example: 1
+    exp:
+      type: integer
+      example: 0
+    nextLevelExp:
+      type: integer
+      example: 100
+    availableStatPoints:
+      type: integer
+      example: 1
+    stats:
+      type: object
+      additionalProperties:
+        type: integer
+    attributes:
+      type: object
+      additionalProperties:
+        type: number
+    buffs:
+      type: object
+      additionalProperties:
+        type: number
+GeneralAssignment:
+  type: object
+  required:
+  - id
+  - generalId
+  - slot
+  properties:
+    id:
+      type: string
+      example: main
+    generalId:
+      type: string
+      example: caocao
+    slot:
+      type: string
+      example: main
+    moduleId:
+      type: string
+      example: dungeon_famous_generals
+    status:
+      type: string
+      example: active
+    assignedAt:
+      type: string
+      format: date-time
+    endsAt:
+      type: string
+      format: date-time
+Buff:
+  type: object
+  required:
+  - id
+  - source
+  - key
+  - value
+  - mode
+  - createdAt
+  properties:
+    id:
+      type: string
+      example: buff_ab12cd34
+    source:
+      type: string
+      example: gm
+    key:
+      type: string
+      example: attackBonus
+    value:
+      type: number
+      example: 0.1
+    mode:
+      type: string
+      example: percentAdd
+    expiresAt:
+      type: string
+      format: date-time
+    createdAt:
+      type: string
+      format: date-time
+    note:
+      type: string
+      example: 活动奖励
 MapTarget:
   type: object
   required:
@@ -298,6 +451,13 @@ BuildingConfig:
           stone: 80
           iron: 30
           food: 20
+    goldUpgradeCostByLevel:
+      type: object
+      additionalProperties:
+        type: integer
+      example:
+        '1': 12
+        '2': 14
     upgradeSecondsByLevel:
       type: object
       additionalProperties:

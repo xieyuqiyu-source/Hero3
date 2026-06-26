@@ -4,6 +4,7 @@ import { gameApi } from '@/api/game'
 import { useGameStore } from '@/store/gameStore'
 import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import { toast } from '@/components/ui'
+import { getErrorMessage } from '@/utils/error'
 import ConfirmCityGoldModal from './ConfirmCityGoldModal'
 
 const FillButton: FC = () => {
@@ -37,8 +38,8 @@ const FillButton: FC = () => {
       setState(result.state)
       toast.success(`爆仓完成，消耗 ${result.cost} 城金`)
       setConfirmOpen(false)
-    } catch (e: any) {
-      const msg = e?.message || '操作失败'
+    } catch (e: unknown) {
+      const msg = getErrorMessage(e, '操作失败')
       if (msg.includes('insufficient')) {
         toast.error('城金不足')
       } else {

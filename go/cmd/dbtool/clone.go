@@ -41,7 +41,15 @@ func runCloneData(args []string) error {
 	targetDSN := flags.String("target-dsn", "", "目标数据库 DSN，默认使用 HERO3_DATABASE_DSN")
 	truncateTarget := flags.Bool("truncate", false, "复制前清空目标库表数据")
 	batchSize := flags.Int("batch-size", defaultCloneBatchSize, "批量插入行数")
-	skipResourceRefresh := flags.Bool("skip-resource-refresh", false, "跳过资源影子表回填和校验")
+	skipAssetRefresh := flags.Bool("skip-asset-refresh", false, "跳过资源/背包/建筑/资源田/兵力/征兵队列/武将/Buff 权威表回填和兼容快照校验")
+	skipResourceRefresh := flags.Bool("skip-resource-refresh", false, "只跳过资源权威表回填和兼容快照校验")
+	skipInventoryRefresh := flags.Bool("skip-inventory-refresh", false, "只跳过背包权威表回填和兼容快照校验")
+	skipBuildingRefresh := flags.Bool("skip-building-refresh", false, "只跳过建筑权威表回填和兼容快照校验")
+	skipResourceSlotRefresh := flags.Bool("skip-resource-slot-refresh", false, "只跳过资源田格子权威表回填和兼容快照校验")
+	skipArmyRefresh := flags.Bool("skip-army-refresh", false, "只跳过兵力权威表回填和兼容快照校验")
+	skipRecruitQueueRefresh := flags.Bool("skip-recruit-queue-refresh", false, "只跳过征兵队列权威表回填和兼容快照校验")
+	skipGeneralRefresh := flags.Bool("skip-general-refresh", false, "只跳过武将权威表回填和兼容快照校验")
+	skipBuffRefresh := flags.Bool("skip-buff-refresh", false, "只跳过 Buff 权威表回填和兼容快照校验")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -85,7 +93,7 @@ func runCloneData(args []string) error {
 		return err
 	}
 	fmt.Printf("数据复制完成：%s -> %s，表 %d，行 %d\n", sourceName, targetName, result.Tables, result.Rows)
-	if !*skipResourceRefresh {
+	if !*skipAssetRefresh && !*skipResourceRefresh {
 		backfillResult, err := backfillPlayerResources(ctx, *targetDSN)
 		if err != nil {
 			return err
@@ -95,9 +103,107 @@ func runCloneData(args []string) error {
 			return err
 		}
 		if verifyResult.Mismatches > 0 {
-			return fmt.Errorf("资源影子表校验失败：玩家 %d，期望资源行 %d，实际资源行 %d，不一致 %d", verifyResult.Players, verifyResult.ExpectedRows, verifyResult.ActualRows, verifyResult.Mismatches)
+			return fmt.Errorf("资源权威表兼容快照校验失败：玩家 %d，期望资源行 %d，实际资源行 %d，不一致 %d", verifyResult.Players, verifyResult.ExpectedRows, verifyResult.ActualRows, verifyResult.Mismatches)
 		}
-		fmt.Printf("资源影子表已刷新：玩家 %d，资源行 %d\n", backfillResult.Players, backfillResult.Rows)
+		fmt.Printf("资源权威表已刷新：玩家 %d，资源行 %d\n", backfillResult.Players, backfillResult.Rows)
+	}
+	if !*skipAssetRefresh && !*skipInventoryRefresh {
+		backfillResult, err := backfillPlayerInventory(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		verifyResult, err := verifyPlayerInventory(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		if verifyResult.Mismatches > 0 {
+			return fmt.Errorf("背包权威表兼容快照校验失败：玩家 %d，期望道具行 %d，实际道具行 %d，不一致 %d", verifyResult.Players, verifyResult.ExpectedRows, verifyResult.ActualRows, verifyResult.Mismatches)
+		}
+		fmt.Printf("背包权威表已刷新：玩家 %d，道具行 %d\n", backfillResult.Players, backfillResult.Rows)
+	}
+	if !*skipAssetRefresh && !*skipBuildingRefresh {
+		backfillResult, err := backfillPlayerBuildings(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		verifyResult, err := verifyPlayerBuildings(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		if verifyResult.Mismatches > 0 {
+			return fmt.Errorf("建筑权威表兼容快照校验失败：玩家 %d，期望建筑行 %d，实际建筑行 %d，不一致 %d", verifyResult.Players, verifyResult.ExpectedRows, verifyResult.ActualRows, verifyResult.Mismatches)
+		}
+		fmt.Printf("建筑权威表已刷新：玩家 %d，建筑行 %d\n", backfillResult.Players, backfillResult.Rows)
+	}
+	if !*skipAssetRefresh && !*skipResourceSlotRefresh {
+		backfillResult, err := backfillPlayerResourceSlots(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		verifyResult, err := verifyPlayerResourceSlots(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		if verifyResult.Mismatches > 0 {
+			return fmt.Errorf("资源田格子权威表兼容快照校验失败：玩家 %d，期望格子行 %d，实际格子行 %d，不一致 %d", verifyResult.Players, verifyResult.ExpectedRows, verifyResult.ActualRows, verifyResult.Mismatches)
+		}
+		fmt.Printf("资源田格子权威表已刷新：玩家 %d，格子行 %d\n", backfillResult.Players, backfillResult.Rows)
+	}
+	if !*skipAssetRefresh && !*skipArmyRefresh {
+		backfillResult, err := backfillPlayerArmy(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		verifyResult, err := verifyPlayerArmy(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		if verifyResult.Mismatches > 0 {
+			return fmt.Errorf("兵力权威表兼容快照校验失败：玩家 %d，期望兵力行 %d，实际兵力行 %d，不一致 %d", verifyResult.Players, verifyResult.ExpectedRows, verifyResult.ActualRows, verifyResult.Mismatches)
+		}
+		fmt.Printf("兵力权威表已刷新：玩家 %d，兵力行 %d\n", backfillResult.Players, backfillResult.Rows)
+	}
+	if !*skipAssetRefresh && !*skipRecruitQueueRefresh {
+		backfillResult, err := backfillPlayerRecruitQueues(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		verifyResult, err := verifyPlayerRecruitQueues(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		if verifyResult.Mismatches > 0 {
+			return fmt.Errorf("征兵队列权威表兼容快照校验失败：玩家 %d，期望队列行 %d，实际队列行 %d，不一致 %d", verifyResult.Players, verifyResult.ExpectedRows, verifyResult.ActualRows, verifyResult.Mismatches)
+		}
+		fmt.Printf("征兵队列权威表已刷新：玩家 %d，队列行 %d\n", backfillResult.Players, backfillResult.Rows)
+	}
+	if !*skipAssetRefresh && !*skipGeneralRefresh {
+		backfillResult, err := backfillPlayerGenerals(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		verifyResult, err := verifyPlayerGenerals(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		if verifyResult.Mismatches > 0 {
+			return fmt.Errorf("武将权威表兼容快照校验失败：玩家 %d，期望武将行 %d，实际武将行 %d，期望占用行 %d，实际占用行 %d，不一致 %d", verifyResult.Players, verifyResult.ExpectedGenerals, verifyResult.ActualGenerals, verifyResult.ExpectedAssignments, verifyResult.ActualAssignments, verifyResult.Mismatches)
+		}
+		fmt.Printf("武将权威表已刷新：玩家 %d，武将行 %d，占用行 %d\n", backfillResult.Players, backfillResult.Generals, backfillResult.Assignments)
+	}
+	if !*skipAssetRefresh && !*skipBuffRefresh {
+		backfillResult, err := backfillPlayerBuffs(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		verifyResult, err := verifyPlayerBuffs(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		if verifyResult.Mismatches > 0 {
+			return fmt.Errorf("Buff 权威表兼容快照校验失败：玩家 %d，期望 Buff 行 %d，实际 Buff 行 %d，不一致 %d", verifyResult.Players, verifyResult.ExpectedRows, verifyResult.ActualRows, verifyResult.Mismatches)
+		}
+		fmt.Printf("Buff 权威表已刷新：玩家 %d，Buff 行 %d\n", backfillResult.Players, backfillResult.Rows)
 	}
 	return nil
 }

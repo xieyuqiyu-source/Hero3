@@ -5,6 +5,7 @@ import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
 import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import { toast } from '@/components/ui'
+import { getErrorMessage } from '@/utils/error'
 import ConfirmCityGoldModal from './ConfirmCityGoldModal'
 
 const BOOST_MULTIPLIERS = [2, 4, 8, 16] as const
@@ -91,8 +92,8 @@ const CapacityBoostButton: FC<CapacityBoostButtonProps> = ({ currentBoost = 1 })
       toast.success(`仓库 ×${selectedMultiplier} 扩容已激活`)
       setOpen(false)
       setConfirmOpen(false)
-    } catch (e: any) {
-      const msg = e?.message || '购买失败'
+    } catch (e: unknown) {
+      const msg = getErrorMessage(e, '购买失败')
       if (msg.includes('still active')) toast.error('当前扩容尚未到期')
       else if (msg.includes('insufficient')) toast.error('城金不足')
       else toast.error(msg)

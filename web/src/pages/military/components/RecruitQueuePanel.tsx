@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type FC } from 'react'
+import { useState, useEffect, useRef, useCallback, type FC } from 'react'
 import { Clock, LoaderCircle, ChevronDown, ChevronRight, Zap } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
@@ -30,11 +30,11 @@ const RecruitQueuePanel: FC = () => {
   const units = useConfigStore((s) => s.units)
   const [now, setNow] = useState(Date.now())
   const [expanded, setExpanded] = useState(false)
-  const getUnitName = (unitId: string): string => {
+  const getUnitName = useCallback((unitId: string): string => {
     const factionUnits = units?.[faction]
     if (!factionUnits) return unitId
     return factionUnits[unitId]?.name ?? unitId
-  }
+  }, [faction, units])
 
   const [lastRefreshed, setLastRefreshed] = useState<string | null>(null)
   const prevQueueMapRef = useRef<Map<string, string>>(new Map())
@@ -58,7 +58,7 @@ const RecruitQueuePanel: FC = () => {
     }
 
     prevQueueMapRef.current = new Map(pendingQueues.map((q) => [q.id, q.unitType]))
-  }, [pendingQueues])
+  }, [pendingQueues, getUnitName])
 
   useEffect(() => {
     if (pendingQueues.length === 0) return
@@ -80,7 +80,7 @@ const RecruitQueuePanel: FC = () => {
   const isTraining = (index: number): boolean => {
     if (index === 0) return true
     const prevEndsAt = new Date(pendingQueues[index - 1].endsAt).getTime()
-    return Date.now() >= prevEndsAt
+    return now >= prevEndsAt
   }
 
   // 填充到 5 个槽位

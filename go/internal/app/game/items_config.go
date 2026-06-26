@@ -28,6 +28,7 @@ type ItemDefinition struct {
 type ItemEffect struct {
 	Type          string            `json:"type"`
 	Amount        int               `json:"amount,omitempty"`
+	GeneralID     string            `json:"generalId,omitempty"`
 	Resources     map[string]int    `json:"resources,omitempty"`
 	UnitByFaction map[string]string `json:"unitByFaction,omitempty"`
 }
@@ -71,6 +72,14 @@ func ValidateItemsConfig(cfg ItemsConfig) error {
 		}
 		for _, effect := range item.Effects {
 			switch strings.TrimSpace(effect.Type) {
+			case "general":
+				if strings.TrimSpace(effect.GeneralID) == "" {
+					return errors.New("general effect requires generalId: " + id)
+				}
+				hero, ok := GetHeroConfig(strings.TrimSpace(effect.GeneralID))
+				if !ok || !hero.Enabled {
+					return errors.New("invalid general effect generalId: " + id)
+				}
 			case "general_exp":
 				if effect.Amount <= 0 {
 					return errors.New("general_exp amount must be positive: " + id)

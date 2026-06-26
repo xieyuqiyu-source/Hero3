@@ -122,7 +122,14 @@ HERO3_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localho
 配置 `HERO3_DATABASE_DSN` 后，服务使用 MySQL/MariaDB，并在启动时自动创建当前需要的表：
 
 - `accounts`：轻账号
-- `players`：账号绑定的游戏存档，当前阶段用 `state_json` 保存完整游戏状态
+- `players`：账号绑定的游戏存档，`state_json` 只保留轻量兼容快照，不再保存资源、建筑、兵力、武将、背包、Buff 等权威资产大字段
+- `player_resources`：玩家资源权威表
+- `player_inventory`：玩家背包权威表
+- `player_buildings`：玩家建筑权威表
+- `player_resource_slots`：玩家资源田格子权威表
+- `player_army_units` / `player_recruit_queues`：玩家兵力和征兵队列权威表
+- `player_generals` / `player_general_assignments`：玩家武将和武将派驻权威表
+- `player_buffs`：玩家 Buff/Modifier 权威表
 
 本地或服务器 MySQL 可以先创建库和用户：
 
@@ -158,7 +165,7 @@ go run ./cmd/server
 - `make migrate` 只迁移当前 `HERO3_DATABASE_DSN` 指向的库。
 - `make migrate-test` 会按当前库名生成 `test_` 前缀库并执行迁移；执行该命令的数据库账号必须拥有 `CREATE DATABASE` 权限。
 - 如果数据库账号没有建库权限，需要先由服务器管理员创建并授权 `test_hero3`，再把 `go/.env` 的 DSN 改到该库。
-- `make clone-data` 会从 `HERO3_SOURCE_DATABASE_DSN` 复制数据到当前 `HERO3_DATABASE_DSN` 指向的 `test_` 库，并清空目标库旧数据；复制完成后会自动回填并校验 `player_resources`。
+- `make clone-data` 会从 `HERO3_SOURCE_DATABASE_DSN` 复制数据到当前 `HERO3_DATABASE_DSN` 指向的 `test_` 库，并清空目标库旧数据；复制完成后会自动回填并校验资源、背包、建筑、资源田格子、兵力、征兵队列、武将和 Buff 权威表。
 - `clone-data` 支持目标测试库已经完成较新迁移的场景：目标表新增列会跳过并使用数据库默认值；源库存在但目标库缺失的列会中止复制。
 - `clone-data --truncate` 会清空目标测试库全部普通表，再按源库表复制，避免目标新增表残留旧数据。
 - `clone-data` 会跳过 `schema_migrations`，避免把源库迁移历史覆盖到测试库。
@@ -170,6 +177,22 @@ make migrate
 make migrate-test
 make print-test-dsn
 HERO3_SOURCE_DATABASE_DSN='源库DSN' make clone-data
+make backfill-resources
+make verify-resources
+make backfill-inventory
+make verify-inventory
+make backfill-buildings
+make verify-buildings
+make backfill-resource-slots
+make verify-resource-slots
+make backfill-army
+make verify-army
+make backfill-recruit-queues
+make verify-recruit-queues
+make backfill-generals
+make verify-generals
+make backfill-buffs
+make verify-buffs
 ```
 
 日常开发只需要：
@@ -263,6 +286,8 @@ curl -X POST http://localhost:8080/api/v1/players/create \
   -H 'Content-Type: application/json' \
   -d '{"accountId":"acc_xxx","nickname":"主公","faction":"wei"}'
 ```
+
+`generalId` 可选；不传时后端会选择该阵营第一个可用将领。前端选择角色页会显式传入玩家选中的将领。
 
 ## 开发约定
 

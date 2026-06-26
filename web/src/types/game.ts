@@ -64,7 +64,17 @@ export interface Building {
   id: string
   type: string
   level: number
+  status?: string
   upgradeEndsAt: string | null
+  statusEndsAt?: string | null
+}
+
+export interface ResourceSlot {
+  id: string
+  resourceType: string
+  buildingId?: string
+  unlockedBy?: string
+  unlockedAt?: string
 }
 
 export interface ArmyUnit {
@@ -233,6 +243,16 @@ export interface General {
   traits?: GeneralTraitInstance[]
 }
 
+export interface GeneralAssignment {
+  id: string
+  generalId: string
+  slot: string
+  moduleId?: string
+  status?: string
+  assignedAt?: string
+  endsAt?: string
+}
+
 export interface GameState {
   player: Player
   resources: ResourceState
@@ -252,7 +272,10 @@ export interface GameState {
   /** 容量加成到期时间 */
   capacityBoostEnd?: string
   buildings: Building[]
+  resourceSlots?: ResourceSlot[]
   general: General | null
+  generals?: General[]
+  generalAssignments?: GeneralAssignment[]
   army: ArmyUnit[]
   recruitQueues: RecruitQueue[]
   npcState?: NpcState | null

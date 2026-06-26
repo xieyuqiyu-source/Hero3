@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -358,6 +359,37 @@ func TestCreatePlayerRejectsGeneralConfigFactionMismatch(t *testing.T) {
 
 	if _, _, err := service.CreatePlayer("account_mismatch_general", "测试", "wei", "zhouyu"); !errors.Is(err, ErrInvalidGeneral) {
 		t.Fatalf("expected ErrInvalidGeneral for mismatched general faction, got %v", err)
+	}
+}
+
+func TestCreatePlayerUsesDefaultGeneralWhenMissing(t *testing.T) {
+	setTestFactionsAndGenerals(t, FactionsConfig{
+		"wei": {Generals: []GeneralInfo{
+			{ID: "zhenmi", Name: "甄宓"},
+			{ID: "caocao", Name: "曹操"},
+		}},
+	}, GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"zhenmi": {ID: "zhenmi", Name: "甄宓", Faction: "wei", Enabled: false},
+			"caocao": {ID: "caocao", Name: "曹操", Faction: "wei", Enabled: true},
+		},
+	})
+
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	now := time.Date(2026, 6, 26, 11, 30, 0, 0, time.UTC)
+	account := Account{ID: "account_default_general", Username: "default_general", PasswordHash: "hash", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+
+	_, state, err := service.CreatePlayer(account.ID, "默认将领", "wei", "")
+	if err != nil {
+		t.Fatalf("CreatePlayer without general failed: %v", err)
+	}
+	if state.General == nil || state.General.ID != "caocao" {
+		t.Fatalf("expected caocao default general, got %+v", state.General)
 	}
 }
 
@@ -2577,6 +2609,120 @@ func TestGrantRewardsAppliesBuff(t *testing.T) {
 	if buff.Key != StatAttackBonus || math.Abs(buff.Value-0.2) > 1e-9 || buff.Mode != "percentAdd" || buff.ExpiresAt == "" {
 		t.Fatalf("unexpected buff: %+v", buff)
 	}
+}
+
+func TestGetStateEnsuresConstructionBureauResourceSlots(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "account_construction_slots", Username: "construction_slots", PasswordHash: "hash", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_construction_slots", "ConstructionSlots", "wei", "caocao", now)
+	state.Player.MailCode = "CS0001"
+	state.Buildings = []Building{{ID: "warehouse-1", Type: "warehouse", Level: 1}}
+	state.ResourceSlots = nil
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	next, err := svc.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState failed: %v", err)
+	}
+	if findBuildingByID(&next, "construction_bureau-1") == nil {
+		t.Fatalf("expected construction bureau to be added")
+	}
+	if findBuildingByID(&next, "construction_resource_slot-1") == nil {
+		t.Fatalf("expected first construction resource slot building")
+	}
+	if countConstructionResourceSlots(next.Buildings) != 1 {
+		t.Fatalf("expected one construction resource slot, got %+v", next.Buildings)
+	}
+}
+
+func TestConstructionBureauUpgradeUsesAccountGold(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "account_construction_gold", Username: "construction_gold", PasswordHash: "hash", Gold: 100, CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_construction_gold", "ConstructionGold", "wei", "caocao", now)
+	state.Player.MailCode = "CG0001"
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	next, err := svc.UpgradeBuilding(state.Player.ID, "construction_bureau-1")
+	if err != nil {
+		t.Fatalf("UpgradeBuilding construction bureau failed: %v", err)
+	}
+	accountAfter, err := repo.GetAccountByID(account.ID)
+	if err != nil {
+		t.Fatalf("GetAccountByID failed: %v", err)
+	}
+	if accountAfter.Gold != 88 {
+		t.Fatalf("expected account gold 88 after level 1 upgrade cost 12, got %d", accountAfter.Gold)
+	}
+	building := findBuildingByID(&next, "construction_bureau-1")
+	if building == nil || building.UpgradeEndsAt == nil || building.Status != BuildingStatusUpgrading {
+		t.Fatalf("expected construction bureau upgrading, got %+v", building)
+	}
+	entries, err := svc.ListGoldLedger(GoldLedgerFilter{AccountID: account.ID, RefType: LedgerRefBuildingGoldUpgrade})
+	if err != nil {
+		t.Fatalf("ListGoldLedger failed: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Amount != 12 || entries[0].BalanceAfter != 88 {
+		t.Fatalf("unexpected construction gold ledger: %+v", entries)
+	}
+}
+
+func TestConstructionBureauLevelUnlocksMoreResourceSlots(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "account_construction_unlock", Username: "construction_unlock", PasswordHash: "hash", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_construction_unlock", "ConstructionUnlock", "wei", "caocao", now)
+	state.Player.MailCode = "CU0001"
+	for i := range state.Buildings {
+		if state.Buildings[i].Type == "construction_bureau" {
+			state.Buildings[i].Level = 4
+			endsAt := now.Add(-time.Minute).UTC().Format(resourceDateLayout)
+			state.Buildings[i].UpgradeEndsAt = &endsAt
+			state.Buildings[i].Status = BuildingStatusUpgrading
+		}
+	}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	next, err := svc.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState failed: %v", err)
+	}
+	building := findBuildingByID(&next, "construction_bureau-1")
+	if building == nil || building.Level != 5 || building.UpgradeEndsAt != nil {
+		t.Fatalf("expected construction bureau completed at level 5, got %+v", building)
+	}
+	if countConstructionResourceSlots(next.Buildings) != 2 {
+		t.Fatalf("expected two construction resource slots after level 5, got %+v", next.Buildings)
+	}
+}
+
+func countConstructionResourceSlots(buildings []Building) int {
+	count := 0
+	for _, building := range buildings {
+		if strings.HasPrefix(building.ID, "construction_resource_slot-") {
+			count++
+		}
+	}
+	return count
 }
 
 func loadTestItemsConfig(t *testing.T) {

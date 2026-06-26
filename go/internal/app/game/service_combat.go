@@ -88,6 +88,7 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 		if state.General != nil {
 			applyHeroConfigToGeneral(state.General)
 		}
+		EnsureGeneralRoster(state, now)
 
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
@@ -178,6 +179,7 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 
 		expGained := calculateGeneralBattleExpFromLosses(npc.Faction, result.DefenderLosses)
 		expResult := applyGeneralBattleExp(state.General, expGained)
+		syncActiveGeneralToRoster(state)
 		if expResult.Gained > 0 {
 			report.GeneralExpGained = expResult.Gained
 			report.GeneralLevelBefore = expResult.LevelBefore
@@ -638,11 +640,8 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 		// 资源入库玩家（溢出部分按比例转城金）
 		totalOverflow := 0
 		for resType, amount := range plundered {
-			state.Resources.Items[resType] += amount
-			cap := state.Resources.Capacity[resType]
-			if cap > 0 && state.Resources.Items[resType] > cap {
-				overflow := state.Resources.Items[resType] - cap
-				state.Resources.Items[resType] = cap
+			_, overflow, _ := addResourceCapped(state, resType, amount)
+			if overflow > 0 {
 				totalOverflow += overflow
 				overflowDetail[resType] = overflow
 			}

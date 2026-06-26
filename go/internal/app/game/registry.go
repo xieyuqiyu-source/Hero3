@@ -17,6 +17,7 @@ func init() {
 	mustRegisterRewardType(RewardTypeDefinition{Type: RewardTypeGold, Description: "账号金币奖励", RequiresAccount: true})
 	mustRegisterRewardType(RewardTypeDefinition{Type: RewardTypeItem, Description: "道具奖励"})
 	mustRegisterRewardType(RewardTypeDefinition{Type: RewardTypeUnit, Description: "兵力奖励"})
+	mustRegisterRewardType(RewardTypeDefinition{Type: RewardTypeGeneral, Description: "武将获取奖励"})
 	mustRegisterRewardType(RewardTypeDefinition{Type: RewardTypeGeneralExp, Description: "武将经验奖励"})
 	mustRegisterRewardType(RewardTypeDefinition{Type: RewardTypeBuff, Description: "Buff/Modifier 奖励"})
 

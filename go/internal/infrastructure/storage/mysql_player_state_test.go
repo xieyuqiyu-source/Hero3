@@ -2,6 +2,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -26,6 +27,51 @@ func TestResourceTypesFromStateMergesItemsAndCapacity(t *testing.T) {
 	want := []string{"food", "iron", "stone", "wood"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("expected resource types %v, got %v", want, got)
+	}
+}
+
+func TestCompactPlayerStateSnapshotDropsAuthoritativeAssets(t *testing.T) {
+	state := game.GameState{
+		Player: game.Player{ID: "player_1", Nickname: "主公", Faction: "wei"},
+		Resources: game.ResourceState{
+			Items:    map[string]int{"wood": 100},
+			Capacity: map[string]int{"wood": 1000},
+		},
+		Inventory:          map[string]game.ItemStack{"item_1": {ItemID: "item_1", Amount: 2}},
+		Buildings:          []game.Building{{ID: "wood_camp-1", Type: "wood_camp", Level: 3}},
+		ResourceSlots:      []game.ResourceSlot{{ID: "wood_slot-1", ResourceType: "wood"}},
+		Generals:           []game.General{{ID: "caocao", Level: 1}},
+		GeneralAssignments: []game.GeneralAssignment{{ID: "main", GeneralID: "caocao", Slot: "main"}},
+		Army:               []game.ArmyUnit{{UnitType: "weiInfantry", Amount: 10}},
+		RecruitQueues:      []game.RecruitQueue{{ID: "queue_1", UnitType: "weiInfantry", Amount: 5}},
+		Buffs:              []game.Buff{{ID: "buff_1", Key: "woodProductionBonus", Mode: "add", Value: 10}},
+		ResourceSettledAt:  "2026-06-26T00:00:00Z",
+		CityGold:           12,
+		ProductionBoost:    2,
+		ProductionBoostEnd: "2026-06-27T00:00:00Z",
+		ServerTime:         "2026-06-26T00:00:00Z",
+	}
+
+	snapshotJSON, err := marshalPlayerStateSnapshot(state)
+	if err != nil {
+		t.Fatalf("marshal compact snapshot: %v", err)
+	}
+
+	var snapshot map[string]any
+	if err := json.Unmarshal(snapshotJSON, &snapshot); err != nil {
+		t.Fatalf("unmarshal compact snapshot: %v", err)
+	}
+
+	for _, key := range []string{"resources", "inventory", "buildings", "resourceSlots", "generals", "generalAssignments", "army", "recruitQueues", "buffs"} {
+		if _, exists := snapshot[key]; exists {
+			t.Fatalf("expected %s to be omitted from compact state_json", key)
+		}
+	}
+	if snapshot["resourceSettledAt"] != state.ResourceSettledAt {
+		t.Fatalf("expected resourceSettledAt to be preserved")
+	}
+	if snapshot["cityGold"].(float64) != float64(state.CityGold) {
+		t.Fatalf("expected cityGold to be preserved")
 	}
 }
 

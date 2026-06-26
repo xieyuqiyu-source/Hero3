@@ -1,8 +1,6 @@
 # <span style="color:#16a34a">NPC 城池系统设计文档</span>
 
 最后更新：2026-05-23
-文档状态：active
-
 ## <span style="color:#8b5cf6">1. 设计目标</span>
 
 NPC 城池是玩家资源回流的核心入口。玩家通过攻击 NPC 城池掠夺资源，形成"征兵 → 打 NPC → 拿资源 → 再征兵"的正循环。

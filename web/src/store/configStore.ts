@@ -10,6 +10,7 @@ export interface BuildingConfig {
   capacityByLevel?: number[]
   modifiersByLevel?: Record<number, Array<{ key: string; value: number; mode: string }>>
   upgradeCostByLevel?: Record<number, Record<string, number>>
+  goldUpgradeCostByLevel?: Record<number, number>
   upgradeSecondsByLevel?: Record<number, number>
 }
 
@@ -35,7 +36,7 @@ export interface UnitConfig {
   stats: Record<string, number>
   cost: Record<string, number>
   trainSeconds: number
-  unlock: Record<string, any>
+  unlock: Record<string, string | number>
 }
 
 export interface GeneralInfo {

@@ -249,6 +249,180 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 				FOREIGN KEY (player_id) REFERENCES players(id)
 				ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS player_inventory (
+			player_id VARCHAR(64) NOT NULL,
+			item_id VARCHAR(64) NOT NULL,
+			amount INT NOT NULL DEFAULT 0,
+			obtained_at DATETIME(6) NULL,
+			updated_at DATETIME(6) NULL,
+			PRIMARY KEY (player_id, item_id),
+			INDEX idx_player_inventory_item (item_id),
+			CONSTRAINT fk_player_inventory_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS player_buildings (
+			player_id VARCHAR(64) NOT NULL,
+			building_id VARCHAR(64) NOT NULL,
+			building_type VARCHAR(64) NOT NULL,
+			level INT NOT NULL DEFAULT 0,
+			status VARCHAR(32) NOT NULL DEFAULT '',
+			upgrade_ends_at DATETIME(6) NULL,
+			status_ends_at DATETIME(6) NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (player_id, building_id),
+			INDEX idx_player_buildings_type (building_type),
+			CONSTRAINT fk_player_buildings_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS player_resource_slots (
+			player_id VARCHAR(64) NOT NULL,
+			slot_id VARCHAR(64) NOT NULL,
+			resource_type VARCHAR(64) NOT NULL,
+			building_id VARCHAR(64) NOT NULL DEFAULT '',
+			unlocked_by VARCHAR(64) NOT NULL DEFAULT '',
+			unlocked_at DATETIME(6) NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (player_id, slot_id),
+			INDEX idx_player_resource_slots_resource (resource_type),
+			INDEX idx_player_resource_slots_building (building_id),
+			CONSTRAINT fk_player_resource_slots_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS player_army_units (
+			player_id VARCHAR(64) NOT NULL,
+			unit_type VARCHAR(64) NOT NULL,
+			amount INT NOT NULL DEFAULT 0,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (player_id, unit_type),
+			INDEX idx_player_army_units_type (unit_type),
+			CONSTRAINT fk_player_army_units_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS player_recruit_queues (
+			player_id VARCHAR(64) NOT NULL,
+			queue_id VARCHAR(64) NOT NULL,
+			unit_type VARCHAR(64) NOT NULL,
+			amount INT NOT NULL DEFAULT 0,
+			ends_at DATETIME(6) NOT NULL,
+			queue_order INT NOT NULL DEFAULT 0,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (player_id, queue_id),
+			INDEX idx_player_recruit_queues_unit (unit_type),
+			INDEX idx_player_recruit_queues_ends (player_id, ends_at),
+			CONSTRAINT fk_player_recruit_queues_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS player_generals (
+			player_id VARCHAR(64) NOT NULL,
+			general_id VARCHAR(64) NOT NULL,
+			faction VARCHAR(32) NOT NULL DEFAULT '',
+			level INT NOT NULL DEFAULT 1,
+			exp INT NOT NULL DEFAULT 0,
+			stats_json JSON NULL,
+			acquired_at DATETIME(6) NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (player_id, general_id),
+			INDEX idx_player_generals_general (general_id),
+			CONSTRAINT fk_player_generals_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS player_general_assignments (
+			player_id VARCHAR(64) NOT NULL,
+			assignment_id VARCHAR(64) NOT NULL,
+			general_id VARCHAR(64) NOT NULL,
+			assignment_slot VARCHAR(64) NOT NULL DEFAULT '',
+			module_id VARCHAR(64) NOT NULL DEFAULT '',
+			status VARCHAR(32) NOT NULL DEFAULT '',
+			assigned_at DATETIME(6) NULL,
+			ends_at DATETIME(6) NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (player_id, assignment_id),
+			INDEX idx_player_general_assignments_general (player_id, general_id),
+			INDEX idx_player_general_assignments_slot (player_id, assignment_slot, module_id),
+			CONSTRAINT fk_player_general_assignments_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS player_buffs (
+			player_id VARCHAR(64) NOT NULL,
+			buff_id VARCHAR(64) NOT NULL,
+			source VARCHAR(64) NOT NULL DEFAULT '',
+			modifier_key VARCHAR(64) NOT NULL,
+			modifier_value DOUBLE NOT NULL DEFAULT 0,
+			modifier_mode VARCHAR(32) NOT NULL,
+			expires_at DATETIME(6) NULL,
+			created_at DATETIME(6) NOT NULL,
+			note VARCHAR(255) NOT NULL DEFAULT '',
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (player_id, buff_id),
+			INDEX idx_player_buffs_key (modifier_key),
+			INDEX idx_player_buffs_expires (player_id, expires_at),
+			CONSTRAINT fk_player_buffs_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS event_processing_records (
+			module_id VARCHAR(64) NOT NULL,
+			handler_key VARCHAR(128) NOT NULL,
+			event_key CHAR(64) NOT NULL,
+			processed_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (module_id, handler_key, event_key),
+			INDEX idx_event_processing_processed (processed_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS gameplay_module_instances (
+			id VARCHAR(64) PRIMARY KEY,
+			module_id VARCHAR(64) NOT NULL,
+			status VARCHAR(32) NOT NULL DEFAULT '',
+			config_json JSON NULL,
+			state_json JSON NULL,
+			opens_at DATETIME(6) NULL,
+			closes_at DATETIME(6) NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			INDEX idx_gameplay_instances_module_status (module_id, status, opens_at),
+			INDEX idx_gameplay_instances_window (opens_at, closes_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS gameplay_module_participants (
+			instance_id VARCHAR(64) NOT NULL,
+			player_id VARCHAR(64) NOT NULL,
+			status VARCHAR(32) NOT NULL DEFAULT '',
+			score BIGINT NOT NULL DEFAULT 0,
+			joined_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (instance_id, player_id),
+			INDEX idx_gameplay_participants_player (player_id, updated_at),
+			INDEX idx_gameplay_participants_score (instance_id, score),
+			CONSTRAINT fk_gameplay_participants_instance
+				FOREIGN KEY (instance_id) REFERENCES gameplay_module_instances(id)
+				ON DELETE CASCADE,
+			CONSTRAINT fk_gameplay_participants_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS gameplay_module_settlements (
+			instance_id VARCHAR(64) NOT NULL,
+			player_id VARCHAR(64) NOT NULL,
+			settlement_key VARCHAR(128) NOT NULL,
+			rewards_json JSON NULL,
+			status VARCHAR(32) NOT NULL DEFAULT '',
+			settled_at DATETIME(6) NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (instance_id, player_id, settlement_key),
+			INDEX idx_gameplay_settlements_player (player_id, updated_at),
+			CONSTRAINT fk_gameplay_settlements_instance
+				FOREIGN KEY (instance_id) REFERENCES gameplay_module_instances(id)
+				ON DELETE CASCADE,
+			CONSTRAINT fk_gameplay_settlements_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS battle_reports (
 			id VARCHAR(64) PRIMARY KEY,
 			player_id VARCHAR(64) NOT NULL,

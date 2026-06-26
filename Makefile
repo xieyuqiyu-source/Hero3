@@ -1,7 +1,7 @@
 # Hero3 项目 Makefile
 # 统一开发环境启动、构建、部署命令
 
-.PHONY: dev dev-go dev-web dev-admin build build-go build-web build-admin clean install migrate migrate-test print-test-dsn clone-data backfill-resources verify-resources openapi openapi-lint openapi-bundle
+.PHONY: dev dev-go dev-web dev-admin build build-go build-web build-admin clean install migrate migrate-test print-test-dsn clone-data backfill-resources verify-resources backfill-inventory verify-inventory backfill-buildings verify-buildings backfill-resource-slots verify-resource-slots backfill-army verify-army backfill-recruit-queues verify-recruit-queues backfill-generals verify-generals backfill-buffs verify-buffs openapi openapi-lint openapi-bundle
 
 # ===== 开发 =====
 
@@ -72,13 +72,69 @@ print-test-dsn:
 clone-data:
 	cd go && go run ./cmd/dbtool clone-data --truncate
 
-## 从 state_json 回填 player_resources 影子表
+## 从 state_json 回填 player_resources 权威表
 backfill-resources:
 	cd go && go run ./cmd/dbtool backfill-resources
 
 ## 校验 player_resources 与 state_json.resources 是否一致
 verify-resources:
 	cd go && go run ./cmd/dbtool verify-resources
+
+## 从 state_json 回填 player_inventory 权威表
+backfill-inventory:
+	cd go && go run ./cmd/dbtool backfill-inventory
+
+## 校验 player_inventory 与 state_json.inventory 是否一致
+verify-inventory:
+	cd go && go run ./cmd/dbtool verify-inventory
+
+## 从 state_json 回填 player_buildings 权威表
+backfill-buildings:
+	cd go && go run ./cmd/dbtool backfill-buildings
+
+## 校验 player_buildings 与 state_json.buildings 是否一致
+verify-buildings:
+	cd go && go run ./cmd/dbtool verify-buildings
+
+## 从建筑快照回填 player_resource_slots 权威表
+backfill-resource-slots:
+	cd go && go run ./cmd/dbtool backfill-resource-slots
+
+## 校验 player_resource_slots 与兼容快照是否一致
+verify-resource-slots:
+	cd go && go run ./cmd/dbtool verify-resource-slots
+
+## 从 state_json 回填 player_army_units 权威表
+backfill-army:
+	cd go && go run ./cmd/dbtool backfill-army
+
+## 校验 player_army_units 与 state_json.army 是否一致
+verify-army:
+	cd go && go run ./cmd/dbtool verify-army
+
+## 从 state_json 回填 player_recruit_queues 权威表
+backfill-recruit-queues:
+	cd go && go run ./cmd/dbtool backfill-recruit-queues
+
+## 校验 player_recruit_queues 与 state_json.recruitQueues 是否一致
+verify-recruit-queues:
+	cd go && go run ./cmd/dbtool verify-recruit-queues
+
+## 从 state_json 回填 player_generals 和 player_general_assignments 权威表
+backfill-generals:
+	cd go && go run ./cmd/dbtool backfill-generals
+
+## 校验 player_generals / player_general_assignments 与兼容快照是否一致
+verify-generals:
+	cd go && go run ./cmd/dbtool verify-generals
+
+## 从 state_json 回填 player_buffs 权威表
+backfill-buffs:
+	cd go && go run ./cmd/dbtool backfill-buffs
+
+## 校验 player_buffs 与 state_json.buffs 是否一致
+verify-buffs:
+	cd go && go run ./cmd/dbtool verify-buffs
 
 # ===== 接口文档 =====
 

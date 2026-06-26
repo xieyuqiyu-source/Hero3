@@ -11,14 +11,15 @@ import (
 )
 
 type BuildingConfig struct {
-	Type                  string              `json:"type"`
-	Name                  string              `json:"name"`
-	ResourceType          string              `json:"resourceType,omitempty"`
-	ProductionByLevel     []int               `json:"productionByLevel,omitempty"`
-	CapacityByLevel       []int               `json:"capacityByLevel,omitempty"`
-	ModifiersByLevel      map[int][]Modifier  `json:"modifiersByLevel,omitempty"`
-	UpgradeCostByLevel    map[int]ResourceMap `json:"upgradeCostByLevel,omitempty"`
-	UpgradeSecondsByLevel map[int]int         `json:"upgradeSecondsByLevel,omitempty"`
+	Type                   string              `json:"type"`
+	Name                   string              `json:"name"`
+	ResourceType           string              `json:"resourceType,omitempty"`
+	ProductionByLevel      []int               `json:"productionByLevel,omitempty"`
+	CapacityByLevel        []int               `json:"capacityByLevel,omitempty"`
+	ModifiersByLevel       map[int][]Modifier  `json:"modifiersByLevel,omitempty"`
+	UpgradeCostByLevel     map[int]ResourceMap `json:"upgradeCostByLevel,omitempty"`
+	GoldUpgradeCostByLevel map[int]int         `json:"goldUpgradeCostByLevel,omitempty"`
+	UpgradeSecondsByLevel  map[int]int         `json:"upgradeSecondsByLevel,omitempty"`
 }
 
 type BalanceConfig struct {
@@ -229,6 +230,13 @@ var defaultBalance = BalanceConfig{
 			UpgradeCostByLevel:    militaryUpgradeCostTable(180, 260, 220, 140, 20),
 			UpgradeSecondsByLevel: militaryUpgradeSecondsTable(80, 20),
 		},
+		"construction_bureau": {
+			Type:                   "construction_bureau",
+			Name:                   "建造司",
+			ModifiersByLevel:       militaryModifierTable([]string{StatBuildSpeedBonus}, 0.01, "percentAdd", 25),
+			GoldUpgradeCostByLevel: goldUpgradeCostTable(10, 25),
+			UpgradeSecondsByLevel:  militaryUpgradeSecondsTable(60, 25),
+		},
 	},
 }
 
@@ -337,14 +345,15 @@ func cloneBalance(source BalanceConfig) BalanceConfig {
 
 func cloneBuildingConfig(source BuildingConfig) BuildingConfig {
 	next := BuildingConfig{
-		Type:                  source.Type,
-		Name:                  source.Name,
-		ResourceType:          source.ResourceType,
-		ProductionByLevel:     append([]int(nil), source.ProductionByLevel...),
-		CapacityByLevel:       append([]int(nil), source.CapacityByLevel...),
-		ModifiersByLevel:      cloneModifierLevelMap(source.ModifiersByLevel),
-		UpgradeCostByLevel:    make(map[int]ResourceMap, len(source.UpgradeCostByLevel)),
-		UpgradeSecondsByLevel: make(map[int]int, len(source.UpgradeSecondsByLevel)),
+		Type:                   source.Type,
+		Name:                   source.Name,
+		ResourceType:           source.ResourceType,
+		ProductionByLevel:      append([]int(nil), source.ProductionByLevel...),
+		CapacityByLevel:        append([]int(nil), source.CapacityByLevel...),
+		ModifiersByLevel:       cloneModifierLevelMap(source.ModifiersByLevel),
+		UpgradeCostByLevel:     make(map[int]ResourceMap, len(source.UpgradeCostByLevel)),
+		GoldUpgradeCostByLevel: cloneIntMap(source.GoldUpgradeCostByLevel),
+		UpgradeSecondsByLevel:  make(map[int]int, len(source.UpgradeSecondsByLevel)),
 	}
 	for level, cost := range source.UpgradeCostByLevel {
 		next.UpgradeCostByLevel[level] = cloneResourceMap(cost)
@@ -465,6 +474,18 @@ func militaryUpgradeSecondsTable(base int, maxLevel int) map[int]int {
 		multiplier := 1.0
 		for i := 0; i < level; i++ {
 			multiplier *= 1.25
+		}
+		table[level] = int(float64(base) * multiplier)
+	}
+	return table
+}
+
+func goldUpgradeCostTable(base int, maxLevel int) map[int]int {
+	table := make(map[int]int, maxLevel)
+	for level := 0; level < maxLevel; level++ {
+		multiplier := 1.0
+		for i := 0; i < level; i++ {
+			multiplier *= 1.20
 		}
 		table[level] = int(float64(base) * multiplier)
 	}

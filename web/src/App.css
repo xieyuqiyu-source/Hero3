@@ -21,3 +21,118 @@
   opacity: 0.6;
   margin: 0;
 }
+
+.help-markdown {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1.85;
+  max-width: 880px;
+}
+
+.help-page {
+  --help-sticky-top: 24px;
+}
+
+.help-sidebar,
+.help-toc {
+  align-self: start;
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  position: sticky;
+  top: var(--help-sticky-top);
+}
+
+.help-markdown h1 {
+  margin: 0 0 18px;
+  color: var(--color-text-primary);
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.help-markdown h2 {
+  margin: 28px 0 12px;
+  color: var(--color-accent);
+  font-size: 18px;
+  font-weight: 800;
+  scroll-margin-top: 24px;
+}
+
+.help-markdown h3 {
+  margin: 22px 0 10px;
+  color: var(--color-text-primary);
+  font-size: 15px;
+  font-weight: 800;
+  scroll-margin-top: 24px;
+}
+
+.help-markdown p {
+  margin: 0 0 12px;
+}
+
+.help-markdown ul,
+.help-markdown ol {
+  margin: 0 0 14px;
+  padding-left: 20px;
+}
+
+.help-markdown li {
+  margin: 5px 0;
+}
+
+.help-markdown pre {
+  overflow-x: auto;
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-dim);
+  color: var(--color-text-primary);
+  font-size: 13px;
+}
+
+.help-markdown blockquote {
+  margin: 14px 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0 10px 10px 0;
+  background: var(--color-accent-light);
+  color: var(--color-text-primary);
+}
+
+.help-table-wrap {
+  overflow-x: auto;
+  margin: 14px 0 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.help-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+  font-size: 13px;
+}
+
+.help-markdown th,
+.help-markdown td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.help-markdown th {
+  background: var(--color-surface-dim);
+  color: var(--color-text-primary);
+  font-weight: 800;
+}
+
+.help-markdown tr:last-child td {
+  border-bottom: 0;
+}
+
+@media (max-width: 1279px) {
+  .help-sidebar {
+    position: static;
+    max-height: none;
+  }
+}

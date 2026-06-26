@@ -1,8 +1,6 @@
 # <span style="color:#4f46e5">Hero3 OpenAPI 维护规范</span>
 
 最后更新：2026-06-25
-文档状态：active
-
 Hero3 接口会持续增加，OpenAPI 按模块拆分维护。
 
 ## <span style="color:#4f46e5">文件职责</span>

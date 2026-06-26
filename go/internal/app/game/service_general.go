@@ -38,6 +38,7 @@ func (s *Service) AllocateGeneralStat(playerID string, statKey string) (GameStat
 
 		state.General.Stats[statKey]++
 		applyHeroConfigToGeneral(state.General)
+		syncActiveGeneralToRoster(state)
 		refreshGeneralDerivedState(state, now)
 		return nil
 	})
@@ -70,6 +71,7 @@ func (s *Service) ResetGeneralStats(playerID string) (GeneralActionResult, error
 		account.Gold -= GeneralResetStatsGoldCost
 		state.General.Stats = map[string]int{}
 		applyHeroConfigToGeneral(state.General)
+		syncActiveGeneralToRoster(state)
 		refreshGeneralDerivedState(state, now)
 		return nil
 	})
@@ -142,10 +144,19 @@ func (s *Service) ChangeGeneral(playerID string, generalID string, itemID string
 			}
 		}
 
-		state.General.ID = generalID
-		state.General.Name = hero.Name
-		state.General.Stats = map[string]int{}
-		applyHeroConfigToGeneral(state.General)
+		EnsureGeneralRoster(state, now)
+		if _, owned := findOwnedGeneral(state.Generals, generalID); owned {
+			if err := SetActiveGeneral(state, generalID, now); err != nil {
+				return err
+			}
+		} else {
+			state.General.ID = generalID
+			state.General.Name = hero.Name
+			state.General.Stats = map[string]int{}
+			applyHeroConfigToGeneral(state.General)
+			state.GeneralAssignments = upsertMainGeneralAssignment(state.GeneralAssignments, generalID, now)
+			syncActiveGeneralToRoster(state)
+		}
 		refreshGeneralDerivedState(state, now)
 		return nil
 	})
@@ -184,7 +195,7 @@ func refreshGeneralDerivedState(state *GameState, now time.Time) {
 	production := calculateResourceProduction(state.Buildings, state.General)
 	state.ResourceProduction = applyProductionModifiers(production, now, modSources)
 	capacity := calculateResourceCapacity(state.Buildings)
-	state.Resources.Capacity = applyCapacityModifiers(capacity, now, modSources)
+	_ = replaceResourceCapacity(state, applyCapacityModifiers(capacity, now, modSources))
 	state.ActiveModifiers = GetModifierBreakdown(state, now)
 	state.ServerTime = now.UTC().Format(resourceDateLayout)
 }

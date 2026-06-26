@@ -185,6 +185,7 @@ const MobileSidebarContent: FC<{
     { key: 'mail', label: '信函', hasNotify: unreadMailCount > 0 },
     { key: 'notice', label: '公告', hasNotify: true },
     { key: 'account', label: '账户', hasNotify: false },
+    { key: 'help', label: '帮助', hasNotify: false },
   ]
   const resources = useProjectedResources()
   const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
@@ -210,6 +211,7 @@ const MobileSidebarContent: FC<{
               if (action.key === 'account') onNavigate('account')
               if (action.key === 'news') onNavigate('news')
               if (action.key === 'mail') onNavigate('mail')
+              if (action.key === 'help') onNavigate('help')
             }}
             className={`
               px-2.5 py-1.5 rounded-lg

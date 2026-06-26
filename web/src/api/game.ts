@@ -59,6 +59,17 @@ export interface MailPage {
   unread: number
 }
 
+export interface HelpDocumentSummary {
+  id: string
+  title: string
+  excerpt: string
+  updatedAt: string
+}
+
+export interface HelpDocument extends HelpDocumentSummary {
+  content: string
+}
+
 export const gameApi = {
   /** 获取游戏启动配置（含 balance、factions、units） */
   bootstrap() {
@@ -72,6 +83,17 @@ export const gameApi = {
       fishing: FishingConfig
       message: string
     }>('/game/bootstrap')
+  },
+
+  /** 获取帮助文档列表 */
+  listHelpDocuments() {
+    return api.get<{ documents: HelpDocumentSummary[] }>('/help/docs')
+  },
+
+  /** 获取单篇帮助文档 */
+  getHelpDocument(documentId: string) {
+    const encodedId = documentId.split('/').map((part) => encodeURIComponent(part)).join('/')
+    return api.get<{ document: HelpDocument }>(`/help/docs/${encodedId}`)
   },
 
   /** 获取完整游戏状态 */

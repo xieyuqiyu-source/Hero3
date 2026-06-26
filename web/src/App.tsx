@@ -13,6 +13,7 @@ import MilitaryPage from './pages/military'
 import MapPage from './pages/map'
 import NewsPage from './pages/news'
 import MailPage from './pages/mail'
+import HelpPage from './pages/help'
 
 import AccountPage from './pages/account'
 import SettingsPage from './pages/settings'
@@ -47,6 +48,7 @@ function App() {
             <Route path="/map" element={<MapPage />} />
             <Route path="/news" element={<NewsPage />} />
             <Route path="/mail" element={<MailPage />} />
+            <Route path="/help" element={<HelpPage />} />
 
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/account" element={<AccountPage />} />

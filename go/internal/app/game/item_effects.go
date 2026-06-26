@@ -31,6 +31,12 @@ func itemEffectsToPipelineEffects(state *GameState, item ItemDefinition, count i
 	rewards := make([]Reward, 0, len(item.Effects))
 	for _, effect := range item.Effects {
 		switch effect.Type {
+		case "general":
+			generalID := strings.TrimSpace(effect.GeneralID)
+			if generalID == "" {
+				return nil, ErrInvalidGeneral
+			}
+			rewards = append(rewards, Reward{Type: RewardTypeGeneral, ID: generalID, Amount: count})
 		case "general_exp":
 			rewards = append(rewards, Reward{Type: RewardTypeGeneralExp, ID: "current_general", Amount: effect.Amount * count})
 		case "resources":

@@ -73,7 +73,7 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
         const result = await gameApi.scoutNpc(playerId, city.id)
         useGameStore.getState().setState(result.state)
         onScoutResult(result.battleReport)
-      } catch { /* global handler */ }
+      } catch { /* ignore */ }
       finally { setBusy(null) }
       return
     }
@@ -89,7 +89,7 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
       const result = await gameApi.attackNpc(playerId, city.id, mode, units)
       useGameStore.getState().setState(result.state)
       onBattleResult(result.battleReport)
-    } catch { /* global handler */ }
+    } catch { /* ignore */ }
     finally { setBusy(null) }
   }
 

@@ -12,6 +12,16 @@ func (s *Service) UpgradeBuilding(playerID string, buildingID string) (GameState
 		return GameState{}, ErrBuildingNotFound
 	}
 
+	current, err := s.repo.GetState(playerID)
+	if err != nil {
+		return GameState{}, err
+	}
+	if building := findBuildingByID(&current, buildingID); building != nil {
+		if config, exists := getBuildingConfig(building.Type); exists && len(config.GoldUpgradeCostByLevel) > 0 {
+			return s.upgradeBuildingWithGold(playerID, buildingID)
+		}
+	}
+
 	now := time.Now()
 	var before, after coreAssetSnapshot
 	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
@@ -49,13 +59,8 @@ func (s *Service) UpgradeBuilding(playerID string, buildingID string) (GameState
 			return ErrMaxLevel
 		}
 
-		for resType, cost := range upgradeCost {
-			if state.Resources.Items[resType] < cost {
-				return ErrInsufficientRes
-			}
-		}
-		for resType, cost := range upgradeCost {
-			state.Resources.Items[resType] -= cost
+		if err := spendResources(state, upgradeCost); err != nil {
+			return err
 		}
 
 		upgradeSeconds := 60
@@ -77,6 +82,81 @@ func (s *Service) UpgradeBuilding(playerID string, buildingID string) (GameState
 		return GameState{}, err
 	}
 	s.publishCoreAssetDiff(playerID, "building_upgrade_start", buildingID, before, after, now)
+
+	hydrateStateForResponse(&state, now)
+	return state, nil
+}
+
+// upgradeBuildingWithGold 使用账号金币开始建筑升级，当前用于建造司。
+func (s *Service) upgradeBuildingWithGold(playerID string, buildingID string) (GameState, error) {
+	accountID, err := s.repo.GetAccountIDByPlayerID(playerID)
+	if err != nil {
+		return GameState{}, err
+	}
+
+	now := time.Now()
+	cost := 0
+	var before, after coreAssetSnapshot
+	account, state, err := s.repo.UpdateAccountPlayerState(accountID, playerID, now, func(account *Account, state *GameState) error {
+		nextState, _ := settleResources(*state, now)
+		*state = nextState
+		before = snapshotCoreAssets(state)
+
+		building := findBuildingByID(state, buildingID)
+		if building == nil {
+			return ErrBuildingNotFound
+		}
+		if building.UpgradeEndsAt != nil {
+			return ErrAlreadyUpgrading
+		}
+		if !buildingCanStartUpgrade(*building) {
+			return ErrBuildingStatusBlocked
+		}
+
+		config, exists := getBuildingConfig(building.Type)
+		if !exists {
+			return ErrBuildingNotFound
+		}
+		nextCost, hasCost := config.GoldUpgradeCostByLevel[building.Level]
+		if !hasCost {
+			return ErrMaxLevel
+		}
+		if account.Gold < nextCost {
+			return ErrInsufficientGold
+		}
+		account.Gold -= nextCost
+		cost = nextCost
+
+		upgradeSeconds := 60
+		if seconds, ok := config.UpgradeSecondsByLevel[building.Level]; ok {
+			upgradeSeconds = seconds
+		}
+		modSources := CollectModifierSources(state)
+		upgradeSeconds = applySpeedBonus(upgradeSeconds, "buildSpeedBonus", now, modSources)
+		endsAt := now.Add(time.Duration(upgradeSeconds) * time.Second).UTC().Format(resourceDateLayout)
+		building.UpgradeEndsAt = &endsAt
+		building.Status = BuildingStatusUpgrading
+
+		state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
+		state.ServerTime = now.UTC().Format(resourceDateLayout)
+		after = snapshotCoreAssets(state)
+		return nil
+	})
+	if err != nil {
+		return GameState{}, err
+	}
+	s.recordLedger(GoldLedgerEntry{
+		AccountID:    account.ID,
+		PlayerID:     playerID,
+		Currency:     LedgerCurrencyGold,
+		Direction:    LedgerDirectionDebit,
+		Amount:       cost,
+		BalanceAfter: account.Gold,
+		RefType:      LedgerRefBuildingGoldUpgrade,
+		RefID:        buildingID,
+	})
+	s.publishCurrencyChanged(playerID, account.ID, buildingID, LedgerRefBuildingGoldUpgrade)
+	s.publishCoreAssetDiff(playerID, LedgerRefBuildingGoldUpgrade, buildingID, before, after, now)
 
 	hydrateStateForResponse(&state, now)
 	return state, nil
@@ -129,19 +209,12 @@ func (s *Service) UpgradeBuildingBatch(playerID string) (GameState, int, error) 
 			config, _ := getBuildingConfig(building.Type)
 			upgradeCost := config.UpgradeCostByLevel[building.Level]
 
-			enough := true
-			for resType, cost := range upgradeCost {
-				if state.Resources.Items[resType] < cost {
-					enough = false
-					break
-				}
-			}
-			if !enough {
+			if !canSpendResources(state, upgradeCost) {
 				continue
 			}
 
-			for resType, cost := range upgradeCost {
-				state.Resources.Items[resType] -= cost
+			if err := spendResources(state, upgradeCost); err != nil {
+				continue
 			}
 
 			upgradeSeconds := 60
@@ -224,6 +297,7 @@ func (s *Service) InstantCompleteBuilding(playerID string, buildingID string) (G
 		if err := applyBuildingMutation(building, BuildingMutation{Type: BuildingMutationCompleteUpgrade}, now); err != nil {
 			return err
 		}
+		ApplyConstructionBureauResourceSlots(state, now)
 		state.ResourceSettledAt = now.UTC().Format(resourceDateLayout)
 		state.ServerTime = now.UTC().Format(resourceDateLayout)
 

@@ -36,7 +36,7 @@ func init() {
 		RepositoryPort:   "MailRepository",
 		RewardEntrypoint: "ApplyRewardsToStateWithContext",
 		EventTypes:       []string{EventMailClaimed, EventRewardGranted, EventCurrencyChanged, EventItemUsed},
-		RewardTypes:      []string{RewardTypeResource, RewardTypeCityGold, RewardTypeGold, RewardTypeItem, RewardTypeUnit, RewardTypeGeneralExp, RewardTypeBuff},
+		RewardTypes:      []string{RewardTypeResource, RewardTypeCityGold, RewardTypeGold, RewardTypeItem, RewardTypeUnit, RewardTypeGeneral, RewardTypeGeneralExp, RewardTypeBuff},
 		CoreEntrypoints:  []string{"UpdateMailPlayerState", "ApplyRewardsToStateWithContext", "flushRewardSideEffects", "publishMailClaimEvents"},
 		BoundaryRules: []string{
 			"信函模块拥有信函列表、阅读、删除、发送和附件领取规则。",

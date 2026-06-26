@@ -33,8 +33,8 @@ func TestEnsureCoreBuildingsAppendsMissingBuildings(t *testing.T) {
 	if !ensureCoreBuildings(&state) {
 		t.Fatal("expected missing core buildings to be appended")
 	}
-	if len(state.Buildings) != 4 {
-		t.Fatalf("expected 4 core buildings, got %d", len(state.Buildings))
+	if len(state.Buildings) != 5 {
+		t.Fatalf("expected 5 core buildings, got %d", len(state.Buildings))
 	}
 	if ensureCoreBuildings(&state) {
 		t.Fatal("expected second ensure not to append duplicate buildings")

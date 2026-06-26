@@ -76,6 +76,14 @@ type Building struct {
 	StatusEndsAt  *string `json:"statusEndsAt,omitempty"`
 }
 
+type ResourceSlot struct {
+	ID           string `json:"id"`
+	ResourceType string `json:"resourceType"`
+	BuildingID   string `json:"buildingId,omitempty"`
+	UnlockedBy   string `json:"unlockedBy,omitempty"`
+	UnlockedAt   string `json:"unlockedAt,omitempty"`
+}
+
 type ArmyUnit struct {
 	UnitType string `json:"unitType"`
 	Amount   int    `json:"amount"`
@@ -93,6 +101,16 @@ type General struct {
 	AttributeBreakdown  map[string][]GeneralAttributeBreakdownItem `json:"attributeBreakdown,omitempty"`  // 属性来源拆分，供前端 tooltip 展示
 	Buffs               map[string]float64                         `json:"buffs"`                         // 兼容旧字段，Modifier 管线仍从这里读取
 	Traits              []GeneralTraitInstance                     `json:"traits,omitempty"`              // 当前激活的特性（来自配置）
+}
+
+type GeneralAssignment struct {
+	ID         string `json:"id"`
+	GeneralID  string `json:"generalId"`
+	Slot       string `json:"slot"`
+	ModuleID   string `json:"moduleId,omitempty"`
+	Status     string `json:"status,omitempty"`
+	AssignedAt string `json:"assignedAt,omitempty"`
+	EndsAt     string `json:"endsAt,omitempty"`
 }
 
 type GeneralAttributeBreakdownItem struct {
@@ -230,7 +248,10 @@ type GameState struct {
 	CapacityBoost       int                     `json:"capacityBoost,omitempty"`      // 仓库容量加成倍率（1=无，2/4/8/16）
 	CapacityBoostEnd    string                  `json:"capacityBoostEnd,omitempty"`   // 容量加成到期时间
 	Buildings           []Building              `json:"buildings"`
+	ResourceSlots       []ResourceSlot          `json:"resourceSlots,omitempty"`
 	General             *General                `json:"general"`
+	Generals            []General               `json:"generals,omitempty"`
+	GeneralAssignments  []GeneralAssignment     `json:"generalAssignments,omitempty"`
 	Army                []ArmyUnit              `json:"army"`
 	RecruitQueues       []RecruitQueue          `json:"recruitQueues"`
 	NpcState            *NpcState               `json:"npcState,omitempty"`
@@ -291,6 +312,7 @@ func newPlayerState(id string, nickname string, faction string, generalID string
 			{ID: "cavalry_camp-1", Type: "cavalry_camp", Level: 1},
 			{ID: "weapon_bureau-1", Type: "weapon_bureau", Level: 1},
 			{ID: "armor_bureau-1", Type: "armor_bureau", Level: 1},
+			{ID: "construction_bureau-1", Type: "construction_bureau", Level: 1},
 		},
 		Army:          []ArmyUnit{},
 		General:       newGeneral(faction, generalID),
@@ -325,9 +347,12 @@ func newPlayerState(id string, nickname string, faction string, generalID string
 		ResourceSettledAt:   now.UTC().Format(time.RFC3339),
 		ServerTime:          now.UTC().Format(time.RFC3339),
 	}
+	EnsureGeneralRoster(&state, now)
 
+	ApplyConstructionBureauResourceSlots(&state, now)
 	state.ResourceProduction = calculateResourceProduction(state.Buildings, state.General)
 	state.Resources.Capacity = calculateResourceCapacity(state.Buildings)
+	state.ResourceSlots = BuildResourceSlotsFromBuildings(state.Buildings, now)
 	return state
 }
 

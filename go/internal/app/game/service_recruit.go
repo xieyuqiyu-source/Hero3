@@ -34,14 +34,12 @@ func (s *Service) Recruit(playerID string, unitID string, amount int) (GameState
 			return ErrUnitNotFound
 		}
 
+		totalCost := make(map[string]int, len(unitConfig.Cost))
 		for resType, costPer := range unitConfig.Cost {
-			totalCost := costPer * amount
-			if state.Resources.Items[resType] < totalCost {
-				return ErrInsufficientRes
-			}
+			totalCost[resType] = costPer * amount
 		}
-		for resType, costPer := range unitConfig.Cost {
-			state.Resources.Items[resType] -= costPer * amount
+		if err := spendResources(state, totalCost); err != nil {
+			return err
 		}
 
 		modSources := CollectModifierSources(state)
