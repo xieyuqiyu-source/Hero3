@@ -181,6 +181,8 @@ ssh $SERVER "chmod +x /tmp/hero3-server.$STAMP; mv -f /tmp/hero3-server.$STAMP /
 
 当前 workflow 的 job 超时时间为 5 分钟。GitHub Actions 不再负责构建产物和上传 `dist`，而是通过 SSH 在服务器上同步执行构建发布脚本。只要服务器上的源码更新、`go build`、`pnpm build`、`systemctl restart hero3`、`nginx -t` 或健康检查任一步失败，GitHub Actions 会直接失败。
 
+服务器部署脚本会使用 `/tmp/hero3-deploy.lock` 防止多个部署同时运行。源码同步阶段使用 120 秒 timeout；如果服务器从 GitHub 拉取源码过慢，会直接失败，不会继续占用服务器进程。
+
 部署流程：
 
 ```text
@@ -225,7 +227,7 @@ ssh-keygen -t ed25519 -C "github-actions-hero3"
 
 - 当前 workflow 只支持手动触发，普通 push 不会发布线上。
 - 服务器必须能通过 `https://github.com/xieyuqiyu-source/Hero3.git` 拉取仓库代码。如果仓库改成私有，需要给服务器配置可拉取该仓库的凭据或部署密钥。
-- 服务器需要安装并维护构建工具：Git、Go、Node.js、pnpm、rsync。
+- 服务器需要安装并维护构建工具：Git、Go、Node.js、pnpm、rsync、flock、timeout。
 - 如果 Actions 失败，先看 GitHub Actions 日志；如果已经连上服务器，再看 `journalctl -u hero3 -f`。
 - 服务器上的数据库密码、环境变量、证书不进入 GitHub，仍然保留在 `/etc/hero3/hero3.env` 和 Nginx 证书目录。
 - 当前 workflow 在服务器构建成功后才替换线上文件；如果构建失败，不会覆盖当前线上版本。

@@ -78,6 +78,14 @@ jobs:
           command -v go >/dev/null
           command -v pnpm >/dev/null
           command -v rsync >/dev/null
+          command -v flock >/dev/null
+          command -v timeout >/dev/null
+
+          exec 9>/tmp/hero3-deploy.lock
+          if ! flock -n 9; then
+            echo "Another Hero3 deployment is already running."
+            exit 1
+          fi
 
           mkdir -p /opt/hero3/backups /var/www/hero3/backups
           mkdir -p /opt/hero3/go/bin /opt/hero3/go/config /var/www/hero3/web /var/www/hero3/admin
@@ -85,13 +93,13 @@ jobs:
           log "Updating source"
           if [ -d "$SOURCE_DIR/.git" ]; then
             git -C "$SOURCE_DIR" remote set-url origin "$REPO_URL"
-            if ! git -C "$SOURCE_DIR" fetch --depth 1 --prune origin "$HERO3_REF_NAME"; then
+            if ! timeout --kill-after=10s 120s git -C "$SOURCE_DIR" fetch --depth 1 --prune origin "$HERO3_REF_NAME"; then
               rm -rf "$SOURCE_DIR"
-              git clone --depth 1 --branch "$HERO3_REF_NAME" "$REPO_URL" "$SOURCE_DIR"
+              timeout --kill-after=10s 120s git clone --depth 1 --single-branch --branch "$HERO3_REF_NAME" "$REPO_URL" "$SOURCE_DIR"
             fi
           else
             rm -rf "$SOURCE_DIR"
-            git clone --depth 1 --branch "$HERO3_REF_NAME" "$REPO_URL" "$SOURCE_DIR"
+            timeout --kill-after=10s 120s git clone --depth 1 --single-branch --branch "$HERO3_REF_NAME" "$REPO_URL" "$SOURCE_DIR"
           fi
 
           git -C "$SOURCE_DIR" checkout -f "$HERO3_SHA"
