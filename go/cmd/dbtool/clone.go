@@ -26,6 +26,11 @@ type cloneDataResult struct {
 	Rows   int
 }
 
+type cloneTablePlan struct {
+	CopyTables     []string
+	TruncateTables []string
+}
+
 // runCloneData 把源库数据复制到目标库，适合把稳定库迁移到 test_ 测试库。
 func runCloneData(args []string) error {
 	flags := flag.NewFlagSet("clone-data", flag.ContinueOnError)
@@ -116,18 +121,23 @@ func cloneMySQLData(ctx context.Context, options cloneDataOptions) (cloneDataRes
 		return cloneDataResult{}, err
 	}
 
-	tables, err := listBaseTables(ctx, sourceDB, sourceName)
+	sourceTables, err := listBaseTables(ctx, sourceDB, sourceName)
 	if err != nil {
 		return cloneDataResult{}, err
 	}
+	targetTables, err := listBaseTables(ctx, targetDB, targetName)
+	if err != nil {
+		return cloneDataResult{}, err
+	}
+	tablePlan := buildCloneTablePlan(sourceTables, targetTables)
 	if options.TruncateTarget {
-		if err := truncateTables(ctx, targetDB, tables); err != nil {
+		if err := truncateTables(ctx, targetDB, tablePlan.TruncateTables); err != nil {
 			return cloneDataResult{}, err
 		}
 	}
 
 	result := cloneDataResult{}
-	for _, tableName := range tables {
+	for _, tableName := range tablePlan.CopyTables {
 		sourceColumns, err := listTableColumns(ctx, sourceDB, sourceName, tableName)
 		if err != nil {
 			return cloneDataResult{}, err
@@ -152,6 +162,14 @@ func cloneMySQLData(ctx context.Context, options cloneDataOptions) (cloneDataRes
 		fmt.Printf("已复制表：%s，行 %d\n", tableName, rows)
 	}
 	return result, nil
+}
+
+// buildCloneTablePlan 明确复制源表、清理目标表，避免目标新表残留旧数据。
+func buildCloneTablePlan(sourceTables []string, targetTables []string) cloneTablePlan {
+	return cloneTablePlan{
+		CopyTables:     append([]string(nil), sourceTables...),
+		TruncateTables: append([]string(nil), targetTables...),
+	}
 }
 
 // cloneableColumns 返回源库和目标库都存在的可复制列，并报告目标库新增列。

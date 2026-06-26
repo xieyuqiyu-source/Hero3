@@ -42,3 +42,22 @@ func TestCloneableColumnsRejectsEmptySourceColumns(t *testing.T) {
 		t.Fatal("expected empty source columns to fail")
 	}
 }
+
+func TestBuildCloneTablePlanTruncatesTargetTables(t *testing.T) {
+	sourceTables := []string{"accounts", "players"}
+	targetTables := []string{"accounts", "players", "player_resources"}
+
+	plan := buildCloneTablePlan(sourceTables, targetTables)
+	if !reflect.DeepEqual(plan.CopyTables, sourceTables) {
+		t.Fatalf("expected copy tables %v, got %v", sourceTables, plan.CopyTables)
+	}
+	if !reflect.DeepEqual(plan.TruncateTables, targetTables) {
+		t.Fatalf("expected truncate tables %v, got %v", targetTables, plan.TruncateTables)
+	}
+
+	sourceTables[0] = "mutated"
+	targetTables[0] = "mutated"
+	if plan.CopyTables[0] == "mutated" || plan.TruncateTables[0] == "mutated" {
+		t.Fatal("expected clone table plan to copy table slices")
+	}
+}

@@ -160,6 +160,7 @@ go run ./cmd/server
 - 如果数据库账号没有建库权限，需要先由服务器管理员创建并授权 `test_hero3`，再把 `go/.env` 的 DSN 改到该库。
 - `make clone-data` 会从 `HERO3_SOURCE_DATABASE_DSN` 复制数据到当前 `HERO3_DATABASE_DSN` 指向的 `test_` 库，并清空目标库旧数据；复制完成后会自动回填并校验 `player_resources`。
 - `clone-data` 支持目标测试库已经完成较新迁移的场景：目标表新增列会跳过并使用数据库默认值；源库存在但目标库缺失的列会中止复制。
+- `clone-data --truncate` 会清空目标测试库全部普通表，再按源库表复制，避免目标新增表残留旧数据。
 
 数据库维护命令：
 
