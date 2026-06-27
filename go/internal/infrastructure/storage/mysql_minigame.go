@@ -102,7 +102,8 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 	defer func() { _ = tx.Rollback() }()
 
 	var stateJSON []byte
-	err = tx.QueryRow(`SELECT state_json FROM players WHERE id = ? LIMIT 1 FOR UPDATE`, playerID).Scan(&stateJSON)
+	var mailCode string
+	err = tx.QueryRow(`SELECT state_json, mail_code FROM players WHERE id = ? LIMIT 1 FOR UPDATE`, playerID).Scan(&stateJSON, &mailCode)
 	if errors.Is(err, sql.ErrNoRows) {
 		return game.GameState{}, nil, game.ErrPlayerNotFound
 	}
@@ -113,39 +114,13 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 	if err = json.Unmarshal(stateJSON, &state); err != nil {
 		return game.GameState{}, nil, err
 	}
-	if err := overlayAuthoritativeResourcesTx(tx, &state, playerID); err != nil {
-		return game.GameState{}, nil, err
-	}
-	if err := overlayAuthoritativeInventoryTx(tx, &state, playerID); err != nil {
-		return game.GameState{}, nil, err
-	}
-	if err := overlayAuthoritativeBuildingsTx(tx, &state, playerID); err != nil {
-		return game.GameState{}, nil, err
-	}
-	if err := overlayAuthoritativeResourceSlotsTx(tx, &state, playerID); err != nil {
-		return game.GameState{}, nil, err
+	if state.Player.MailCode == "" {
+		state.Player.MailCode = mailCode
 	}
 	if err := overlayAuthoritativeArmyTx(tx, &state, playerID); err != nil {
 		return game.GameState{}, nil, err
 	}
-	if err := overlayAuthoritativeRecruitQueuesTx(tx, &state, playerID); err != nil {
-		return game.GameState{}, nil, err
-	}
-	if err := overlayAuthoritativeGeneralsTx(tx, &state, playerID); err != nil {
-		return game.GameState{}, nil, err
-	}
-	if err := overlayAuthoritativeBuffsTx(tx, &state, playerID); err != nil {
-		return game.GameState{}, nil, err
-	}
-	previousResourceSnapshot := resourceSnapshotsFromStorageState(state.Resources)
-	previousInventorySnapshot := inventorySnapshotsFromStorageState(state.Inventory)
-	previousBuildingSnapshot := buildingSnapshotsFromStorageState(state.Buildings)
-	previousResourceSlotSnapshot := resourceSlotSnapshotsFromStorageState(state.ResourceSlots)
 	previousArmySnapshot := armySnapshotsFromStorageState(state.Army)
-	previousRecruitQueueSnapshot := recruitQueueSnapshotsFromStorageState(state.RecruitQueues)
-	previousGeneralSnapshot := generalSnapshotsFromStorageState(state.Generals)
-	previousGeneralAssignmentSnapshot := generalAssignmentSnapshotsFromStorageState(state.GeneralAssignments)
-	previousBuffSnapshot := buffSnapshotsFromStorageState(state.Buffs)
 
 	rows, err := tx.Query(
 		`SELECT id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, remaining_amount, bet_unit, bet_amount, created_at
@@ -194,11 +169,6 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 			return game.GameState{}, nil, err
 		}
 	}
-	if len(state.ResourceSlots) == 0 {
-		state.ResourceSlots = game.BuildResourceSlotsFromBuildings(state.Buildings, updatedAt)
-	}
-	game.EnsureGeneralRoster(&state, updatedAt)
-
 	for _, record := range records {
 		if !miniGameRemainingAmountChanged(previousRemainingByRecordID, record) {
 			continue
@@ -215,55 +185,22 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 	if err != nil {
 		return game.GameState{}, nil, err
 	}
-	if resourceSnapshotChanged(previousResourceSnapshot, state.Resources) {
-		if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
-			return game.GameState{}, nil, err
-		}
-	}
-	if inventorySnapshotChanged(previousInventorySnapshot, state.Inventory) {
-		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, updatedAt.UTC()); err != nil {
-			return game.GameState{}, nil, err
-		}
-	}
-	if buildingSnapshotChanged(previousBuildingSnapshot, state.Buildings) {
-		if err := syncPlayerBuildingsTx(tx, playerID, state.Buildings, updatedAt.UTC()); err != nil {
-			return game.GameState{}, nil, err
-		}
-	}
-	if resourceSlotSnapshotChanged(previousResourceSlotSnapshot, state.ResourceSlots) || buildingSnapshotChanged(previousBuildingSnapshot, state.Buildings) {
-		if err := syncPlayerResourceSlotsTx(tx, playerID, state.ResourceSlots, updatedAt.UTC()); err != nil {
-			return game.GameState{}, nil, err
-		}
-	}
 	if armySnapshotChanged(previousArmySnapshot, state.Army) {
 		if err := syncPlayerArmyTx(tx, playerID, state.Army, updatedAt.UTC()); err != nil {
 			return game.GameState{}, nil, err
 		}
 	}
-	if recruitQueueSnapshotChanged(previousRecruitQueueSnapshot, state.RecruitQueues) {
-		if err := syncPlayerRecruitQueuesTx(tx, playerID, state.RecruitQueues, updatedAt.UTC()); err != nil {
-			return game.GameState{}, nil, err
-		}
-	}
-	if generalSnapshotChanged(previousGeneralSnapshot, state.Generals) {
-		if err := syncPlayerGeneralsTx(tx, playerID, state.Generals, updatedAt.UTC()); err != nil {
-			return game.GameState{}, nil, err
-		}
-	}
-	if generalAssignmentSnapshotChanged(previousGeneralAssignmentSnapshot, state.GeneralAssignments) {
-		if err := syncPlayerGeneralAssignmentsTx(tx, playerID, state.GeneralAssignments, updatedAt.UTC()); err != nil {
-			return game.GameState{}, nil, err
-		}
-	}
-	if buffSnapshotChanged(previousBuffSnapshot, state.Buffs) {
-		if err := syncPlayerBuffsTx(tx, playerID, state.Buffs, updatedAt.UTC()); err != nil {
-			return game.GameState{}, nil, err
-		}
-	}
 	if !bytes.Equal(stateJSON, nextStateJSON) {
 		if _, err = tx.Exec(
-			`UPDATE players SET state_json = ?, updated_at = ? WHERE id = ?`,
-			nextStateJSON, updatedAt.UTC(), playerID,
+			`UPDATE players
+			 SET nickname = ?, faction = ?, mail_code = ?, state_json = ?, updated_at = ?
+			 WHERE id = ?`,
+			state.Player.Nickname,
+			state.Player.Faction,
+			state.Player.MailCode,
+			nextStateJSON,
+			updatedAt.UTC(),
+			playerID,
 		); err != nil {
 			return game.GameState{}, nil, err
 		}

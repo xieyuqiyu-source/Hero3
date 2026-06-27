@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Castle,
   Swords,
+  ShieldPlus,
   Map,
   ChevronLeft,
   ChevronRight,
@@ -17,11 +18,13 @@ import BoostButton from './BoostButton'
 import FillButton from './FillButton'
 import CapacityBoostButton from './CapacityBoostButton'
 import ProductionTooltip from './ProductionTooltip'
+import GarrisonPanel from './GarrisonPanel'
 import type { GameState } from '@/types/game'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
 import { useConfigStore } from '@/store/configStore'
 import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
+import { useAnnouncementUnread } from '@/hooks/useAnnouncementUnread'
 
 export interface NavItem {
   key: string
@@ -32,6 +35,7 @@ export interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { key: 'city', label: '城池', icon: Castle },
   { key: 'military', label: '军事', icon: Swords },
+  { key: 'reinforcements', label: '增援', icon: ShieldPlus },
   { key: 'map', label: '地图', icon: Map },
   { key: 'settings', label: '设置', icon: Settings },
 ]
@@ -51,11 +55,12 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
   const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
   const unreadMessageCount = gameState?.unreadMessageCount ?? 0
   const unreadMailCount = gameState?.unreadMailCount ?? 0
+  const announcementUnread = useAnnouncementUnread()
   const newsHasNotify = unreadMessageCount > 0
   const quickActions = [
     { key: 'news', label: '军情', hasNotify: newsHasNotify },
     { key: 'mail', label: '信函', hasNotify: unreadMailCount > 0 },
-    { key: 'notice', label: '公告', hasNotify: true },
+    { key: 'notice', label: '公告', hasNotify: announcementUnread },
     { key: 'account', label: '账户', hasNotify: false },
     { key: 'help', label: '帮助', hasNotify: false },
   ]
@@ -125,6 +130,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
                 if (action.key === 'account') onNavigate('account')
                 if (action.key === 'news') onNavigate('news')
                 if (action.key === 'mail') onNavigate('mail')
+                if (action.key === 'notice') onNavigate('notice')
                 if (action.key === 'help') onNavigate('help')
               }}
               className={`
@@ -152,6 +158,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
                 if (action.key === 'account') onNavigate('account')
                 if (action.key === 'news') onNavigate('news')
                 if (action.key === 'mail') onNavigate('mail')
+                if (action.key === 'notice') onNavigate('notice')
                 if (action.key === 'help') onNavigate('help')
               }}
               className={`
@@ -335,11 +342,12 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
             </>
           )}
         </div>
+        {!collapsed && <GarrisonPanel gameStateReady={gameState !== null} />}
       </div>
 
       {/* Bottom Navigation */}
       <div className="flex-shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface-dim)] rounded-b-3xl p-2">
-        <div className={`grid gap-1.5 ${collapsed ? 'grid-cols-1' : 'grid-cols-4'}`}>
+        <div className={`grid gap-1.5 ${collapsed ? 'grid-cols-1' : 'grid-cols-5'}`}>
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon
             const isActive = activeKey === item.key

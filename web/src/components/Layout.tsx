@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Castle,
   Swords,
+  ShieldPlus,
   Map,
   Package,
   Warehouse,
@@ -19,8 +20,12 @@ import BoostButton from './BoostButton'
 import FillButton from './FillButton'
 import CapacityBoostButton from './CapacityBoostButton'
 import ProductionTooltip from './ProductionTooltip'
+import GarrisonPanel from './GarrisonPanel'
 import { useGameStore } from '@/store/gameStore'
 import { useAccountStore } from '@/store/accountStore'
+import { useAnnouncementUnread } from '@/hooks/useAnnouncementUnread'
+import { gameApi } from '@/api/game'
+import type { AnnouncementSummary } from '@/types/game'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
 import { useConfigStore } from '@/store/configStore'
 import { FACTION_LABELS, FACTION_COLORS } from '@/utils/faction'
@@ -34,11 +39,14 @@ const Layout: FC<LayoutProps> = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const gameState = useGameStore((store) => store.state)
+  const activePlayerId = useGameStore((store) => store.activePlayerId)
   const loading = useGameStore((store) => store.loading)
   const error = useGameStore((store) => store.error)
   const loadGameState = useGameStore((store) => store.loadGameState)
   const navigate = useNavigate()
   const location = useLocation()
+  const [popupQueue, setPopupQueue] = useState<AnnouncementSummary[]>([])
+  const currentPopup = popupQueue[0]
 
   const activeKey = location.pathname.replace('/', '') || 'city'
 
@@ -50,6 +58,39 @@ const Layout: FC<LayoutProps> = ({ children }) => {
   useEffect(() => {
     void loadGameState()
   }, [loadGameState])
+
+  useEffect(() => {
+    let cancelled = false
+    const refreshPopups = () => {
+      if (!activePlayerId) {
+        setPopupQueue([])
+        return
+      }
+      gameApi.listAnnouncementPopups(activePlayerId).then((result) => {
+        if (!cancelled) setPopupQueue(Array.isArray(result.items) ? result.items : [])
+      }).catch(() => {
+        if (!cancelled) setPopupQueue([])
+      })
+    }
+    if (!activePlayerId) {
+      setPopupQueue([])
+      return
+    }
+    refreshPopups()
+    const timer = window.setInterval(refreshPopups, 30000)
+    const handleFocus = () => refreshPopups()
+    window.addEventListener('focus', handleFocus)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [activePlayerId])
+
+  useEffect(() => {
+    if (!activePlayerId || !currentPopup || currentPopup.isPopupShown) return
+    gameApi.markAnnouncementPopupShown(activePlayerId, currentPopup.id).catch(() => {})
+  }, [activePlayerId, currentPopup])
 
   return (
     <div className="flex min-h-dvh relative overflow-x-hidden">
@@ -109,6 +150,40 @@ const Layout: FC<LayoutProps> = ({ children }) => {
       </main>
 
       {loading && <GameStateLoadingOverlay />}
+      {currentPopup && activePlayerId && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-[4px]">
+          <div className="w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[0_24px_70px_rgba(15,23,42,0.24)]">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="rounded-full bg-[var(--color-accent-light)] px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)]">公告</span>
+              {currentPopup.pinned && <span className="text-xs text-[var(--color-text-muted)]">置顶</span>}
+            </div>
+            <h2 className="text-lg font-bold text-[var(--color-text-primary)]">{currentPopup.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">{currentPopup.summary}</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  gameApi.dismissAnnouncement(activePlayerId, currentPopup.id).catch(() => {})
+                  setPopupQueue((items) => items.slice(1))
+                }}
+                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-dim)]"
+              >
+                关闭
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  navigate(`/notice?announcementId=${currentPopup.id}`)
+                  setPopupQueue((items) => items.slice(1))
+                }}
+                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                查看详情
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Menu Trigger */}
       <button
@@ -173,17 +248,19 @@ const MobileSidebarContent: FC<{
   const navItems = [
     { key: 'city', label: '城池', icon: Castle },
     { key: 'military', label: '军事', icon: Swords },
+    { key: 'reinforcements', label: '增援', icon: ShieldPlus },
     { key: 'map', label: '地图', icon: Map },
     { key: 'settings', label: '设置', icon: Settings },
   ]
 
   const unreadMessageCount = gameState?.unreadMessageCount ?? 0
   const unreadMailCount = gameState?.unreadMailCount ?? 0
+  const announcementUnread = useAnnouncementUnread()
   const newsHasNotify = unreadMessageCount > 0
   const quickActions = [
     { key: 'news', label: '军情', hasNotify: newsHasNotify },
     { key: 'mail', label: '信函', hasNotify: unreadMailCount > 0 },
-    { key: 'notice', label: '公告', hasNotify: true },
+    { key: 'notice', label: '公告', hasNotify: announcementUnread },
     { key: 'account', label: '账户', hasNotify: false },
     { key: 'help', label: '帮助', hasNotify: false },
   ]
@@ -211,6 +288,7 @@ const MobileSidebarContent: FC<{
               if (action.key === 'account') onNavigate('account')
               if (action.key === 'news') onNavigate('news')
               if (action.key === 'mail') onNavigate('mail')
+              if (action.key === 'notice') onNavigate('notice')
               if (action.key === 'help') onNavigate('help')
             }}
             className={`
@@ -304,11 +382,14 @@ const MobileSidebarContent: FC<{
             <p className="text-xs text-[var(--color-text-secondary)] opacity-50">暂无兵力</p>
           )}
         </div>
+        <div className="mb-2.5">
+          <GarrisonPanel gameStateReady={gameState !== null} compact />
+        </div>
       </div>
 
       {/* Bottom Nav */}
       <div className="border-t border-[var(--color-border)] bg-[var(--color-surface-dim)] rounded-b-3xl p-2">
-        <div className="grid grid-cols-4 gap-1.5">
+        <div className="grid grid-cols-5 gap-1.5">
           {navItems.map((item) => {
             const Icon = item.icon
             const isActive = activeKey === item.key

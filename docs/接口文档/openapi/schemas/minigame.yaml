@@ -116,15 +116,22 @@ MiniGameRedeemResult:
   type: object
   required:
   - record
-  - state
+  - serverTime
   - redeemedUnitId
   - redeemedUnit
   - redeemedAmount
+  - redeemedTarget
   properties:
     record:
       $ref: '#/components/schemas/MiniGameRecord'
-    state:
-      $ref: '#/components/schemas/GameState'
+    army:
+      type: array
+      description: 本次兑换后需要局部刷新到前端的常规军队。
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    serverTime:
+      type: string
+      format: date-time
     redeemedUnitId:
       type: string
       example: qiQiYing
@@ -132,6 +139,54 @@ MiniGameRedeemResult:
       type: string
       example: 骁骑营
     redeemedAmount:
+      type: integer
+    redeemedTarget:
+      type: string
+      enum: [army, garrison]
+      description: army 表示进入常规军队，garrison 表示进入编外驻防队伍。
+    garrison:
+      $ref: '#/components/schemas/Reinforcement'
+MiniGameRedeemAllResult:
+  type: object
+  required:
+  - serverTime
+  - redeemedUnits
+  - redeemedAmount
+  - redeemedRecords
+  - skippedUnits
+  - skippedRecords
+  properties:
+    army:
+      type: array
+      description: 批量兑换后需要局部刷新到前端的常规军队。
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    serverTime:
+      type: string
+      format: date-time
+    redeemedUnits:
+      type: object
+      description: 进入常规军队的兵种汇总。
+      additionalProperties:
+        type: integer
+    redeemedAmount:
+      type: integer
+      description: 总兑换数量，包含进入常规军队和进入驻防队伍的数量。
+    redeemedRecords:
+      type: integer
+    garrisonedUnits:
+      type: object
+      description: 进入编外驻防队伍的兵种汇总。
+      additionalProperties:
+        type: integer
+    garrisonRecords:
+      type: integer
+    skippedUnits:
+      type: object
+      description: 因配置不存在等原因跳过的库存。
+      additionalProperties:
+        type: integer
+    skippedRecords:
       type: integer
 FishingConfig:
   type: object

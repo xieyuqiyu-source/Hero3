@@ -1,0 +1,215 @@
+SendReinforcementRequest:
+  type: object
+  required:
+  - playerId
+  - targetPlayerId
+  - troops
+  properties:
+    playerId:
+      type: string
+    targetPlayerId:
+      type: string
+    troops:
+      type: object
+      additionalProperties:
+        type: integer
+    generalIds:
+      type: array
+      items:
+        type: string
+    speedMultiplier:
+      type: number
+      example: 1
+ReinforcementPlayerRequest:
+  type: object
+  required:
+  - playerId
+  properties:
+    playerId:
+      type: string
+ReinforcementGeneralSnapshot:
+  type: object
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    level:
+      type: integer
+    buffs:
+      type: object
+      additionalProperties:
+        type: number
+    assignment:
+      type: string
+GarrisonRules:
+  type: object
+  required:
+  - canRecall
+  - canExpel
+  - canReturn
+  - canFight
+  - canConvert
+  - canRelease
+  properties:
+    canRecall:
+      type: boolean
+    canExpel:
+      type: boolean
+    canReturn:
+      type: boolean
+    canFight:
+      type: boolean
+    canConvert:
+      type: boolean
+    canRelease:
+      type: boolean
+Reinforcement:
+  type: object
+  required:
+  - reinforcementId
+  - fromPlayerId
+  - toPlayerId
+  - targetType
+  - targetId
+  - status
+  - troops
+  - remainingTroops
+  - rules
+  - speedMultiplier
+  - marchSeconds
+  - returnSeconds
+  - sentAt
+  - isAnnihilated
+  properties:
+    reinforcementId:
+      type: string
+    fromPlayerId:
+      type: string
+    fromPlayerName:
+      type: string
+    fromPlayerFaction:
+      type: string
+    toPlayerId:
+      type: string
+    toPlayerName:
+      type: string
+    toPlayerFaction:
+      type: string
+    ownerPlayerId:
+      type: string
+      description: 队伍归属玩家。普通增援等于 fromPlayerId，编外驻防通常等于获得该队伍的玩家。
+    hostPlayerId:
+      type: string
+      description: 队伍驻防所在玩家。普通增援等于 toPlayerId。
+    sourceType:
+      type: string
+      enum: [reinforcement, captured, mercenary, event_reward, system]
+      description: 驻防队伍来源类型。reinforcement 为玩家增援，其它为编外驻防来源。
+    sourceId:
+      type: string
+      description: 来源记录 ID，例如俘虏事件、雇佣记录或活动奖励记录。
+    targetType:
+      type: string
+      example: player_city
+    targetId:
+      type: string
+    status:
+      type: string
+      enum: [marching, stationed, fighting, returning, completed, cancelled, failed]
+    troops:
+      type: object
+      additionalProperties:
+        type: integer
+    remainingTroops:
+      type: object
+      additionalProperties:
+        type: integer
+    generals:
+      type: array
+      items:
+        $ref: '#/components/schemas/ReinforcementGeneralSnapshot'
+    losses:
+      type: object
+      additionalProperties:
+        type: integer
+    rules:
+      $ref: '#/components/schemas/GarrisonRules'
+    speedMultiplier:
+      type: number
+    marchSeconds:
+      type: integer
+    returnSeconds:
+      type: integer
+    sentAt:
+      type: string
+      format: date-time
+    arriveAt:
+      type: string
+      format: date-time
+    arrivedAt:
+      type: string
+      format: date-time
+    recalledAt:
+      type: string
+      format: date-time
+    expelledAt:
+      type: string
+      format: date-time
+    returnStartedAt:
+      type: string
+      format: date-time
+    expectedReturnedAt:
+      type: string
+      format: date-time
+    returnedAt:
+      type: string
+      format: date-time
+    lastBattleReportId:
+      type: string
+    lastBattleAt:
+      type: string
+      format: date-time
+    isAnnihilated:
+      type: boolean
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+ReinforcementResponse:
+  type: object
+  required:
+  - reinforcement
+  properties:
+    reinforcement:
+      $ref: '#/components/schemas/Reinforcement'
+    patch:
+      type: object
+      description: 增援操作后的局部状态补丁，不再返回完整 GameState。
+      properties:
+        army:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        generals:
+          type: array
+          items:
+            $ref: '#/components/schemas/General'
+        generalAssignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeneralAssignment'
+        serverTime:
+          type: string
+          format: date-time
+ReinforcementListResponse:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/Reinforcement'

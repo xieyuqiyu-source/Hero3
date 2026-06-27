@@ -1,0 +1,89 @@
+CurrencyActionResult:
+  type: object
+  required: [cityGold, serverTime]
+  properties:
+    cityGold:
+      type: integer
+    accountGold:
+      type: integer
+    lastExchangeAt:
+      type: string
+      format: date-time
+    serverTime:
+      type: string
+      format: date-time
+ReportActionResult:
+  type: object
+  required: [unreadMessageCount, serverTime]
+  properties:
+    unreadMessageCount:
+      type: integer
+    serverTime:
+      type: string
+      format: date-time
+ItemActionResult:
+  type: object
+  required: [cityGold, serverTime]
+  properties:
+    inventory:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/ItemStack'
+    resources:
+      $ref: '#/components/schemas/ResourceState'
+    army:
+      type: array
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    general:
+      $ref: '#/components/schemas/General'
+    generals:
+      type: array
+      items:
+        $ref: '#/components/schemas/General'
+    generalAssignments:
+      type: array
+      items:
+        $ref: '#/components/schemas/GeneralAssignment'
+    activeModifiers:
+      type: array
+      items:
+        $ref: '#/components/schemas/ModifierBreakdownItem'
+    buffs:
+      type: array
+      items:
+        $ref: '#/components/schemas/Buff'
+    cityGold:
+      type: integer
+    serverTime:
+      type: string
+      format: date-time
+UseItemResult:
+  type: object
+  required: [patch, itemId, used, effects]
+  properties:
+    patch:
+      $ref: '#/components/schemas/ItemActionResult'
+    itemId:
+      type: string
+    used:
+      type: integer
+    effects:
+      type: object
+      additionalProperties:
+        type: integer
+FishingBaitUseResult:
+  type: object
+  required: [baitId, serverTime, cityGoldCost]
+  properties:
+    baitId:
+      type: string
+    cityGold:
+      type: integer
+    serverTime:
+      type: string
+      format: date-time
+    cityGoldCost:
+      type: integer
+    cityGoldRemain:
+      type: integer

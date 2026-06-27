@@ -2,7 +2,7 @@
 
 `Hero3 Go 后端` 是 Hero3 的数据与游戏规则服务。当前采用模块化单体方向：HTTP 输入输出、应用编排、通用核心能力和基础设施分层维护。
 
-当前后端已经接入账号、玩家存档、资源、建筑、征兵、NPC、战斗、武将、道具、信函、万象幻境、货币流水等基础能力，并正在建设稳定核心地基。核心地基要求玩家长期资产变更通过统一玩家状态事务、账号资产事务、奖励发放、事件管线和 Modifier 加成管线处理。
+当前后端已经接入账号、玩家存档、资源、建筑、征兵、NPC、战斗、武将、道具、信函、公告、万象幻境、货币流水等基础能力，并正在建设稳定核心地基。核心地基要求玩家长期资产变更通过统一玩家状态事务、账号资产事务、奖励发放、事件管线和 Modifier 加成管线处理。
 
 ## 技术选择
 
@@ -68,9 +68,10 @@ go/
 
 玩法模块边界当前集中在：
 
-- `gameplay_module_registry.go`：玩法模块边界声明，当前登记 `mail` 和 `minigame`。
+- `gameplay_module_registry.go`：玩法模块边界声明，当前登记 `mail`、`minigame` 和 `reinforcement`。
 - `service_mail.go`：信函列表、阅读、发送、删除和附件领取。
 - `service_minigame.go`：万象幻境记录、鱼饵消耗、奖励兑换和兑换事件。
+- `service_reinforcement.go`：增援派出、召回、遣返、到达、返程和战斗损耗接入。
 
 后续活动/副本应先登记玩法模块边界，再通过奖励、事件、Modifier、建筑变更等核心入口接入长期资产。
 
@@ -193,7 +194,10 @@ make backfill-generals
 make verify-generals
 make backfill-buffs
 make verify-buffs
+make healthcheck-authority
 ```
+
+`verify-*` 命令用于旧 `state_json` 快照迁移期的一致性校验；当前日常开发以 `make healthcheck-authority` 判断权威表是否完整、`players.state_json` 是否仍残留资源、背包、建筑、资源田、兵力、招募队列、武将、Buff 等大字段。
 
 日常开发只需要：
 

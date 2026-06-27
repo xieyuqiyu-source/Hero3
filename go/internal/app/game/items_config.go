@@ -26,11 +26,13 @@ type ItemDefinition struct {
 }
 
 type ItemEffect struct {
-	Type          string            `json:"type"`
-	Amount        int               `json:"amount,omitempty"`
-	GeneralID     string            `json:"generalId,omitempty"`
-	Resources     map[string]int    `json:"resources,omitempty"`
-	UnitByFaction map[string]string `json:"unitByFaction,omitempty"`
+	Type            string            `json:"type"`
+	Amount          int               `json:"amount,omitempty"`
+	GeneralID       string            `json:"generalId,omitempty"`
+	Resources       map[string]int    `json:"resources,omitempty"`
+	UnitByFaction   map[string]string `json:"unitByFaction,omitempty"`
+	ProtectionType  string            `json:"protectionType,omitempty"`
+	DurationSeconds int               `json:"durationSeconds,omitempty"`
 }
 
 var (
@@ -96,6 +98,15 @@ func ValidateItemsConfig(cfg ItemsConfig) error {
 			case "unit_by_faction":
 				if effect.Amount <= 0 || len(effect.UnitByFaction) == 0 {
 					return errors.New("unit_by_faction effect requires amount and unit map: " + id)
+				}
+			case "pvp_protection":
+				if effect.DurationSeconds <= 0 {
+					return errors.New("pvp_protection effect requires durationSeconds: " + id)
+				}
+				switch strings.TrimSpace(effect.ProtectionType) {
+				case PvpProtectionTypeManual, PvpProtectionTypeSystem, PvpProtectionTypeMaintenance:
+				default:
+					return errors.New("invalid pvp_protection protectionType: " + id)
 				}
 			default:
 				return errors.New("invalid item effect type: " + id)

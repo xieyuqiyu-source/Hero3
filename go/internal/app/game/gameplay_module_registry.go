@@ -60,6 +60,38 @@ func init() {
 			"跨阵营或不可识别产出不能绕过兵种注册表直接写入玩家兵力。",
 		},
 	})
+	mustRegisterGameplayModule(GameplayModuleDefinition{
+		ID:              ReinforcementModuleID,
+		Name:            "增援",
+		Description:     "玩家之间派出兵力和武将驻防目标玩家城池的玩法模块。",
+		StateOwner:      "player_reinforcements table",
+		RepositoryPort:  "ReinforcementRepository",
+		EventTypes:      []string{EventBattleFinished},
+		RewardTypes:     []string{RewardTypeResource, RewardTypeCityGold, RewardTypeItem, RewardTypeUnit, RewardTypeGeneralExp},
+		CoreEntrypoints: []string{"CreateReinforcementWithState", "UpdateReinforcement", "validateAndConsumeArmy", "player_general_assignments"},
+		BoundaryRules: []string{
+			"增援模块拥有增援批次生命周期和驻防展示状态。",
+			"派出兵力必须先从派出方长期兵力扣出，不能写入接收方长期兵力。",
+			"携带武将必须写入武将占用表，返程完成后释放占用。",
+			"战斗损耗必须按增援批次更新 remaining_troops_json，不能只写战报。",
+		},
+	})
+	mustRegisterGameplayModule(GameplayModuleDefinition{
+		ID:              PVPModuleID,
+		Name:            "PVP",
+		Description:     "玩家之间发起侦查、攻击、掠夺、行军和战斗结算的玩法模块。",
+		StateOwner:      "pvp_marches + pvp_battles + pvp_player_states tables",
+		RepositoryPort:  "PvpRepository",
+		EventTypes:      []string{EventBattleFinished},
+		RewardTypes:     []string{RewardTypeResource, RewardTypeCityGold, RewardTypeItem, RewardTypeGeneralExp},
+		CoreEntrypoints: []string{"CreatePvpMarchWithState", "ResolvePvpBattleTransaction", "validateAndConsumeArmy", "player_general_assignments", "internal/core/combat"},
+		BoundaryRules: []string{
+			"PVP 模块拥有玩家目标、行军、战斗和 PVP 状态，不拥有核心长期资产。",
+			"发起攻击必须先创建行军并从攻击方长期兵力扣出出征兵力。",
+			"战斗结算必须通过 PVP 专用跨玩家事务，固定处理攻击方、防守方和驻防援军。",
+			"防守援军损耗必须写回增援记录，不能写入防守方长期兵力。",
+		},
+	})
 }
 
 // RegisterGameplayModule 注册玩法模块边界声明。

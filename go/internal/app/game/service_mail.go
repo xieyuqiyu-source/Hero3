@@ -204,18 +204,24 @@ func (s *Service) SendPlayerMail(req SendPlayerMailRequest) (Mail, error) {
 		return Mail{}, ErrPlayerNotFound
 	}
 	now := time.Now()
-	senderState, err := s.repo.UpdatePlayerState(senderID, now, func(state *GameState) error {
-		if state.Player.MailCode == "" {
-			code, err := s.generateMailCode(state.Player.Nickname)
-			if err != nil {
-				return err
-			}
-			state.Player.MailCode = code
-		}
-		return nil
-	})
+	senderState, err := s.repo.GetState(senderID)
 	if err != nil {
 		return Mail{}, err
+	}
+	if senderState.Player.MailCode == "" {
+		code, err := s.generateMailCode(senderState.Player.Nickname)
+		if err != nil {
+			return Mail{}, err
+		}
+		senderState, err = s.repo.UpdatePlayerMetaState(senderID, now, func(state *GameState) error {
+			if state.Player.MailCode == "" {
+				state.Player.MailCode = code
+			}
+			return nil
+		})
+		if err != nil {
+			return Mail{}, err
+		}
 	}
 
 	nickname, mailCode, err := parseMailAddress(req.Recipient)
@@ -301,7 +307,7 @@ func buildMail(req SendMailRequest, now time.Time) (Mail, error) {
 
 func normalizeMailType(mailType string) string {
 	switch strings.TrimSpace(mailType) {
-	case "compensation", "reward", "event_reward", "system_notice", "player_message":
+	case "compensation", "reward", "event_reward", "system_notice", "player_message", PvpSeasonRewardMailType:
 		return strings.TrimSpace(mailType)
 	default:
 		return "gm_notice"
@@ -312,7 +318,7 @@ func normalizeMailTypeFilter(mailType string) (string, bool) {
 	switch strings.TrimSpace(mailType) {
 	case "", "all":
 		return "", true
-	case "gm_notice", "compensation", "reward", "event_reward", "system_notice", "player_message":
+	case "gm_notice", "compensation", "reward", "event_reward", "system_notice", "player_message", PvpSeasonRewardMailType:
 		return strings.TrimSpace(mailType), true
 	default:
 		return "", false

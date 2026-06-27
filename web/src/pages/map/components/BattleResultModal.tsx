@@ -72,6 +72,9 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
 
   const hasRewards = Object.values(report.rewards).some(v => v > 0)
   const hasLosses = Object.values(report.lostUnits).some(v => v > 0)
+  const pvpPointEntries = Object.entries(report.pvpPointsDelta ?? {}).filter(([, amount]) => amount !== 0)
+  const pvpReinforcementCount = report.pvpReinforcements?.length ?? 0
+  const pvpGeneralCount = (report.pvpAttackerGenerals?.length ?? 0) + (report.pvpDefenderGenerals?.length ?? 0)
 
   return (
     <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
@@ -126,6 +129,26 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
                   ? ` Lv.${report.generalLevelBefore} → Lv.${report.generalLevelAfter}`
                   : ''}
               </span>
+            </div>
+          )}
+
+          {(pvpPointEntries.length > 0 || pvpGeneralCount > 0 || pvpReinforcementCount > 0) && (
+            <div className="rounded-xl bg-indigo-500/10 border border-indigo-500/25 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold text-indigo-600">PVP 结算</span>
+                <span className="text-[10px] text-indigo-600">
+                  {[pvpGeneralCount > 0 ? `武将 ${pvpGeneralCount} 位` : '', pvpReinforcementCount > 0 ? `驻防/援军 ${pvpReinforcementCount} 队` : ''].filter(Boolean).join(' · ')}
+                </span>
+              </div>
+              {pvpPointEntries.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {pvpPointEntries.map(([key, amount]) => (
+                    <span key={key} className={`text-[10px] px-2 py-0.5 rounded-lg font-medium ${amount > 0 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'}`}>
+                      {key === 'self' ? '我方' : key === 'target' ? '对方' : key} {amount > 0 ? '+' : ''}{amount}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

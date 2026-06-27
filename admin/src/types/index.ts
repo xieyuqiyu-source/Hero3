@@ -1,3 +1,4 @@
+/* 本文件定义 GM 后台使用的接口数据类型。 */
 export interface HealthState {
   status: string
   service: string
@@ -115,6 +116,8 @@ export interface ItemEffect {
   amount?: number
   resources?: Record<string, number>
   unitByFaction?: Record<string, string>
+  protectionType?: string
+  durationSeconds?: number
 }
 
 export interface ItemDefinition {
@@ -307,6 +310,62 @@ export interface MailPage {
   unread: number
 }
 
+export type AnnouncementType = 'system' | 'maintenance' | 'update' | 'activity' | 'compensation' | 'emergency'
+
+export type AnnouncementStatus = 'draft' | 'scheduled' | 'published' | 'withdrawn' | 'archived'
+
+export type AnnouncementDisplayMode = 'center_only' | 'popup' | 'banner'
+
+export type AnnouncementTargetType = 'all' | 'player_ids' | 'account_ids' | 'factions' | 'level_range' | 'created_at_range'
+
+export interface AnnouncementTarget {
+  type: AnnouncementTargetType | string
+  value?: unknown
+}
+
+export interface Announcement {
+  id: string
+  title: string
+  summary: string
+  content?: string
+  type: AnnouncementType | string
+  status: AnnouncementStatus | string
+  displayMode: AnnouncementDisplayMode | string
+  pinned: boolean
+  priority: number
+  forcePopup: boolean
+  startsAt?: string
+  endsAt?: string
+  publishedAt?: string
+  withdrawnAt?: string
+  archivedAt?: string
+  createdAt: string
+  updatedAt: string
+  targets?: AnnouncementTarget[]
+}
+
+export interface SaveAnnouncementPayload {
+  title: string
+  summary: string
+  content: string
+  type: string
+  status?: string
+  displayMode: string
+  pinned: boolean
+  priority: number
+  forcePopup: boolean
+  startsAt?: string
+  endsAt?: string
+  targets: AnnouncementTarget[]
+}
+
+export interface AdminAnnouncementPage {
+  items: Announcement[]
+  page: number
+  pageSize: number
+  total: number
+}
+
 export interface PlayerSummary {
   id: string
   nickname: string
@@ -441,4 +500,182 @@ export interface GoldLedgerEntry {
   refId?: string
   reason?: string
   createdAt: string
+}
+
+export interface PvpPlayerState {
+  playerId: string
+  status: string
+  protectionType?: string
+  protectedUntil?: string
+  cooldownUntil?: string
+  dailyAttackCount: number
+  dailyAttackLimit: number
+  dailyResetAt?: string
+  targetCooldown?: Record<string, string>
+  metadata?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PvpRevengeRecord {
+  id: string
+  defenderPlayerId: string
+  attackerPlayerId: string
+  marchId: string
+  battleId?: string
+  status: string
+  createdAt: string
+  expiresAt: string
+  closedAt?: string
+}
+
+export interface PvpStateResponse {
+  state: PvpPlayerState
+  seasonPoints: number
+  rating: number
+  attackWins: number
+  defenseWins: number
+  losses: number
+  revengeRecords: PvpRevengeRecord[]
+  serverTime: string
+}
+
+export interface PvpSeasonSummary {
+  id: string
+  name: string
+  status: string
+  startsAt: string
+  endsAt: string
+  updatedAt: string
+}
+
+export interface PvpSeasonRecord extends PvpSeasonSummary {
+  settledAt?: string
+  rules?: Record<string, unknown>
+  rewards?: Record<string, unknown>
+  createdAt: string
+}
+
+export interface PvpSeasonPlayerRecord {
+  seasonId: string
+  playerId: string
+  nickname?: string
+  faction?: string
+  rank: number
+  points: number
+  rating: number
+  wins: number
+  losses: number
+  defenseWins: number
+  defenseLosses: number
+  lastBattleAt?: string
+  rewardMailId?: string
+  rewardSentAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PvpRankingEntry {
+  rank: number
+  playerId: string
+  nickname: string
+  faction: string
+  points: number
+  rating: number
+  attackWins: number
+  defenseWins: number
+  losses: number
+  updatedAt: string
+}
+
+export interface PvpMarch {
+  id: string
+  attackerPlayerId: string
+  attackerName: string
+  attackerFaction: string
+  defenderPlayerId: string
+  defenderName: string
+  defenderFaction: string
+  marchType: string
+  status: string
+  attackTroops: Record<string, number>
+  attackGenerals?: string[]
+  speedMultiplier: number
+  durationSeconds: number
+  startedAt: string
+  arrivesAt: string
+  returnStartedAt?: string
+  returnsAt?: string
+  resolvedAt?: string
+  attackerReportId?: string
+  defenderReportId?: string
+  battleId?: string
+  acceleratedTimes: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PvpMarchActionResponse {
+  march: PvpMarch
+  army?: Array<{
+    unitType: string
+    amount: number
+  }>
+  generals?: Array<{
+    id: string
+    name: string
+    level: number
+  }>
+  cityGold?: number
+  cost?: number
+  serverTime: string
+}
+
+export interface PvpBattle {
+  id: string
+  marchId: string
+  attackerPlayerId: string
+  defenderPlayerId: string
+  status: string
+  result?: Record<string, unknown>
+  losses?: Record<string, unknown>
+  plunder?: Record<string, number>
+  attackerReportId?: string
+  defenderReportId?: string
+  resolvedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AdminPvpOverviewResponse {
+  playerId?: string
+  player?: PvpStateResponse
+  season: PvpSeasonSummary
+  rankings: PvpRankingEntry[]
+  marches: PvpMarch[]
+  battles: PvpBattle[]
+  serverTime: string
+}
+
+export interface AdminPvpSeasonListResponse {
+  current: PvpSeasonSummary
+  seasons: PvpSeasonRecord[]
+  serverTime: string
+}
+
+export interface AdminSavePvpSeasonRequest {
+  id?: string
+  name: string
+  status?: string
+  startsAt: string
+  endsAt: string
+  rules?: Record<string, unknown>
+  rewards?: Record<string, unknown>
+}
+
+export interface AdminSettlePvpSeasonResponse {
+  season: PvpSeasonRecord
+  players: PvpSeasonPlayerRecord[]
+  rewardMail: number
+  serverTime: string
 }

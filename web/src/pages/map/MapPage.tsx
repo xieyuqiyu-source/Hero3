@@ -2,6 +2,7 @@ import { useState, useRef, type FC } from 'react'
 import { Castle, Users, Flag, Scroll, Sparkles } from 'lucide-react'
 import NpcCityTab from './components/NpcCityTab'
 import MiniGamesTab from './components/MiniGamesTab'
+import PlayerTargetsTab from './components/PlayerTargetsTab'
 
 type MapTab = 'npc' | 'players' | 'stronghold' | 'dungeon' | 'minigames'
 
@@ -142,11 +143,7 @@ const MapPage: FC = () => {
 
       {/* Tab Content */}
       {activeTab === 'npc' && <NpcCityTab />}
-      {activeTab === 'players' && (
-        <div className="flex items-center justify-center py-16">
-          <span className="text-sm text-[var(--color-text-muted)]">玩家城池系统开发中，敬请期待</span>
-        </div>
-      )}
+      {activeTab === 'players' && <PlayerTargetsTab />}
       {activeTab === 'stronghold' && (
         <div className="flex items-center justify-center py-16">
           <span className="text-sm text-[var(--color-text-muted)]">据点系统开发中，敬请期待</span>

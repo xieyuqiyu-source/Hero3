@@ -25,6 +25,8 @@ tags:
   description: 军情与战报
 - name: Mail
   description: 信函系统
+- name: Announcement
+  description: 公告系统
 - name: MiniGame
   description: 万象幻境小游戏
 - name: Admin
@@ -38,6 +40,18 @@ paths:
     $ref: ./paths/game.yaml#/~1api~1v1~1game~1bootstrap
   /api/v1/game/state:
     $ref: ./paths/game.yaml#/~1api~1v1~1game~1state
+  /api/v1/game/summary:
+    $ref: ./paths/game.yaml#/~1api~1v1~1game~1summary
+  /api/v1/city/view:
+    $ref: ./paths/game.yaml#/~1api~1v1~1city~1view
+  /api/v1/resources/view:
+    $ref: ./paths/game.yaml#/~1api~1v1~1resources~1view
+  /api/v1/military/view:
+    $ref: ./paths/game.yaml#/~1api~1v1~1military~1view
+  /api/v1/inventory/view:
+    $ref: ./paths/game.yaml#/~1api~1v1~1inventory~1view
+  /api/v1/generals/view:
+    $ref: ./paths/game.yaml#/~1api~1v1~1generals~1view
   /api/v1/accounts/register:
     $ref: ./paths/account.yaml#/~1api~1v1~1accounts~1register
   /api/v1/accounts/login:
@@ -66,6 +80,18 @@ paths:
     $ref: ./paths/military.yaml#/~1api~1v1~1military~1general~1reset-stats
   /api/v1/military/general/change:
     $ref: ./paths/military.yaml#/~1api~1v1~1military~1general~1change
+  /api/v1/reinforcements:
+    $ref: ./paths/reinforcement.yaml#/~1api~1v1~1reinforcements
+  /api/v1/reinforcements/sent:
+    $ref: ./paths/reinforcement.yaml#/~1api~1v1~1reinforcements~1sent
+  /api/v1/reinforcements/received:
+    $ref: ./paths/reinforcement.yaml#/~1api~1v1~1reinforcements~1received
+  /api/v1/reinforcements/{reinforcementId}:
+    $ref: ./paths/reinforcement.yaml#/~1api~1v1~1reinforcements~1{reinforcementId}
+  /api/v1/reinforcements/{reinforcementId}/recall:
+    $ref: ./paths/reinforcement.yaml#/~1api~1v1~1reinforcements~1{reinforcementId}~1recall
+  /api/v1/reinforcements/{reinforcementId}/expel:
+    $ref: ./paths/reinforcement.yaml#/~1api~1v1~1reinforcements~1{reinforcementId}~1expel
   /api/v1/map/npc-cities:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities
   /api/v1/map/npc-cities/refresh:
@@ -76,6 +102,20 @@ paths:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1scout
   /api/v1/news/reports:
     $ref: ./paths/news.yaml#/~1api~1v1~1news~1reports
+  /api/v1/news/mark-read:
+    $ref: ./paths/news.yaml#/~1api~1v1~1news~1mark-read
+  /api/v1/news/delete-report:
+    $ref: ./paths/news.yaml#/~1api~1v1~1news~1delete-report
+  /api/v1/news/delete-all-reports:
+    $ref: ./paths/news.yaml#/~1api~1v1~1news~1delete-all-reports
+  /api/v1/gold/exchange:
+    $ref: ./paths/gold.yaml#/~1api~1v1~1gold~1exchange
+  /api/v1/gold/reverse-exchange:
+    $ref: ./paths/gold.yaml#/~1api~1v1~1gold~1reverse-exchange
+  /api/v1/items/config:
+    $ref: ./paths/items.yaml#/~1api~1v1~1items~1config
+  /api/v1/items/use:
+    $ref: ./paths/items.yaml#/~1api~1v1~1items~1use
   /api/v1/mails:
     $ref: ./paths/mail.yaml#/~1api~1v1~1mails
   /api/v1/mails/{mailId}:
@@ -86,16 +126,44 @@ paths:
     $ref: ./paths/mail.yaml#/~1api~1v1~1mails~1{mailId}~1claim
   /api/v1/mails/send-player:
     $ref: ./paths/mail.yaml#/~1api~1v1~1mails~1send-player
+  /api/v1/announcements:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1announcements
+  /api/v1/announcements/popups:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1announcements~1popups
+  /api/v1/announcements/{announcementId}:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1announcements~1{announcementId}
+  /api/v1/announcements/{announcementId}/read:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1announcements~1{announcementId}~1read
+  /api/v1/announcements/{announcementId}/popup-shown:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1announcements~1{announcementId}~1popup-shown
+  /api/v1/announcements/{announcementId}/dismiss:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1announcements~1{announcementId}~1dismiss
   /api/v1/minigame/record:
     $ref: ./paths/minigame.yaml#/~1api~1v1~1minigame~1record
   /api/v1/minigame/records:
     $ref: ./paths/minigame.yaml#/~1api~1v1~1minigame~1records
+  /api/v1/minigame/fishing/use-bait:
+    $ref: ./paths/minigame.yaml#/~1api~1v1~1minigame~1fishing~1use-bait
   /api/v1/minigame/redeem:
     $ref: ./paths/minigame.yaml#/~1api~1v1~1minigame~1redeem
+  /api/v1/minigame/redeem-all:
+    $ref: ./paths/minigame.yaml#/~1api~1v1~1minigame~1redeem-all
   /api/v1/admin/minigame/records:
     $ref: ./paths/minigame.yaml#/~1api~1v1~1admin~1minigame~1records
   /api/v1/admin/mails/send:
     $ref: ./paths/mail.yaml#/~1api~1v1~1admin~1mails~1send
+  /api/v1/admin/announcements:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1admin~1announcements
+  /api/v1/admin/announcements/{announcementId}:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1admin~1announcements~1{announcementId}
+  /api/v1/admin/announcements/{announcementId}/publish:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1admin~1announcements~1{announcementId}~1publish
+  /api/v1/admin/announcements/{announcementId}/schedule:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1admin~1announcements~1{announcementId}~1schedule
+  /api/v1/admin/announcements/{announcementId}/withdraw:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1admin~1announcements~1{announcementId}~1withdraw
+  /api/v1/admin/announcements/{announcementId}/archive:
+    $ref: ./paths/announcement.yaml#/~1api~1v1~1admin~1announcements~1{announcementId}~1archive
   /api/v1/admin/players/{playerId}/mails:
     $ref: ./paths/mail.yaml#/~1api~1v1~1admin~1players~1{playerId}~1mails
   /api/v1/admin/accounts:
@@ -130,18 +198,52 @@ components:
       $ref: ./schemas/account.yaml#/PlayerSummary
     GameState:
       $ref: ./schemas/game-state.yaml#/GameState
+    PlayerSummaryView:
+      $ref: ./schemas/game-state.yaml#/PlayerSummaryView
+    CityView:
+      $ref: ./schemas/game-state.yaml#/CityView
+    ResourceView:
+      $ref: ./schemas/game-state.yaml#/ResourceView
+    MilitaryView:
+      $ref: ./schemas/game-state.yaml#/MilitaryView
+    InventoryView:
+      $ref: ./schemas/game-state.yaml#/InventoryView
+    GeneralsView:
+      $ref: ./schemas/game-state.yaml#/GeneralsView
+    CurrencyActionResult:
+      $ref: ./schemas/action-result.yaml#/CurrencyActionResult
+    ReportActionResult:
+      $ref: ./schemas/action-result.yaml#/ReportActionResult
+    ItemActionResult:
+      $ref: ./schemas/action-result.yaml#/ItemActionResult
+    UseItemResult:
+      $ref: ./schemas/action-result.yaml#/UseItemResult
+    FishingBaitUseResult:
+      $ref: ./schemas/action-result.yaml#/FishingBaitUseResult
     Player:
       $ref: ./schemas/game-state.yaml#/Player
     ResourceState:
       $ref: ./schemas/game-state.yaml#/ResourceState
+    ItemStack:
+      $ref: ./schemas/game-state.yaml#/ItemStack
     ResourceProduction:
       $ref: ./schemas/game-state.yaml#/ResourceProduction
     Building:
       $ref: ./schemas/game-state.yaml#/Building
+    ResourceSlot:
+      $ref: ./schemas/game-state.yaml#/ResourceSlot
     ArmyUnit:
       $ref: ./schemas/game-state.yaml#/ArmyUnit
     RecruitQueue:
       $ref: ./schemas/game-state.yaml#/RecruitQueue
+    General:
+      $ref: ./schemas/game-state.yaml#/General
+    GeneralAssignment:
+      $ref: ./schemas/game-state.yaml#/GeneralAssignment
+    ModifierBreakdownItem:
+      $ref: ./schemas/game-state.yaml#/ModifierBreakdownItem
+    Buff:
+      $ref: ./schemas/game-state.yaml#/Buff
     MapTarget:
       $ref: ./schemas/game-state.yaml#/MapTarget
     BattleReport:
@@ -160,6 +262,24 @@ components:
       $ref: ./schemas/mail.yaml#/SendPlayerMailRequest
     MailClaimResult:
       $ref: ./schemas/mail.yaml#/MailClaimResult
+    AnnouncementTarget:
+      $ref: ./schemas/announcement.yaml#/AnnouncementTarget
+    Announcement:
+      $ref: ./schemas/announcement.yaml#/Announcement
+    AnnouncementSummary:
+      $ref: ./schemas/announcement.yaml#/AnnouncementSummary
+    AnnouncementDetail:
+      $ref: ./schemas/announcement.yaml#/AnnouncementDetail
+    AnnouncementReadState:
+      $ref: ./schemas/announcement.yaml#/AnnouncementReadState
+    AnnouncementPage:
+      $ref: ./schemas/announcement.yaml#/AnnouncementPage
+    AnnouncementPopupPage:
+      $ref: ./schemas/announcement.yaml#/AnnouncementPopupPage
+    AdminAnnouncementPage:
+      $ref: ./schemas/announcement.yaml#/AdminAnnouncementPage
+    SaveAnnouncementRequest:
+      $ref: ./schemas/announcement.yaml#/SaveAnnouncementRequest
     MiniGameRecord:
       $ref: ./schemas/minigame.yaml#/MiniGameRecord
     MiniGameSummary:
@@ -170,6 +290,8 @@ components:
       $ref: ./schemas/minigame.yaml#/MiniGameRedeemRequest
     MiniGameRedeemResult:
       $ref: ./schemas/minigame.yaml#/MiniGameRedeemResult
+    MiniGameRedeemAllResult:
+      $ref: ./schemas/minigame.yaml#/MiniGameRedeemAllResult
     FishingConfig:
       $ref: ./schemas/minigame.yaml#/FishingConfig
     FishingRarityConfig:
@@ -186,6 +308,10 @@ components:
       $ref: ./schemas/city.yaml#/UpgradeBuildingRequest
     AdjustResourcesRequest:
       $ref: ./schemas/city.yaml#/AdjustResourcesRequest
+    CityActionResult:
+      $ref: ./schemas/city.yaml#/CityActionResult
+    ResourceActionResult:
+      $ref: ./schemas/city.yaml#/ResourceActionResult
     RecruitRequest:
       $ref: ./schemas/military.yaml#/RecruitRequest
     InstantCompleteRecruitRequest:
@@ -196,8 +322,26 @@ components:
       $ref: ./schemas/military.yaml#/ResetGeneralStatsRequest
     ChangeGeneralRequest:
       $ref: ./schemas/military.yaml#/ChangeGeneralRequest
+    MilitaryActionResult:
+      $ref: ./schemas/military.yaml#/MilitaryActionResult
+    GeneralViewActionResult:
+      $ref: ./schemas/military.yaml#/GeneralViewActionResult
     GeneralActionResult:
       $ref: ./schemas/military.yaml#/GeneralActionResult
+    SendReinforcementRequest:
+      $ref: ./schemas/reinforcement.yaml#/SendReinforcementRequest
+    ReinforcementPlayerRequest:
+      $ref: ./schemas/reinforcement.yaml#/ReinforcementPlayerRequest
+    ReinforcementGeneralSnapshot:
+      $ref: ./schemas/reinforcement.yaml#/ReinforcementGeneralSnapshot
+    GarrisonRules:
+      $ref: ./schemas/reinforcement.yaml#/GarrisonRules
+    Reinforcement:
+      $ref: ./schemas/reinforcement.yaml#/Reinforcement
+    ReinforcementResponse:
+      $ref: ./schemas/reinforcement.yaml#/ReinforcementResponse
+    ReinforcementListResponse:
+      $ref: ./schemas/reinforcement.yaml#/ReinforcementListResponse
     NpcState:
       $ref: ./schemas/map.yaml#/NpcState
     NpcCity:

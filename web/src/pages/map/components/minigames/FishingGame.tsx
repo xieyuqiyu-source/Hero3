@@ -6,7 +6,7 @@ import { toast } from '@/components/ui'
 import { useConfigStore } from '@/store/configStore'
 import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import { useGameStore } from '@/store/gameStore'
-import type { MiniGameRecord } from '@/types/game'
+import type { ArmyUnit, MiniGameRecord } from '@/types/game'
 import { FishingBaitSelector } from './fishing/FishingBaitSelector'
 import { FishingInventoryModal } from './fishing/FishingInventoryModal'
 import { FishingPondScene } from './fishing/FishingPondScene'
@@ -112,7 +112,7 @@ const FishingGame: FC = () => {
 
   const handleRedeemGroup = async (unitName: string, groupRecords: MiniGameRecord[]) => {
     if (!activePlayerId || redeemingId) return
-    const targets = groupRecords.filter(record => record.remainingAmount > 0 && isFactionUnit(record.rewardUnit))
+    const targets = groupRecords.filter(record => record.remainingAmount > 0)
     const totalAmount = targets.reduce((sum, record) => sum + record.remainingAmount, 0)
     if (targets.length === 0 || totalAmount <= 0) {
       toast.error('没有可兑换库存')
@@ -121,17 +121,25 @@ const FishingGame: FC = () => {
     setRedeemingId(unitName)
     try {
       let redeemed = 0
-      let latestState = null
+      let latestArmy: ArmyUnit[] | null = null
+      let latestServerTime = ''
+      let armyAmount = 0
+      let garrisonAmount = 0
       for (const record of targets) {
         const result = await gameApi.redeemMiniGameReward(activePlayerId, record.id, record.remainingAmount)
         redeemed += result.redeemedAmount
-        latestState = result.state
+        if (result.redeemedTarget === 'garrison') garrisonAmount += result.redeemedAmount
+        else armyAmount += result.redeemedAmount
+        latestArmy = result.army ?? latestArmy
+        latestServerTime = result.serverTime || latestServerTime
         setRecords(prev => prev.map(item => item.id === result.record.id ? result.record : item))
       }
-      if (latestState) {
-        patchState({ army: latestState.army, serverTime: latestState.serverTime })
+      if (latestArmy) {
+        patchState({ army: latestArmy, serverTime: latestServerTime })
       }
-      toast.success(`${unitName} ×${redeemed.toLocaleString()} 已加入军队`)
+      if (garrisonAmount > 0) window.dispatchEvent(new Event('hero3:garrison-updated'))
+      const targetText = garrisonAmount > 0 && armyAmount === 0 ? '已加入驻防队伍' : garrisonAmount > 0 ? '已兑换，部分加入驻防队伍' : '已加入军队'
+      toast.success(`${unitName} ×${redeemed.toLocaleString()} ${targetText}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '兑换失败')
     } finally {
@@ -145,18 +153,24 @@ const FishingGame: FC = () => {
     try {
       const result = await gameApi.redeemAllMiniGameRewards(activePlayerId, 'fishing')
       if (result.redeemedAmount <= 0) {
-        toast.error('没有本阵营可兑换库存')
+        toast.error('没有可兑换库存')
         return
       }
 
-      patchState({ army: result.state.army, serverTime: result.state.serverTime })
+      patchState({ army: result.army, serverTime: result.serverTime })
+      if ((result.garrisonRecords ?? 0) > 0) window.dispatchEvent(new Event('hero3:garrison-updated'))
       await loadRecords(0)
 
       const summary = Object.entries(result.redeemedUnits)
         .slice(0, 3)
         .map(([unitName, amount]) => `${unitName} ×${amount.toLocaleString()}`)
         .join('、')
-      toast.success(`已兑换 ${result.redeemedAmount.toLocaleString()} 兵力${summary ? `：${summary}` : ''}`)
+      const garrisonSummary = Object.entries(result.garrisonedUnits ?? {})
+        .slice(0, 3)
+        .map(([unitName, amount]) => `${unitName} ×${amount.toLocaleString()}`)
+        .join('、')
+      const detail = [summary ? `军队：${summary}` : '', garrisonSummary ? `驻防：${garrisonSummary}` : ''].filter(Boolean).join('；')
+      toast.success(`已兑换 ${result.redeemedAmount.toLocaleString()} 兵力${detail ? `，${detail}` : ''}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '兑换失败')
     } finally {
@@ -256,7 +270,7 @@ const FishingGame: FC = () => {
     setUsingBait(true)
     try {
       const result = await gameApi.useFishingBait(activePlayerId, selectedBait.id)
-      patchState({ cityGold: result.state.cityGold, serverTime: result.state.serverTime })
+      patchState({ cityGold: result.cityGold, serverTime: result.serverTime })
     } catch (error) {
       setConfirmBaitOpen(false)
       setPhase('idle')

@@ -1,3 +1,4 @@
+/* 本文件实现 GM 后台应用入口和页面切换。 */
 import './App.css'
 import { useState } from 'react'
 import AccountsPanel from '@/components/AccountsPanel'
@@ -20,6 +21,8 @@ import GeneralsConfigPanel from '@/components/GeneralsConfigPanel'
 import FishingConfigPanel from '@/components/FishingConfigPanel'
 import GoldLedgerPanel from '@/components/GoldLedgerPanel'
 import MailAdminPanel from '@/components/MailAdminPanel'
+import AnnouncementAdminPanel from '@/components/AnnouncementAdminPanel'
+import PvpAdminPanel from '@/components/PvpAdminPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
 import { Sliders, MapPin, Swords, Flag, Shield, Users, Fish } from 'lucide-react'
@@ -88,6 +91,10 @@ function App() {
         return <GoldLedgerPanel />
       case 'mails':
         return <MailAdminPanel />
+      case 'announcements':
+        return <AnnouncementAdminPanel />
+      case 'pvp':
+        return <PvpAdminPanel accounts={accounts} />
       case 'balance':
         return (
           <div className="grid gap-4">

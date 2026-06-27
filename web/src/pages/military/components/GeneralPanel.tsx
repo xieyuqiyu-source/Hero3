@@ -86,7 +86,7 @@ const GeneralPanel: FC = () => {
   const state = useGameStore((s) => s.state)
   const general = useGameStore((s) => s.state?.general)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
-  const setState = useGameStore((s) => s.setState)
+  const patchState = useGameStore((s) => s.patchState)
   const allocateGeneralStat = useGameStore((s) => s.allocateGeneralStat)
   const resetGeneralStats = useGameStore((s) => s.resetGeneralStats)
   const changeGeneral = useGameStore((s) => s.changeGeneral)
@@ -155,7 +155,7 @@ const GeneralPanel: FC = () => {
     setUsingItemId(stack.itemId)
     try {
       const result = await gameApi.useItem(activePlayerId, stack.itemId, 1)
-      setState(result.state)
+      patchState(result.patch)
       toast.success(`已使用 ${item.name}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '物品使用失败')

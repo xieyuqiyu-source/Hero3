@@ -349,6 +349,60 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 				FOREIGN KEY (player_id) REFERENCES players(id)
 				ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS player_reinforcements (
+			id BIGINT NOT NULL AUTO_INCREMENT,
+			reinforcement_id VARCHAR(64) NOT NULL,
+			from_player_id VARCHAR(64) NOT NULL,
+			to_player_id VARCHAR(64) NOT NULL,
+			owner_player_id VARCHAR(64) NOT NULL DEFAULT '',
+			host_player_id VARCHAR(64) NOT NULL DEFAULT '',
+			source_type VARCHAR(64) NOT NULL DEFAULT 'reinforcement',
+			source_id VARCHAR(128) NOT NULL DEFAULT '',
+			source_faction VARCHAR(32) NOT NULL DEFAULT '',
+			target_type VARCHAR(64) NOT NULL,
+			target_id VARCHAR(64) NOT NULL,
+			status VARCHAR(32) NOT NULL,
+			troops_json JSON NOT NULL,
+			remaining_troops_json JSON NOT NULL,
+			generals_json JSON NULL,
+			losses_json JSON NULL,
+			buff_snapshot_json JSON NULL,
+			rules_json JSON NULL,
+			speed_multiplier DECIMAL(10,4) NOT NULL DEFAULT 1,
+			march_seconds INT NOT NULL DEFAULT 10800,
+			return_seconds INT NOT NULL DEFAULT 10800,
+			sent_at DATETIME(6) NOT NULL,
+			arrived_at DATETIME(6) NULL,
+			recalled_at DATETIME(6) NULL,
+			expelled_at DATETIME(6) NULL,
+			return_started_at DATETIME(6) NULL,
+			returned_at DATETIME(6) NULL,
+			last_battle_report_id VARCHAR(64) NULL,
+			last_battle_at DATETIME(6) NULL,
+			is_annihilated BOOLEAN NOT NULL DEFAULT FALSE,
+			reward_state_json JSON NULL,
+			mail_state_json JSON NULL,
+			metadata_json JSON NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (id),
+			UNIQUE KEY uk_reinforcement_id (reinforcement_id),
+			KEY idx_reinforcements_from_status (from_player_id, status),
+			KEY idx_reinforcements_to_status (to_player_id, status),
+			KEY idx_reinforcements_owner_status (owner_player_id, status),
+			KEY idx_reinforcements_host_status (host_player_id, status),
+			KEY idx_reinforcements_source (source_type, source_id),
+			KEY idx_reinforcements_target_status (target_type, target_id, status),
+			KEY idx_reinforcements_arrive (status, sent_at),
+			KEY idx_reinforcements_return (status, return_started_at),
+			KEY idx_reinforcements_last_battle_report (last_battle_report_id),
+			CONSTRAINT fk_reinforcements_from_player
+				FOREIGN KEY (from_player_id) REFERENCES players(id)
+				ON DELETE CASCADE,
+			CONSTRAINT fk_reinforcements_to_player
+				FOREIGN KEY (to_player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS player_buffs (
 			player_id VARCHAR(64) NOT NULL,
 			buff_id VARCHAR(64) NOT NULL,
@@ -364,6 +418,62 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			INDEX idx_player_buffs_key (modifier_key),
 			INDEX idx_player_buffs_expires (player_id, expires_at),
 			CONSTRAINT fk_player_buffs_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS announcements (
+			id VARCHAR(64) PRIMARY KEY,
+			title VARCHAR(160) NOT NULL,
+			summary VARCHAR(255) NOT NULL DEFAULT '',
+			content TEXT NOT NULL,
+			type VARCHAR(32) NOT NULL,
+			status VARCHAR(32) NOT NULL,
+			display_mode VARCHAR(32) NOT NULL DEFAULT 'center_only',
+			pinned BOOLEAN NOT NULL DEFAULT FALSE,
+			priority INT NOT NULL DEFAULT 0,
+			force_popup BOOLEAN NOT NULL DEFAULT FALSE,
+			starts_at DATETIME(6) NULL,
+			ends_at DATETIME(6) NULL,
+			published_at DATETIME(6) NULL,
+			withdrawn_at DATETIME(6) NULL,
+			archived_at DATETIME(6) NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			INDEX idx_announcements_visible (status, starts_at, ends_at, pinned, priority, published_at),
+			INDEX idx_announcements_admin (updated_at),
+			INDEX idx_announcements_type (type, status, published_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS announcement_targets (
+			announcement_id VARCHAR(64) NOT NULL,
+			target_type VARCHAR(32) NOT NULL,
+			target_value_json JSON NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (announcement_id, target_type),
+			INDEX idx_announcement_targets_type (target_type),
+			CONSTRAINT fk_announcement_targets_announcement
+				FOREIGN KEY (announcement_id) REFERENCES announcements(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS announcement_reads (
+			announcement_id VARCHAR(64) NOT NULL,
+			player_id VARCHAR(64) NOT NULL,
+			account_id VARCHAR(64) NOT NULL DEFAULT '',
+			is_read BOOLEAN NOT NULL DEFAULT FALSE,
+			read_at DATETIME(6) NULL,
+			is_popup_shown BOOLEAN NOT NULL DEFAULT FALSE,
+			popup_shown_at DATETIME(6) NULL,
+			is_dismissed BOOLEAN NOT NULL DEFAULT FALSE,
+			dismissed_at DATETIME(6) NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (announcement_id, player_id),
+			INDEX idx_announcement_reads_player (player_id, updated_at),
+			INDEX idx_announcement_reads_account (account_id, updated_at),
+			CONSTRAINT fk_announcement_reads_announcement
+				FOREIGN KEY (announcement_id) REFERENCES announcements(id)
+				ON DELETE CASCADE,
+			CONSTRAINT fk_announcement_reads_player
 				FOREIGN KEY (player_id) REFERENCES players(id)
 				ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
@@ -432,6 +542,106 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			deleted_by_player TINYINT(1) NOT NULL DEFAULT 0,
 			created_at DATETIME(6) NOT NULL,
 			INDEX idx_reports_player (player_id, deleted_by_player, created_at DESC)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS pvp_marches (
+			id VARCHAR(64) PRIMARY KEY,
+			attacker_player_id VARCHAR(64) NOT NULL,
+			attacker_name VARCHAR(64) NOT NULL DEFAULT '',
+			attacker_faction VARCHAR(32) NOT NULL DEFAULT '',
+			defender_player_id VARCHAR(64) NOT NULL,
+			defender_name VARCHAR(64) NOT NULL DEFAULT '',
+			defender_faction VARCHAR(32) NOT NULL DEFAULT '',
+			march_type VARCHAR(32) NOT NULL,
+			status VARCHAR(32) NOT NULL,
+			attack_troops_json JSON NOT NULL,
+			attack_generals_json JSON NULL,
+			speed_multiplier DECIMAL(10,4) NOT NULL DEFAULT 1,
+			duration_seconds INT NOT NULL,
+			started_at DATETIME(6) NOT NULL,
+			arrives_at DATETIME(6) NOT NULL,
+			return_started_at DATETIME(6) NULL,
+			returns_at DATETIME(6) NULL,
+			resolved_at DATETIME(6) NULL,
+			attacker_report_id VARCHAR(64) NOT NULL DEFAULT '',
+			defender_report_id VARCHAR(64) NOT NULL DEFAULT '',
+			battle_id VARCHAR(64) NOT NULL DEFAULT '',
+			accelerated_times INT NOT NULL DEFAULT 0,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			INDEX idx_pvp_marches_attacker (attacker_player_id, status, arrives_at),
+			INDEX idx_pvp_marches_defender (defender_player_id, status, arrives_at),
+			INDEX idx_pvp_marches_due (status, arrives_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS pvp_battles (
+			id VARCHAR(64) PRIMARY KEY,
+			march_id VARCHAR(64) NOT NULL,
+			attacker_player_id VARCHAR(64) NOT NULL,
+			defender_player_id VARCHAR(64) NOT NULL,
+			status VARCHAR(32) NOT NULL,
+			attacker_snapshot_json JSON NULL,
+			defender_snapshot_json JSON NULL,
+			reinforcement_snapshot_json JSON NULL,
+			result_json JSON NULL,
+			losses_json JSON NULL,
+			plunder_json JSON NULL,
+			attacker_report_id VARCHAR(64) NOT NULL DEFAULT '',
+			defender_report_id VARCHAR(64) NOT NULL DEFAULT '',
+			resolved_at DATETIME(6) NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			UNIQUE KEY uk_pvp_battles_march (march_id),
+			INDEX idx_pvp_battles_attacker (attacker_player_id, created_at),
+			INDEX idx_pvp_battles_defender (defender_player_id, created_at),
+			INDEX idx_pvp_battles_status (status, created_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS pvp_player_states (
+			player_id VARCHAR(64) PRIMARY KEY,
+			status VARCHAR(32) NOT NULL DEFAULT 'normal',
+			protection_type VARCHAR(32) NOT NULL DEFAULT '',
+			protected_until DATETIME(6) NULL,
+			cooldown_until DATETIME(6) NULL,
+			daily_attack_count INT NOT NULL DEFAULT 0,
+			daily_attack_limit INT NOT NULL DEFAULT 0,
+			daily_reset_at DATETIME(6) NULL,
+			target_cooldown_json JSON NULL,
+			metadata_json JSON NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS pvp_seasons (
+			id VARCHAR(64) PRIMARY KEY,
+			name VARCHAR(120) NOT NULL,
+			status VARCHAR(32) NOT NULL,
+			starts_at DATETIME(6) NOT NULL,
+			ends_at DATETIME(6) NOT NULL,
+			settled_at DATETIME(6) NULL,
+			rules_json JSON NULL,
+			rewards_json JSON NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			INDEX idx_pvp_seasons_status (status, starts_at, ends_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS pvp_season_players (
+			season_id VARCHAR(64) NOT NULL,
+			player_id VARCHAR(64) NOT NULL,
+			nickname VARCHAR(64) NOT NULL DEFAULT '',
+			faction VARCHAR(32) NOT NULL DEFAULT '',
+			` + "`rank`" + ` INT NOT NULL DEFAULT 0,
+			points BIGINT NOT NULL DEFAULT 0,
+			rating BIGINT NOT NULL DEFAULT 0,
+			wins INT NOT NULL DEFAULT 0,
+			losses INT NOT NULL DEFAULT 0,
+			defense_wins INT NOT NULL DEFAULT 0,
+			defense_losses INT NOT NULL DEFAULT 0,
+			last_battle_at DATETIME(6) NULL,
+			reward_mail_id VARCHAR(64) NOT NULL DEFAULT '',
+			reward_sent_at DATETIME(6) NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (season_id, player_id),
+			INDEX idx_pvp_season_points (season_id, points),
+			INDEX idx_pvp_season_rating (season_id, rating),
+			INDEX idx_pvp_season_player (player_id, updated_at)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS mails (
 			id VARCHAR(64) PRIMARY KEY,
@@ -512,6 +722,45 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := addColumnIfMissing(ctx, db, `ALTER TABLE minigame_records ADD COLUMN remaining_amount INT NOT NULL DEFAULT -1`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE player_reinforcements ADD COLUMN owner_player_id VARCHAR(64) NOT NULL DEFAULT '' AFTER to_player_id`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE player_reinforcements ADD COLUMN host_player_id VARCHAR(64) NOT NULL DEFAULT '' AFTER owner_player_id`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE player_reinforcements ADD COLUMN source_type VARCHAR(64) NOT NULL DEFAULT 'reinforcement' AFTER host_player_id`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE player_reinforcements ADD COLUMN source_id VARCHAR(128) NOT NULL DEFAULT '' AFTER source_type`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE player_reinforcements ADD COLUMN source_faction VARCHAR(32) NOT NULL DEFAULT '' AFTER source_id`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE player_reinforcements ADD COLUMN rules_json JSON NULL AFTER buff_snapshot_json`); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE player_reinforcements SET owner_player_id = from_player_id WHERE owner_player_id = ''`); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE player_reinforcements SET host_player_id = to_player_id WHERE host_player_id = ''`); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE player_reinforcements SET source_id = reinforcement_id WHERE source_id = ''`); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX idx_reinforcements_owner_status ON player_reinforcements (owner_player_id, status)`); err != nil && !isDuplicateKeyName(err) {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX idx_reinforcements_host_status ON player_reinforcements (host_player_id, status)`); err != nil && !isDuplicateKeyName(err) {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX idx_reinforcements_source ON player_reinforcements (source_type, source_id)`); err != nil && !isDuplicateKeyName(err) {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE pvp_marches ADD COLUMN accelerated_times INT NOT NULL DEFAULT 0 AFTER battle_id`); err != nil {
 		return err
 	}
 	if _, err := db.ExecContext(ctx, `UPDATE minigame_records SET remaining_amount = reward_amount WHERE remaining_amount = -1 AND game_type = 'fishing'`); err != nil {

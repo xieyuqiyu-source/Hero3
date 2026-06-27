@@ -79,7 +79,8 @@ const BuildingCard: FC<BuildingCardProps> = ({
     if (countdown > 0 || refreshedUpgradeRef.current === upgradeEndsAt) return
 
     refreshedUpgradeRef.current = upgradeEndsAt
-    useGameStore.getState().loadGameState()
+    void useGameStore.getState().loadCityView()
+    void useGameStore.getState().loadResourceView()
   }, [upgradeEndsAt, countdown])
 
   const handleUpgrade = async () => {
@@ -99,7 +100,7 @@ const BuildingCard: FC<BuildingCardProps> = ({
       const playerId = useGameStore.getState().activePlayerId
       if (!playerId) return
       const result = await gameApi.instantCompleteBuilding(playerId, buildingId)
-      useGameStore.getState().setState(result.state)
+      useGameStore.getState().patchCityAction(result)
       toast.success(`${name} 升级完成`)
     } catch (e: unknown) {
       const msg = getErrorMessage(e, '加速失败')

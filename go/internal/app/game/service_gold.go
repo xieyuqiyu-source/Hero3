@@ -48,14 +48,14 @@ func speedUpCost(remainingSeconds int) int {
 	return cost
 }
 
-// AddGold 给存档增加城金（原子操作）
-func (s *Service) AddGold(playerID string, amount int, reason string) (GameState, error) {
+// AddGold 给存档增加城金（原子操作），仅返回货币局部结果。
+func (s *Service) AddGold(playerID string, amount int, reason string) (CurrencyActionResult, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
-		return GameState{}, ErrPlayerNotFound
+		return CurrencyActionResult{}, ErrPlayerNotFound
 	}
 	if amount <= 0 {
-		return GameState{}, ErrInvalidGoldAmount
+		return CurrencyActionResult{}, ErrInvalidGoldAmount
 	}
 
 	result, err := s.GrantRewards(playerID, []Reward{{
@@ -68,25 +68,25 @@ func (s *Service) AddGold(playerID string, amount int, reason string) (GameState
 		Reason:   reason,
 	})
 	if err != nil {
-		return GameState{}, err
+		return CurrencyActionResult{}, err
 	}
 
-	return result.State, nil
+	return BuildCurrencyActionResult(result.State, 0), nil
 }
 
-// DeductGold 从存档扣除城金（原子操作，余额不足返回 ErrInsufficientCityGold）
-func (s *Service) DeductGold(playerID string, amount int, reason string) (GameState, error) {
+// DeductGold 从存档扣除城金（原子操作），仅返回货币局部结果。
+func (s *Service) DeductGold(playerID string, amount int, reason string) (CurrencyActionResult, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
-		return GameState{}, ErrPlayerNotFound
+		return CurrencyActionResult{}, ErrPlayerNotFound
 	}
 	if amount <= 0 {
-		return GameState{}, ErrInvalidGoldAmount
+		return CurrencyActionResult{}, ErrInvalidGoldAmount
 	}
 
 	now := time.Now()
 	refID := "city_gold_deduct_" + randomID(10)
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateRewardState(playerID, now, func(state *GameState) error {
 		if int(state.CityGold) < amount {
 			return ErrInsufficientCityGold
 		}
@@ -95,7 +95,7 @@ func (s *Service) DeductGold(playerID string, amount int, reason string) (GameSt
 		return nil
 	})
 	if err != nil {
-		return GameState{}, err
+		return CurrencyActionResult{}, err
 	}
 
 	s.recordLedger(GoldLedgerEntry{
@@ -110,7 +110,7 @@ func (s *Service) DeductGold(playerID string, amount int, reason string) (GameSt
 	})
 	s.publishCurrencyChanged(playerID, "", refID, LedgerRefAdminAdjust)
 
-	return state, nil
+	return BuildCurrencyActionResult(state, 0), nil
 }
 
 // GetGold 查询存档城金余额
@@ -128,25 +128,25 @@ func (s *Service) GetGold(playerID string) (int, error) {
 	return int(state.CityGold), nil
 }
 
-// ExchangeGoldToCityGold 金币 → 城金（事务操作，比例从配置读取）
-func (s *Service) ExchangeGoldToCityGold(accountID string, playerID string, goldAmount int) (GameState, error) {
+// ExchangeGoldToCityGold 金币转城金，仅返回货币局部结果。
+func (s *Service) ExchangeGoldToCityGold(accountID string, playerID string, goldAmount int) (CurrencyActionResult, error) {
 	accountID = strings.TrimSpace(accountID)
 	playerID = strings.TrimSpace(playerID)
 	if accountID == "" {
-		return GameState{}, ErrAccountNotFound
+		return CurrencyActionResult{}, ErrAccountNotFound
 	}
 	if playerID == "" {
-		return GameState{}, ErrPlayerNotFound
+		return CurrencyActionResult{}, ErrPlayerNotFound
 	}
 	if goldAmount <= 0 {
-		return GameState{}, ErrInvalidGoldAmount
+		return CurrencyActionResult{}, ErrInvalidGoldAmount
 	}
 
 	now := time.Now()
 	cityGoldGain := goldAmount * exchangeRate()
 	refID := "exchange_" + randomID(10)
 
-	account, state, err := s.repo.UpdateAccountPlayerState(accountID, playerID, now, func(account *Account, state *GameState) error {
+	account, state, err := s.repo.UpdateAccountRewardState(accountID, playerID, now, func(account *Account, state *GameState) error {
 		if err := ensureExchangeCooldown(*state, now); err != nil {
 			return err
 		}
@@ -160,7 +160,7 @@ func (s *Service) ExchangeGoldToCityGold(accountID string, playerID string, gold
 		return nil
 	})
 	if err != nil {
-		return GameState{}, err
+		return CurrencyActionResult{}, err
 	}
 
 	s.recordLedger(GoldLedgerEntry{
@@ -185,28 +185,28 @@ func (s *Service) ExchangeGoldToCityGold(accountID string, playerID string, gold
 	})
 	s.publishCurrencyChanged(playerID, accountID, refID, LedgerRefExchange)
 
-	return state, nil
+	return BuildCurrencyActionResult(state, account.Gold), nil
 }
 
-// ExchangeCityGoldToGold 城金 → 金币（有损耗，事务操作，比例从配置读取）
-func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, cityGoldAmount int) (GameState, error) {
+// ExchangeCityGoldToGold 城金转金币，仅返回货币局部结果。
+func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, cityGoldAmount int) (CurrencyActionResult, error) {
 	accountID = strings.TrimSpace(accountID)
 	playerID = strings.TrimSpace(playerID)
 	if accountID == "" {
-		return GameState{}, ErrAccountNotFound
+		return CurrencyActionResult{}, ErrAccountNotFound
 	}
 	if playerID == "" {
-		return GameState{}, ErrPlayerNotFound
+		return CurrencyActionResult{}, ErrPlayerNotFound
 	}
 	if cityGoldAmount < reverseExchangeRate() {
-		return GameState{}, ErrInvalidGoldAmount
+		return CurrencyActionResult{}, ErrInvalidGoldAmount
 	}
 
 	now := time.Now()
 	goldGain := cityGoldAmount / reverseExchangeRate()
 	refID := "exchange_" + randomID(10)
 
-	account, state, err := s.repo.UpdateAccountPlayerState(accountID, playerID, now, func(account *Account, state *GameState) error {
+	account, state, err := s.repo.UpdateAccountRewardState(accountID, playerID, now, func(account *Account, state *GameState) error {
 		if err := ensureExchangeCooldown(*state, now); err != nil {
 			return err
 		}
@@ -220,7 +220,7 @@ func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, city
 		return nil
 	})
 	if err != nil {
-		return GameState{}, err
+		return CurrencyActionResult{}, err
 	}
 
 	s.recordLedger(GoldLedgerEntry{
@@ -245,7 +245,7 @@ func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, city
 	})
 	s.publishCurrencyChanged(playerID, accountID, refID, LedgerRefExchange)
 
-	return state, nil
+	return BuildCurrencyActionResult(state, account.Gold), nil
 }
 
 func ensureExchangeCooldown(state GameState, now time.Time) error {

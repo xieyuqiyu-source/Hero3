@@ -1,8 +1,10 @@
+// 本文件定义游戏服务使用的仓储接口和内存仓储基础结构。
 package game
 
 import (
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +31,41 @@ type PlayerStateRepository interface {
 	DeletePlayer(playerID string) error
 	GetState(playerID string) (GameState, error)
 	UpdatePlayerState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
+}
+
+type PlayerMetaRepository interface {
+	UpdatePlayerMetaState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
+}
+
+type BuildingAssetRepository interface {
+	UpdateBuildingResourceState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
+	UpdateAccountBuildingResourceState(accountID string, playerID string, updatedAt time.Time, update func(account *Account, state *GameState) error) (Account, GameState, error)
+}
+
+type RecruitAssetRepository interface {
+	UpdateRecruitState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
+}
+
+type ResourceAssetRepository interface {
+	UpdateResourceState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
+}
+
+type ItemAssetRepository interface {
+	UpdateItemState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
+}
+
+type GeneralAssetRepository interface {
+	UpdateGeneralState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
+	UpdateAccountGeneralState(accountID string, playerID string, updatedAt time.Time, update func(account *Account, state *GameState) error) (Account, GameState, error)
+}
+
+type CombatAssetRepository interface {
+	UpdateCombatState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
+}
+
+type RewardAssetRepository interface {
+	UpdateRewardState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
+	UpdateAccountRewardState(accountID string, playerID string, updatedAt time.Time, update func(account *Account, state *GameState) error) (Account, GameState, error)
 }
 
 type AccountAssetRepository interface {
@@ -63,6 +100,57 @@ type MiniGameRecordRepository interface {
 	UpdateMiniGamePlayerState(playerID string, updatedAt time.Time, update func(state *GameState, records []MiniGameRecord) ([]MiniGameRecord, error)) (GameState, []MiniGameRecord, error)
 }
 
+type PlayerViewRepository interface {
+	GetPlayerSummaryView(playerID string) (PlayerSummaryView, error)
+	GetCityView(playerID string) (CityView, error)
+	GetResourceView(playerID string) (ResourceView, error)
+	GetMilitaryView(playerID string) (MilitaryView, error)
+	GetInventoryView(playerID string) (InventoryView, error)
+	GetGeneralsView(playerID string) (GeneralsView, error)
+}
+
+type ReinforcementRepository interface {
+	CreateReinforcementWithState(fromPlayerID string, toPlayerID string, updatedAt time.Time, update func(from *GameState, to *GameState, targetRecords []Reinforcement) (Reinforcement, error)) (GameState, GameState, Reinforcement, error)
+	UpdateReinforcement(reinforcementID string, updatedAt time.Time, update func(from *GameState, to *GameState, reinforcement *Reinforcement) error) (GameState, GameState, Reinforcement, error)
+	GetReinforcement(reinforcementID string) (Reinforcement, error)
+	ListSentReinforcements(playerID string) ([]Reinforcement, error)
+	ListReceivedReinforcements(playerID string) ([]Reinforcement, error)
+}
+
+type PvpRepository interface {
+	CreatePvpMarchWithState(attackerPlayerID string, defenderPlayerID string, updatedAt time.Time, update func(attacker *GameState, defender *GameState) (PvpMarch, error)) (GameState, GameState, PvpMarch, error)
+	GetPvpMarch(marchID string) (PvpMarch, error)
+	UpdatePvpMarch(marchID string, updatedAt time.Time, update func(march *PvpMarch) error) (PvpMarch, error)
+	UpdatePvpMarchWithAttackerState(marchID string, updatedAt time.Time, update func(attacker *GameState, march *PvpMarch) error) (GameState, PvpMarch, error)
+	ListPvpMarchesForPlayer(playerID string) ([]PvpMarch, error)
+	ListDuePvpMarches(playerID string, now time.Time) ([]PvpMarch, error)
+	ResolvePvpBattleTransaction(marchID string, updatedAt time.Time, update func(attacker *GameState, defender *GameState, reinforcements []Reinforcement, march *PvpMarch) (PvpBattle, BattleReport, BattleReport, []Reinforcement, error)) (GameState, GameState, PvpMarch, PvpBattle, BattleReport, BattleReport, error)
+	GetPvpPlayerState(playerID string, now time.Time) (PvpPlayerState, error)
+	SavePvpPlayerState(state PvpPlayerState, updatedAt time.Time) error
+	GetPvpBattle(battleID string) (PvpBattle, error)
+	ListPvpBattlesForPlayer(playerID string) ([]PvpBattle, error)
+	GetCurrentPvpSeason(now time.Time) (PvpSeasonRecord, error)
+	SavePvpSeason(season PvpSeasonRecord, updatedAt time.Time) error
+	ListPvpSeasons() ([]PvpSeasonRecord, error)
+	SavePvpSeasonPlayers(seasonID string, players []PvpSeasonPlayerRecord, updatedAt time.Time) error
+	ListPvpSeasonPlayers(seasonID string) ([]PvpSeasonPlayerRecord, error)
+}
+
+type AnnouncementRepository interface {
+	PromoteDueScheduledAnnouncements(now time.Time) error
+	GetAnnouncementPlayerContext(playerID string) (AnnouncementPlayerContext, error)
+	ListVisibleAnnouncements(ctx AnnouncementPlayerContext, filter AnnouncementListFilter, now time.Time) ([]AnnouncementSummary, int, error)
+	GetVisibleAnnouncementDetail(ctx AnnouncementPlayerContext, announcementID string, now time.Time) (AnnouncementDetail, error)
+	MarkAnnouncementRead(ctx AnnouncementPlayerContext, announcementID string, now time.Time) (AnnouncementReadState, error)
+	MarkAnnouncementPopupShown(ctx AnnouncementPlayerContext, announcementID string, now time.Time) (AnnouncementReadState, error)
+	DismissAnnouncement(ctx AnnouncementPlayerContext, announcementID string, now time.Time) (AnnouncementReadState, error)
+	ListAdminAnnouncements(filter AdminAnnouncementFilter) ([]Announcement, int, error)
+	GetAdminAnnouncement(announcementID string) (Announcement, error)
+	SaveAnnouncement(announcement Announcement) (Announcement, error)
+	UpdateAnnouncementStatus(announcementID string, status string, now time.Time) (Announcement, error)
+	DeleteAnnouncementDraft(announcementID string) error
+}
+
 type GoldLedgerRepository interface {
 	WriteGoldLedger(entry GoldLedgerEntry) error
 	ListGoldLedger(filter GoldLedgerFilter) ([]GoldLedgerEntry, error)
@@ -75,40 +163,68 @@ type EventProcessingRepository interface {
 type Repository interface {
 	AccountRepository
 	PlayerStateRepository
+	PlayerMetaRepository
+	BuildingAssetRepository
+	RecruitAssetRepository
+	ResourceAssetRepository
+	ItemAssetRepository
+	GeneralAssetRepository
+	CombatAssetRepository
+	RewardAssetRepository
 	AccountAssetRepository
 	ReportRepository
 	MailRepository
 	MiniGameRecordRepository
+	PlayerViewRepository
+	ReinforcementRepository
+	PvpRepository
+	AnnouncementRepository
 	GoldLedgerRepository
 	EventProcessingRepository
 }
 
 type MemoryRepository struct {
-	mu              sync.RWMutex
-	accounts        map[string]Account
-	accountByName   map[string]string
-	accountPlayers  map[string][]string
-	players         map[string]GameState
-	playerUpdatedAt map[string]time.Time
-	reports         map[string][]BattleReport   // playerID → reports
-	mails           map[string][]Mail           // playerID → mails
-	miniGameRecords map[string][]MiniGameRecord // playerID → records
-	ledger          []GoldLedgerEntry
-	ledgerNextID    int64
-	eventClaims     map[string]struct{}
+	mu                sync.RWMutex
+	accounts          map[string]Account
+	accountByName     map[string]string
+	accountPlayers    map[string][]string
+	players           map[string]GameState
+	playerUpdatedAt   map[string]time.Time
+	reports           map[string][]BattleReport   // playerID → reports
+	mails             map[string][]Mail           // playerID → mails
+	miniGameRecords   map[string][]MiniGameRecord // playerID → records
+	reinforcements    map[string]Reinforcement
+	pvpMarches        map[string]PvpMarch
+	pvpBattles        map[string]PvpBattle
+	pvpPlayerStates   map[string]PvpPlayerState
+	pvpSeasons        map[string]PvpSeasonRecord
+	pvpSeasonPlayers  map[string][]PvpSeasonPlayerRecord
+	announcements     map[string]Announcement
+	announcementReads map[string]AnnouncementReadState
+	ledger            []GoldLedgerEntry
+	ledgerNextID      int64
+	eventClaims       map[string]struct{}
 }
 
 func NewMemoryRepository() *MemoryRepository {
 	return &MemoryRepository{
-		accounts:        make(map[string]Account),
-		accountByName:   make(map[string]string),
-		accountPlayers:  make(map[string][]string),
-		players:         make(map[string]GameState),
-		playerUpdatedAt: make(map[string]time.Time),
-		reports:         make(map[string][]BattleReport),
-		mails:           make(map[string][]Mail),
-		miniGameRecords: make(map[string][]MiniGameRecord),
-		eventClaims:     make(map[string]struct{}),
+		accounts:          make(map[string]Account),
+		accountByName:     make(map[string]string),
+		accountPlayers:    make(map[string][]string),
+		players:           make(map[string]GameState),
+		playerUpdatedAt:   make(map[string]time.Time),
+		reports:           make(map[string][]BattleReport),
+		mails:             make(map[string][]Mail),
+		miniGameRecords:   make(map[string][]MiniGameRecord),
+		reinforcements:    make(map[string]Reinforcement),
+		pvpMarches:        make(map[string]PvpMarch),
+		pvpBattles:        make(map[string]PvpBattle),
+		pvpPlayerStates:   make(map[string]PvpPlayerState),
+		pvpSeasons:        make(map[string]PvpSeasonRecord),
+		pvpSeasonPlayers:  make(map[string][]PvpSeasonPlayerRecord),
+		announcements:     make(map[string]Announcement),
+		announcementReads: make(map[string]AnnouncementReadState),
+		eventClaims:       make(map[string]struct{}),
 	}
 }
 
@@ -344,7 +460,7 @@ func (r *MemoryRepository) GetState(playerID string) (GameState, error) {
 		return GameState{}, ErrPlayerNotFound
 	}
 
-	return state, nil
+	return cloneGameState(state)
 }
 
 func cloneGameState(state GameState) (GameState, error) {
@@ -357,6 +473,101 @@ func cloneGameState(state GameState) (GameState, error) {
 		return GameState{}, err
 	}
 	return cloned, nil
+}
+
+// GetPlayerSummaryView 从内存状态投影玩家摘要视图。
+func (r *MemoryRepository) GetPlayerSummaryView(playerID string) (PlayerSummaryView, error) {
+	state, err := r.GetState(playerID)
+	if err != nil {
+		return PlayerSummaryView{}, err
+	}
+	return PlayerSummaryView{
+		Player:             state.Player,
+		CityGold:           state.CityGold,
+		UnreadMessageCount: state.UnreadMessageCount,
+		UnreadMailCount:    state.UnreadMailCount,
+		ServerTime:         state.ServerTime,
+	}, nil
+}
+
+// GetCityView 从内存状态投影城池视图。
+func (r *MemoryRepository) GetCityView(playerID string) (CityView, error) {
+	state, err := r.GetState(playerID)
+	if err != nil {
+		return CityView{}, err
+	}
+	return CityView{
+		Player:             state.Player,
+		Buildings:          state.Buildings,
+		ResourceSlots:      state.ResourceSlots,
+		Resources:          state.Resources,
+		ResourceProduction: state.ResourceProduction,
+		CityGold:           state.CityGold,
+		ActiveModifiers:    state.ActiveModifiers,
+		ServerTime:         state.ServerTime,
+	}, nil
+}
+
+// GetResourceView 从内存状态投影资源视图。
+func (r *MemoryRepository) GetResourceView(playerID string) (ResourceView, error) {
+	state, err := r.GetState(playerID)
+	if err != nil {
+		return ResourceView{}, err
+	}
+	return ResourceView{
+		Resources:          state.Resources,
+		ResourceProduction: state.ResourceProduction,
+		ResourceSettledAt:  state.ResourceSettledAt,
+		ProductionBoost:    state.ProductionBoost,
+		ProductionBoostEnd: state.ProductionBoostEnd,
+		CapacityBoost:      state.CapacityBoost,
+		CapacityBoostEnd:   state.CapacityBoostEnd,
+		ActiveModifiers:    state.ActiveModifiers,
+		ServerTime:         state.ServerTime,
+	}, nil
+}
+
+// GetMilitaryView 从内存状态投影军事视图。
+func (r *MemoryRepository) GetMilitaryView(playerID string) (MilitaryView, error) {
+	state, err := r.GetState(playerID)
+	if err != nil {
+		return MilitaryView{}, err
+	}
+	return MilitaryView{
+		Army:               state.Army,
+		RecruitQueues:      state.RecruitQueues,
+		General:            state.General,
+		Generals:           state.Generals,
+		GeneralAssignments: state.GeneralAssignments,
+		ServerTime:         state.ServerTime,
+	}, nil
+}
+
+// GetInventoryView 从内存状态投影背包视图。
+func (r *MemoryRepository) GetInventoryView(playerID string) (InventoryView, error) {
+	state, err := r.GetState(playerID)
+	if err != nil {
+		return InventoryView{}, err
+	}
+	if state.Inventory == nil {
+		state.Inventory = map[string]ItemStack{}
+	}
+	return InventoryView{Inventory: state.Inventory, ServerTime: state.ServerTime}, nil
+}
+
+// GetGeneralsView 从内存状态投影武将视图。
+func (r *MemoryRepository) GetGeneralsView(playerID string) (GeneralsView, error) {
+	state, err := r.GetState(playerID)
+	if err != nil {
+		return GeneralsView{}, err
+	}
+	return GeneralsView{
+		General:            state.General,
+		Generals:           state.Generals,
+		GeneralAssignments: state.GeneralAssignments,
+		ActiveModifiers:    state.ActiveModifiers,
+		ServerTime:         state.ServerTime,
+	}, nil
 }
 
 func (r *MemoryRepository) UpdatePlayerState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
@@ -380,6 +591,50 @@ func (r *MemoryRepository) UpdatePlayerState(playerID string, updatedAt time.Tim
 	r.players[playerID] = state
 	r.playerUpdatedAt[playerID] = updatedAt
 	return state, nil
+}
+
+func (r *MemoryRepository) UpdatePlayerMetaState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+	return r.UpdatePlayerState(playerID, updatedAt, update)
+}
+
+func (r *MemoryRepository) UpdateBuildingResourceState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+	return r.UpdatePlayerState(playerID, updatedAt, update)
+}
+
+func (r *MemoryRepository) UpdateAccountBuildingResourceState(accountID string, playerID string, updatedAt time.Time, update func(account *Account, state *GameState) error) (Account, GameState, error) {
+	return r.UpdateAccountPlayerState(accountID, playerID, updatedAt, update)
+}
+
+func (r *MemoryRepository) UpdateRecruitState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+	return r.UpdatePlayerState(playerID, updatedAt, update)
+}
+
+func (r *MemoryRepository) UpdateResourceState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+	return r.UpdatePlayerState(playerID, updatedAt, update)
+}
+
+func (r *MemoryRepository) UpdateItemState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+	return r.UpdatePlayerState(playerID, updatedAt, update)
+}
+
+func (r *MemoryRepository) UpdateGeneralState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+	return r.UpdatePlayerState(playerID, updatedAt, update)
+}
+
+func (r *MemoryRepository) UpdateAccountGeneralState(accountID string, playerID string, updatedAt time.Time, update func(account *Account, state *GameState) error) (Account, GameState, error) {
+	return r.UpdateAccountPlayerState(accountID, playerID, updatedAt, update)
+}
+
+func (r *MemoryRepository) UpdateCombatState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+	return r.UpdatePlayerState(playerID, updatedAt, update)
+}
+
+func (r *MemoryRepository) UpdateRewardState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+	return r.UpdatePlayerState(playerID, updatedAt, update)
+}
+
+func (r *MemoryRepository) UpdateAccountRewardState(accountID string, playerID string, updatedAt time.Time, update func(account *Account, state *GameState) error) (Account, GameState, error) {
+	return r.UpdateAccountPlayerState(accountID, playerID, updatedAt, update)
 }
 
 func (r *MemoryRepository) UpdateAccountPlayerState(accountID string, playerID string, updatedAt time.Time, update func(account *Account, state *GameState) error) (Account, GameState, error) {
@@ -782,6 +1037,420 @@ func (r *MemoryRepository) UpdateMiniGamePlayerState(playerID string, updatedAt 
 	r.players[playerID] = state
 	r.playerUpdatedAt[playerID] = updatedAt.UTC()
 	return state, records, nil
+}
+
+// CreateReinforcementWithState 在内存事务中创建增援并更新双方相关资产。
+func (r *MemoryRepository) CreateReinforcementWithState(fromPlayerID string, toPlayerID string, updatedAt time.Time, update func(from *GameState, to *GameState, targetRecords []Reinforcement) (Reinforcement, error)) (GameState, GameState, Reinforcement, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	from, exists := r.players[fromPlayerID]
+	if !exists {
+		return GameState{}, GameState{}, Reinforcement{}, ErrPlayerNotFound
+	}
+	to, exists := r.players[toPlayerID]
+	if !exists {
+		return GameState{}, GameState{}, Reinforcement{}, ErrPlayerNotFound
+	}
+	from, err := cloneGameState(from)
+	if err != nil {
+		return GameState{}, GameState{}, Reinforcement{}, err
+	}
+	to, err = cloneGameState(to)
+	if err != nil {
+		return GameState{}, GameState{}, Reinforcement{}, err
+	}
+	targetRecords := r.memoryReceivedReinforcementsLocked(toPlayerID)
+	record, err := update(&from, &to, targetRecords)
+	if err != nil {
+		return GameState{}, GameState{}, Reinforcement{}, err
+	}
+	r.players[fromPlayerID] = from
+	r.players[toPlayerID] = to
+	r.playerUpdatedAt[fromPlayerID] = updatedAt.UTC()
+	r.playerUpdatedAt[toPlayerID] = updatedAt.UTC()
+	r.reinforcements[record.ID] = record
+	return from, to, record, nil
+}
+
+// UpdateReinforcement 在内存事务中更新单个增援和双方相关资产。
+func (r *MemoryRepository) UpdateReinforcement(reinforcementID string, updatedAt time.Time, update func(from *GameState, to *GameState, reinforcement *Reinforcement) error) (GameState, GameState, Reinforcement, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	record, exists := r.reinforcements[reinforcementID]
+	if !exists {
+		return GameState{}, GameState{}, Reinforcement{}, ErrReinforcementNotFound
+	}
+	from, exists := r.players[record.FromPlayerID]
+	if !exists {
+		return GameState{}, GameState{}, Reinforcement{}, ErrPlayerNotFound
+	}
+	to, exists := r.players[record.ToPlayerID]
+	if !exists {
+		return GameState{}, GameState{}, Reinforcement{}, ErrPlayerNotFound
+	}
+	from, err := cloneGameState(from)
+	if err != nil {
+		return GameState{}, GameState{}, Reinforcement{}, err
+	}
+	to, err = cloneGameState(to)
+	if err != nil {
+		return GameState{}, GameState{}, Reinforcement{}, err
+	}
+	previousReinforcementID := record.ID
+	if update != nil {
+		if err := update(&from, &to, &record); err != nil {
+			return GameState{}, GameState{}, Reinforcement{}, err
+		}
+	}
+	r.players[record.FromPlayerID] = from
+	r.players[record.ToPlayerID] = to
+	r.playerUpdatedAt[record.FromPlayerID] = updatedAt.UTC()
+	r.playerUpdatedAt[record.ToPlayerID] = updatedAt.UTC()
+	if previousReinforcementID != record.ID {
+		delete(r.reinforcements, previousReinforcementID)
+	}
+	r.reinforcements[record.ID] = record
+	return from, to, record, nil
+}
+
+// GetReinforcement 读取单个增援批次。
+func (r *MemoryRepository) GetReinforcement(reinforcementID string) (Reinforcement, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	record, exists := r.reinforcements[reinforcementID]
+	if !exists {
+		return Reinforcement{}, ErrReinforcementNotFound
+	}
+	return cloneReinforcement(record), nil
+}
+
+// ListSentReinforcements 读取玩家派出的增援。
+func (r *MemoryRepository) ListSentReinforcements(playerID string) ([]Reinforcement, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := []Reinforcement{}
+	for _, record := range r.reinforcements {
+		if record.FromPlayerID == playerID {
+			result = append(result, cloneReinforcement(record))
+		}
+	}
+	return result, nil
+}
+
+// ListReceivedReinforcements 读取玩家收到的增援。
+func (r *MemoryRepository) ListReceivedReinforcements(playerID string) ([]Reinforcement, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return cloneReinforcements(r.memoryReceivedReinforcementsLocked(playerID)), nil
+}
+
+func (r *MemoryRepository) memoryReceivedReinforcementsLocked(playerID string) []Reinforcement {
+	result := []Reinforcement{}
+	for _, record := range r.reinforcements {
+		if record.ToPlayerID == playerID {
+			result = append(result, record)
+		}
+	}
+	return result
+}
+
+// CreatePvpMarchWithState 在内存仓储中创建 PVP 行军并同步扣出攻击方资产。
+func (r *MemoryRepository) CreatePvpMarchWithState(attackerPlayerID string, defenderPlayerID string, updatedAt time.Time, update func(attacker *GameState, defender *GameState) (PvpMarch, error)) (GameState, GameState, PvpMarch, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	attacker, ok := r.players[attackerPlayerID]
+	if !ok {
+		return GameState{}, GameState{}, PvpMarch{}, ErrPlayerNotFound
+	}
+	defender, ok := r.players[defenderPlayerID]
+	if !ok {
+		return GameState{}, GameState{}, PvpMarch{}, ErrPlayerNotFound
+	}
+	march, err := update(&attacker, &defender)
+	if err != nil {
+		return GameState{}, GameState{}, PvpMarch{}, err
+	}
+	r.players[attackerPlayerID] = attacker
+	r.players[defenderPlayerID] = defender
+	r.playerUpdatedAt[attackerPlayerID] = updatedAt.UTC()
+	r.playerUpdatedAt[defenderPlayerID] = updatedAt.UTC()
+	r.pvpMarches[march.ID] = march
+	return attacker, defender, march, nil
+}
+
+// GetPvpMarch 读取单条 PVP 行军。
+func (r *MemoryRepository) GetPvpMarch(marchID string) (PvpMarch, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	march, ok := r.pvpMarches[marchID]
+	if !ok {
+		return PvpMarch{}, ErrPlayerNotFound
+	}
+	return clonePvpMarch(march), nil
+}
+
+// UpdatePvpMarch 更新单条 PVP 行军。
+func (r *MemoryRepository) UpdatePvpMarch(marchID string, updatedAt time.Time, update func(march *PvpMarch) error) (PvpMarch, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	march, ok := r.pvpMarches[marchID]
+	if !ok {
+		return PvpMarch{}, ErrPlayerNotFound
+	}
+	if err := update(&march); err != nil {
+		return PvpMarch{}, err
+	}
+	march.UpdatedAt = updatedAt.UTC().Format(resourceDateLayout)
+	r.pvpMarches[marchID] = march
+	return clonePvpMarch(march), nil
+}
+
+// UpdatePvpMarchWithAttackerState 在内存仓储中同时更新 PVP 行军和攻击方状态。
+func (r *MemoryRepository) UpdatePvpMarchWithAttackerState(marchID string, updatedAt time.Time, update func(attacker *GameState, march *PvpMarch) error) (GameState, PvpMarch, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	march, ok := r.pvpMarches[marchID]
+	if !ok {
+		return GameState{}, PvpMarch{}, ErrPlayerNotFound
+	}
+	attacker, ok := r.players[march.AttackerPlayerID]
+	if !ok {
+		return GameState{}, PvpMarch{}, ErrPlayerNotFound
+	}
+	if err := update(&attacker, &march); err != nil {
+		return GameState{}, PvpMarch{}, err
+	}
+	attacker.ServerTime = updatedAt.UTC().Format(resourceDateLayout)
+	march.UpdatedAt = updatedAt.UTC().Format(resourceDateLayout)
+	r.players[attacker.Player.ID] = attacker
+	r.playerUpdatedAt[attacker.Player.ID] = updatedAt.UTC()
+	r.pvpMarches[march.ID] = march
+	return attacker, clonePvpMarch(march), nil
+}
+
+// ListPvpMarchesForPlayer 返回玩家相关的 PVP 行军。
+func (r *MemoryRepository) ListPvpMarchesForPlayer(playerID string) ([]PvpMarch, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := []PvpMarch{}
+	for _, march := range r.pvpMarches {
+		if march.AttackerPlayerID == playerID || march.DefenderPlayerID == playerID {
+			result = append(result, clonePvpMarch(march))
+		}
+	}
+	return result, nil
+}
+
+// ListDuePvpMarches 返回玩家相关且已经到达的行军。
+func (r *MemoryRepository) ListDuePvpMarches(playerID string, now time.Time) ([]PvpMarch, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := []PvpMarch{}
+	for _, march := range r.pvpMarches {
+		if march.AttackerPlayerID != playerID && march.DefenderPlayerID != playerID {
+			continue
+		}
+		switch march.Status {
+		case PvpMarchStatusMarching:
+			arrivesAt, err := time.Parse(resourceDateLayout, march.ArrivesAt)
+			if err == nil && !arrivesAt.After(now.UTC()) {
+				result = append(result, clonePvpMarch(march))
+			}
+		case PvpMarchStatusReturning:
+			returnsAt, err := time.Parse(resourceDateLayout, march.ReturnsAt)
+			if err == nil && !returnsAt.After(now.UTC()) {
+				result = append(result, clonePvpMarch(march))
+			}
+		}
+	}
+	return result, nil
+}
+
+// ResolvePvpBattleTransaction 在内存仓储中结算一场 PVP 战斗。
+func (r *MemoryRepository) ResolvePvpBattleTransaction(marchID string, updatedAt time.Time, update func(attacker *GameState, defender *GameState, reinforcements []Reinforcement, march *PvpMarch) (PvpBattle, BattleReport, BattleReport, []Reinforcement, error)) (GameState, GameState, PvpMarch, PvpBattle, BattleReport, BattleReport, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	march, ok := r.pvpMarches[marchID]
+	if !ok {
+		return GameState{}, GameState{}, PvpMarch{}, PvpBattle{}, BattleReport{}, BattleReport{}, ErrPlayerNotFound
+	}
+	if march.Status == PvpMarchStatusResolved {
+		battle, _ := r.pvpBattles[march.BattleID]
+		return r.players[march.AttackerPlayerID], r.players[march.DefenderPlayerID], clonePvpMarch(march), battle, BattleReport{}, BattleReport{}, nil
+	}
+	if march.Status != PvpMarchStatusMarching && march.Status != PvpMarchStatusResolving {
+		return GameState{}, GameState{}, PvpMarch{}, PvpBattle{}, BattleReport{}, BattleReport{}, ErrInvalidReinforcement
+	}
+	attacker := r.players[march.AttackerPlayerID]
+	defender := r.players[march.DefenderPlayerID]
+	targetRecords := []Reinforcement{}
+	for _, record := range r.reinforcements {
+		normalizeGarrisonRecord(&record)
+		if record.HostPlayerID == defender.Player.ID && record.Status == ReinforcementStatusStationed && record.Rules.CanFight {
+			targetRecords = append(targetRecords, cloneReinforcement(record))
+		}
+	}
+	march.Status = PvpMarchStatusResolving
+	battle, attackerReport, defenderReport, changedReinforcements, err := update(&attacker, &defender, targetRecords, &march)
+	if err != nil {
+		return GameState{}, GameState{}, PvpMarch{}, PvpBattle{}, BattleReport{}, BattleReport{}, err
+	}
+	for _, record := range changedReinforcements {
+		r.reinforcements[record.ID] = record
+	}
+	r.players[attacker.Player.ID] = attacker
+	r.players[defender.Player.ID] = defender
+	r.playerUpdatedAt[attacker.Player.ID] = updatedAt.UTC()
+	r.playerUpdatedAt[defender.Player.ID] = updatedAt.UTC()
+	r.pvpMarches[march.ID] = march
+	r.pvpBattles[battle.ID] = battle
+	if attackerReport.ID != "" {
+		r.reports[attackerReport.PlayerID] = append([]BattleReport{attackerReport}, r.reports[attackerReport.PlayerID]...)
+	}
+	if defenderReport.ID != "" {
+		r.reports[defenderReport.PlayerID] = append([]BattleReport{defenderReport}, r.reports[defenderReport.PlayerID]...)
+	}
+	return attacker, defender, clonePvpMarch(march), battle, attackerReport, defenderReport, nil
+}
+
+// GetPvpBattle 读取单条 PVP 战斗。
+func (r *MemoryRepository) GetPvpBattle(battleID string) (PvpBattle, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	battle, ok := r.pvpBattles[battleID]
+	if !ok {
+		return PvpBattle{}, ErrPlayerNotFound
+	}
+	return battle, nil
+}
+
+// ListPvpBattlesForPlayer 返回玩家相关 PVP 战斗。
+func (r *MemoryRepository) ListPvpBattlesForPlayer(playerID string) ([]PvpBattle, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	result := []PvpBattle{}
+	for _, battle := range r.pvpBattles {
+		if battle.AttackerPlayerID == playerID || battle.DefenderPlayerID == playerID {
+			result = append(result, battle)
+		}
+	}
+	return result, nil
+}
+
+// GetPvpPlayerState 读取或初始化玩家 PVP 状态。
+func (r *MemoryRepository) GetPvpPlayerState(playerID string, now time.Time) (PvpPlayerState, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.players[playerID]; !ok {
+		return PvpPlayerState{}, ErrPlayerNotFound
+	}
+	state, ok := r.pvpPlayerStates[playerID]
+	if !ok {
+		state = newDefaultPvpPlayerState(playerID, now)
+		r.pvpPlayerStates[playerID] = state
+	}
+	state = normalizePvpPlayerState(state, now)
+	r.pvpPlayerStates[playerID] = state
+	return state, nil
+}
+
+// SavePvpPlayerState 保存玩家 PVP 状态。
+func (r *MemoryRepository) SavePvpPlayerState(state PvpPlayerState, updatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.players[state.PlayerID]; !ok {
+		return ErrPlayerNotFound
+	}
+	state.UpdatedAt = updatedAt.UTC().Format(resourceDateLayout)
+	r.pvpPlayerStates[state.PlayerID] = state
+	return nil
+}
+
+// GetCurrentPvpSeason 返回当前时间所在的 PVP 赛季。
+func (r *MemoryRepository) GetCurrentPvpSeason(now time.Time) (PvpSeasonRecord, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, season := range r.pvpSeasons {
+		startsAt, startErr := time.Parse(resourceDateLayout, season.StartsAt)
+		endsAt, endErr := time.Parse(resourceDateLayout, season.EndsAt)
+		if startErr == nil && endErr == nil && !now.UTC().Before(startsAt) && now.UTC().Before(endsAt) && season.Status == PvpSeasonStatusActive {
+			return clonePvpSeasonRecord(season), nil
+		}
+	}
+	return PvpSeasonRecord{}, ErrPlayerNotFound
+}
+
+// SavePvpSeason 保存 PVP 赛季定义。
+func (r *MemoryRepository) SavePvpSeason(season PvpSeasonRecord, updatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if season.ID == "" {
+		return ErrPlayerNotFound
+	}
+	season.UpdatedAt = updatedAt.UTC().Format(resourceDateLayout)
+	if season.CreatedAt == "" {
+		season.CreatedAt = season.UpdatedAt
+	}
+	r.pvpSeasons[season.ID] = clonePvpSeasonRecord(season)
+	return nil
+}
+
+// ListPvpSeasons 返回全部 PVP 赛季。
+func (r *MemoryRepository) ListPvpSeasons() ([]PvpSeasonRecord, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]PvpSeasonRecord, 0, len(r.pvpSeasons))
+	for _, season := range r.pvpSeasons {
+		items = append(items, clonePvpSeasonRecord(season))
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].StartsAt > items[j].StartsAt
+	})
+	return items, nil
+}
+
+// SavePvpSeasonPlayers 保存赛季玩家结算快照。
+func (r *MemoryRepository) SavePvpSeasonPlayers(seasonID string, players []PvpSeasonPlayerRecord, updatedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	updatedAtText := updatedAt.UTC().Format(resourceDateLayout)
+	next := make([]PvpSeasonPlayerRecord, 0, len(players))
+	for _, player := range players {
+		player.SeasonID = seasonID
+		player.UpdatedAt = updatedAtText
+		if player.CreatedAt == "" {
+			player.CreatedAt = updatedAtText
+		}
+		next = append(next, player)
+	}
+	r.pvpSeasonPlayers[seasonID] = next
+	return nil
+}
+
+// ListPvpSeasonPlayers 返回赛季玩家结算快照。
+func (r *MemoryRepository) ListPvpSeasonPlayers(seasonID string) ([]PvpSeasonPlayerRecord, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := append([]PvpSeasonPlayerRecord(nil), r.pvpSeasonPlayers[seasonID]...)
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Rank < items[j].Rank
+	})
+	return items, nil
+}
+
+func clonePvpMarch(march PvpMarch) PvpMarch {
+	march.AttackTroops = cloneStringIntMap(march.AttackTroops)
+	march.AttackGenerals = append([]string(nil), march.AttackGenerals...)
+	return march
+}
+
+// clonePvpSeasonRecord 复制赛季记录中的可变字段。
+func clonePvpSeasonRecord(season PvpSeasonRecord) PvpSeasonRecord {
+	season.Rules = cloneAnyMap(season.Rules)
+	season.Rewards = cloneAnyMap(season.Rewards)
+	return season
 }
 
 // --- Gold Ledger Methods (MemoryRepository) ---

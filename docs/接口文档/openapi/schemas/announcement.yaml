@@ -1,0 +1,273 @@
+AnnouncementTarget:
+  type: object
+  required:
+  - type
+  properties:
+    type:
+      type: string
+      enum: [all, player_ids, account_ids, factions, level_range, created_at_range]
+      example: all
+    value:
+      description: 投放规则值；all 可为空，列表类为字符串数组，范围类为对象。
+      nullable: true
+Announcement:
+  type: object
+  required:
+  - id
+  - title
+  - summary
+  - content
+  - type
+  - status
+  - displayMode
+  - pinned
+  - priority
+  - forcePopup
+  - createdAt
+  - updatedAt
+  properties:
+    id:
+      type: string
+      example: ann_47f23e0eeb08
+    title:
+      type: string
+      maxLength: 160
+    summary:
+      type: string
+      maxLength: 255
+    content:
+      type: string
+    type:
+      type: string
+      enum: [system, maintenance, update, activity, compensation, emergency]
+    status:
+      type: string
+      enum: [draft, scheduled, published, withdrawn, archived]
+    displayMode:
+      type: string
+      enum: [center_only, popup, banner]
+    pinned:
+      type: boolean
+    priority:
+      type: integer
+    forcePopup:
+      type: boolean
+    startsAt:
+      type: string
+      format: date-time
+    endsAt:
+      type: string
+      format: date-time
+    publishedAt:
+      type: string
+      format: date-time
+    withdrawnAt:
+      type: string
+      format: date-time
+    archivedAt:
+      type: string
+      format: date-time
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+    targets:
+      type: array
+      items:
+        $ref: '#/components/schemas/AnnouncementTarget'
+AnnouncementSummary:
+  type: object
+  required:
+  - id
+  - title
+  - summary
+  - type
+  - status
+  - displayMode
+  - pinned
+  - priority
+  - forcePopup
+  - isRead
+  - isPopupShown
+  - isDismissed
+  properties:
+    id:
+      type: string
+    title:
+      type: string
+    summary:
+      type: string
+    type:
+      type: string
+      enum: [system, maintenance, update, activity, compensation, emergency]
+    status:
+      type: string
+      enum: [scheduled, published, archived]
+    displayMode:
+      type: string
+      enum: [center_only, popup, banner]
+    pinned:
+      type: boolean
+    priority:
+      type: integer
+    forcePopup:
+      type: boolean
+    publishedAt:
+      type: string
+      format: date-time
+    startsAt:
+      type: string
+      format: date-time
+    endsAt:
+      type: string
+      format: date-time
+    isRead:
+      type: boolean
+    isPopupShown:
+      type: boolean
+    isDismissed:
+      type: boolean
+AnnouncementDetail:
+  allOf:
+  - $ref: '#/components/schemas/AnnouncementSummary'
+  - type: object
+    required:
+    - content
+    properties:
+      content:
+        type: string
+AnnouncementReadState:
+  type: object
+  required:
+  - announcementId
+  - playerId
+  - isRead
+  - isPopupShown
+  - isDismissed
+  - createdAt
+  - updatedAt
+  properties:
+    announcementId:
+      type: string
+    playerId:
+      type: string
+    accountId:
+      type: string
+    isRead:
+      type: boolean
+    readAt:
+      type: string
+      format: date-time
+    isPopupShown:
+      type: boolean
+    popupShownAt:
+      type: string
+      format: date-time
+    isDismissed:
+      type: boolean
+    dismissedAt:
+      type: string
+      format: date-time
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+AnnouncementPage:
+  type: object
+  required:
+  - items
+  - page
+  - pageSize
+  - total
+  - unread
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/AnnouncementSummary'
+    page:
+      type: integer
+    pageSize:
+      type: integer
+    total:
+      type: integer
+    unread:
+      type: boolean
+AnnouncementPopupPage:
+  type: object
+  required:
+  - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/AnnouncementSummary'
+AdminAnnouncementPage:
+  type: object
+  required:
+  - items
+  - page
+  - pageSize
+  - total
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/Announcement'
+    page:
+      type: integer
+    pageSize:
+      type: integer
+    total:
+      type: integer
+SaveAnnouncementRequest:
+  type: object
+  required:
+  - title
+  - content
+  - targets
+  properties:
+    title:
+      type: string
+      maxLength: 160
+    summary:
+      type: string
+      maxLength: 255
+    content:
+      type: string
+    type:
+      type: string
+      enum: [system, maintenance, update, activity, compensation, emergency]
+      default: system
+    status:
+      type: string
+      enum: [draft, scheduled, published, withdrawn, archived]
+      default: draft
+    displayMode:
+      type: string
+      enum: [center_only, popup, banner]
+      default: center_only
+    pinned:
+      type: boolean
+      default: false
+    priority:
+      type: integer
+      default: 0
+    forcePopup:
+      type: boolean
+      default: false
+    startsAt:
+      type: string
+      format: date-time
+    endsAt:
+      type: string
+      format: date-time
+    targets:
+      type: array
+      description: 必须显式配置 all 或其他投放规则；空数组玩家不可见。
+      items:
+        $ref: '#/components/schemas/AnnouncementTarget'

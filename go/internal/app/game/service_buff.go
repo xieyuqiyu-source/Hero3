@@ -49,7 +49,7 @@ func (s *Service) RevokeBuff(playerID string, buffID string) (GameState, error) 
 	}
 
 	now := time.Now()
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateRewardState(playerID, now, func(state *GameState) error {
 		found := false
 		remaining := state.Buffs[:0]
 		for _, b := range state.Buffs {

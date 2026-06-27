@@ -34,10 +34,13 @@ func NewRouter(options RouterOptions) http.Handler {
 	registerAccountRoutes(mux, handlers)
 	registerCityRoutes(mux, handlers)
 	registerMilitaryRoutes(mux, handlers)
+	registerReinforcementRoutes(mux, handlers)
+	registerPvpRoutes(mux, handlers)
 	registerMapRoutes(mux, handlers)
 	registerCombatRoutes(mux, handlers)
 	registerReportRoutes(mux, handlers)
 	registerMailRoutes(mux, handlers)
+	registerAnnouncementRoutes(mux, handlers)
 	registerGoldRoutes(mux, handlers)
 	registerItemRoutes(mux, handlers)
 	registerMiniGameRoutes(mux, handlers)
@@ -75,6 +78,7 @@ func registerPublicRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("GET /api/v1/meta", handlers.Meta)
 	mux.HandleFunc("GET /api/v1/game/bootstrap", handlers.GameBootstrap)
 	mux.HandleFunc("GET /api/v1/game/state", handlers.GameState)
+	mux.HandleFunc("GET /api/v1/game/summary", handlers.GameSummary)
 }
 
 // registerAccountRoutes 注册账号和存档路由。
@@ -90,6 +94,8 @@ func registerAccountRoutes(mux *http.ServeMux, handlers *Handlers) {
 
 // registerCityRoutes 注册城池、建筑和资源路由。
 func registerCityRoutes(mux *http.ServeMux, handlers *Handlers) {
+	mux.HandleFunc("GET /api/v1/city/view", handlers.CityView)
+	mux.HandleFunc("GET /api/v1/resources/view", handlers.ResourceView)
 	mux.HandleFunc("POST /api/v1/city/buildings/upgrade", handlers.UpgradeBuilding)
 	mux.HandleFunc("POST /api/v1/city/buildings/upgrade-batch", handlers.UpgradeBuildingBatch)
 	mux.HandleFunc("POST /api/v1/city/buildings/instant", handlers.InstantCompleteBuilding)
@@ -102,11 +108,40 @@ func registerCityRoutes(mux *http.ServeMux, handlers *Handlers) {
 
 // registerMilitaryRoutes 注册征兵和武将操作路由。
 func registerMilitaryRoutes(mux *http.ServeMux, handlers *Handlers) {
+	mux.HandleFunc("GET /api/v1/military/view", handlers.MilitaryView)
+	mux.HandleFunc("GET /api/v1/generals/view", handlers.GeneralsView)
 	mux.HandleFunc("POST /api/v1/military/recruit", handlers.Recruit)
 	mux.HandleFunc("POST /api/v1/military/recruit/instant", handlers.InstantCompleteRecruit)
 	mux.HandleFunc("POST /api/v1/military/general/stat", handlers.AllocateGeneralStat)
 	mux.HandleFunc("POST /api/v1/military/general/reset-stats", handlers.ResetGeneralStats)
 	mux.HandleFunc("POST /api/v1/military/general/change", handlers.ChangeGeneral)
+}
+
+// registerReinforcementRoutes 注册增援系统路由。
+func registerReinforcementRoutes(mux *http.ServeMux, handlers *Handlers) {
+	mux.HandleFunc("POST /api/v1/reinforcements", handlers.SendReinforcement)
+	mux.HandleFunc("GET /api/v1/reinforcements/sent", handlers.ListSentReinforcements)
+	mux.HandleFunc("GET /api/v1/reinforcements/received", handlers.ListReceivedReinforcements)
+	mux.HandleFunc("GET /api/v1/reinforcements/{reinforcementId}", handlers.GetReinforcement)
+	mux.HandleFunc("POST /api/v1/reinforcements/{reinforcementId}/recall", handlers.RecallReinforcement)
+	mux.HandleFunc("POST /api/v1/reinforcements/{reinforcementId}/expel", handlers.ExpelReinforcement)
+}
+
+// registerPvpRoutes 注册 PVP 玩家战斗路由。
+func registerPvpRoutes(mux *http.ServeMux, handlers *Handlers) {
+	mux.HandleFunc("GET /api/v1/pvp/targets", handlers.PvpTargets)
+	mux.HandleFunc("GET /api/v1/pvp/targets/{targetPlayerId}", handlers.PvpTarget)
+	mux.HandleFunc("POST /api/v1/pvp/scout", handlers.ScoutPvpTarget)
+	mux.HandleFunc("POST /api/v1/pvp/attacks", handlers.StartPvpAttack)
+	mux.HandleFunc("GET /api/v1/pvp/marches", handlers.PvpMarches)
+	mux.HandleFunc("POST /api/v1/pvp/marches/{marchId}/accelerate", handlers.AcceleratePvpMarch)
+	mux.HandleFunc("POST /api/v1/pvp/marches/{marchId}/recall", handlers.RecallPvpMarch)
+	mux.HandleFunc("GET /api/v1/pvp/battles", handlers.PvpBattles)
+	mux.HandleFunc("GET /api/v1/pvp/battles/{battleId}", handlers.PvpBattle)
+	mux.HandleFunc("GET /api/v1/pvp/state", handlers.PvpState)
+	mux.HandleFunc("GET /api/v1/pvp/revenge", handlers.PvpRevenge)
+	mux.HandleFunc("GET /api/v1/pvp/season", handlers.PvpSeason)
+	mux.HandleFunc("GET /api/v1/pvp/rankings", handlers.PvpRankings)
 }
 
 // registerMapRoutes 注册地图和 NPC 城池路由。
@@ -140,6 +175,16 @@ func registerMailRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("POST /api/v1/mails/send-player", handlers.SendPlayerMail)
 }
 
+// registerAnnouncementRoutes 注册公告系统路由。
+func registerAnnouncementRoutes(mux *http.ServeMux, handlers *Handlers) {
+	mux.HandleFunc("GET /api/v1/announcements", handlers.ListAnnouncements)
+	mux.HandleFunc("GET /api/v1/announcements/popups", handlers.ListAnnouncementPopups)
+	mux.HandleFunc("GET /api/v1/announcements/{announcementId}", handlers.GetAnnouncement)
+	mux.HandleFunc("POST /api/v1/announcements/{announcementId}/read", handlers.MarkAnnouncementRead)
+	mux.HandleFunc("POST /api/v1/announcements/{announcementId}/popup-shown", handlers.MarkAnnouncementPopupShown)
+	mux.HandleFunc("POST /api/v1/announcements/{announcementId}/dismiss", handlers.DismissAnnouncement)
+}
+
 // registerGoldRoutes 注册金币和城金兑换路由。
 func registerGoldRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("POST /api/v1/gold/exchange", handlers.ExchangeGold)
@@ -149,6 +194,7 @@ func registerGoldRoutes(mux *http.ServeMux, handlers *Handlers) {
 // registerItemRoutes 注册道具路由。
 func registerItemRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("GET /api/v1/items/config", handlers.ItemsConfig)
+	mux.HandleFunc("GET /api/v1/inventory/view", handlers.InventoryView)
 	mux.HandleFunc("POST /api/v1/items/use", handlers.UseItem)
 }
 
@@ -164,7 +210,26 @@ func registerMiniGameRoutes(mux *http.ServeMux, handlers *Handlers) {
 // registerAdminRoutes 注册 GM 后台路由。
 func registerAdminRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("GET /api/v1/admin/accounts", handlers.AdminAccounts)
+	mux.HandleFunc("GET /api/v1/admin/announcements", handlers.AdminAnnouncements)
+	mux.HandleFunc("POST /api/v1/admin/announcements", handlers.AdminCreateAnnouncement)
+	mux.HandleFunc("PUT /api/v1/admin/announcements/{announcementId}", handlers.AdminUpdateAnnouncement)
+	mux.HandleFunc("POST /api/v1/admin/announcements/{announcementId}/publish", handlers.AdminPublishAnnouncement)
+	mux.HandleFunc("POST /api/v1/admin/announcements/{announcementId}/schedule", handlers.AdminScheduleAnnouncement)
+	mux.HandleFunc("POST /api/v1/admin/announcements/{announcementId}/withdraw", handlers.AdminWithdrawAnnouncement)
+	mux.HandleFunc("POST /api/v1/admin/announcements/{announcementId}/archive", handlers.AdminArchiveAnnouncement)
+	mux.HandleFunc("DELETE /api/v1/admin/announcements/{announcementId}", handlers.AdminDeleteAnnouncement)
 	mux.HandleFunc("GET /api/v1/admin/players/{playerId}/state", handlers.AdminPlayerState)
+	mux.HandleFunc("GET /api/v1/admin/pvp/overview", handlers.AdminPvpOverview)
+	mux.HandleFunc("GET /api/v1/admin/pvp/marches", handlers.AdminPvpMarches)
+	mux.HandleFunc("GET /api/v1/admin/pvp/battles", handlers.AdminPvpBattles)
+	mux.HandleFunc("GET /api/v1/admin/pvp/seasons", handlers.AdminPvpSeasons)
+	mux.HandleFunc("POST /api/v1/admin/pvp/seasons", handlers.AdminCreatePvpSeason)
+	mux.HandleFunc("PUT /api/v1/admin/pvp/seasons/{seasonId}", handlers.AdminUpdatePvpSeason)
+	mux.HandleFunc("POST /api/v1/admin/pvp/seasons/{seasonId}/settle", handlers.AdminSettlePvpSeason)
+	mux.HandleFunc("GET /api/v1/admin/pvp/players/{playerId}", handlers.AdminPvpPlayer)
+	mux.HandleFunc("POST /api/v1/admin/pvp/players/{playerId}/protection", handlers.AdminSetPvpProtection)
+	mux.HandleFunc("POST /api/v1/admin/pvp/marches/{marchId}/force-resolve", handlers.AdminForceResolvePvpMarch)
+	mux.HandleFunc("POST /api/v1/admin/pvp/marches/{marchId}/cancel", handlers.AdminCancelPvpMarch)
 	mux.HandleFunc("POST /api/v1/admin/resources/adjust", handlers.AdminAdjustResources)
 	mux.HandleFunc("POST /api/v1/admin/items/grant", handlers.AdminGrantItem)
 	mux.HandleFunc("POST /api/v1/admin/gold/add", handlers.AddGold)

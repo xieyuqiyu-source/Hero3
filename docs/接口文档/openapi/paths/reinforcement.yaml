@@ -1,0 +1,148 @@
+/api/v1/reinforcements:
+  post:
+    tags:
+    - Military
+    summary: 发起增援
+    operationId: sendReinforcement
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SendReinforcementRequest'
+    responses:
+      '200':
+        description: 增援已派出
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReinforcementResponse'
+      '400':
+        description: 参数错误
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '409':
+        description: 兵力不足、武将占用或驻防来源槽已满
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/reinforcements/sent:
+  get:
+    tags:
+    - Military
+    summary: 查看我派出的增援
+    operationId: listSentReinforcements
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 我派出的增援列表
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReinforcementListResponse'
+/api/v1/reinforcements/received:
+  get:
+    tags:
+    - Military
+    summary: 查看我收到的增援
+    operationId: listReceivedReinforcements
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 我收到的增援列表
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReinforcementListResponse'
+/api/v1/reinforcements/{reinforcementId}:
+  get:
+    tags:
+    - Military
+    summary: 查看单个增援批次
+    operationId: getReinforcement
+    parameters:
+    - name: reinforcementId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 增援批次详情
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - reinforcement
+              properties:
+                reinforcement:
+                  $ref: '#/components/schemas/Reinforcement'
+/api/v1/reinforcements/{reinforcementId}/recall:
+  post:
+    tags:
+    - Military
+    summary: 召回援军
+    operationId: recallReinforcement
+    parameters:
+    - name: reinforcementId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReinforcementPlayerRequest'
+    responses:
+      '200':
+        description: 援军进入返程
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReinforcementResponse'
+/api/v1/reinforcements/{reinforcementId}/expel:
+  post:
+    tags:
+    - Military
+    summary: 遣返援军
+    operationId: expelReinforcement
+    parameters:
+    - name: reinforcementId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReinforcementPlayerRequest'
+    responses:
+      '200':
+        description: 援军进入返程
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReinforcementResponse'

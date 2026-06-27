@@ -25,6 +25,8 @@ tags:
   description: 军情与战报
 - name: Mail
   description: 信函系统
+- name: Announcement
+  description: 公告系统
 - name: MiniGame
   description: 万象幻境小游戏
 - name: Admin
@@ -96,6 +98,162 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: 缺少玩家存档 ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/game/summary:
+    get:
+      tags:
+      - Game
+      summary: 获取玩家摘要视图
+      operationId: getGameSummary
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        description: 玩家存档 ID。
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 玩家摘要视图
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerSummaryView'
+        '400':
+          description: 缺少玩家存档 ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/city/view:
+    get:
+      tags:
+      - City
+      summary: 获取城池视图
+      operationId: getCityView
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        description: 玩家存档 ID。
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 城池、建筑和资源田视图
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CityView'
+        '400':
+          description: 缺少玩家存档 ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/resources/view:
+    get:
+      tags:
+      - City
+      summary: 获取资源视图
+      operationId: getResourceView
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        description: 玩家存档 ID。
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 资源栏和产量视图
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceView'
+        '400':
+          description: 缺少玩家存档 ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/military/view:
+    get:
+      tags:
+      - Military
+      summary: 获取军事视图
+      operationId: getMilitaryView
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        description: 玩家存档 ID。
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 兵力、征兵队列和武将摘要视图
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MilitaryView'
+        '400':
+          description: 缺少玩家存档 ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/inventory/view:
+    get:
+      tags:
+      - Game
+      summary: 获取背包视图
+      operationId: getInventoryView
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        description: 玩家存档 ID。
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 背包视图
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryView'
+        '400':
+          description: 缺少玩家存档 ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/generals/view:
+    get:
+      tags:
+      - Military
+      summary: 获取武将视图
+      operationId: getGeneralsView
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        description: 玩家存档 ID。
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 武将和派驻视图
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeneralsView'
         '400':
           description: 缺少玩家存档 ID
           content:
@@ -300,16 +458,11 @@ paths:
               $ref: '#/components/schemas/UpgradeBuildingRequest'
       responses:
         '200':
-          description: 升级已开始，返回更新后的游戏状态
+          description: 升级已开始，返回城池相关局部状态
           content:
             application/json:
               schema:
-                type: object
-                required:
-                - state
-                properties:
-                  state:
-                    $ref: '#/components/schemas/GameState'
+                $ref: '#/components/schemas/CityActionResult'
         '404':
           description: 玩家或建筑不存在
           content:
@@ -353,17 +506,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required:
-                - state
-                - upgraded
-                properties:
-                  state:
-                    $ref: '#/components/schemas/GameState'
-                  upgraded:
-                    type: integer
-                    description: 本次成功升级的建筑数量
-                    example: 3
+                $ref: '#/components/schemas/CityActionResult'
         '404':
           description: 玩家不存在
           content:
@@ -401,12 +544,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required:
-                - state
-                properties:
-                  state:
-                    $ref: '#/components/schemas/GameState'
+                $ref: '#/components/schemas/ResourceActionResult'
         '404':
           description: 玩家不存在
           content:
@@ -428,16 +566,11 @@ paths:
               $ref: '#/components/schemas/RecruitRequest'
       responses:
         '200':
-          description: 征兵已进入队列，返回更新后的游戏状态
+          description: 征兵已进入队列，返回军事相关局部状态
           content:
             application/json:
               schema:
-                type: object
-                required:
-                - state
-                properties:
-                  state:
-                    $ref: '#/components/schemas/GameState'
+                $ref: '#/components/schemas/MilitaryActionResult'
         '400':
           description: 征兵数量无效
           content:
@@ -477,16 +610,11 @@ paths:
               $ref: '#/components/schemas/InstantCompleteRecruitRequest'
       responses:
         '200':
-          description: 征兵队列已完成，返回更新后的游戏状态
+          description: 征兵队列已完成，返回军事相关局部状态
           content:
             application/json:
               schema:
-                type: object
-                required:
-                - state
-                properties:
-                  state:
-                    $ref: '#/components/schemas/GameState'
+                $ref: '#/components/schemas/MilitaryActionResult'
         '400':
           description: 参数错误或队列不存在
           content:
@@ -513,16 +641,11 @@ paths:
               $ref: '#/components/schemas/AllocateGeneralStatRequest'
       responses:
         '200':
-          description: 加点成功，返回更新后的游戏状态
+          description: 加点成功，返回将领相关局部状态
           content:
             application/json:
               schema:
-                type: object
-                required:
-                - state
-                properties:
-                  state:
-                    $ref: '#/components/schemas/GameState'
+                $ref: '#/components/schemas/GeneralViewActionResult'
         '400':
           description: 参数错误
           content:
@@ -560,7 +683,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GeneralActionResult'
+                $ref: '#/components/schemas/GeneralViewActionResult'
         '404':
           description: 玩家、账号或将领不存在
           content:
@@ -593,7 +716,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GeneralActionResult'
+                $ref: '#/components/schemas/GeneralViewActionResult'
         '404':
           description: 玩家、将领或换将卡物品配置不存在
           content:
@@ -606,6 +729,154 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/reinforcements:
+    post:
+      tags:
+      - Military
+      summary: 发起增援
+      operationId: sendReinforcement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendReinforcementRequest'
+      responses:
+        '200':
+          description: 增援已派出
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReinforcementResponse'
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 兵力不足、武将占用或驻防来源槽已满
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/reinforcements/sent:
+    get:
+      tags:
+      - Military
+      summary: 查看我派出的增援
+      operationId: listSentReinforcements
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 我派出的增援列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReinforcementListResponse'
+  /api/v1/reinforcements/received:
+    get:
+      tags:
+      - Military
+      summary: 查看我收到的增援
+      operationId: listReceivedReinforcements
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 我收到的增援列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReinforcementListResponse'
+  /api/v1/reinforcements/{reinforcementId}:
+    get:
+      tags:
+      - Military
+      summary: 查看单个增援批次
+      operationId: getReinforcement
+      parameters:
+      - name: reinforcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: playerId
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 增援批次详情
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - reinforcement
+                properties:
+                  reinforcement:
+                    $ref: '#/components/schemas/Reinforcement'
+  /api/v1/reinforcements/{reinforcementId}/recall:
+    post:
+      tags:
+      - Military
+      summary: 召回援军
+      operationId: recallReinforcement
+      parameters:
+      - name: reinforcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReinforcementPlayerRequest'
+      responses:
+        '200':
+          description: 援军进入返程
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReinforcementResponse'
+  /api/v1/reinforcements/{reinforcementId}/expel:
+    post:
+      tags:
+      - Military
+      summary: 遣返援军
+      operationId: expelReinforcement
+      parameters:
+      - name: reinforcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReinforcementPlayerRequest'
+      responses:
+        '200':
+          description: 援军进入返程
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReinforcementResponse'
   /api/v1/map/npc-cities:
     get:
       tags:
@@ -665,7 +936,7 @@ paths:
       tags:
       - Map
       summary: 攻击或掠夺 NPC 城池
-      description: 扣除出征兵力，执行战斗结算，归还存活兵力，更新 NPC 守军、NPC 资源、玩家资源和最近战报。
+      description: 扣除出征兵力，执行战斗结算，归还存活兵力，更新 NPC 守军、NPC 资源和玩家资源，只返回战斗影响范围内的局部状态。
       operationId: attackNpcCity
       requestBody:
         required: true
@@ -675,7 +946,7 @@ paths:
               $ref: '#/components/schemas/AttackNpcRequest'
       responses:
         '200':
-          description: 战斗结算结果和更新后的游戏状态
+          description: 战斗结算结果和局部状态
           content:
             application/json:
               schema:
@@ -703,7 +974,7 @@ paths:
       tags:
       - Map
       summary: 侦查 NPC 城池
-      description: 消耗侦察兵，返回目标 NPC 城池完整信息和更新后的游戏状态。
+      description: 消耗侦察兵，返回目标 NPC 城池完整信息和侦查影响范围内的局部状态。
       operationId: scoutNpcCity
       requestBody:
         required: true
@@ -713,7 +984,7 @@ paths:
               $ref: '#/components/schemas/ScoutNpcRequest'
       responses:
         '200':
-          description: 侦查结果和更新后的游戏状态
+          description: 侦查结果和局部状态
           content:
             application/json:
               schema:
@@ -787,6 +1058,186 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/news/mark-read:
+    post:
+      tags:
+      - News
+      summary: 标记军情已读
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+                reportId:
+                  type: string
+                  description: 传入时标记单条，不传时标记全部。
+      responses:
+        '200':
+          description: 返回未读数局部结果。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportActionResult'
+  /api/v1/news/delete-report:
+    post:
+      tags:
+      - News
+      summary: 删除单条军情
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              - reportId
+              properties:
+                playerId:
+                  type: string
+                reportId:
+                  type: string
+      responses:
+        '200':
+          description: 返回未读数局部结果。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportActionResult'
+  /api/v1/news/delete-all-reports:
+    post:
+      tags:
+      - News
+      summary: 删除全部军情
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+      responses:
+        '200':
+          description: 返回未读数局部结果。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportActionResult'
+  /api/v1/gold/exchange:
+    post:
+      tags:
+      - Account
+      summary: 金币兑换城金
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - accountId
+              - playerId
+              - amount
+              properties:
+                accountId:
+                  type: string
+                playerId:
+                  type: string
+                amount:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: 返回货币局部结果。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrencyActionResult'
+  /api/v1/gold/reverse-exchange:
+    post:
+      tags:
+      - Account
+      summary: 城金兑换金币
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - accountId
+              - playerId
+              - cityGoldAmount
+              properties:
+                accountId:
+                  type: string
+                playerId:
+                  type: string
+                cityGoldAmount:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: 返回货币局部结果。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrencyActionResult'
+  /api/v1/items/config:
+    get:
+      tags:
+      - Game
+      summary: 查询道具配置
+      responses:
+        '200':
+          description: 道具配置
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+  /api/v1/items/use:
+    post:
+      tags:
+      - Game
+      summary: 使用道具
+      description: 返回局部补丁，不再返回完整 GameState。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              - itemId
+              - amount
+              properties:
+                playerId:
+                  type: string
+                itemId:
+                  type: string
+                amount:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: 使用成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UseItemResult'
   /api/v1/mails:
     get:
       tags:
@@ -948,6 +1399,187 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/announcements:
+    get:
+      tags:
+      - Announcement
+      summary: 获取玩家可见公告列表
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: type
+        in: query
+        schema:
+          type: string
+          enum:
+          - system
+          - maintenance
+          - update
+          - activity
+          - compensation
+          - emergency
+      - name: includeArchived
+        in: query
+        schema:
+          type: boolean
+          default: false
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+      responses:
+        '200':
+          description: 公告分页结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementPage'
+  /api/v1/announcements/popups:
+    get:
+      tags:
+      - Announcement
+      summary: 获取玩家待弹窗公告队列
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 公告弹窗摘要列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementPopupPage'
+  /api/v1/announcements/{announcementId}:
+    get:
+      tags:
+      - Announcement
+      summary: 获取公告详情
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: playerId
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 公告详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementDetail'
+        '404':
+          description: 公告不存在或当前玩家不可见
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/announcements/{announcementId}/read:
+    post:
+      tags:
+      - Announcement
+      summary: 标记公告已读
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+      responses:
+        '200':
+          description: 玩家公告阅读状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementReadState'
+  /api/v1/announcements/{announcementId}/popup-shown:
+    post:
+      tags:
+      - Announcement
+      summary: 记录公告弹窗已展示
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+      responses:
+        '200':
+          description: 玩家公告弹窗状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementReadState'
+  /api/v1/announcements/{announcementId}/dismiss:
+    post:
+      tags:
+      - Announcement
+      summary: 关闭公告弹窗并记录忽略状态
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+      responses:
+        '200':
+          description: 玩家公告弹窗状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementReadState'
   /api/v1/minigame/record:
     post:
       tags:
@@ -1006,12 +1638,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MiniGameSummary'
+  /api/v1/minigame/fishing/use-bait:
+    post:
+      tags:
+      - MiniGame
+      summary: 使用钓鱼鱼饵
+      description: 扣除城金后返回货币局部结果，不再返回完整 GameState。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              - baitId
+              properties:
+                playerId:
+                  type: string
+                baitId:
+                  type: string
+      responses:
+        '200':
+          description: 鱼饵使用成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FishingBaitUseResult'
   /api/v1/minigame/redeem:
     post:
       tags:
       - MiniGame
       summary: 兑换小游戏库存奖励
-      description: 钓鱼奖励只允许兑换当前玩家阵营拥有的兵种；非本阵营兵种暂时只能存储，待驻防增援系统完成后开放。
+      description: 钓鱼奖励兑换时，本阵营兵种进入常规军队，非本阵营兵种进入编外驻防队伍。
       requestBody:
         required: true
         content:
@@ -1026,7 +1685,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/MiniGameRedeemResult'
         '400':
-          description: 库存不足、非本阵营兵种或请求非法
+          description: 库存不足、兵种配置不存在或请求非法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/minigame/redeem-all:
+    post:
+      tags:
+      - MiniGame
+      summary: 一键兑换小游戏库存奖励
+      description: 扫描指定小游戏库存；本阵营兵种进入常规军队，非本阵营兵种进入编外驻防队伍。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+                gameType:
+                  type: string
+                  enum:
+                  - fishing
+                  - gambling
+                  default: fishing
+      responses:
+        '200':
+          description: 一键兑换完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MiniGameRedeemAllResult'
+        '400':
+          description: 请求非法
           content:
             application/json:
               schema:
@@ -1089,6 +1784,203 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Mail'
+  /api/v1/admin/announcements:
+    get:
+      tags:
+      - Admin
+      - Announcement
+      summary: GM 获取公告列表
+      parameters:
+      - name: type
+        in: query
+        schema:
+          type: string
+          enum:
+          - system
+          - maintenance
+          - update
+          - activity
+          - compensation
+          - emergency
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - draft
+          - scheduled
+          - published
+          - withdrawn
+          - archived
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+      responses:
+        '200':
+          description: GM 公告分页结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAnnouncementPage'
+    post:
+      tags:
+      - Admin
+      - Announcement
+      summary: GM 新建公告
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveAnnouncementRequest'
+      responses:
+        '201':
+          description: 已创建公告
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+  /api/v1/admin/announcements/{announcementId}:
+    put:
+      tags:
+      - Admin
+      - Announcement
+      summary: GM 编辑公告
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveAnnouncementRequest'
+      responses:
+        '200':
+          description: 已更新公告
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+    delete:
+      tags:
+      - Admin
+      - Announcement
+      summary: GM 删除草稿公告
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+  /api/v1/admin/announcements/{announcementId}/publish:
+    post:
+      tags:
+      - Admin
+      - Announcement
+      summary: GM 立即发布公告
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 已发布公告
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+  /api/v1/admin/announcements/{announcementId}/schedule:
+    post:
+      tags:
+      - Admin
+      - Announcement
+      summary: GM 定时发布公告
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - startsAt
+              properties:
+                startsAt:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: 已设为定时发布
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+  /api/v1/admin/announcements/{announcementId}/withdraw:
+    post:
+      tags:
+      - Admin
+      - Announcement
+      summary: GM 撤回公告
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 已撤回公告
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
+  /api/v1/admin/announcements/{announcementId}/archive:
+    post:
+      tags:
+      - Admin
+      - Announcement
+      summary: GM 归档公告
+      parameters:
+      - name: announcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 已归档公告
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Announcement'
   /api/v1/admin/players/{playerId}/mails:
     get:
       tags:
@@ -1524,12 +2416,37 @@ components:
           $ref: '#/components/schemas/Player'
         resources:
           $ref: '#/components/schemas/ResourceState'
+        inventory:
+          type: object
+          description: 玩家背包快照，key 为道具 ID。
+          additionalProperties:
+            $ref: '#/components/schemas/ItemStack'
         resourceProduction:
           $ref: '#/components/schemas/ResourceProduction'
         resourceSettledAt:
           type: string
           format: date-time
           description: 资源上次由后端权威结算的时间。
+        cityGold:
+          type: integer
+          description: 城内金币，主要用于加速和城内消费。
+          example: 120
+        productionBoost:
+          type: integer
+          description: 资源产量加成倍率，0 或 1 表示无加成。
+          example: 2
+        productionBoostEnd:
+          type: string
+          description: 资源产量加成到期时间。
+          example: '2026-06-26T12:00:00Z'
+        capacityBoost:
+          type: integer
+          description: 资源容量加成倍率，0 或 1 表示无加成。
+          example: 2
+        capacityBoostEnd:
+          type: string
+          description: 资源容量加成到期时间。
+          example: '2026-06-26T12:00:00Z'
         buildings:
           type: array
           items:
@@ -1585,9 +2502,274 @@ components:
         unreadMailCount:
           type: integer
           example: 0
+        activeModifiers:
+          type: array
+          description: 当前生效加成明细，按来源拆分。
+          items:
+            $ref: '#/components/schemas/ModifierBreakdownItem'
         serverTime:
           type: string
           format: date-time
+    PlayerSummaryView:
+      type: object
+      required:
+      - player
+      - cityGold
+      - unreadMessageCount
+      - unreadMailCount
+      - serverTime
+      properties:
+        player:
+          $ref: '#/components/schemas/Player'
+        cityGold:
+          type: integer
+          example: 120
+        unreadMessageCount:
+          type: integer
+          example: 0
+        unreadMailCount:
+          type: integer
+          example: 0
+        serverTime:
+          type: string
+          format: date-time
+    CityView:
+      type: object
+      required:
+      - player
+      - buildings
+      - resources
+      - resourceProduction
+      - cityGold
+      - serverTime
+      properties:
+        player:
+          $ref: '#/components/schemas/Player'
+        buildings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Building'
+        resourceSlots:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResourceSlot'
+        resources:
+          $ref: '#/components/schemas/ResourceState'
+        resourceProduction:
+          $ref: '#/components/schemas/ResourceProduction'
+        cityGold:
+          type: integer
+          example: 120
+        activeModifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModifierBreakdownItem'
+        serverTime:
+          type: string
+          format: date-time
+    ResourceView:
+      type: object
+      required:
+      - resources
+      - resourceProduction
+      - resourceSettledAt
+      - serverTime
+      properties:
+        resources:
+          $ref: '#/components/schemas/ResourceState'
+        resourceProduction:
+          $ref: '#/components/schemas/ResourceProduction'
+        resourceSettledAt:
+          type: string
+          format: date-time
+        productionBoost:
+          type: integer
+          example: 2
+        productionBoostEnd:
+          type: string
+          example: '2026-06-26T12:00:00Z'
+        capacityBoost:
+          type: integer
+          example: 2
+        capacityBoostEnd:
+          type: string
+          example: '2026-06-26T12:00:00Z'
+        activeModifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModifierBreakdownItem'
+        serverTime:
+          type: string
+          format: date-time
+    MilitaryView:
+      type: object
+      required:
+      - army
+      - recruitQueues
+      - serverTime
+      properties:
+        army:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        recruitQueues:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecruitQueue'
+        general:
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/General'
+        generals:
+          type: array
+          items:
+            $ref: '#/components/schemas/General'
+        generalAssignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeneralAssignment'
+        serverTime:
+          type: string
+          format: date-time
+    InventoryView:
+      type: object
+      required:
+      - inventory
+      - serverTime
+      properties:
+        inventory:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ItemStack'
+        serverTime:
+          type: string
+          format: date-time
+    GeneralsView:
+      type: object
+      required:
+      - serverTime
+      properties:
+        general:
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/General'
+        generals:
+          type: array
+          items:
+            $ref: '#/components/schemas/General'
+        generalAssignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeneralAssignment'
+        activeModifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModifierBreakdownItem'
+        serverTime:
+          type: string
+          format: date-time
+    CurrencyActionResult:
+      type: object
+      required:
+      - cityGold
+      - serverTime
+      properties:
+        cityGold:
+          type: integer
+        accountGold:
+          type: integer
+        lastExchangeAt:
+          type: string
+          format: date-time
+        serverTime:
+          type: string
+          format: date-time
+    ReportActionResult:
+      type: object
+      required:
+      - unreadMessageCount
+      - serverTime
+      properties:
+        unreadMessageCount:
+          type: integer
+        serverTime:
+          type: string
+          format: date-time
+    ItemActionResult:
+      type: object
+      required:
+      - cityGold
+      - serverTime
+      properties:
+        inventory:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ItemStack'
+        resources:
+          $ref: '#/components/schemas/ResourceState'
+        army:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        general:
+          $ref: '#/components/schemas/General'
+        generals:
+          type: array
+          items:
+            $ref: '#/components/schemas/General'
+        generalAssignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeneralAssignment'
+        activeModifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModifierBreakdownItem'
+        buffs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Buff'
+        cityGold:
+          type: integer
+        serverTime:
+          type: string
+          format: date-time
+    UseItemResult:
+      type: object
+      required:
+      - patch
+      - itemId
+      - used
+      - effects
+      properties:
+        patch:
+          $ref: '#/components/schemas/ItemActionResult'
+        itemId:
+          type: string
+        used:
+          type: integer
+        effects:
+          type: object
+          additionalProperties:
+            type: integer
+    FishingBaitUseResult:
+      type: object
+      required:
+      - baitId
+      - serverTime
+      - cityGoldCost
+      properties:
+        baitId:
+          type: string
+        cityGold:
+          type: integer
+        serverTime:
+          type: string
+          format: date-time
+        cityGoldCost:
+          type: integer
+        cityGoldRemain:
+          type: integer
     Player:
       type: object
       required:
@@ -1634,6 +2816,24 @@ components:
             stone: 7500
             iron: 7500
             food: 7500
+    ItemStack:
+      type: object
+      required:
+      - itemId
+      - amount
+      properties:
+        itemId:
+          type: string
+          example: general_exp_small
+        amount:
+          type: integer
+          example: 3
+        obtainedAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     ResourceProduction:
       type: object
       description: 每小时资源产量，key 为资源类型，可扩展。
@@ -1672,6 +2872,28 @@ components:
           type: string
           nullable: true
           example: null
+    ResourceSlot:
+      type: object
+      required:
+      - id
+      - resourceType
+      properties:
+        id:
+          type: string
+          example: construction_resource_slot-1
+        resourceType:
+          type: string
+          example: wood
+        buildingId:
+          type: string
+          example: construction_resource_slot-1
+        unlockedBy:
+          type: string
+          example: construction_bureau
+        unlockedAt:
+          type: string
+          format: date-time
+          example: '2026-06-26T12:00:00Z'
     ArmyUnit:
       type: object
       required:
@@ -1701,6 +2923,126 @@ components:
         endsAt:
           type: string
           format: date-time
+    General:
+      type: object
+      required:
+      - id
+      - name
+      - level
+      - exp
+      properties:
+        id:
+          type: string
+          example: caocao
+        name:
+          type: string
+          example: 曹操
+        level:
+          type: integer
+          example: 1
+        exp:
+          type: integer
+          example: 0
+        nextLevelExp:
+          type: integer
+          example: 100
+        availableStatPoints:
+          type: integer
+          example: 1
+        stats:
+          type: object
+          additionalProperties:
+            type: integer
+        attributes:
+          type: object
+          additionalProperties:
+            type: number
+        buffs:
+          type: object
+          additionalProperties:
+            type: number
+    GeneralAssignment:
+      type: object
+      required:
+      - id
+      - generalId
+      - slot
+      properties:
+        id:
+          type: string
+          example: main
+        generalId:
+          type: string
+          example: caocao
+        slot:
+          type: string
+          example: main
+        moduleId:
+          type: string
+          example: dungeon_famous_generals
+        status:
+          type: string
+          example: active
+        assignedAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+    ModifierBreakdownItem:
+      type: object
+      required:
+      - source
+      - key
+      - value
+      - mode
+      properties:
+        source:
+          type: string
+          example: 将领
+        key:
+          type: string
+          example: resourceProduction.wood
+        value:
+          type: number
+          example: 0.1
+        mode:
+          type: string
+          example: percentAdd
+    Buff:
+      type: object
+      required:
+      - id
+      - source
+      - key
+      - value
+      - mode
+      - createdAt
+      properties:
+        id:
+          type: string
+          example: buff_ab12cd34
+        source:
+          type: string
+          example: gm
+        key:
+          type: string
+          example: attackBonus
+        value:
+          type: number
+          example: 0.1
+        mode:
+          type: string
+          example: percentAdd
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        note:
+          type: string
+          example: 活动奖励
     MapTarget:
       type: object
       required:
@@ -1999,6 +3341,325 @@ components:
           example:
             wood: 1000
             city_gold: 50
+    AnnouncementTarget:
+      type: object
+      required:
+      - type
+      properties:
+        type:
+          type: string
+          enum:
+          - all
+          - player_ids
+          - account_ids
+          - factions
+          - level_range
+          - created_at_range
+          example: all
+        value:
+          description: 投放规则值；all 可为空，列表类为字符串数组，范围类为对象。
+          nullable: true
+    Announcement:
+      type: object
+      required:
+      - id
+      - title
+      - summary
+      - content
+      - type
+      - status
+      - displayMode
+      - pinned
+      - priority
+      - forcePopup
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          example: ann_47f23e0eeb08
+        title:
+          type: string
+          maxLength: 160
+        summary:
+          type: string
+          maxLength: 255
+        content:
+          type: string
+        type:
+          type: string
+          enum:
+          - system
+          - maintenance
+          - update
+          - activity
+          - compensation
+          - emergency
+        status:
+          type: string
+          enum:
+          - draft
+          - scheduled
+          - published
+          - withdrawn
+          - archived
+        displayMode:
+          type: string
+          enum:
+          - center_only
+          - popup
+          - banner
+        pinned:
+          type: boolean
+        priority:
+          type: integer
+        forcePopup:
+          type: boolean
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: string
+          format: date-time
+        withdrawnAt:
+          type: string
+          format: date-time
+        archivedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnouncementTarget'
+    AnnouncementSummary:
+      type: object
+      required:
+      - id
+      - title
+      - summary
+      - type
+      - status
+      - displayMode
+      - pinned
+      - priority
+      - forcePopup
+      - isRead
+      - isPopupShown
+      - isDismissed
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        type:
+          type: string
+          enum:
+          - system
+          - maintenance
+          - update
+          - activity
+          - compensation
+          - emergency
+        status:
+          type: string
+          enum:
+          - scheduled
+          - published
+          - archived
+        displayMode:
+          type: string
+          enum:
+          - center_only
+          - popup
+          - banner
+        pinned:
+          type: boolean
+        priority:
+          type: integer
+        forcePopup:
+          type: boolean
+        publishedAt:
+          type: string
+          format: date-time
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        isRead:
+          type: boolean
+        isPopupShown:
+          type: boolean
+        isDismissed:
+          type: boolean
+    AnnouncementDetail:
+      allOf:
+      - $ref: '#/components/schemas/AnnouncementSummary'
+      - type: object
+        required:
+        - content
+        properties:
+          content:
+            type: string
+    AnnouncementReadState:
+      type: object
+      required:
+      - announcementId
+      - playerId
+      - isRead
+      - isPopupShown
+      - isDismissed
+      - createdAt
+      - updatedAt
+      properties:
+        announcementId:
+          type: string
+        playerId:
+          type: string
+        accountId:
+          type: string
+        isRead:
+          type: boolean
+        readAt:
+          type: string
+          format: date-time
+        isPopupShown:
+          type: boolean
+        popupShownAt:
+          type: string
+          format: date-time
+        isDismissed:
+          type: boolean
+        dismissedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AnnouncementPage:
+      type: object
+      required:
+      - items
+      - page
+      - pageSize
+      - total
+      - unread
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnouncementSummary'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+        unread:
+          type: boolean
+    AnnouncementPopupPage:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnouncementSummary'
+    AdminAnnouncementPage:
+      type: object
+      required:
+      - items
+      - page
+      - pageSize
+      - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Announcement'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    SaveAnnouncementRequest:
+      type: object
+      required:
+      - title
+      - content
+      - targets
+      properties:
+        title:
+          type: string
+          maxLength: 160
+        summary:
+          type: string
+          maxLength: 255
+        content:
+          type: string
+        type:
+          type: string
+          enum:
+          - system
+          - maintenance
+          - update
+          - activity
+          - compensation
+          - emergency
+          default: system
+        status:
+          type: string
+          enum:
+          - draft
+          - scheduled
+          - published
+          - withdrawn
+          - archived
+          default: draft
+        displayMode:
+          type: string
+          enum:
+          - center_only
+          - popup
+          - banner
+          default: center_only
+        pinned:
+          type: boolean
+          default: false
+        priority:
+          type: integer
+          default: 0
+        forcePopup:
+          type: boolean
+          default: false
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        targets:
+          type: array
+          description: 必须显式配置 all 或其他投放规则；空数组玩家不可见。
+          items:
+            $ref: '#/components/schemas/AnnouncementTarget'
     MiniGameRecord:
       type: object
       required:
@@ -2125,15 +3786,22 @@ components:
       type: object
       required:
       - record
-      - state
+      - serverTime
       - redeemedUnitId
       - redeemedUnit
       - redeemedAmount
+      - redeemedTarget
       properties:
         record:
           $ref: '#/components/schemas/MiniGameRecord'
-        state:
-          $ref: '#/components/schemas/GameState'
+        army:
+          type: array
+          description: 本次兑换后需要局部刷新到前端的常规军队。
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        serverTime:
+          type: string
+          format: date-time
         redeemedUnitId:
           type: string
           example: qiQiYing
@@ -2141,6 +3809,56 @@ components:
           type: string
           example: 骁骑营
         redeemedAmount:
+          type: integer
+        redeemedTarget:
+          type: string
+          enum:
+          - army
+          - garrison
+          description: army 表示进入常规军队，garrison 表示进入编外驻防队伍。
+        garrison:
+          $ref: '#/components/schemas/Reinforcement'
+    MiniGameRedeemAllResult:
+      type: object
+      required:
+      - serverTime
+      - redeemedUnits
+      - redeemedAmount
+      - redeemedRecords
+      - skippedUnits
+      - skippedRecords
+      properties:
+        army:
+          type: array
+          description: 批量兑换后需要局部刷新到前端的常规军队。
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        serverTime:
+          type: string
+          format: date-time
+        redeemedUnits:
+          type: object
+          description: 进入常规军队的兵种汇总。
+          additionalProperties:
+            type: integer
+        redeemedAmount:
+          type: integer
+          description: 总兑换数量，包含进入常规军队和进入驻防队伍的数量。
+        redeemedRecords:
+          type: integer
+        garrisonedUnits:
+          type: object
+          description: 进入编外驻防队伍的兵种汇总。
+          additionalProperties:
+            type: integer
+        garrisonRecords:
+          type: integer
+        skippedUnits:
+          type: object
+          description: 因配置不存在等原因跳过的库存。
+          additionalProperties:
+            type: integer
+        skippedRecords:
           type: integer
     FishingConfig:
       type: object
@@ -2363,6 +4081,90 @@ components:
           example:
             wood: 5000
             iron: -200
+    CityActionResult:
+      type: object
+      required:
+      - resources
+      - resourceProduction
+      - cityGold
+      - serverTime
+      properties:
+        building:
+          $ref: '#/components/schemas/Building'
+        buildings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Building'
+        resourceSlots:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResourceSlot'
+        resources:
+          $ref: '#/components/schemas/ResourceState'
+        resourceProduction:
+          $ref: '#/components/schemas/ResourceProduction'
+        cityGold:
+          type: integer
+          example: 120
+        activeModifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModifierBreakdownItem'
+        upgraded:
+          type: integer
+          description: 批量升级时本次成功升级的建筑数量。
+          example: 3
+        cost:
+          type: integer
+          description: 操作消耗的城金或其他数值成本。
+          example: 5
+        serverTime:
+          type: string
+          format: date-time
+    ResourceActionResult:
+      type: object
+      required:
+      - resources
+      - resourceProduction
+      - resourceSettledAt
+      - cityGold
+      - serverTime
+      properties:
+        resources:
+          $ref: '#/components/schemas/ResourceState'
+        resourceProduction:
+          $ref: '#/components/schemas/ResourceProduction'
+        resourceSettledAt:
+          type: string
+          format: date-time
+        productionBoost:
+          type: number
+          example: 2
+        productionBoostEnd:
+          type: string
+          format: date-time
+          nullable: true
+        capacityBoost:
+          type: number
+          example: 2
+        capacityBoostEnd:
+          type: string
+          format: date-time
+          nullable: true
+        activeModifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModifierBreakdownItem'
+        cityGold:
+          type: integer
+          example: 120
+        cost:
+          type: integer
+          description: 操作消耗的城金。
+          example: 5
+        serverTime:
+          type: string
+          format: date-time
     RecruitRequest:
       type: object
       required:
@@ -2436,17 +4238,287 @@ components:
           type: string
           description: 预留换将卡物品 ID。传入时会消耗背包中 1 个该物品；不传则当前版本免费换将。
           example: general_change_card
-    GeneralActionResult:
+    MilitaryActionResult:
       type: object
       required:
-      - state
-      - accountGold
+      - army
+      - recruitQueues
+      - resources
+      - cityGold
+      - serverTime
       properties:
-        state:
-          $ref: '#/components/schemas/GameState'
+        army:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        recruitQueues:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecruitQueue'
+        resources:
+          $ref: '#/components/schemas/ResourceState'
+        cityGold:
+          type: integer
+          example: 120
+        serverTime:
+          type: string
+          format: date-time
+    GeneralViewActionResult:
+      type: object
+      required:
+      - accountGold
+      - serverTime
+      properties:
+        general:
+          $ref: '#/components/schemas/General'
+        generals:
+          type: array
+          items:
+            $ref: '#/components/schemas/General'
+        generalAssignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeneralAssignment'
+        activeModifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModifierBreakdownItem'
         accountGold:
           type: integer
           description: 操作后的账户金币余额。
+        serverTime:
+          type: string
+          format: date-time
+    GeneralActionResult:
+      allOf:
+      - $ref: '#/components/schemas/GeneralViewActionResult'
+    SendReinforcementRequest:
+      type: object
+      required:
+      - playerId
+      - targetPlayerId
+      - troops
+      properties:
+        playerId:
+          type: string
+        targetPlayerId:
+          type: string
+        troops:
+          type: object
+          additionalProperties:
+            type: integer
+        generalIds:
+          type: array
+          items:
+            type: string
+        speedMultiplier:
+          type: number
+          example: 1
+    ReinforcementPlayerRequest:
+      type: object
+      required:
+      - playerId
+      properties:
+        playerId:
+          type: string
+    ReinforcementGeneralSnapshot:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        level:
+          type: integer
+        buffs:
+          type: object
+          additionalProperties:
+            type: number
+        assignment:
+          type: string
+    GarrisonRules:
+      type: object
+      required:
+      - canRecall
+      - canExpel
+      - canReturn
+      - canFight
+      - canConvert
+      - canRelease
+      properties:
+        canRecall:
+          type: boolean
+        canExpel:
+          type: boolean
+        canReturn:
+          type: boolean
+        canFight:
+          type: boolean
+        canConvert:
+          type: boolean
+        canRelease:
+          type: boolean
+    Reinforcement:
+      type: object
+      required:
+      - reinforcementId
+      - fromPlayerId
+      - toPlayerId
+      - targetType
+      - targetId
+      - status
+      - troops
+      - remainingTroops
+      - rules
+      - speedMultiplier
+      - marchSeconds
+      - returnSeconds
+      - sentAt
+      - isAnnihilated
+      properties:
+        reinforcementId:
+          type: string
+        fromPlayerId:
+          type: string
+        fromPlayerName:
+          type: string
+        fromPlayerFaction:
+          type: string
+        toPlayerId:
+          type: string
+        toPlayerName:
+          type: string
+        toPlayerFaction:
+          type: string
+        ownerPlayerId:
+          type: string
+          description: 队伍归属玩家。普通增援等于 fromPlayerId，编外驻防通常等于获得该队伍的玩家。
+        hostPlayerId:
+          type: string
+          description: 队伍驻防所在玩家。普通增援等于 toPlayerId。
+        sourceType:
+          type: string
+          enum:
+          - reinforcement
+          - captured
+          - mercenary
+          - event_reward
+          - system
+          description: 驻防队伍来源类型。reinforcement 为玩家增援，其它为编外驻防来源。
+        sourceId:
+          type: string
+          description: 来源记录 ID，例如俘虏事件、雇佣记录或活动奖励记录。
+        targetType:
+          type: string
+          example: player_city
+        targetId:
+          type: string
+        status:
+          type: string
+          enum:
+          - marching
+          - stationed
+          - fighting
+          - returning
+          - completed
+          - cancelled
+          - failed
+        troops:
+          type: object
+          additionalProperties:
+            type: integer
+        remainingTroops:
+          type: object
+          additionalProperties:
+            type: integer
+        generals:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReinforcementGeneralSnapshot'
+        losses:
+          type: object
+          additionalProperties:
+            type: integer
+        rules:
+          $ref: '#/components/schemas/GarrisonRules'
+        speedMultiplier:
+          type: number
+        marchSeconds:
+          type: integer
+        returnSeconds:
+          type: integer
+        sentAt:
+          type: string
+          format: date-time
+        arriveAt:
+          type: string
+          format: date-time
+        arrivedAt:
+          type: string
+          format: date-time
+        recalledAt:
+          type: string
+          format: date-time
+        expelledAt:
+          type: string
+          format: date-time
+        returnStartedAt:
+          type: string
+          format: date-time
+        expectedReturnedAt:
+          type: string
+          format: date-time
+        returnedAt:
+          type: string
+          format: date-time
+        lastBattleReportId:
+          type: string
+        lastBattleAt:
+          type: string
+          format: date-time
+        isAnnihilated:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ReinforcementResponse:
+      type: object
+      required:
+      - reinforcement
+      properties:
+        reinforcement:
+          $ref: '#/components/schemas/Reinforcement'
+        patch:
+          type: object
+          description: 增援操作后的局部状态补丁，不再返回完整 GameState。
+          properties:
+            army:
+              type: array
+              items:
+                $ref: '#/components/schemas/ArmyUnit'
+            generals:
+              type: array
+              items:
+                $ref: '#/components/schemas/General'
+            generalAssignments:
+              type: array
+              items:
+                $ref: '#/components/schemas/GeneralAssignment'
+            serverTime:
+              type: string
+              format: date-time
+    ReinforcementListResponse:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reinforcement'
     NpcState:
       type: object
       required:
@@ -2772,12 +4844,33 @@ components:
       type: object
       required:
       - battleReport
-      - state
+      - resources
+      - army
+      - cityGold
+      - serverTime
       properties:
         battleReport:
           $ref: '#/components/schemas/BattleReport'
-        state:
-          $ref: '#/components/schemas/GameState'
+        resources:
+          $ref: '#/components/schemas/ResourceState'
+        army:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        general:
+          $ref: '#/components/schemas/General'
+        generals:
+          type: array
+          items:
+            $ref: '#/components/schemas/General'
+        cityGold:
+          type: integer
+          example: 120
+        npcState:
+          $ref: '#/components/schemas/NpcState'
+        serverTime:
+          type: string
+          format: date-time
     ScoutNpcRequest:
       type: object
       required:
@@ -2793,13 +4886,28 @@ components:
     ScoutNpcResponse:
       type: object
       required:
+      - success
       - npcCity
-      - state
+      - army
+      - serverTime
       properties:
+        success:
+          type: boolean
+          example: true
+        battleReport:
+          $ref: '#/components/schemas/BattleReport'
         npcCity:
           $ref: '#/components/schemas/NpcCity'
-        state:
-          $ref: '#/components/schemas/GameState'
+          nullable: true
+        army:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        npcState:
+          $ref: '#/components/schemas/NpcState'
+        serverTime:
+          type: string
+          format: date-time
     ErrorResponse:
       type: object
       required:

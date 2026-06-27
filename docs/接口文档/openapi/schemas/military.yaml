@@ -67,14 +67,57 @@ ChangeGeneralRequest:
       type: string
       description: 预留换将卡物品 ID。传入时会消耗背包中 1 个该物品；不传则当前版本免费换将。
       example: general_change_card
-GeneralActionResult:
+MilitaryActionResult:
   type: object
   required:
-  - state
-  - accountGold
+  - army
+  - recruitQueues
+  - resources
+  - cityGold
+  - serverTime
   properties:
-    state:
-      $ref: '#/components/schemas/GameState'
+    army:
+      type: array
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    recruitQueues:
+      type: array
+      items:
+        $ref: '#/components/schemas/RecruitQueue'
+    resources:
+      $ref: '#/components/schemas/ResourceState'
+    cityGold:
+      type: integer
+      example: 120
+    serverTime:
+      type: string
+      format: date-time
+GeneralViewActionResult:
+  type: object
+  required:
+  - accountGold
+  - serverTime
+  properties:
+    general:
+      $ref: '#/components/schemas/General'
+    generals:
+      type: array
+      items:
+        $ref: '#/components/schemas/General'
+    generalAssignments:
+      type: array
+      items:
+        $ref: '#/components/schemas/GeneralAssignment'
+    activeModifiers:
+      type: array
+      items:
+        $ref: '#/components/schemas/ModifierBreakdownItem'
     accountGold:
       type: integer
       description: 操作后的账户金币余额。
+    serverTime:
+      type: string
+      format: date-time
+GeneralActionResult:
+  allOf:
+  - $ref: '#/components/schemas/GeneralViewActionResult'

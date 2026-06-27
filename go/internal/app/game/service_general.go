@@ -21,7 +21,7 @@ func (s *Service) AllocateGeneralStat(playerID string, statKey string) (GameStat
 	}
 
 	now := time.Now()
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateGeneralState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		if state.General == nil {
@@ -59,7 +59,7 @@ func (s *Service) ResetGeneralStats(playerID string) (GeneralActionResult, error
 	if err != nil {
 		return GeneralActionResult{}, err
 	}
-	account, state, err := s.repo.UpdateAccountPlayerState(accountID, playerID, now, func(account *Account, state *GameState) error {
+	account, state, err := s.repo.UpdateAccountGeneralState(accountID, playerID, now, func(account *Account, state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		if state.General == nil {
@@ -118,7 +118,7 @@ func (s *Service) ChangeGeneral(playerID string, generalID string, itemID string
 	}
 
 	now := time.Now()
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateGeneralState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		if state.General == nil {

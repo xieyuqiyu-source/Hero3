@@ -36,7 +36,7 @@ type AccountEffectExecutionResult struct {
 	Apply   EffectApplyResult `json:"apply"`
 }
 
-// ExecuteEffects 在玩家状态事务中执行标准效果，并发布核心资产变化。
+// ExecuteEffects 按效果类型选择资产级事务执行，并发布核心资产变化。
 func (s *Service) ExecuteEffects(playerID string, effects []Effect, ctx EffectContext) (EffectExecutionResult, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
@@ -46,9 +46,11 @@ func (s *Service) ExecuteEffects(playerID string, effects []Effect, ctx EffectCo
 	now := time.Now()
 	var before, after coreAssetSnapshot
 	var applyResult EffectApplyResult
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
-		nextState, _ := settleResources(*state, now)
-		*state = nextState
+	updateFn := func(state *GameState) error {
+		if effectListContainsBuildingMutation(effects) {
+			nextState, _ := settleResources(*state, now)
+			*state = nextState
+		}
 		before = snapshotCoreAssets(state)
 		result, err := ExecuteEffectsOnState(state, effects, ctx, now)
 		if err != nil {
@@ -57,12 +59,15 @@ func (s *Service) ExecuteEffects(playerID string, effects []Effect, ctx EffectCo
 		if result.Reward.AccountGold > 0 {
 			return ErrAccountNotFound
 		}
-		nextState, _ = settleResources(*state, now)
-		*state = nextState
+		if effectListContainsBuildingMutation(effects) {
+			nextState, _ := settleResources(*state, now)
+			*state = nextState
+		}
 		after = snapshotCoreAssets(state)
 		applyResult = result
 		return nil
-	})
+	}
+	state, err := s.executeEffectsInPlayerAssetTransaction(playerID, now, effects, updateFn)
 	if err != nil {
 		return EffectExecutionResult{}, err
 	}
@@ -72,7 +77,7 @@ func (s *Service) ExecuteEffects(playerID string, effects []Effect, ctx EffectCo
 	return EffectExecutionResult{State: state, Apply: applyResult}, nil
 }
 
-// ExecuteEffectsWithAccount 在账号 + 玩家组合事务中执行标准效果，支持账号级奖励。
+// ExecuteEffectsWithAccount 按效果类型选择账号 + 资产级事务执行，支持账号级奖励。
 func (s *Service) ExecuteEffectsWithAccount(accountID string, playerID string, effects []Effect, ctx EffectContext) (AccountEffectExecutionResult, error) {
 	accountID = strings.TrimSpace(accountID)
 	playerID = strings.TrimSpace(playerID)
@@ -88,9 +93,11 @@ func (s *Service) ExecuteEffectsWithAccount(accountID string, playerID string, e
 
 	var before, after coreAssetSnapshot
 	var applyResult EffectApplyResult
-	account, state, err := s.repo.UpdateAccountPlayerState(accountID, playerID, now, func(account *Account, state *GameState) error {
-		nextState, _ := settleResources(*state, now)
-		*state = nextState
+	updateFn := func(account *Account, state *GameState) error {
+		if effectListContainsBuildingMutation(effects) {
+			nextState, _ := settleResources(*state, now)
+			*state = nextState
+		}
 		before = snapshotCoreAssets(state)
 		result, err := ExecuteEffectsOnState(state, effects, ctx, now)
 		if err != nil {
@@ -111,12 +118,15 @@ func (s *Service) ExecuteEffectsWithAccount(accountID string, playerID string, e
 				CreatedAt:    now.UTC().Format(resourceDateLayout),
 			})
 		}
-		nextState, _ = settleResources(*state, now)
-		*state = nextState
+		if effectListContainsBuildingMutation(effects) {
+			nextState, _ := settleResources(*state, now)
+			*state = nextState
+		}
 		after = snapshotCoreAssets(state)
 		applyResult = result
 		return nil
-	})
+	}
+	account, state, err := s.executeEffectsInAccountAssetTransaction(accountID, playerID, now, effects, updateFn)
 	if err != nil {
 		return AccountEffectExecutionResult{}, err
 	}
@@ -124,6 +134,25 @@ func (s *Service) ExecuteEffectsWithAccount(accountID string, playerID string, e
 	s.publishCoreAssetDiff(playerID, firstNonEmpty(ctx.RefType, "effect"), ctx.RefID, before, after, now)
 	hydrateStateForResponse(&state, now)
 	return AccountEffectExecutionResult{Account: account, State: state, Apply: applyResult}, nil
+}
+
+// executeEffectsInPlayerAssetTransaction 根据 Effect 类型选择最小可用的玩家资产事务。
+func (s *Service) executeEffectsInPlayerAssetTransaction(playerID string, now time.Time, effects []Effect, update func(state *GameState) error) (GameState, error) {
+	if effectListOnlyTouchesRewardAssets(effects) {
+		return s.repo.UpdateRewardState(playerID, now, update)
+	}
+	if effectListOnlyTouchesBuildingAssets(effects) {
+		return s.repo.UpdateBuildingResourceState(playerID, now, update)
+	}
+	return GameState{}, ErrMixedEffectAssets
+}
+
+// executeEffectsInAccountAssetTransaction 根据 Effect 类型选择最小可用的账号资产事务。
+func (s *Service) executeEffectsInAccountAssetTransaction(accountID string, playerID string, now time.Time, effects []Effect, update func(account *Account, state *GameState) error) (Account, GameState, error) {
+	if effectListOnlyTouchesRewardAssets(effects) {
+		return s.repo.UpdateAccountRewardState(accountID, playerID, now, update)
+	}
+	return Account{}, GameState{}, ErrMixedEffectAssets
 }
 
 // ExecuteEffectsOnState 执行标准效果列表，所有长期资产变更必须复用既有核心入口。
@@ -193,6 +222,43 @@ func ExecuteEffectsOnState(state *GameState, effects []Effect, ctx EffectContext
 
 	state.ServerTime = now.UTC().Format(resourceDateLayout)
 	return result, nil
+}
+
+// effectListOnlyTouchesRewardAssets 判断效果列表是否只影响奖励资产。
+func effectListOnlyTouchesRewardAssets(effects []Effect) bool {
+	if len(effects) == 0 {
+		return true
+	}
+	for _, effect := range effects {
+		effectType := coreeffect.NormalizeType(effect.Type)
+		if effectType != EffectTypeReward && effectType != EffectTypeModifier {
+			return false
+		}
+	}
+	return true
+}
+
+// effectListOnlyTouchesBuildingAssets 判断效果列表是否只影响建筑资产。
+func effectListOnlyTouchesBuildingAssets(effects []Effect) bool {
+	if len(effects) == 0 {
+		return false
+	}
+	for _, effect := range effects {
+		if coreeffect.NormalizeType(effect.Type) != EffectTypeBuildingMutation {
+			return false
+		}
+	}
+	return true
+}
+
+// effectListContainsBuildingMutation 判断效果列表是否包含建筑变更。
+func effectListContainsBuildingMutation(effects []Effect) bool {
+	for _, effect := range effects {
+		if coreeffect.NormalizeType(effect.Type) == EffectTypeBuildingMutation {
+			return true
+		}
+	}
+	return false
 }
 
 // rewardFromModifierEffect 把 Modifier 效果转换为标准 Buff 奖励。

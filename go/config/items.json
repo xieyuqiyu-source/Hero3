@@ -112,6 +112,21 @@
     ],
     "metadata": { "version": 1 }
   },
+  "pvp_truce_8h": {
+    "id": "pvp_truce_8h",
+    "name": "免战令",
+    "description": "使用后获得 8 小时 PVP 主动免战保护，主动攻击会打破该保护。",
+    "type": "consumable",
+    "rarity": "rare",
+    "usable": true,
+    "stackable": true,
+    "maxStack": 999999,
+    "useTarget": "player",
+    "effects": [
+      { "type": "pvp_protection", "protectionType": "manual", "durationSeconds": 28800 }
+    ],
+    "metadata": { "version": 1, "module": "pvp" }
+  },
   "general_change_card": {
     "id": "general_change_card",
     "name": "换将卡",

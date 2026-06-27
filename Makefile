@@ -1,7 +1,7 @@
 # Hero3 项目 Makefile
 # 统一开发环境启动、构建、部署命令
 
-.PHONY: dev dev-go dev-web dev-admin build build-go build-web build-admin clean install migrate migrate-test print-test-dsn clone-data backfill-resources verify-resources backfill-inventory verify-inventory backfill-buildings verify-buildings backfill-resource-slots verify-resource-slots backfill-army verify-army backfill-recruit-queues verify-recruit-queues backfill-generals verify-generals backfill-buffs verify-buffs openapi openapi-lint openapi-bundle
+.PHONY: dev dev-go dev-web dev-admin build build-go build-web build-admin clean install migrate migrate-test print-test-dsn clone-data backfill-resources verify-resources backfill-inventory verify-inventory backfill-buildings verify-buildings backfill-resource-slots verify-resource-slots backfill-army verify-army backfill-recruit-queues verify-recruit-queues backfill-generals verify-generals backfill-buffs verify-buffs healthcheck-authority openapi openapi-lint openapi-bundle
 
 # ===== 开发 =====
 
@@ -135,6 +135,10 @@ backfill-buffs:
 ## 校验 player_buffs 与 state_json.buffs 是否一致
 verify-buffs:
 	cd go && go run ./cmd/dbtool verify-buffs
+
+## 检查当前权威表覆盖和 state_json 轻量化状态
+healthcheck-authority:
+	cd go && go run ./cmd/dbtool healthcheck-authority
 
 # ===== 接口文档 =====
 

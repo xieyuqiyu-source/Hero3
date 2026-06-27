@@ -88,7 +88,8 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
     if (countdown > 0 || refreshedUpgradeRef.current === upgradeEndsAt) return
 
     refreshedUpgradeRef.current = upgradeEndsAt
-    useGameStore.getState().loadGameState()
+    void useGameStore.getState().loadCityView()
+    void useGameStore.getState().loadResourceView()
   }, [upgradeEndsAt, countdown])
 
   const handleUpgrade = async () => {
@@ -108,7 +109,7 @@ const ResourceSlot: FC<ResourceSlotProps> = ({
       const playerId = useGameStore.getState().activePlayerId
       if (!playerId) return
       const result = await gameApi.instantCompleteBuilding(playerId, buildingId)
-      useGameStore.getState().setState(result.state)
+      useGameStore.getState().patchCityAction(result)
     } catch (e: unknown) {
       const msg = getErrorMessage(e, '加速失败')
       if (msg.includes('insufficient')) {

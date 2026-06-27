@@ -1625,12 +1625,12 @@ func TestAddGoldUsesGrantRewardsLedgerAndEvent(t *testing.T) {
 		events = append(events, event)
 	})
 
-	state, err := svc.AddGold(state.Player.ID, 50, "gm_add_city_gold")
+	result, err := svc.AddGold(state.Player.ID, 50, "gm_add_city_gold")
 	if err != nil {
 		t.Fatalf("AddGold failed: %v", err)
 	}
-	if int(state.CityGold) != 50 {
-		t.Fatalf("expected city gold 50, got %d", state.CityGold)
+	if int(result.CityGold) != 50 {
+		t.Fatalf("expected city gold 50, got %d", result.CityGold)
 	}
 	if len(events) != 1 {
 		t.Fatalf("expected 1 reward event, got %+v", events)
@@ -1964,13 +1964,13 @@ func TestRedeemMiniGameRewardPartialAddsFactionArmy(t *testing.T) {
 		t.Fatalf("expected one reward granted event, got %+v", rewardEvents)
 	}
 	found := false
-	for _, unit := range result.State.Army {
+	for _, unit := range result.Army {
 		if unit.UnitType == "qiQiYing" && unit.Amount == 1200 {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("expected redeemed unit in army, got %+v", result.State.Army)
+		t.Fatalf("expected redeemed unit in army, got %+v", result.Army)
 	}
 }
 
@@ -1992,7 +1992,7 @@ func TestUseFishingBaitDeductsCityGoldAndWritesLedger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UseFishingBait failed: %v", err)
 	}
-	if result.CityGoldCost != 120 || result.CityGoldRemain != 30 || result.State.CityGold != 30 {
+	if result.CityGold == nil || result.CityGoldRemain == nil || result.CityGoldCost != 120 || *result.CityGoldRemain != 30 || *result.CityGold != 30 {
 		t.Fatalf("unexpected bait result: %+v", result)
 	}
 
@@ -2009,7 +2009,7 @@ func TestUseFishingBaitDeductsCityGoldAndWritesLedger(t *testing.T) {
 	}
 }
 
-func TestRedeemMiniGameRewardRejectsCrossFactionUnit(t *testing.T) {
+func TestRedeemMiniGameRewardCrossFactionCreatesGarrison(t *testing.T) {
 	svc := NewService()
 	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
 		t.Fatalf("load units: %v", err)
@@ -2029,16 +2029,38 @@ func TestRedeemMiniGameRewardRejectsCrossFactionUnit(t *testing.T) {
 		t.Fatalf("save minigame record: %v", err)
 	}
 
-	_, err = svc.RedeemMiniGameReward(state.Player.ID, record.ID, 1000)
-	if !errors.Is(err, ErrCrossFactionReward) {
-		t.Fatalf("expected ErrCrossFactionReward, got %v", err)
+	result, err := svc.RedeemMiniGameReward(state.Player.ID, record.ID, 1000)
+	if err != nil {
+		t.Fatalf("RedeemMiniGameReward failed: %v", err)
+	}
+	if result.RedeemedTarget != "garrison" || result.RedeemedUnit != "南蛮象" || result.RedeemedAmount != 1000 {
+		t.Fatalf("unexpected redeem result: %+v", result)
+	}
+	if result.Garrison == nil || result.Garrison.SourceType != GarrisonSourceObtained || result.Garrison.RemainingTroops[result.RedeemedUnitID] != 1000 {
+		t.Fatalf("expected obtained garrison, got %+v", result.Garrison)
 	}
 	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "fishing", 10, 0)
 	if err != nil {
 		t.Fatalf("list records: %v", err)
 	}
-	if len(records) != 1 || records[0].RemainingAmount != 50000 {
-		t.Fatalf("expected stock unchanged, got %+v", records)
+	if len(records) != 1 || records[0].RemainingAmount != 49000 {
+		t.Fatalf("expected stock reduced, got %+v", records)
+	}
+	next, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState failed: %v", err)
+	}
+	for _, unit := range next.Army {
+		if unit.UnitType == result.RedeemedUnitID {
+			t.Fatalf("cross faction unit should not enter regular army: %+v", next.Army)
+		}
+	}
+	defenders, err := svc.BuildDefenseReinforcementUnits(state.Player.ID)
+	if err != nil {
+		t.Fatalf("BuildDefenseReinforcementUnits failed: %v", err)
+	}
+	if len(defenders) != 1 || defenders[0].SourceTags["source_type"] != GarrisonSourceObtained {
+		t.Fatalf("expected garrison defender, got %+v", defenders)
 	}
 }
 
@@ -2080,17 +2102,20 @@ func TestRedeemAllFactionMiniGameRewardsSkipsCrossFactionStock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RedeemAllFactionMiniGameRewards failed: %v", err)
 	}
-	if result.RedeemedAmount != 7000 {
-		t.Fatalf("expected redeemed amount 7000, got %d", result.RedeemedAmount)
+	if result.RedeemedAmount != 57000 {
+		t.Fatalf("expected redeemed amount 57000, got %d", result.RedeemedAmount)
 	}
-	if result.RedeemedRecords != 2 {
-		t.Fatalf("expected 2 redeemed records, got %d", result.RedeemedRecords)
+	if result.RedeemedRecords != 3 {
+		t.Fatalf("expected 3 redeemed records, got %d", result.RedeemedRecords)
 	}
-	if result.SkippedRecords != 1 || result.SkippedUnits["南蛮象"] != 50000 {
-		t.Fatalf("expected cross faction stock skipped, got records=%d units=%+v", result.SkippedRecords, result.SkippedUnits)
+	if result.SkippedRecords != 0 || len(result.SkippedUnits) != 0 {
+		t.Fatalf("expected no skipped cross faction stock, got records=%d units=%+v", result.SkippedRecords, result.SkippedUnits)
 	}
 	if result.RedeemedUnits["骁骑营"] != 5000 || result.RedeemedUnits["青州军"] != 2000 {
 		t.Fatalf("unexpected redeemed unit totals: %+v", result.RedeemedUnits)
+	}
+	if result.GarrisonedUnits["南蛮象"] != 50000 || result.GarrisonRecords != 1 {
+		t.Fatalf("unexpected garrison totals: records=%d units=%+v", result.GarrisonRecords, result.GarrisonedUnits)
 	}
 
 	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "fishing", 10, 0)
@@ -2101,7 +2126,7 @@ func TestRedeemAllFactionMiniGameRewardsSkipsCrossFactionStock(t *testing.T) {
 	for _, record := range records {
 		remainingByUnit[record.RewardUnit] += record.RemainingAmount
 	}
-	if remainingByUnit["骁骑营"] != 0 || remainingByUnit["青州军"] != 0 || remainingByUnit["南蛮象"] != 50000 {
+	if remainingByUnit["骁骑营"] != 0 || remainingByUnit["青州军"] != 0 || remainingByUnit["南蛮象"] != 0 {
 		t.Fatalf("unexpected remaining stock: %+v", remainingByUnit)
 	}
 	if len(redeemEvents) != 1 || redeemEvents[0].Type != EventMiniGameRedeemed {
@@ -2109,6 +2134,13 @@ func TestRedeemAllFactionMiniGameRewardsSkipsCrossFactionStock(t *testing.T) {
 	}
 	if len(rewardEvents) != 2 {
 		t.Fatalf("expected two reward events from core reward pipeline, got %+v", rewardEvents)
+	}
+	defenders, err := svc.BuildDefenseReinforcementUnits(state.Player.ID)
+	if err != nil {
+		t.Fatalf("BuildDefenseReinforcementUnits failed: %v", err)
+	}
+	if len(defenders) != 1 || defenders[0].Troops["southernElephant"] != 50000 {
+		t.Fatalf("expected cross faction garrison, got %+v", defenders)
 	}
 }
 
@@ -2167,11 +2199,11 @@ func TestUseItemConsumesInventoryAndAppliesGeneralExp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UseItem failed: %v", err)
 	}
-	if result.State.Inventory["test_general_exp_small"].Amount != 1 {
-		t.Fatalf("expected 1 item left, got %d", result.State.Inventory["test_general_exp_small"].Amount)
+	if result.Patch.Inventory["test_general_exp_small"].Amount != 1 {
+		t.Fatalf("expected 1 item left, got %d", result.Patch.Inventory["test_general_exp_small"].Amount)
 	}
-	if result.State.General.Exp != 100 {
-		t.Fatalf("expected general exp 100, got %d", result.State.General.Exp)
+	if result.Patch.General.Exp != 100 {
+		t.Fatalf("expected general exp 100, got %d", result.Patch.General.Exp)
 	}
 }
 
@@ -2611,7 +2643,7 @@ func TestGrantRewardsAppliesBuff(t *testing.T) {
 	}
 }
 
-func TestGetStateEnsuresConstructionBureauResourceSlots(t *testing.T) {
+func TestGetStateUsesReadonlyRepositoryWithoutRepairingCoreAssets(t *testing.T) {
 	svc := NewService()
 	repo := svc.repo.(*MemoryRepository)
 	now := time.Now()
@@ -2626,19 +2658,25 @@ func TestGetStateEnsuresConstructionBureauResourceSlots(t *testing.T) {
 	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
 		t.Fatalf("create player: %v", err)
 	}
+	storedBefore := repo.players[state.Player.ID]
+	updatedAtBefore := repo.playerUpdatedAt[state.Player.ID]
 
 	next, err := svc.GetState(state.Player.ID)
 	if err != nil {
 		t.Fatalf("GetState failed: %v", err)
 	}
-	if findBuildingByID(&next, "construction_bureau-1") == nil {
-		t.Fatalf("expected construction bureau to be added")
+	if findBuildingByID(&next, "construction_bureau-1") != nil {
+		t.Fatalf("expected readonly GetState not to repair missing construction bureau")
 	}
-	if findBuildingByID(&next, "construction_resource_slot-1") == nil {
-		t.Fatalf("expected first construction resource slot building")
+	if findBuildingByID(&next, "construction_resource_slot-1") != nil {
+		t.Fatalf("expected readonly GetState not to repair construction resource slot")
 	}
-	if countConstructionResourceSlots(next.Buildings) != 1 {
-		t.Fatalf("expected one construction resource slot, got %+v", next.Buildings)
+	storedAfter := repo.players[state.Player.ID]
+	if !updatedAtBefore.Equal(repo.playerUpdatedAt[state.Player.ID]) {
+		t.Fatalf("expected readonly GetState not to update stored timestamp")
+	}
+	if countConstructionResourceSlots(storedAfter.Buildings) != countConstructionResourceSlots(storedBefore.Buildings) {
+		t.Fatalf("expected readonly GetState not to mutate stored buildings")
 	}
 }
 
@@ -2680,7 +2718,7 @@ func TestConstructionBureauUpgradeUsesAccountGold(t *testing.T) {
 	}
 }
 
-func TestConstructionBureauLevelUnlocksMoreResourceSlots(t *testing.T) {
+func TestGetStateProjectsCompletedConstructionBureauUpgradeWithoutPersisting(t *testing.T) {
 	svc := NewService()
 	repo := svc.repo.(*MemoryRepository)
 	now := time.Now()
@@ -2701,6 +2739,7 @@ func TestConstructionBureauLevelUnlocksMoreResourceSlots(t *testing.T) {
 	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
 		t.Fatalf("create player: %v", err)
 	}
+	storedBefore := repo.players[state.Player.ID]
 
 	next, err := svc.GetState(state.Player.ID)
 	if err != nil {
@@ -2712,6 +2751,67 @@ func TestConstructionBureauLevelUnlocksMoreResourceSlots(t *testing.T) {
 	}
 	if countConstructionResourceSlots(next.Buildings) != 2 {
 		t.Fatalf("expected two construction resource slots after level 5, got %+v", next.Buildings)
+	}
+	storedAfter := repo.players[state.Player.ID]
+	buildingAfter := findBuildingByID(&storedAfter, "construction_bureau-1")
+	if buildingAfter == nil || buildingAfter.Level != 4 || buildingAfter.UpgradeEndsAt == nil || buildingAfter.Status != BuildingStatusUpgrading {
+		t.Fatalf("expected readonly GetState not to persist completed upgrade, before=%+v after=%+v", storedBefore.Buildings, storedAfter.Buildings)
+	}
+}
+
+func TestRepairPlayerCoreAssetsRepairsLegacyStateExplicitly(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "account_repair_core", Username: "repair_core", PasswordHash: "hash", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_repair_core", "RepairCore", "wei", "caocao", now)
+	state.Player.MailCode = ""
+	state.Buildings = []Building{{ID: "warehouse-1", Type: "warehouse", Level: 1}}
+	state.ResourceSlots = nil
+	state.Inventory = nil
+	state.General = nil
+	state.Generals = nil
+	state.GeneralAssignments = nil
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	readonly, err := svc.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState failed: %v", err)
+	}
+	if findBuildingByID(&readonly, "construction_bureau-1") != nil || readonly.General != nil {
+		t.Fatalf("expected readonly GetState not to repair legacy state, got building=%+v general=%+v", readonly.Buildings, readonly.General)
+	}
+
+	repaired, err := svc.RepairPlayerCoreAssets(state.Player.ID)
+	if err != nil {
+		t.Fatalf("RepairPlayerCoreAssets failed: %v", err)
+	}
+	if !repaired.Changed {
+		t.Fatalf("expected repair to report changes")
+	}
+	if findBuildingByID(&repaired.State, "construction_bureau-1") == nil {
+		t.Fatalf("expected repair to add construction bureau")
+	}
+	if findBuildingByID(&repaired.State, "construction_resource_slot-1") == nil {
+		t.Fatalf("expected repair to add construction resource slot")
+	}
+	if repaired.State.General == nil || repaired.State.General.ID == "" {
+		t.Fatalf("expected repair to add default general")
+	}
+	if len(repaired.State.Generals) == 0 || len(repaired.State.GeneralAssignments) == 0 {
+		t.Fatalf("expected repair to add general roster and assignment, got generals=%+v assignments=%+v", repaired.State.Generals, repaired.State.GeneralAssignments)
+	}
+	if repaired.State.Inventory == nil {
+		t.Fatalf("expected repair to initialize inventory")
+	}
+	stored := repo.players[state.Player.ID]
+	if findBuildingByID(&stored, "construction_bureau-1") == nil || stored.General == nil {
+		t.Fatalf("expected explicit repair to persist core assets, got %+v", stored)
 	}
 }
 

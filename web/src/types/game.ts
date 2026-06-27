@@ -24,12 +24,102 @@ export interface PlayerSummary {
   updatedAt: string
 }
 
+export type AnnouncementType = 'system' | 'maintenance' | 'update' | 'activity' | 'compensation' | 'emergency'
+
+export interface AnnouncementSummary {
+  id: string
+  title: string
+  summary: string
+  type: AnnouncementType | string
+  status: string
+  displayMode: 'center_only' | 'popup' | 'banner' | string
+  pinned: boolean
+  priority: number
+  forcePopup: boolean
+  publishedAt?: string
+  startsAt?: string
+  endsAt?: string
+  isRead: boolean
+  isPopupShown: boolean
+  isDismissed: boolean
+}
+
+export interface AnnouncementDetail extends AnnouncementSummary {
+  content: string
+}
+
+export interface AnnouncementPage {
+  items: AnnouncementSummary[]
+  page: number
+  pageSize: number
+  total: number
+  unread: boolean
+}
+
+export interface AnnouncementReadState {
+  announcementId: string
+  playerId: string
+  accountId?: string
+  isRead: boolean
+  readAt?: string
+  isPopupShown: boolean
+  popupShownAt?: string
+  isDismissed: boolean
+  dismissedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface ResourceState {
   items: Record<string, number>
   capacity: Record<string, number>
 }
 
 export type ResourceProduction = Record<string, number>
+
+export interface CityActionResult {
+  building?: Building
+  buildings?: Building[]
+  resourceSlots?: ResourceSlot[]
+  resources: ResourceState
+  resourceProduction: ResourceProduction
+  cityGold: number
+  activeModifiers?: ModifierBreakdownItem[]
+  upgraded?: number
+  cost?: number
+  serverTime: string
+}
+
+export interface ResourceActionResult {
+  resources: ResourceState
+  resourceProduction: ResourceProduction
+  resourceSettledAt: string
+  productionBoost?: number
+  productionBoostEnd?: string
+  capacityBoost?: number
+  capacityBoostEnd?: string
+  activeModifiers?: ModifierBreakdownItem[]
+  cityGold: number
+  cost?: number
+  serverTime: string
+}
+
+export interface MilitaryActionResult {
+  army: ArmyUnit[]
+  recruitQueues: RecruitQueue[]
+  resources: ResourceState
+  cityGold: number
+  serverTime: string
+}
+
+export interface GeneralViewActionResult {
+  general?: General
+  generals?: General[]
+  generalAssignments?: GeneralAssignment[]
+  activeModifiers?: ModifierBreakdownItem[]
+  accountGold: number
+  serverTime: string
+}
 
 export interface ItemStack {
   itemId: string
@@ -43,6 +133,8 @@ export interface ItemEffect {
   amount?: number
   resources?: Record<string, number>
   unitByFaction?: Record<string, string>
+  protectionType?: string
+  durationSeconds?: number
 }
 
 export interface ItemDefinition {
@@ -130,6 +222,11 @@ export interface BattleReport {
     name?: string
     detail?: Record<string, number | string | Record<string, number>>
   }>
+  pvpPointsDelta?: Record<string, number>
+  pvpAttackerGenerals?: PvpGeneralSnapshot[]
+  pvpDefenderGenerals?: PvpGeneralSnapshot[]
+  pvpReinforcements?: DefenseReinforcementUnit[]
+  pvpReinforcementLosses?: Record<string, Record<string, number>>
   read: boolean
   createdAt: string
 }
@@ -196,26 +293,302 @@ export interface MiniGameSummary {
 
 export interface MiniGameRedeemResult {
   record: MiniGameRecord
-  state: GameState
+  army?: ArmyUnit[]
+  serverTime: string
   redeemedUnitId: string
   redeemedUnit: string
   redeemedAmount: number
+  redeemedTarget: 'army' | 'garrison'
+  garrison?: Reinforcement
 }
 
 export interface MiniGameRedeemAllResult {
-  state: GameState
+  army?: ArmyUnit[]
+  serverTime: string
   redeemedUnits: Record<string, number>
   redeemedAmount: number
   redeemedRecords: number
+  garrisonedUnits?: Record<string, number>
+  garrisonRecords?: number
   skippedUnits: Record<string, number>
   skippedRecords: number
 }
 
 export interface FishingBaitUseResult {
-  state: GameState
   baitId: string
+  cityGold?: number
+  serverTime: string
   cityGoldCost: number
-  cityGoldRemain: number
+  cityGoldRemain?: number
+}
+
+export interface CurrencyActionResult {
+  cityGold: number
+  accountGold?: number
+  lastExchangeAt?: string
+  serverTime: string
+}
+
+export interface ReportActionResult {
+  unreadMessageCount: number
+  serverTime: string
+}
+
+export interface ItemActionResult {
+  inventory?: Record<string, ItemStack>
+  resources?: ResourceState
+  army?: ArmyUnit[]
+  general?: General
+  generals?: General[]
+  generalAssignments?: GeneralAssignment[]
+  activeModifiers?: ModifierBreakdownItem[]
+  buffs?: Buff[]
+  cityGold: number
+  serverTime: string
+}
+
+export interface UseItemResult {
+  patch: ItemActionResult
+  itemId: string
+  used: number
+  effects: Record<string, number>
+}
+
+export interface GarrisonActionResult {
+  army?: ArmyUnit[]
+  generals?: General[]
+  generalAssignments?: GeneralAssignment[]
+  serverTime: string
+}
+
+export interface ReinforcementGeneralSnapshot {
+  id: string
+  name?: string
+  level?: number
+  buffs?: Record<string, number>
+  assignment?: string
+}
+
+export interface GarrisonRules {
+  canRecall: boolean
+  canExpel: boolean
+  canReturn: boolean
+  canFight: boolean
+  canConvert: boolean
+  canRelease: boolean
+}
+
+export interface Reinforcement {
+  reinforcementId: string
+  fromPlayerId: string
+  fromPlayerName?: string
+  fromPlayerFaction?: string
+  toPlayerId: string
+  toPlayerName?: string
+  toPlayerFaction?: string
+  ownerPlayerId?: string
+  hostPlayerId?: string
+  sourceType?: 'reinforcement' | 'obtained' | 'captured' | 'mercenary' | 'event_reward' | 'system'
+  sourceId?: string
+  targetType: string
+  targetId: string
+  status: 'marching' | 'stationed' | 'fighting' | 'returning' | 'completed' | 'cancelled' | 'failed'
+  troops: Record<string, number>
+  remainingTroops: Record<string, number>
+  generals?: ReinforcementGeneralSnapshot[]
+  losses?: Record<string, number>
+  rules: GarrisonRules
+  speedMultiplier: number
+  marchSeconds: number
+  returnSeconds: number
+  sentAt: string
+  arriveAt?: string
+  arrivedAt?: string
+  recalledAt?: string
+  expelledAt?: string
+  returnStartedAt?: string
+  expectedReturnedAt?: string
+  returnedAt?: string
+  lastBattleReportId?: string
+  lastBattleAt?: string
+  isAnnihilated: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReinforcementListResponse {
+  items: Reinforcement[]
+}
+
+export interface ReinforcementResponse {
+  reinforcement: Reinforcement
+  patch?: GarrisonActionResult
+}
+
+export interface DefenseReinforcementUnit {
+  reinforcementId: string
+  fromPlayerId: string
+  faction: string
+  troops: Record<string, number>
+  generals?: ReinforcementGeneralSnapshot[]
+  buffs?: ModifierBreakdownItem[]
+  sourceTags?: Record<string, string>
+}
+
+export interface PvpTargetSummary {
+  playerId: string
+  nickname: string
+  faction: string
+  totalArmy: number
+  buildingLevel: number
+  canAttack: boolean
+  canReinforce: boolean
+  protected: boolean
+  protectedUntil?: string
+  cooldownUntil?: string
+  reason?: string
+}
+
+export interface PvpMarch {
+  id: string
+  attackerPlayerId: string
+  attackerName: string
+  attackerFaction: string
+  defenderPlayerId: string
+  defenderName: string
+  defenderFaction: string
+  marchType: 'attack' | 'plunder'
+  status: 'marching' | 'returning' | 'resolving' | 'resolved' | 'recalled' | 'cancelled' | 'failed'
+  attackTroops: Record<string, number>
+  attackGenerals?: string[]
+  speedMultiplier: number
+  durationSeconds: number
+  startedAt: string
+  arrivesAt: string
+  returnStartedAt?: string
+  returnsAt?: string
+  resolvedAt?: string
+  attackerReportId?: string
+  defenderReportId?: string
+  battleId?: string
+  acceleratedTimes: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PvpBattle {
+  id: string
+  marchId: string
+  attackerPlayerId: string
+  defenderPlayerId: string
+  status: 'created' | 'resolving' | 'resolved' | 'failed'
+  attackerSnapshot?: Record<string, unknown>
+  defenderSnapshot?: Record<string, unknown>
+  reinforcementSnapshot?: DefenseReinforcementUnit[]
+  result?: Record<string, unknown>
+  losses?: Record<string, unknown>
+  plunder?: Record<string, number>
+  attackerReportId?: string
+  defenderReportId?: string
+  resolvedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PvpGeneralSnapshot {
+  id: string
+  name?: string
+  level?: number
+  buffs?: Record<string, number>
+}
+
+export interface PvpRevengeRecord {
+  id: string
+  defenderPlayerId: string
+  attackerPlayerId: string
+  marchId: string
+  battleId?: string
+  status: 'open' | 'closed' | string
+  createdAt: string
+  expiresAt: string
+  closedAt?: string
+}
+
+export interface PvpPlayerState {
+  playerId: string
+  status: string
+  protectionType?: string
+  protectedUntil?: string
+  cooldownUntil?: string
+  dailyAttackCount: number
+  dailyAttackLimit: number
+  dailyResetAt?: string
+  targetCooldown?: Record<string, string>
+  metadata?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PvpStateResponse {
+  state: PvpPlayerState
+  seasonPoints: number
+  rating: number
+  attackWins: number
+  defenseWins: number
+  losses: number
+  revengeRecords: PvpRevengeRecord[]
+  serverTime: string
+}
+
+export interface PvpSeasonSummary {
+  id: string
+  name: string
+  status: string
+  startsAt: string
+  endsAt: string
+  updatedAt: string
+}
+
+export interface PvpRankingEntry {
+  rank: number
+  playerId: string
+  nickname: string
+  faction: string
+  points: number
+  rating: number
+  attackWins: number
+  defenseWins: number
+  losses: number
+  updatedAt: string
+}
+
+export interface PvpSeasonResponse {
+  season: PvpSeasonSummary
+  self?: PvpRankingEntry
+  serverTime: string
+}
+
+export interface PvpRankingResponse {
+  season: PvpSeasonSummary
+  items: PvpRankingEntry[]
+  self?: PvpRankingEntry
+  serverTime: string
+}
+
+export interface PvpAttackResponse {
+  march: PvpMarch
+  army: ArmyUnit[]
+  generals?: General[]
+  serverTime: string
+}
+
+export interface PvpMarchActionResponse {
+  march: PvpMarch
+  army?: ArmyUnit[]
+  generals?: General[]
+  cityGold?: number
+  cost?: number
+  serverTime: string
 }
 
 export interface GeneralActionResult {
@@ -294,6 +667,16 @@ export interface ModifierBreakdownItem {
   key: string      // 属性键名，如 "productionBonus"
   value: number    // 数值
   mode: string     // "flat" | "percentAdd" | "percentMultiply"
+}
+
+export interface Buff {
+  id: string
+  source: string
+  modifierKey: string
+  value: number
+  mode: string
+  startsAt?: string
+  endsAt?: string
 }
 
 // --- NPC 城池类型 ---

@@ -54,6 +54,27 @@ func FindFactionUnitByName(faction string, unitName string) (string, UnitConfig,
 	return "", UnitConfig{}, false
 }
 
+// FindAnyFactionUnitByName 根据显示名称在全部阵营中查找兵种。
+func FindAnyFactionUnitByName(unitName string) (string, string, UnitConfig, bool) {
+	unitName = strings.TrimSpace(unitName)
+	if unitName == "" {
+		return "", "", UnitConfig{}, false
+	}
+	if alias, ok := unitNameAliases[unitName]; ok {
+		unitName = alias
+	}
+	unitsMu.RLock()
+	defer unitsMu.RUnlock()
+	for faction, factionUnits := range activeUnits {
+		for unitID, config := range factionUnits {
+			if strings.TrimSpace(config.Name) == unitName {
+				return faction, unitID, cloneUnitConfig(config), true
+			}
+		}
+	}
+	return "", "", UnitConfig{}, false
+}
+
 // cloneUnitsConfig 复制全部兵种配置，避免调用方修改全局配置。
 func cloneUnitsConfig(source UnitsConfig) UnitsConfig {
 	if source == nil {

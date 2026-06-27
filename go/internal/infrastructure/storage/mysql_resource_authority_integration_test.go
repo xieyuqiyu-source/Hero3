@@ -119,6 +119,20 @@ func readResourceRow(t *testing.T, db *sql.DB, playerID string, resourceType str
 	return amount, capacity
 }
 
+// readPlayerStorageSnapshot 读取 players 表中的轻量快照和更新时间，用于验证普通读取不写库。
+func readPlayerStorageSnapshot(t *testing.T, db *sql.DB, playerID string) ([]byte, time.Time) {
+	t.Helper()
+	var stateJSON []byte
+	var updatedAt time.Time
+	if err := db.QueryRow(
+		`SELECT state_json, updated_at FROM players WHERE id = ? LIMIT 1`,
+		playerID,
+	).Scan(&stateJSON, &updatedAt); err != nil {
+		t.Fatalf("read player storage snapshot: %v", err)
+	}
+	return append([]byte(nil), stateJSON...), updatedAt
+}
+
 // readSnapshotResource 读取 players.state_json 兼容快照中的单项资源。
 func readSnapshotResource(t *testing.T, db *sql.DB, playerID string, resourceType string) int {
 	t.Helper()
@@ -273,6 +287,46 @@ func readGeneralRow(t *testing.T, db *sql.DB, playerID string, generalID string)
 		t.Fatalf("read player_generals: %v", err)
 	}
 	return level, exp, true
+}
+
+// readGeneralAssignmentCount 读取玩家武将占用记录数量。
+func readGeneralAssignmentCount(t *testing.T, db *sql.DB, playerID string) int {
+	t.Helper()
+	var count int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM player_general_assignments WHERE player_id = ?`,
+		playerID,
+	).Scan(&count); err != nil {
+		t.Fatalf("read player_general_assignments count: %v", err)
+	}
+	return count
+}
+
+// readBuffCount 读取玩家 Buff 权威表记录数量。
+func readBuffCount(t *testing.T, db *sql.DB, playerID string) int {
+	t.Helper()
+	var count int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM player_buffs WHERE player_id = ?`,
+		playerID,
+	).Scan(&count); err != nil {
+		t.Fatalf("read player_buffs count: %v", err)
+	}
+	return count
+}
+
+// readSnapshotCityGold 读取 players.state_json 兼容快照中的城内金币。
+func readSnapshotCityGold(t *testing.T, db *sql.DB, playerID string) int {
+	t.Helper()
+	var stateJSON []byte
+	if err := db.QueryRow(`SELECT state_json FROM players WHERE id = ?`, playerID).Scan(&stateJSON); err != nil {
+		t.Fatalf("read state_json: %v", err)
+	}
+	var state game.GameState
+	if err := json.Unmarshal(stateJSON, &state); err != nil {
+		t.Fatalf("unmarshal state_json: %v", err)
+	}
+	return int(state.CityGold)
 }
 
 // overwriteSnapshotGeneral 手动篡改兼容快照，用于验证读取时不再相信 state_json.general。
@@ -610,6 +664,69 @@ func TestMySQLGrantItemRefreshesInventoryAuthority(t *testing.T) {
 	}
 }
 
+// TestMySQLGrantRewardsRefreshesRewardAssetAuthorities 验证标准奖励发放会更新奖励涉及的权威表，且轻量快照只保留兼容字段。
+func TestMySQLGrantRewardsRefreshesRewardAssetAuthorities(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	_, state := createResourceAuthorityPlayer(t, repo, "reward_assets")
+	if err := game.LoadItemsConfig("../../../config/items.json"); err != nil {
+		t.Fatalf("load items config: %v", err)
+	}
+	if err := game.LoadUnitsConfig("../../../config/units"); err != nil {
+		t.Fatalf("load units config: %v", err)
+	}
+	service := game.NewServiceWithRepository(repo)
+
+	result, err := service.GrantRewards(state.Player.ID, []game.Reward{
+		{Type: game.RewardTypeResource, ID: "wood", Amount: 25},
+		{Type: game.RewardTypeItem, ID: "resource_pack_small", Amount: 2},
+		{Type: game.RewardTypeUnit, ID: "qingZhouArmy", Amount: 3},
+		{Type: game.RewardTypeCityGold, ID: game.RewardTypeCityGold, Amount: 7},
+		{
+			Type:   game.RewardTypeBuff,
+			ID:     game.StatAttackBonus,
+			Amount: 1,
+			Metadata: map[string]any{
+				"value": 0.15,
+				"mode":  "percentAdd",
+				"hours": 1,
+			},
+		},
+	}, game.RewardGrantContext{RefType: "test_reward_assets", RefID: "grant_1"})
+	if err != nil {
+		t.Fatalf("grant rewards: %v", err)
+	}
+
+	wood, _ := readResourceRow(t, db, state.Player.ID, "wood")
+	itemAmount, itemOK := readInventoryRow(t, db, state.Player.ID, "resource_pack_small")
+	unitAmount, unitOK := readArmyRow(t, db, state.Player.ID, "qingZhouArmy")
+	buffCount := readBuffCount(t, db, state.Player.ID)
+	got := result.State
+	if got.Resources.Items["wood"] != 1225 || wood != 1225 {
+		t.Fatalf("expected wood authority/state=1225, state=%d table=%d", got.Resources.Items["wood"], wood)
+	}
+	if got.Inventory["resource_pack_small"].Amount != 2 || !itemOK || itemAmount != 2 {
+		t.Fatalf("expected item authority/state=2, state=%+v table=%d/%v", got.Inventory["resource_pack_small"], itemAmount, itemOK)
+	}
+	if !unitOK || unitAmount != 3 {
+		t.Fatalf("expected army authority qingZhouArmy=3, table=%d/%v", unitAmount, unitOK)
+	}
+	if int(got.CityGold) != 7 || readSnapshotCityGold(t, db, state.Player.ID) != 7 {
+		t.Fatalf("expected city gold snapshot/state=7, state=%d", got.CityGold)
+	}
+	if len(got.Buffs) != 1 || buffCount != 1 {
+		t.Fatalf("expected one buff in state/table, state=%+v table=%d", got.Buffs, buffCount)
+	}
+	if snapshot := readSnapshotResource(t, db, state.Player.ID, "wood"); snapshot != 0 {
+		t.Fatalf("expected no state_json resource snapshot, got %d", snapshot)
+	}
+	if amount, ok := readSnapshotItem(t, db, state.Player.ID, "resource_pack_small"); ok || amount != 0 {
+		t.Fatalf("expected no state_json inventory snapshot, got %d/%v", amount, ok)
+	}
+	if amount, ok := readSnapshotArmy(t, db, state.Player.ID, "qingZhouArmy"); ok || amount != 0 {
+		t.Fatalf("expected no state_json army snapshot, got %d/%v", amount, ok)
+	}
+}
+
 // TestMySQLGetStateUsesPlayerInventoryAuthority 验证读取玩家状态时以 player_inventory 为准。
 func TestMySQLGetStateUsesPlayerInventoryAuthority(t *testing.T) {
 	repo, db := openResourceAuthorityTestRepository(t)
@@ -878,6 +995,104 @@ func TestMySQLGetStateUsesPlayerBuildingsAuthority(t *testing.T) {
 		}
 	}
 	t.Fatalf("expected wood_camp-1 in authoritative buildings")
+}
+
+// TestMySQLServiceGetStateDoesNotWriteStorage 验证服务层普通状态读取只读投影，不写 players 或资源权威表。
+func TestMySQLServiceGetStateDoesNotWriteStorage(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	_, state := createResourceAuthorityPlayer(t, repo, "readonly_service_state")
+	service := game.NewServiceWithRepository(repo)
+
+	beforeJSON, beforeUpdatedAt := readPlayerStorageSnapshot(t, db, state.Player.ID)
+	beforeWood, beforeCapacity := readResourceRow(t, db, state.Player.ID, "wood")
+
+	got, err := service.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("service GetState: %v", err)
+	}
+	if got.Resources.Items["wood"] < beforeWood {
+		t.Fatalf("expected readonly projected resources not to go backwards, before=%d got=%d", beforeWood, got.Resources.Items["wood"])
+	}
+
+	afterJSON, afterUpdatedAt := readPlayerStorageSnapshot(t, db, state.Player.ID)
+	afterWood, afterCapacity := readResourceRow(t, db, state.Player.ID, "wood")
+	if !beforeUpdatedAt.Equal(afterUpdatedAt) {
+		t.Fatalf("expected GetState not to update players.updated_at, before=%s after=%s", beforeUpdatedAt, afterUpdatedAt)
+	}
+	if string(beforeJSON) != string(afterJSON) {
+		t.Fatalf("expected GetState not to update players.state_json")
+	}
+	if beforeWood != afterWood || beforeCapacity != afterCapacity {
+		t.Fatalf("expected GetState not to update player_resources, before=%d/%d after=%d/%d", beforeWood, beforeCapacity, afterWood, afterCapacity)
+	}
+}
+
+// TestMySQLRepairPlayerCoreAssetsPersistsAuthorityRows 验证显式修复入口会把旧玩家核心资产补入权威表。
+func TestMySQLRepairPlayerCoreAssetsPersistsAuthorityRows(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	now := time.Now().UTC()
+	suffix := strings.NewReplacer(".", "_").Replace("repair_core_" + now.Format("20060102150405.000000000"))
+	account := game.Account{
+		ID:           "it_account_" + suffix,
+		Username:     "it_user_" + suffix,
+		PasswordHash: strings.Repeat("b", 64),
+		CreatedAt:    now,
+	}
+	state := game.GameState{
+		Player: game.Player{
+			ID:       "it_player_" + suffix,
+			Nickname: "修复测试" + suffix,
+			Faction:  "wei",
+		},
+		Resources: game.ResourceState{
+			Items:    map[string]int{"wood": 1000, "stone": 1000, "iron": 1000, "food": 1000},
+			Capacity: map[string]int{"wood": 5000, "stone": 5000, "iron": 5000, "food": 5000},
+		},
+		Buildings:         []game.Building{{ID: "warehouse-1", Type: "warehouse", Level: 1}},
+		Inventory:         nil,
+		Army:              []game.ArmyUnit{},
+		RecruitQueues:     []game.RecruitQueue{},
+		ResourceSettledAt: now.Format(time.RFC3339),
+		ServerTime:        now.Format(time.RFC3339),
+	}
+	_ = repo.DeleteAccount(account.ID)
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = repo.DeleteAccount(account.ID)
+	})
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+	service := game.NewServiceWithRepository(repo)
+
+	if _, ok := readBuildingRow(t, db, state.Player.ID, "construction_bureau-1"); ok {
+		t.Fatalf("expected legacy test player to start without construction bureau")
+	}
+	if _, _, ok := readGeneralRow(t, db, state.Player.ID, "caocao"); ok {
+		t.Fatalf("expected legacy test player to start without general authority row")
+	}
+
+	result, err := service.RepairPlayerCoreAssets(state.Player.ID)
+	if err != nil {
+		t.Fatalf("RepairPlayerCoreAssets: %v", err)
+	}
+	if !result.Changed {
+		t.Fatalf("expected repair to report changes")
+	}
+	if _, ok := readBuildingRow(t, db, state.Player.ID, "construction_bureau-1"); !ok {
+		t.Fatalf("expected repair to persist construction bureau")
+	}
+	if _, ok := readResourceSlotRow(t, db, state.Player.ID, "construction_resource_slot-1"); !ok {
+		t.Fatalf("expected repair to persist construction resource slot")
+	}
+	if _, _, ok := readGeneralRow(t, db, state.Player.ID, "caocao"); !ok {
+		t.Fatalf("expected repair to persist default general")
+	}
+	if count := readGeneralAssignmentCount(t, db, state.Player.ID); count == 0 {
+		t.Fatalf("expected repair to persist general assignment")
+	}
 }
 
 // TestMySQLBuildingUpgradeRefreshesBuildingAuthority 验证建筑升级会同步建筑权威表、资源田格子，且轻量快照不再保存建筑。

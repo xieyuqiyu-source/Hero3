@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Swords, FlaskConical, Users } from 'lucide-react'
 import RecruitTab from './components/RecruitTab'
 import GeneralPanel from './components/GeneralPanel'
+import { useGameStore } from '@/store/gameStore'
 
 type MainTab = 'recruit' | 'generals' | 'tech'
 
@@ -10,6 +11,8 @@ const MilitaryPage: FC = () => {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialTab = (searchParams.get('tab') as MainTab) || 'recruit'
   const [activeTab, setActiveTab] = useState<MainTab>(initialTab)
+  const loadMilitaryView = useGameStore((s) => s.loadMilitaryView)
+  const loadGeneralsView = useGameStore((s) => s.loadGeneralsView)
 
   // URL ?tab=generals 变化时同步切换
   useEffect(() => {
@@ -19,6 +22,14 @@ const MilitaryPage: FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
+
+  useEffect(() => {
+    if (activeTab === 'generals') {
+      void loadGeneralsView()
+      return
+    }
+    void loadMilitaryView()
+  }, [activeTab, loadGeneralsView, loadMilitaryView])
 
   const handleTabChange = (key: MainTab) => {
     setActiveTab(key)

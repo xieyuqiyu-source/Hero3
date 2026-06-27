@@ -248,7 +248,7 @@ const AccountGoldSection: FC = () => {
   const [now, setNow] = useState(() => Date.now())
   const account = useAccountStore((s) => s.account)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
-  const setState = useGameStore((s) => s.setState)
+  const patchState = useGameStore((s) => s.patchState)
   const gameState = useGameStore((s) => s.state)
   const balance = useConfigStore((s) => s.balance)
 
@@ -284,14 +284,14 @@ const AccountGoldSection: FC = () => {
     try {
       if (expanded === 'to_city') {
         const result = await gameApi.exchangeGold(account.accountId, activePlayerId, amount)
-        setState(result.state)
+        patchState({ cityGold: result.cityGold, lastExchangeAt: result.lastExchangeAt, serverTime: result.serverTime })
         if (result.accountGold !== undefined) {
           useAccountStore.setState({ account: { ...account, gold: result.accountGold } })
         }
         toast.success(`${amount * exRate} 城金已存入「${cityName}」`)
       } else {
         const result = await gameApi.reverseExchangeGold(account.accountId, activePlayerId, amount)
-        setState(result.state)
+        patchState({ cityGold: result.cityGold, lastExchangeAt: result.lastExchangeAt, serverTime: result.serverTime })
         if (result.accountGold !== undefined) {
           useAccountStore.setState({ account: { ...account, gold: result.accountGold } })
         }

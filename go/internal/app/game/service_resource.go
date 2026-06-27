@@ -14,7 +14,7 @@ func (s *Service) AdjustResources(playerID string, adjustments map[string]int) (
 
 	now := time.Now()
 	var before, after coreAssetSnapshot
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateResourceState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		before = snapshotCoreAssets(state)
@@ -46,7 +46,7 @@ func (s *Service) FillResources(playerID string) (GameState, error) {
 
 	now := time.Now()
 	var before, after coreAssetSnapshot
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateResourceState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		before = snapshotCoreAssets(state)
@@ -78,7 +78,7 @@ func (s *Service) FillResourcesPaid(playerID string) (GameState, int, error) {
 	now := time.Now()
 	cost := 0
 	var before, after coreAssetSnapshot
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateResourceState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		before = snapshotCoreAssets(state)

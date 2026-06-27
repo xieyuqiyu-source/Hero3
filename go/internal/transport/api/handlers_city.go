@@ -24,7 +24,7 @@ func (h *Handlers) FillResources(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	writeJSON(w, http.StatusOK, game.BuildResourceActionResult(state, 0))
 }
 
 func (h *Handlers) FillResourcesPaid(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +51,7 @@ func (h *Handlers) FillResourcesPaid(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state, "cost": cost})
+	writeJSON(w, http.StatusOK, game.BuildResourceActionResult(state, cost))
 }
 
 func (h *Handlers) UpgradeBuilding(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +82,7 @@ func (h *Handlers) UpgradeBuilding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	writeJSON(w, http.StatusOK, game.BuildCityActionResult(state, payload.BuildingID, 0, 0))
 }
 
 // --- Boost Handlers ---
@@ -116,7 +116,7 @@ func (h *Handlers) InstantCompleteBuilding(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	writeJSON(w, http.StatusOK, game.BuildCityActionResult(state, payload.BuildingID, 0, 0))
 }
 
 func (h *Handlers) PurchaseBoost(w http.ResponseWriter, r *http.Request) {
@@ -151,7 +151,7 @@ func (h *Handlers) PurchaseBoost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	writeJSON(w, http.StatusOK, game.BuildResourceActionResult(state, 0))
 }
 
 func (h *Handlers) BoostPrices(w http.ResponseWriter, r *http.Request) {
@@ -201,7 +201,7 @@ func (h *Handlers) PurchaseCapacityBoost(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	writeJSON(w, http.StatusOK, game.BuildResourceActionResult(state, 0))
 }
 
 func (h *Handlers) UpgradeBuildingBatch(w http.ResponseWriter, r *http.Request) {
@@ -228,5 +228,5 @@ func (h *Handlers) UpgradeBuildingBatch(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state, "upgraded": upgraded})
+	writeJSON(w, http.StatusOK, game.BuildCityActionResult(state, "", upgraded, 0))
 }

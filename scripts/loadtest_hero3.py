@@ -106,8 +106,67 @@ def pick_building(index: int) -> str:
     return candidates[index % len(candidates)]
 
 
-def run_operation(base_url: str, session: Session, op_index: int) -> Result:
+def get_view(base_url: str, session: Session, name: str, path: str) -> Result:
+    status, _, elapsed = request(base_url, "GET", path + "?" + urllib.parse.urlencode({"playerId": session.player_id}), token=session.token)
+    return Result(name=name, status=status, elapsed_ms=elapsed, ok=200 <= status < 300)
+
+
+def post_upgrade(base_url: str, session: Session, op_index: int) -> Result:
+    status, _, elapsed = request(base_url, "POST", "/api/v1/city/buildings/upgrade", token=session.token, body={
+        "playerId": session.player_id,
+        "buildingId": pick_building(op_index),
+    })
+    return Result(name="upgrade", status=status, elapsed_ms=elapsed, ok=200 <= status < 300)
+
+
+def post_recruit(base_url: str, session: Session) -> Result:
+    status, _, elapsed = request(base_url, "POST", "/api/v1/military/recruit", token=session.token, body={
+        "playerId": session.player_id,
+        "unitId": "qingZhouArmy",
+        "amount": 1,
+    })
+    return Result(name="recruit", status=status, elapsed_ms=elapsed, ok=200 <= status < 300)
+
+
+def run_operation(base_url: str, session: Session, op_index: int, mode: str) -> Result:
     roll = random.random()
+    if mode == "frontend":
+        if roll < 0.25:
+            return get_view(base_url, session, "resource_view", "/api/v1/resources/view")
+        if roll < 0.45:
+            return get_view(base_url, session, "city_view", "/api/v1/city/view")
+        if roll < 0.60:
+            return get_view(base_url, session, "military_view", "/api/v1/military/view")
+        if roll < 0.75:
+            return get_view(base_url, session, "npc_list", "/api/v1/map/npc-cities")
+        if roll < 0.85:
+            return post_upgrade(base_url, session, op_index)
+        if roll < 0.95:
+            return post_recruit(base_url, session)
+        return get_view(base_url, session, "summary_view", "/api/v1/game/summary")
+
+    if mode == "readonly":
+        if roll < 0.25:
+            return get_view(base_url, session, "resource_view", "/api/v1/resources/view")
+        if roll < 0.45:
+            return get_view(base_url, session, "city_view", "/api/v1/city/view")
+        if roll < 0.60:
+            return get_view(base_url, session, "military_view", "/api/v1/military/view")
+        if roll < 0.72:
+            return get_view(base_url, session, "inventory_view", "/api/v1/inventory/view")
+        if roll < 0.84:
+            return get_view(base_url, session, "generals_view", "/api/v1/generals/view")
+        if roll < 0.94:
+            return get_view(base_url, session, "npc_list", "/api/v1/map/npc-cities")
+        return get_view(base_url, session, "summary_view", "/api/v1/game/summary")
+
+    if mode == "write-local":
+        if roll < 0.45:
+            return post_upgrade(base_url, session, op_index)
+        if roll < 0.85:
+            return post_recruit(base_url, session)
+        return get_view(base_url, session, "resource_view", "/api/v1/resources/view")
+
     if roll < 0.55:
         name = "get_state"
         path = "/api/v1/game/state?" + urllib.parse.urlencode({"playerId": session.player_id})
@@ -117,18 +176,9 @@ def run_operation(base_url: str, session: Session, op_index: int) -> Result:
         path = "/api/v1/map/npc-cities?" + urllib.parse.urlencode({"playerId": session.player_id})
         status, _, elapsed = request(base_url, "GET", path, token=session.token)
     elif roll < 0.90:
-        name = "upgrade"
-        status, _, elapsed = request(base_url, "POST", "/api/v1/city/buildings/upgrade", token=session.token, body={
-            "playerId": session.player_id,
-            "buildingId": pick_building(op_index),
-        })
+        return post_upgrade(base_url, session, op_index)
     else:
-        name = "recruit"
-        status, _, elapsed = request(base_url, "POST", "/api/v1/military/recruit", token=session.token, body={
-            "playerId": session.player_id,
-            "unitId": "qingZhouArmy",
-            "amount": 1,
-        })
+        return post_recruit(base_url, session)
     # 409/422 属于业务拒绝，不算 HTTP 系统错误，但会在结果里单独看到成功率下降。
     ok = 200 <= status < 300
     return Result(name=name, status=status, elapsed_ms=elapsed, ok=ok)
@@ -166,7 +216,7 @@ def summarize(label: str, results: list[Result], wall_seconds: float) -> dict[st
     }
 
 
-def run_stage(base_url: str, sessions: list[Session], concurrency: int, requests: int) -> dict[str, Any]:
+def run_stage(base_url: str, sessions: list[Session], concurrency: int, requests: int, mode: str) -> dict[str, Any]:
     results: list[Result] = []
     lock = threading.Lock()
     started = time.perf_counter()
@@ -174,12 +224,12 @@ def run_stage(base_url: str, sessions: list[Session], concurrency: int, requests
         futures = []
         for i in range(requests):
             session = sessions[i % len(sessions)]
-            futures.append(pool.submit(run_operation, base_url, session, i))
+            futures.append(pool.submit(run_operation, base_url, session, i, mode))
         for future in as_completed(futures):
             with lock:
                 results.append(future.result())
     wall_seconds = time.perf_counter() - started
-    return summarize(f"c{concurrency}_n{requests}", results, wall_seconds)
+    return summarize(f"{mode}_c{concurrency}_n{requests}", results, wall_seconds)
 
 
 def main() -> int:
@@ -187,6 +237,7 @@ def main() -> int:
     parser.add_argument("--base-url", default="http://localhost:8080")
     parser.add_argument("--users", type=int, default=80)
     parser.add_argument("--stages", default="10:200,25:500,50:1000,100:2000")
+    parser.add_argument("--mode", choices=["legacy", "frontend", "readonly", "write-local"], default="frontend")
     parser.add_argument("--prefix", default="lt")
     args = parser.parse_args()
 
@@ -211,8 +262,8 @@ def main() -> int:
         concurrency_raw, requests_raw = raw_stage.split(":", 1)
         concurrency = int(concurrency_raw)
         requests = int(requests_raw)
-        print(f"Running stage concurrency={concurrency} requests={requests} ...", flush=True)
-        summary = run_stage(args.base_url, sessions, concurrency, requests)
+        print(f"Running stage mode={args.mode} concurrency={concurrency} requests={requests} ...", flush=True)
+        summary = run_stage(args.base_url, sessions, concurrency, requests, args.mode)
         summaries.append(summary)
         print(json.dumps(summary, ensure_ascii=False), flush=True)
 

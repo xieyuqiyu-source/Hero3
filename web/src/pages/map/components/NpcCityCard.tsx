@@ -71,7 +71,11 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
       setBusy('scout')
       try {
         const result = await gameApi.scoutNpc(playerId, city.id)
-        useGameStore.getState().setState(result.state)
+        useGameStore.getState().patchState({
+          army: result.army,
+          npcState: result.npcState,
+          serverTime: result.serverTime,
+        })
         onScoutResult(result.battleReport)
       } catch { /* ignore */ }
       finally { setBusy(null) }
@@ -87,7 +91,15 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
     setBusy(mode)
     try {
       const result = await gameApi.attackNpc(playerId, city.id, mode, units)
-      useGameStore.getState().setState(result.state)
+      useGameStore.getState().patchState({
+        resources: result.resources,
+        army: result.army,
+        general: result.general,
+        generals: result.generals,
+        cityGold: result.cityGold,
+        npcState: result.npcState,
+        serverTime: result.serverTime,
+      })
       onBattleResult(result.battleReport)
     } catch { /* ignore */ }
     finally { setBusy(null) }

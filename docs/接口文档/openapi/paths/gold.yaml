@@ -1,0 +1,52 @@
+/api/v1/gold/exchange:
+  post:
+    tags: [Account]
+    summary: 金币兑换城金
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [accountId, playerId, amount]
+            properties:
+              accountId:
+                type: string
+              playerId:
+                type: string
+              amount:
+                type: integer
+                minimum: 1
+    responses:
+      '200':
+        description: 返回货币局部结果。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurrencyActionResult'
+/api/v1/gold/reverse-exchange:
+  post:
+    tags: [Account]
+    summary: 城金兑换金币
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [accountId, playerId, cityGoldAmount]
+            properties:
+              accountId:
+                type: string
+              playerId:
+                type: string
+              cityGoldAmount:
+                type: integer
+                minimum: 1
+    responses:
+      '200':
+        description: 返回货币局部结果。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurrencyActionResult'

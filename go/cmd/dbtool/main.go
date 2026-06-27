@@ -61,6 +61,8 @@ func main() {
 		err = runBackfillBuffs(os.Args[2:])
 	case "verify-buffs":
 		err = runVerifyBuffs(os.Args[2:])
+	case "healthcheck-authority":
+		err = runHealthcheckAuthority(os.Args[2:])
 	default:
 		printUsage()
 		err = fmt.Errorf("unknown command: %s", os.Args[1])
@@ -97,4 +99,5 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  verify-generals   校验 player_generals / player_general_assignments 与兼容快照")
 	fmt.Fprintln(os.Stderr, "  backfill-buffs 从 state_json 兼容快照回填 player_buffs")
 	fmt.Fprintln(os.Stderr, "  verify-buffs   校验 player_buffs 与 state_json.buffs 兼容快照")
+	fmt.Fprintln(os.Stderr, "  healthcheck-authority 检查当前权威表覆盖和轻量 state_json 干净度")
 }

@@ -61,6 +61,28 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
     return unitType
   }
 
+  const formatTroopMap = (troops?: Record<string, number>) => {
+    const text = Object.entries(troops ?? {})
+      .filter(([, amount]) => amount > 0)
+      .map(([unitType, amount]) => `${getUnitName(unitType)} ${amount.toLocaleString()}`)
+      .join('、')
+    return text || '无'
+  }
+
+  const formatPvpGenerals = (generals?: Array<{ id: string; name?: string; level?: number }>) => {
+    const text = (generals ?? [])
+      .map((general) => `${general.name || general.id}${general.level ? ` Lv.${general.level}` : ''}`)
+      .join('、')
+    return text || '无'
+  }
+
+  const pvpPointEntries = Object.entries(report.pvpPointsDelta ?? {}).filter(([, amount]) => amount !== 0)
+  const pvpAttackerGenerals = report.pvpAttackerGenerals ?? []
+  const pvpDefenderGenerals = report.pvpDefenderGenerals ?? []
+  const pvpReinforcements = report.pvpReinforcements ?? []
+  const pvpReinforcementLosses = report.pvpReinforcementLosses ?? {}
+  const hasPvpGenerals = pvpAttackerGenerals.length > 0 || pvpDefenderGenerals.length > 0
+
   const formatOutcomeDetail = (key: string, value: number | string | Record<string, number>): string => {
     const labels: Record<string, string> = {
       totalCaptured: '俘虏',
@@ -342,6 +364,80 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
                     <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 font-medium">
                       {getUnitName(unitType)} +{count}
                     </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {(pvpPointEntries.length > 0 || hasPvpGenerals || pvpReinforcements.length > 0 || Object.keys(pvpReinforcementLosses).length > 0) && (
+        <div className="rounded-2xl border border-indigo-400/40 bg-indigo-400/5 overflow-hidden">
+          <div className="px-4 py-2 border-b border-indigo-400/30 bg-indigo-400/10">
+            <span className="text-xs font-bold text-indigo-600">PVP 结算</span>
+          </div>
+          <div className="p-4 space-y-3">
+            {pvpPointEntries.length > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold text-indigo-600 mb-1.5">积分变化</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {pvpPointEntries.map(([key, amount]) => (
+                    <span key={key} className={`text-[10px] px-2 py-1 rounded-lg font-medium ${amount > 0 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'}`}>
+                      {key === 'self' ? '我方' : key === 'target' ? '对方' : key} {amount > 0 ? '+' : ''}{amount}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {hasPvpGenerals && (
+              <div>
+                <div className="text-[11px] font-semibold text-indigo-600 mb-1.5">参战武将</div>
+                <div className="grid gap-1.5 sm:grid-cols-2">
+                  <div className="rounded-xl border border-indigo-400/20 bg-[var(--color-surface)] px-3 py-2">
+                    <div className="text-[10px] font-bold text-indigo-600">攻击方</div>
+                    <div className="mt-1 text-[10px] text-[var(--color-text-secondary)]">{formatPvpGenerals(pvpAttackerGenerals)}</div>
+                  </div>
+                  <div className="rounded-xl border border-indigo-400/20 bg-[var(--color-surface)] px-3 py-2">
+                    <div className="text-[10px] font-bold text-indigo-600">防守方</div>
+                    <div className="mt-1 text-[10px] text-[var(--color-text-secondary)]">{formatPvpGenerals(pvpDefenderGenerals)}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {pvpReinforcements.length > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold text-indigo-600 mb-1.5">参战驻防/援军</div>
+                <div className="space-y-1.5">
+                  {pvpReinforcements.map((item) => (
+                    <div key={item.reinforcementId} className="rounded-xl border border-indigo-400/20 bg-[var(--color-surface)] px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-indigo-600">{item.sourceTags?.source_type === 'obtained' ? '获得驻防' : '增援'}</span>
+                        <span className="text-[10px] text-[var(--color-text-muted)] truncate">{item.fromPlayerId}</span>
+                      </div>
+                      <div className="mt-1 text-[10px] text-[var(--color-text-secondary)]">{formatTroopMap(item.troops)}</div>
+                      {item.generals && item.generals.length > 0 && (
+                        <div className="mt-1 text-[10px] text-[var(--color-text-muted)]">
+                          武将：{item.generals.map((general) => general.name || general.id).join('、')}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {Object.keys(pvpReinforcementLosses).length > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold text-indigo-600 mb-1.5">援军损耗</div>
+                <div className="space-y-1.5">
+                  {Object.entries(pvpReinforcementLosses).map(([reinforcementId, losses]) => (
+                    <div key={reinforcementId} className="flex items-center justify-between gap-2 rounded-lg bg-red-500/10 px-2.5 py-1.5">
+                      <span className="min-w-0 truncate text-[10px] text-red-600">{reinforcementId}</span>
+                      <span className="shrink-0 text-[10px] font-semibold text-red-600">{formatTroopMap(losses)}</span>
+                    </div>
                   ))}
                 </div>
               </div>

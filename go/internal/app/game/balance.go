@@ -237,6 +237,13 @@ var defaultBalance = BalanceConfig{
 			GoldUpgradeCostByLevel: goldUpgradeCostTable(10, 25),
 			UpgradeSecondsByLevel:  militaryUpgradeSecondsTable(60, 25),
 		},
+		"relay_station": {
+			Type:                  "relay_station",
+			Name:                  "驿站",
+			ModifiersByLevel:      militaryModifierTable([]string{StatMarchSpeedBonus}, 0.01, "percentAdd", 20),
+			UpgradeCostByLevel:    militaryUpgradeCostTable(160, 120, 180, 220, 20),
+			UpgradeSecondsByLevel: militaryUpgradeSecondsTable(60, 20),
+		},
 	},
 }
 

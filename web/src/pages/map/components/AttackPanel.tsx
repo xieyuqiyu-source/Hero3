@@ -18,7 +18,7 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const army = useGameStore((s) => s.state?.army ?? [])
   const faction = useGameStore((s) => s.state?.player.faction ?? 'wei')
-  const setState = useGameStore((s) => s.setState)
+  const patchState = useGameStore((s) => s.patchState)
   const units = useConfigStore((s) => s.units)
   const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
   const setSkipConfirmations = useConfirmPreferenceStore((s) => s.setSkipConfirmations)
@@ -71,7 +71,15 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
     setDispatching(true)
     try {
       const result = await gameApi.attackNpc(activePlayerId, city.id, mode as 'attack' | 'plunder', dispatchUnits)
-      setState(result.state)
+      patchState({
+        resources: result.resources,
+        army: result.army,
+        general: result.general,
+        generals: result.generals,
+        cityGold: result.cityGold,
+        npcState: result.npcState,
+        serverTime: result.serverTime,
+      })
       setBattleReport(result.battleReport)
     } catch {
       // 错误由全局拦截器处理
@@ -85,7 +93,11 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
     setDispatching(true)
     try {
       const result = await gameApi.scoutNpc(activePlayerId, city.id)
-      setState(result.state)
+      patchState({
+        army: result.army,
+        npcState: result.npcState,
+        serverTime: result.serverTime,
+      })
       setScoutReport(result.battleReport)
     } catch {
       // 错误由全局拦截器处理

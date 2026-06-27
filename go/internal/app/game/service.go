@@ -28,6 +28,7 @@ var (
 	ErrInvalidBuildingMutation = errors.New("invalid building mutation")
 	ErrBuildingStatusBlocked   = errors.New("building status blocks this action")
 	ErrInvalidEffectType       = errors.New("invalid effect type")
+	ErrMixedEffectAssets       = errors.New("mixed effect assets require split execution")
 	ErrUnitNotFound            = errors.New("unit not found")
 	ErrNonCombatUnit           = errors.New("unit cannot participate in combat")
 	ErrInvalidBuffKey          = errors.New("invalid buff key")
@@ -55,6 +56,13 @@ var (
 	ErrItemNotFound            = errors.New("item not found")
 	ErrItemNotUsable           = errors.New("item is not usable")
 	ErrInsufficientItem        = errors.New("insufficient item")
+	ErrReinforcementNotFound   = errors.New("reinforcement not found")
+	ErrInvalidReinforcement    = errors.New("invalid reinforcement")
+	ErrReinforcementTargetSelf = errors.New("cannot reinforce yourself")
+	ErrReinforcementTargetNPC  = errors.New("npc cannot be reinforced")
+	ErrReinforcementSlotFull   = errors.New("reinforcement source slots are full")
+	ErrReinforcementBusy       = errors.New("reinforcement is busy")
+	ErrGeneralBusy             = errors.New("general is already assigned")
 )
 
 const resourceDateLayout = time.RFC3339
@@ -394,56 +402,33 @@ func (s *Service) GetState(playerID string) (GameState, error) {
 	}
 
 	now := time.Now()
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
-		if state.General != nil {
-			applyHeroConfigToGeneral(state.General)
-		}
-
-		nextState, _ := settleResources(*state, now)
-		*state = nextState
-		if strings.TrimSpace(state.Player.MailCode) == "" {
-			mailCode, codeErr := s.generateMailCode(state.Player.Nickname)
-			if codeErr != nil {
-				return codeErr
-			}
-			state.Player.MailCode = mailCode
-		}
-		EnsureCoreBuildings(state)
-		ApplyConstructionBureauResourceSlots(state, now)
-		if state.Inventory == nil {
-			state.Inventory = map[string]ItemStack{}
-		}
-
-		if state.General == nil && state.Player.Faction != "" {
-			defaultGenerals := map[string]string{
-				"wei": "caocao",
-				"shu": "liubei",
-				"wu":  "sunquan",
-			}
-			if gid, ok := defaultGenerals[state.Player.Faction]; ok {
-				state.General = newGeneral(state.Player.Faction, gid)
-			}
-		}
-		EnsureGeneralRoster(state, now)
-
-		return nil
-	})
+	state, err := s.repo.GetState(playerID)
 	if err != nil {
 		return GameState{}, err
 	}
 
-	// 总是重新应用 GeneralsConfig（GM 可能修改了配置，运行时同步生效）
-	if state.General != nil {
-		applyHeroConfigToGeneral(state.General)
-	}
-	EnsureGeneralRoster(&state, now)
+	applyGeneralConfigForView(&state)
+	state, _ = settleResources(state, now)
 
 	s.attachReportSummary(&state, playerID)
 	s.attachMailSummary(&state, playerID)
 
-	hydrateStateForResponse(&state, time.Now())
+	hydrateStateForResponse(&state, now)
 
 	return state, nil
+}
+
+// applyGeneralConfigForView 只为读取响应补充武将配置派生字段，不补齐长期武将资产。
+func applyGeneralConfigForView(state *GameState) {
+	if state == nil {
+		return
+	}
+	if state.General != nil {
+		applyHeroConfigToGeneral(state.General)
+	}
+	for index := range state.Generals {
+		applyHeroConfigToGeneral(&state.Generals[index])
+	}
 }
 
 func (s *Service) attachReportSummary(state *GameState, playerID string) {

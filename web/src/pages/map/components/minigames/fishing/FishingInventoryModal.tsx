@@ -29,6 +29,7 @@ type InventoryGroup = {
   fishTags: Array<{ name: string; count: number; amount: number; rarity: FishCatch['rarity'] }>
   highestRarity: FishCatch['rarity']
   canRedeem: boolean
+  target: 'army' | 'garrison'
 }
 
 const rarityRank: Record<FishCatch['rarity'], number> = {
@@ -80,13 +81,14 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
         originalAmount: groupRecords.reduce((sum, record) => sum + record.rewardAmount, 0),
         fishTags: Array.from(fishMap.values()).sort((a, b) => rarityRank[b.rarity] - rarityRank[a.rarity] || b.amount - a.amount),
         highestRarity,
-        canRedeem: isFactionUnit(rewardUnit),
+        canRedeem: true,
+        target: (isFactionUnit(rewardUnit) ? 'army' : 'garrison') as InventoryGroup['target'],
       }
-    }).sort((a, b) => Number(b.canRedeem) - Number(a.canRedeem) || rarityRank[b.highestRarity] - rarityRank[a.highestRarity] || b.totalAmount - a.totalAmount)
+    }).sort((a, b) => Number(a.target === 'garrison') - Number(b.target === 'garrison') || rarityRank[b.highestRarity] - rarityRank[a.highestRarity] || b.totalAmount - a.totalAmount)
   }, [inventoryRecords, isFactionUnit])
   const redeemableGroups = groups.filter(group => group.canRedeem)
-  const totalInventoryAmount = inventoryRecords.reduce((sum, record) => sum + record.remainingAmount, 0)
   const redeemableAmount = redeemableGroups.reduce((sum, group) => sum + group.totalAmount, 0)
+  const garrisonAmount = groups.filter(group => group.target === 'garrison').reduce((sum, group) => sum + group.totalAmount, 0)
   const currentPage = Math.floor(recordsOffset / recordsPageSize) + 1
   const totalPages = Math.max(1, Math.ceil(recordsTotal / recordsPageSize))
   const canPrevPage = recordsOffset > 0
@@ -143,8 +145,8 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
                   <p className="mt-0.5 text-sm font-bold text-emerald-600">{redeemableAmount.toLocaleString()}</p>
                 </div>
                 <div className="min-w-0 rounded-xl bg-[var(--color-surface-dim)] px-2.5 py-2">
-                  <p className="text-[9px] text-[var(--color-text-muted)]">暂存</p>
-                  <p className="mt-0.5 text-sm font-bold text-amber-600">{(totalInventoryAmount - redeemableAmount).toLocaleString()}</p>
+                  <p className="text-[9px] text-[var(--color-text-muted)]">入驻防</p>
+                  <p className="mt-0.5 text-sm font-bold text-amber-600">{garrisonAmount.toLocaleString()}</p>
                 </div>
                 <button
                   type="button"
@@ -159,7 +161,7 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
             )}
             {inventoryRecords.length > 0 && (
               <p className="mt-2 text-[9px] leading-4 text-[var(--color-text-muted)]">
-                全部兑换会扫描所有存储记录，目前只取出本阵营兵种。
+                本阵营兵种加入军队，非本阵营兵种加入驻防队伍。
               </p>
             )}
           </div>
@@ -205,24 +207,20 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
                         </div>
                       </div>
 
-                      {group.canRedeem ? (
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <span className="text-[10px] text-emerald-700">可一键兑换全部库存</span>
-                          <button
-                            type="button"
-                            onClick={() => onRedeemGroup(group.rewardUnit, group.records)}
-                            disabled={Boolean(redeemingId)}
-                            className="inline-flex min-w-[86px] items-center justify-center gap-1 rounded-lg bg-[var(--color-accent)] px-2.5 py-1.5 text-[10px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 cursor-pointer"
-                          >
-                            {isRedeeming && <Loader2 size={11} className="animate-spin" />}
-                            一键兑换
-                          </button>
-                        </div>
-                      ) : (
-                        <p className="mt-2 rounded-lg bg-amber-500/10 px-2 py-1.5 text-[10px] leading-5 text-amber-700">
-                          非当前阵营兵种，暂时只能存储；驻防增援系统完成后即可兑换。
-                        </p>
-                      )}
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <span className={`text-[10px] ${group.target === 'army' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {group.target === 'army' ? '兑换后加入军队' : '兑换后加入驻防队伍'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => onRedeemGroup(group.rewardUnit, group.records)}
+                          disabled={Boolean(redeemingId)}
+                          className="inline-flex min-w-[86px] items-center justify-center gap-1 rounded-lg bg-[var(--color-accent)] px-2.5 py-1.5 text-[10px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 cursor-pointer"
+                        >
+                          {isRedeeming && <Loader2 size={11} className="animate-spin" />}
+                          一键兑换
+                        </button>
+                      </div>
                     </div>
                   )
                 })}

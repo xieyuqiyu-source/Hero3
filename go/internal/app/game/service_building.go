@@ -1,9 +1,12 @@
 package game
 
 import (
+	"errors"
 	"strings"
 	"time"
 )
+
+var errUseGoldBuildingUpgrade = errors.New("building uses account gold upgrade")
 
 func (s *Service) UpgradeBuilding(playerID string, buildingID string) (GameState, error) {
 	playerID = strings.TrimSpace(playerID)
@@ -12,19 +15,9 @@ func (s *Service) UpgradeBuilding(playerID string, buildingID string) (GameState
 		return GameState{}, ErrBuildingNotFound
 	}
 
-	current, err := s.repo.GetState(playerID)
-	if err != nil {
-		return GameState{}, err
-	}
-	if building := findBuildingByID(&current, buildingID); building != nil {
-		if config, exists := getBuildingConfig(building.Type); exists && len(config.GoldUpgradeCostByLevel) > 0 {
-			return s.upgradeBuildingWithGold(playerID, buildingID)
-		}
-	}
-
 	now := time.Now()
 	var before, after coreAssetSnapshot
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateBuildingResourceState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		before = snapshotCoreAssets(state)
@@ -52,6 +45,9 @@ func (s *Service) UpgradeBuilding(playerID string, buildingID string) (GameState
 		if !exists {
 			return ErrBuildingNotFound
 		}
+		if len(config.GoldUpgradeCostByLevel) > 0 {
+			return errUseGoldBuildingUpgrade
+		}
 
 		currentLevel := building.Level
 		upgradeCost, hasCost := config.UpgradeCostByLevel[currentLevel]
@@ -78,6 +74,9 @@ func (s *Service) UpgradeBuilding(playerID string, buildingID string) (GameState
 		after = snapshotCoreAssets(state)
 		return nil
 	})
+	if errors.Is(err, errUseGoldBuildingUpgrade) {
+		return s.upgradeBuildingWithGold(playerID, buildingID)
+	}
 	if err != nil {
 		return GameState{}, err
 	}
@@ -97,7 +96,7 @@ func (s *Service) upgradeBuildingWithGold(playerID string, buildingID string) (G
 	now := time.Now()
 	cost := 0
 	var before, after coreAssetSnapshot
-	account, state, err := s.repo.UpdateAccountPlayerState(accountID, playerID, now, func(account *Account, state *GameState) error {
+	account, state, err := s.repo.UpdateAccountBuildingResourceState(accountID, playerID, now, func(account *Account, state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		before = snapshotCoreAssets(state)
@@ -171,7 +170,7 @@ func (s *Service) UpgradeBuildingBatch(playerID string) (GameState, int, error) 
 	now := time.Now()
 	upgraded := 0
 	var before, after coreAssetSnapshot
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateBuildingResourceState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		before = snapshotCoreAssets(state)
@@ -260,7 +259,7 @@ func (s *Service) InstantCompleteBuilding(playerID string, buildingID string) (G
 	now := time.Now()
 	cost := 0
 	var before, after coreAssetSnapshot
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateBuildingResourceState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		before = snapshotCoreAssets(state)

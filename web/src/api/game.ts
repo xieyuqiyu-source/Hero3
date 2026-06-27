@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition, GeneralActionResult } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetSummary, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse } from '@/types/game'
 import type { BalanceConfig, FactionConfig, FishingConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -90,6 +90,41 @@ export const gameApi = {
     return api.get<{ documents: HelpDocumentSummary[] }>('/help/docs')
   },
 
+  /** 获取玩家公告列表 */
+  listAnnouncements(playerId: string, params?: { type?: string; includeArchived?: boolean; page?: number; pageSize?: number }) {
+    const query = new URLSearchParams({ playerId })
+    if (params?.type) query.set('type', params.type)
+    if (params?.includeArchived) query.set('includeArchived', 'true')
+    if (params?.page) query.set('page', String(params.page))
+    if (params?.pageSize) query.set('pageSize', String(params.pageSize))
+    return api.get<AnnouncementPage>(`/announcements?${query.toString()}`)
+  },
+
+  /** 获取公告详情 */
+  getAnnouncement(playerId: string, announcementId: string) {
+    return api.get<AnnouncementDetail>(`/announcements/${announcementId}?playerId=${playerId}`)
+  },
+
+  /** 标记公告已读 */
+  markAnnouncementRead(playerId: string, announcementId: string) {
+    return api.post<AnnouncementReadState>(`/announcements/${announcementId}/read`, { playerId })
+  },
+
+  /** 记录公告弹窗已展示 */
+  markAnnouncementPopupShown(playerId: string, announcementId: string) {
+    return api.post<AnnouncementReadState>(`/announcements/${announcementId}/popup-shown`, { playerId })
+  },
+
+  /** 关闭公告弹窗 */
+  dismissAnnouncement(playerId: string, announcementId: string) {
+    return api.post<AnnouncementReadState>(`/announcements/${announcementId}/dismiss`, { playerId })
+  },
+
+  /** 获取公告弹窗队列 */
+  listAnnouncementPopups(playerId: string) {
+    return api.get<{ items: AnnouncementSummary[] }>(`/announcements/popups?playerId=${playerId}`)
+  },
+
   /** 获取单篇帮助文档 */
   getHelpDocument(documentId: string) {
     const encodedId = documentId.split('/').map((part) => encodeURIComponent(part)).join('/')
@@ -99,6 +134,57 @@ export const gameApi = {
   /** 获取完整游戏状态 */
   getState(playerId: string) {
     return api.get<GameState>(`/game/state?playerId=${playerId}`)
+  },
+
+  /** 获取玩家摘要视图 */
+  getSummaryView(playerId: string) {
+    return api.get<Pick<GameState, 'player' | 'cityGold' | 'unreadMessageCount' | 'unreadMailCount' | 'serverTime'>>(
+      `/game/summary?playerId=${playerId}`,
+    )
+  },
+
+  /** 获取城池视图 */
+  getCityView(playerId: string) {
+    return api.get<
+      Pick<GameState, 'player' | 'buildings' | 'resourceSlots' | 'resources' | 'resourceProduction' | 'cityGold' | 'activeModifiers' | 'serverTime'>
+    >(`/city/view?playerId=${playerId}`)
+  },
+
+  /** 获取资源视图 */
+  getResourceView(playerId: string) {
+    return api.get<
+      Pick<
+        GameState,
+        | 'resources'
+        | 'resourceProduction'
+        | 'resourceSettledAt'
+        | 'productionBoost'
+        | 'productionBoostEnd'
+        | 'capacityBoost'
+        | 'capacityBoostEnd'
+        | 'activeModifiers'
+        | 'serverTime'
+      >
+    >(`/resources/view?playerId=${playerId}`)
+  },
+
+  /** 获取军事视图 */
+  getMilitaryView(playerId: string) {
+    return api.get<Pick<GameState, 'army' | 'recruitQueues' | 'general' | 'generals' | 'generalAssignments' | 'serverTime'>>(
+      `/military/view?playerId=${playerId}`,
+    )
+  },
+
+  /** 获取背包视图 */
+  getInventoryView(playerId: string) {
+    return api.get<Pick<GameState, 'inventory' | 'serverTime'>>(`/inventory/view?playerId=${playerId}`)
+  },
+
+  /** 获取武将视图 */
+  getGeneralsView(playerId: string) {
+    return api.get<Pick<GameState, 'general' | 'generals' | 'generalAssignments' | 'activeModifiers' | 'serverTime'>>(
+      `/generals/view?playerId=${playerId}`,
+    )
   },
 
   /** 创建账号绑定的游戏存档 */
@@ -135,62 +221,92 @@ export const gameApi = {
 
   /** 升级建筑 */
   upgradeBuilding(playerId: string, buildingId: string) {
-    return api.post<{ state: GameState }>('/city/buildings/upgrade', { playerId, buildingId })
+    return api.post<CityActionResult>('/city/buildings/upgrade', { playerId, buildingId })
   },
 
   /** 一键爆仓（GM免费） */
   fillResources(playerId: string) {
-    return api.post<{ state: GameState }>('/city/resources/fill', { playerId })
+    return api.post<ResourceActionResult>('/city/resources/fill', { playerId })
   },
 
   /** 一键爆仓（消耗城金） */
   fillResourcesPaid(playerId: string) {
-    return api.post<{ state: GameState; cost: number }>('/city/resources/fill-paid', { playerId })
+    return api.post<ResourceActionResult>('/city/resources/fill-paid', { playerId })
   },
 
   /** 一键升级（批量） */
   upgradeBuildingBatch(playerId: string) {
-    return api.post<{ state: GameState; upgraded: number }>('/city/buildings/upgrade-batch', { playerId })
+    return api.post<CityActionResult>('/city/buildings/upgrade-batch', { playerId })
   },
 
   /** 征兵 */
   recruit(playerId: string, unitId: string, amount: number) {
-    return api.post<{ state: GameState }>('/military/recruit', { playerId, unitId, amount })
+    return api.post<MilitaryActionResult>('/military/recruit', { playerId, unitId, amount })
   },
 
   /** 极速完成征兵队列 */
   instantCompleteRecruit(playerId: string, queueId: string) {
-    return api.post<{ state: GameState }>('/military/recruit/instant', { playerId, queueId })
+    return api.post<MilitaryActionResult>('/military/recruit/instant', { playerId, queueId })
   },
 
   /** 将领四维加点 */
   allocateGeneralStat(playerId: string, statKey: string) {
-    return api.post<{ state: GameState }>('/military/general/stat', { playerId, statKey })
+    return api.post<GeneralViewActionResult>('/military/general/stat', { playerId, statKey })
   },
 
   /** 将领洗点 */
   resetGeneralStats(playerId: string) {
-    return api.post<GeneralActionResult>('/military/general/reset-stats', { playerId })
+    return api.post<GeneralViewActionResult>('/military/general/reset-stats', { playerId })
   },
 
   /** 更换将领 */
   changeGeneral(playerId: string, generalId: string, itemId?: string) {
-    return api.post<GeneralActionResult>('/military/general/change', { playerId, generalId, itemId })
+    return api.post<GeneralViewActionResult>('/military/general/change', { playerId, generalId, itemId })
+  },
+
+  /** 发起增援 */
+  sendReinforcement(playerId: string, targetPlayerId: string, troops: Record<string, number>, generalIds: string[] = [], speedMultiplier?: number) {
+    return api.post<ReinforcementResponse>('/reinforcements', { playerId, targetPlayerId, troops, generalIds, speedMultiplier })
+  },
+
+  /** 查看我派出的增援 */
+  listSentReinforcements(playerId: string) {
+    return api.get<ReinforcementListResponse>(`/reinforcements/sent?playerId=${playerId}`)
+  },
+
+  /** 查看我收到的增援 */
+  listReceivedReinforcements(playerId: string) {
+    return api.get<ReinforcementListResponse>(`/reinforcements/received?playerId=${playerId}`)
+  },
+
+  /** 查看单个增援批次 */
+  getReinforcement(playerId: string, reinforcementId: string) {
+    return api.get<{ reinforcement: Reinforcement }>(`/reinforcements/${reinforcementId}?playerId=${playerId}`)
+  },
+
+  /** 召回援军 */
+  recallReinforcement(playerId: string, reinforcementId: string) {
+    return api.post<ReinforcementResponse>(`/reinforcements/${reinforcementId}/recall`, { playerId })
+  },
+
+  /** 遣返援军 */
+  expelReinforcement(playerId: string, reinforcementId: string) {
+    return api.post<ReinforcementResponse>(`/reinforcements/${reinforcementId}/expel`, { playerId })
   },
 
   /** 极速完成建筑升级 */
   instantCompleteBuilding(playerId: string, buildingId: string) {
-    return api.post<{ state: GameState }>('/city/buildings/instant', { playerId, buildingId })
+    return api.post<CityActionResult>('/city/buildings/instant', { playerId, buildingId })
   },
 
   /** 购买产量加成 */
   purchaseBoost(playerId: string, multiplier: number, hours: number) {
-    return api.post<{ state: GameState }>('/city/boost', { playerId, multiplier, hours })
+    return api.post<ResourceActionResult>('/city/boost', { playerId, multiplier, hours })
   },
 
   /** 购买仓库容量加成 */
   purchaseCapacityBoost(playerId: string, multiplier: number, hours: number) {
-    return api.post<{ state: GameState }>('/city/capacity-boost', { playerId, multiplier, hours })
+    return api.post<ResourceActionResult>('/city/capacity-boost', { playerId, multiplier, hours })
   },
 
   /** 获取加成价格表 */
@@ -228,14 +344,74 @@ export const gameApi = {
 
   /** 攻击 NPC 城池 */
   attackNpc(playerId: string, npcId: string, mode: 'attack' | 'plunder', units: Record<string, number>) {
-    return api.post<{ battleReport: BattleReport; state: GameState }>('/map/npc-cities/attack', {
+    return api.post<{ battleReport: BattleReport; resources: ResourceState; army: ArmyUnit[]; general?: General; generals?: General[]; cityGold: number; npcState?: GameState['npcState']; serverTime: string }>('/map/npc-cities/attack', {
       playerId, npcId, mode, units,
     })
   },
 
   /** 侦查 NPC 城池 */
   scoutNpc(playerId: string, npcId: string) {
-    return api.post<{ success: boolean; battleReport: BattleReport; npcCity: NpcCity | null; state: GameState }>('/map/npc-cities/scout', { playerId, npcId })
+    return api.post<{ success: boolean; battleReport: BattleReport; npcCity: NpcCity | null; army: ArmyUnit[]; npcState?: GameState['npcState']; serverTime: string }>('/map/npc-cities/scout', { playerId, npcId })
+  },
+
+  /** 获取 PVP 玩家目标 */
+  listPvpTargets(playerId: string) {
+    return api.get<{ items: PvpTargetSummary[] }>(`/pvp/targets?playerId=${playerId}`)
+  },
+
+  /** 侦查 PVP 玩家 */
+  scoutPvpTarget(playerId: string, targetPlayerId: string) {
+    return api.post<{ success: boolean; battleReport: BattleReport; serverTime: string }>('/pvp/scout', { playerId, targetPlayerId })
+  },
+
+  /** 发起 PVP 攻击或掠夺行军 */
+  startPvpAttack(playerId: string, targetPlayerId: string, marchMode: 'attack' | 'plunder', troops: Record<string, number>, generalIds: string[] = []) {
+    return api.post<PvpAttackResponse>('/pvp/attacks', { playerId, targetPlayerId, marchMode, troops, generalIds })
+  },
+
+  /** 获取我的 PVP 行军 */
+  listPvpMarches(playerId: string) {
+    return api.get<{ items: PvpMarch[] }>(`/pvp/marches?playerId=${playerId}`)
+  },
+
+  /** 召回 PVP 行军 */
+  recallPvpMarch(playerId: string, marchId: string) {
+    return api.post<PvpMarchActionResponse>(`/pvp/marches/${marchId}/recall`, { playerId })
+  },
+
+  /** 加速 PVP 行军 */
+  acceleratePvpMarch(playerId: string, marchId: string) {
+    return api.post<PvpMarchActionResponse>(`/pvp/marches/${marchId}/accelerate`, { playerId })
+  },
+
+  /** 获取我的 PVP 战斗记录 */
+  listPvpBattles(playerId: string) {
+    return api.get<{ items: PvpBattle[] }>(`/pvp/battles?playerId=${playerId}`)
+  },
+
+  /** 获取单场 PVP 战斗详情 */
+  getPvpBattle(playerId: string, battleId: string) {
+    return api.get<PvpBattle>(`/pvp/battles/${battleId}?playerId=${playerId}`)
+  },
+
+  /** 获取我的 PVP 状态 */
+  getPvpState(playerId: string) {
+    return api.get<PvpStateResponse>(`/pvp/state?playerId=${playerId}`)
+  },
+
+  /** 获取我的 PVP 复仇记录 */
+  listPvpRevenge(playerId: string) {
+    return api.get<{ items: PvpRevengeRecord[]; serverTime: string }>(`/pvp/revenge?playerId=${playerId}`)
+  },
+
+  /** 获取当前 PVP 赛季 */
+  getPvpSeason(playerId: string) {
+    return api.get<PvpSeasonResponse>(`/pvp/season?playerId=${playerId}`)
+  },
+
+  /** 获取当前 PVP 排行榜 */
+  listPvpRankings(playerId: string, limit = 20) {
+    return api.get<PvpRankingResponse>(`/pvp/rankings?playerId=${playerId}&limit=${limit}`)
   },
 
   /** 战斗模拟：只计算，不扣兵不保存战报 */
@@ -254,17 +430,17 @@ export const gameApi = {
 
   /** 标记军情已读（传 reportId 标记单条，不传标记全部） */
   markReportsRead(playerId: string, reportId?: string) {
-    return api.post<{ state: GameState }>('/news/mark-read', { playerId, reportId })
+    return api.post<ReportActionResult>('/news/mark-read', { playerId, reportId })
   },
 
   /** 删除单条战报 */
   deleteReport(playerId: string, reportId: string) {
-    return api.post<{ state: GameState }>('/news/delete-report', { playerId, reportId })
+    return api.post<ReportActionResult>('/news/delete-report', { playerId, reportId })
   },
 
   /** 一键删除所有战报 */
   deleteAllReports(playerId: string) {
-    return api.post<{ state: GameState }>('/news/delete-all-reports', { playerId })
+    return api.post<ReportActionResult>('/news/delete-all-reports', { playerId })
   },
 
   /** 分页获取信函 */
@@ -305,12 +481,12 @@ export const gameApi = {
 
   /** 金币兑换城金（1金币=10城金，有冷却） */
   exchangeGold(accountId: string, playerId: string, amount: number) {
-    return api.post<{ state: GameState; accountGold: number }>('/gold/exchange', { accountId, playerId, amount })
+    return api.post<CurrencyActionResult>('/gold/exchange', { accountId, playerId, amount })
   },
 
   /** 城金兑换金币（15城金=1金币，有损耗+冷却） */
   reverseExchangeGold(accountId: string, playerId: string, cityGoldAmount: number) {
-    return api.post<{ state: GameState; accountGold: number }>('/gold/reverse-exchange', { accountId, playerId, cityGoldAmount })
+    return api.post<CurrencyActionResult>('/gold/reverse-exchange', { accountId, playerId, cityGoldAmount })
   },
 
   /** 获取物品配置 */
@@ -320,7 +496,7 @@ export const gameApi = {
 
   /** 使用物品 */
   useItem(playerId: string, itemId: string, amount = 1) {
-    return api.post<{ state: GameState; itemId: string; used: number; effects: Record<string, number> }>('/items/use', {
+    return api.post<UseItemResult>('/items/use', {
       playerId,
       itemId,
       amount,

@@ -72,7 +72,7 @@ interface ResourceTabProps {
 const ResourceTab: FC<ResourceTabProps> = ({ expanded, onToggle }) => {
   const buildings = useGameStore((s) => s.state?.buildings ?? EMPTY_BUILDINGS)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
-  const setState = useGameStore((s) => s.setState)
+  const patchCityAction = useGameStore((s) => s.patchCityAction)
   const resources = useProjectedResources()
   const [batchLoading, setBatchLoading] = useState(false)
 
@@ -86,7 +86,7 @@ const ResourceTab: FC<ResourceTabProps> = ({ expanded, onToggle }) => {
     setBatchLoading(true)
     try {
       const result = await gameApi.upgradeBuildingBatch(activePlayerId)
-      setState(result.state)
+      patchCityAction(result)
       toast.success(`成功升级 ${result.upgraded} 块田地`)
     } catch {
       // 错误已由全局拦截器处理

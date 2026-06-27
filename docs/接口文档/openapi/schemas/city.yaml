@@ -28,3 +28,87 @@ AdjustResourcesRequest:
       example:
         wood: 5000
         iron: -200
+CityActionResult:
+  type: object
+  required:
+  - resources
+  - resourceProduction
+  - cityGold
+  - serverTime
+  properties:
+    building:
+      $ref: '#/components/schemas/Building'
+    buildings:
+      type: array
+      items:
+        $ref: '#/components/schemas/Building'
+    resourceSlots:
+      type: array
+      items:
+        $ref: '#/components/schemas/ResourceSlot'
+    resources:
+      $ref: '#/components/schemas/ResourceState'
+    resourceProduction:
+      $ref: '#/components/schemas/ResourceProduction'
+    cityGold:
+      type: integer
+      example: 120
+    activeModifiers:
+      type: array
+      items:
+        $ref: '#/components/schemas/ModifierBreakdownItem'
+    upgraded:
+      type: integer
+      description: 批量升级时本次成功升级的建筑数量。
+      example: 3
+    cost:
+      type: integer
+      description: 操作消耗的城金或其他数值成本。
+      example: 5
+    serverTime:
+      type: string
+      format: date-time
+ResourceActionResult:
+  type: object
+  required:
+  - resources
+  - resourceProduction
+  - resourceSettledAt
+  - cityGold
+  - serverTime
+  properties:
+    resources:
+      $ref: '#/components/schemas/ResourceState'
+    resourceProduction:
+      $ref: '#/components/schemas/ResourceProduction'
+    resourceSettledAt:
+      type: string
+      format: date-time
+    productionBoost:
+      type: number
+      example: 2
+    productionBoostEnd:
+      type: string
+      format: date-time
+      nullable: true
+    capacityBoost:
+      type: number
+      example: 2
+    capacityBoostEnd:
+      type: string
+      format: date-time
+      nullable: true
+    activeModifiers:
+      type: array
+      items:
+        $ref: '#/components/schemas/ModifierBreakdownItem'
+    cityGold:
+      type: integer
+      example: 120
+    cost:
+      type: integer
+      description: 操作消耗的城金。
+      example: 5
+    serverTime:
+      type: string
+      format: date-time

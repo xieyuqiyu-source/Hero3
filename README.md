@@ -63,6 +63,7 @@ go build ./cmd/server
 - 本地开发模式应连接 `test_` 前缀测试库，例如 `test_hero3`，不要直接写稳定玩家库。
 - `make migrate` 迁移当前 DSN 指向的库，`make migrate-test` 创建并迁移 `test_` 前缀测试库。
 - `make clone-data` 可从 `HERO3_SOURCE_DATABASE_DSN` 复制数据到当前 `test_` 目标库，复制后自动回填并校验资源、背包、建筑、资源田格子、兵力、征兵队列、武将和 Buff 权威表。
+- `make healthcheck-authority` 是当前权威表健康检查；`verify-*` 仍保留为旧快照迁移期校验，不作为轻量 `state_json` 后的日常通过标准。
 - `clone-data` 允许目标测试库比源库多出迁移后的新列，复制时只写公共列；源库列在目标库不存在时会中止。
 - `clone-data` 不复制或清空 `schema_migrations`，测试库迁移记录由测试库自己的迁移命令维护。
 

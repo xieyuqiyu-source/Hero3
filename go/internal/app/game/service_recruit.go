@@ -20,7 +20,7 @@ func (s *Service) Recruit(playerID string, unitID string, amount int) (GameState
 
 	now := time.Now()
 	var before, after coreAssetSnapshot
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateRecruitState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		before = snapshotCoreAssets(state)
@@ -87,7 +87,7 @@ func (s *Service) InstantCompleteRecruit(playerID string, queueID string) (GameS
 	now := time.Now()
 	cost := 0
 	var before, after coreAssetSnapshot
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateRecruitState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		before = snapshotCoreAssets(state)

@@ -1,10 +1,12 @@
 import { useState, useEffect, type FC } from 'react'
 import { TreePine, Mountain, Gem, Wheat } from 'lucide-react'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
+import { useGameStore } from '@/store/gameStore'
 
 const ResourceBar: FC = () => {
   const [scrolled, setScrolled] = useState(false)
   const gameResources = useProjectedResources()
+  const loadResourceView = useGameStore((s) => s.loadResourceView)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -13,6 +15,10 @@ const ResourceBar: FC = () => {
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  useEffect(() => {
+    void loadResourceView()
+  }, [loadResourceView])
 
   const resources = [
     { key: 'wood', name: '木材', icon: TreePine, color: 'text-green-600' },

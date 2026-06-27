@@ -1,12 +1,18 @@
-import { useState, type FC } from 'react'
+import { useEffect, useState, type FC } from 'react'
 import ResourceTab from './components/ResourceTab'
 import MilitaryTab from './components/MilitaryTab'
+import { useGameStore } from '@/store/gameStore'
 
 type Tab = 'resource' | 'military'
 
 const CityPage: FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('resource')
   const [resourceExpanded, setResourceExpanded] = useState(true)
+  const loadCityView = useGameStore((s) => s.loadCityView)
+
+  useEffect(() => {
+    void loadCityView()
+  }, [loadCityView])
 
   return (
     <div>

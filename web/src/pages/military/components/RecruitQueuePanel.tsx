@@ -71,7 +71,7 @@ const RecruitQueuePanel: FC = () => {
     const firstDone = pendingQueues.find((q) => getRemainingSeconds(q.endsAt) <= 0)
     if (firstDone && firstDone.id !== lastRefreshed) {
       setLastRefreshed(firstDone.id)
-      useGameStore.getState().loadGameState()
+      void useGameStore.getState().loadMilitaryView()
     }
   }, [now, pendingQueues, lastRefreshed])
 
@@ -114,7 +114,7 @@ const RecruitQueuePanel: FC = () => {
     setCompleting(queueId)
     try {
       const result = await gameApi.instantCompleteRecruit(playerId, queueId)
-      useGameStore.getState().setState(result.state)
+      useGameStore.getState().patchMilitaryAction(result)
     } catch {
       // 错误由全局拦截器处理
     } finally {

@@ -13,16 +13,11 @@
             $ref: '#/components/schemas/RecruitRequest'
     responses:
       '200':
-        description: 征兵已进入队列，返回更新后的游戏状态
+        description: 征兵已进入队列，返回军事相关局部状态
         content:
           application/json:
             schema:
-              type: object
-              required:
-              - state
-              properties:
-                state:
-                  $ref: '#/components/schemas/GameState'
+              $ref: '#/components/schemas/MilitaryActionResult'
       '400':
         description: 征兵数量无效
         content:
@@ -62,16 +57,11 @@
             $ref: '#/components/schemas/InstantCompleteRecruitRequest'
     responses:
       '200':
-        description: 征兵队列已完成，返回更新后的游戏状态
+        description: 征兵队列已完成，返回军事相关局部状态
         content:
           application/json:
             schema:
-              type: object
-              required:
-              - state
-              properties:
-                state:
-                  $ref: '#/components/schemas/GameState'
+              $ref: '#/components/schemas/MilitaryActionResult'
       '400':
         description: 参数错误或队列不存在
         content:
@@ -98,16 +88,11 @@
             $ref: '#/components/schemas/AllocateGeneralStatRequest'
     responses:
       '200':
-        description: 加点成功，返回更新后的游戏状态
+        description: 加点成功，返回将领相关局部状态
         content:
           application/json:
             schema:
-              type: object
-              required:
-              - state
-              properties:
-                state:
-                  $ref: '#/components/schemas/GameState'
+              $ref: '#/components/schemas/GeneralViewActionResult'
       '400':
         description: 参数错误
         content:
@@ -145,7 +130,7 @@
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GeneralActionResult'
+              $ref: '#/components/schemas/GeneralViewActionResult'
       '404':
         description: 玩家、账号或将领不存在
         content:
@@ -177,7 +162,7 @@
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GeneralActionResult'
+              $ref: '#/components/schemas/GeneralViewActionResult'
       '404':
         description: 玩家、将领或换将卡物品配置不存在
         content:

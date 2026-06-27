@@ -38,7 +38,7 @@ func (h *Handlers) Recruit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	writeJSON(w, http.StatusOK, game.BuildMilitaryActionResult(state))
 }
 
 func (h *Handlers) InstantCompleteRecruit(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +66,7 @@ func (h *Handlers) InstantCompleteRecruit(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	writeJSON(w, http.StatusOK, game.BuildMilitaryActionResult(state))
 }
 
 func (h *Handlers) AllocateGeneralStat(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +96,7 @@ func (h *Handlers) AllocateGeneralStat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	writeJSON(w, http.StatusOK, game.BuildGeneralViewActionResult(state, 0))
 }
 
 func (h *Handlers) ResetGeneralStats(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +125,7 @@ func (h *Handlers) ResetGeneralStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusOK, game.BuildGeneralViewActionResult(result.State, result.AccountGold))
 }
 
 func (h *Handlers) ChangeGeneral(w http.ResponseWriter, r *http.Request) {
@@ -154,5 +154,5 @@ func (h *Handlers) ChangeGeneral(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, result)
+	writeJSON(w, http.StatusOK, game.BuildGeneralViewActionResult(result.State, result.AccountGold))
 }

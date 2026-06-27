@@ -58,7 +58,7 @@ func (s *Service) PurchaseBoost(playerID string, multiplier int, hours int) (Gam
 
 	now := time.Now()
 	cost := boostCost(multiplier, hours)
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateResourceState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 
@@ -125,7 +125,7 @@ func (s *Service) PurchaseCapacityBoost(playerID string, multiplier int, hours i
 
 	now := time.Now()
 	cost := boostCost(multiplier, hours)
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateResourceState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 

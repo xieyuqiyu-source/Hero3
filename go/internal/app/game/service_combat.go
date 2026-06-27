@@ -26,8 +26,14 @@ type AttackNpcRequest struct {
 
 // AttackNpcResponse 攻击 NPC 响应
 type AttackNpcResponse struct {
-	BattleReport BattleReport `json:"battleReport"`
-	State        GameState    `json:"state"`
+	BattleReport BattleReport  `json:"battleReport"`
+	Resources    ResourceState `json:"resources"`
+	Army         []ArmyUnit    `json:"army"`
+	General      *General      `json:"general,omitempty"`
+	Generals     []General     `json:"generals,omitempty"`
+	CityGold     FlexInt       `json:"cityGold"`
+	NpcState     *NpcState     `json:"npcState,omitempty"`
+	ServerTime   string        `json:"serverTime"`
 }
 
 // BattleSimulationRequest 战斗模拟请求：只计算战果，不扣兵、不保存战报。
@@ -60,7 +66,9 @@ type ScoutNpcResponse struct {
 	Success      bool         `json:"success"`
 	BattleReport BattleReport `json:"battleReport"`
 	NpcCity      *NpcCity     `json:"npcCity"`
-	State        GameState    `json:"state"`
+	Army         []ArmyUnit   `json:"army"`
+	NpcState     *NpcState    `json:"npcState,omitempty"`
+	ServerTime   string       `json:"serverTime"`
 }
 
 // AttackNpc 攻击 NPC 城池
@@ -84,7 +92,9 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 
 	now := time.Now()
 	var report BattleReport
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	capturedToGarrison := map[string]int{}
+	capturedSourceFaction := ""
+	state, err := s.repo.UpdateCombatState(playerID, now, func(state *GameState) error {
 		if state.General != nil {
 			applyHeroConfigToGeneral(state.General)
 		}
@@ -130,7 +140,10 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 			SameFaction:       true,
 		}
 		general.Dispatch(beforeCtx, activeTraits)
-		for unitType, count := range beforeCtx.CapturedToArmy {
+		capturedToArmy, routedToGarrison := splitCapturedUnitsByOwnerFaction(state.Player.Faction, beforeCtx.CapturedToArmy)
+		capturedToGarrison = mergeTroopMaps(routedToGarrison, beforeCtx.CapturedToGarrison)
+		capturedSourceFaction = npc.Faction
+		for unitType, count := range capturedToArmy {
 			mergeIntoArmy(state, unitType, count)
 		}
 
@@ -152,8 +165,11 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 		general.Dispatch(afterCombatCtx, activeTraits)
 
 		report = applyNpcBattleResult(state, npc, result, attackerUnits, mode, now)
-		if len(beforeCtx.CapturedToArmy) > 0 {
-			report.CapturedUnits = beforeCtx.CapturedToArmy
+		if len(capturedToArmy) > 0 {
+			report.CapturedUnits = capturedToArmy
+		}
+		if len(capturedToGarrison) > 0 {
+			report.CapturedToGarrison = cloneStringIntMap(capturedToGarrison)
 		}
 		mergeTraitOutcomes(&report, beforeCtx.Triggered)
 		mergeTraitOutcomes(&report, afterCombatCtx.Triggered)
@@ -197,6 +213,28 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 		return AttackNpcResponse{}, err
 	}
 
+	if len(capturedToGarrison) > 0 {
+		result, err := s.CreateGarrisonDetachment(CreateGarrisonDetachmentRequest{
+			OwnerPlayerID: state.Player.ID,
+			HostPlayerID:  state.Player.ID,
+			SourceType:    GarrisonSourceCaptured,
+			SourceID:      report.ID,
+			SourceFaction: capturedSourceFaction,
+			Troops:        capturedToGarrison,
+			Metadata: map[string]any{
+				"reason":   "beauty_trap_capture",
+				"reportId": report.ID,
+				"npcId":    npcID,
+			},
+		})
+		if err != nil {
+			return AttackNpcResponse{}, err
+		}
+		if result.Patch.ServerTime != "" {
+			state.ServerTime = result.Patch.ServerTime
+		}
+	}
+
 	if report.OverflowCityGold > 0 {
 		s.recordLedger(GoldLedgerEntry{
 			PlayerID:     state.Player.ID,
@@ -219,7 +257,13 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 
 	return AttackNpcResponse{
 		BattleReport: report,
-		State:        state,
+		Resources:    state.Resources,
+		Army:         state.Army,
+		General:      state.General,
+		Generals:     state.Generals,
+		CityGold:     state.CityGold,
+		NpcState:     state.NpcState,
+		ServerTime:   state.ServerTime,
 	}, nil
 }
 
@@ -307,7 +351,7 @@ func (s *Service) ScoutNpc(req ScoutNpcRequest) (ScoutNpcResponse, error) {
 	var report BattleReport
 	var scoutSuccess bool
 	var revealedNpc *NpcCity
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateCombatState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 
@@ -465,7 +509,9 @@ func (s *Service) ScoutNpc(req ScoutNpcRequest) (ScoutNpcResponse, error) {
 	response := ScoutNpcResponse{
 		Success:      scoutSuccess,
 		BattleReport: report,
-		State:        state,
+		Army:         state.Army,
+		NpcState:     state.NpcState,
+		ServerTime:   state.ServerTime,
 	}
 	if scoutSuccess {
 		response.NpcCity = revealedNpc
@@ -848,87 +894,75 @@ func (s *Service) ListReports(playerID string, page int, pageSize int) (BattleRe
 	}, nil
 }
 
-// MarkReportsRead 标记所有战报为已读
-func (s *Service) MarkReportsRead(playerID string) (GameState, error) {
+// MarkReportsRead 标记所有战报为已读，并返回战报未读数局部结果。
+func (s *Service) MarkReportsRead(playerID string) (ReportActionResult, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
-		return GameState{}, ErrPlayerNotFound
+		return ReportActionResult{}, ErrPlayerNotFound
 	}
 
 	if err := s.repo.MarkReportsRead(playerID); err != nil {
-		return GameState{}, err
+		return ReportActionResult{}, err
 	}
 
-	state, err := s.repo.GetState(playerID)
-	if err != nil {
-		return GameState{}, err
-	}
-
-	s.attachReportSummary(&state, playerID)
-	return state, nil
+	return s.buildReportActionResult(playerID)
 }
 
-// MarkSingleReportRead 标记单条战报为已读
-func (s *Service) MarkSingleReportRead(playerID string, reportID string) (GameState, error) {
+// MarkSingleReportRead 标记单条战报为已读，并返回战报未读数局部结果。
+func (s *Service) MarkSingleReportRead(playerID string, reportID string) (ReportActionResult, error) {
 	playerID = strings.TrimSpace(playerID)
 	reportID = strings.TrimSpace(reportID)
 	if playerID == "" {
-		return GameState{}, ErrPlayerNotFound
+		return ReportActionResult{}, ErrPlayerNotFound
 	}
 
 	if err := s.repo.MarkSingleReportRead(playerID, reportID); err != nil {
-		return GameState{}, err
+		return ReportActionResult{}, err
 	}
 
-	state, err := s.repo.GetState(playerID)
-	if err != nil {
-		return GameState{}, err
-	}
-
-	s.attachReportSummary(&state, playerID)
-	return state, nil
+	return s.buildReportActionResult(playerID)
 }
 
-// DeleteReport 删除单条战报
-func (s *Service) DeleteReport(playerID string, reportID string) (GameState, error) {
+// DeleteReport 删除单条战报，并返回战报未读数局部结果。
+func (s *Service) DeleteReport(playerID string, reportID string) (ReportActionResult, error) {
 	playerID = strings.TrimSpace(playerID)
 	reportID = strings.TrimSpace(reportID)
 	if playerID == "" {
-		return GameState{}, ErrPlayerNotFound
+		return ReportActionResult{}, ErrPlayerNotFound
 	}
 	if reportID == "" {
-		return GameState{}, errors.New("reportId is required")
+		return ReportActionResult{}, errors.New("reportId is required")
 	}
 
 	if err := s.repo.DeleteReport(playerID, reportID); err != nil {
-		return GameState{}, err
+		return ReportActionResult{}, err
 	}
 
-	state, err := s.repo.GetState(playerID)
-	if err != nil {
-		return GameState{}, err
-	}
-
-	s.attachReportSummary(&state, playerID)
-	return state, nil
+	return s.buildReportActionResult(playerID)
 }
 
-// DeleteAllReports 一键删除所有战报
-func (s *Service) DeleteAllReports(playerID string) (GameState, error) {
+// DeleteAllReports 一键删除所有战报，并返回战报未读数局部结果。
+func (s *Service) DeleteAllReports(playerID string) (ReportActionResult, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
-		return GameState{}, ErrPlayerNotFound
+		return ReportActionResult{}, ErrPlayerNotFound
 	}
 
 	if err := s.repo.DeleteAllReports(playerID); err != nil {
-		return GameState{}, err
+		return ReportActionResult{}, err
 	}
 
-	state, err := s.repo.GetState(playerID)
+	return s.buildReportActionResult(playerID)
+}
+
+// buildReportActionResult 统计战报未读数，避免战报写操作回读完整玩家状态。
+func (s *Service) buildReportActionResult(playerID string) (ReportActionResult, error) {
+	unread, err := s.repo.CountUnreadReports(playerID)
 	if err != nil {
-		return GameState{}, err
+		return ReportActionResult{}, err
 	}
-
-	s.attachReportSummary(&state, playerID)
-	return state, nil
+	return ReportActionResult{
+		UnreadMessageCount: unread,
+		ServerTime:         time.Now().UTC().Format(resourceDateLayout),
+	}, nil
 }

@@ -49,3 +49,71 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/news/mark-read:
+  post:
+    tags: [News]
+    summary: 标记军情已读
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId]
+            properties:
+              playerId:
+                type: string
+              reportId:
+                type: string
+                description: 传入时标记单条，不传时标记全部。
+    responses:
+      '200':
+        description: 返回未读数局部结果。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportActionResult'
+/api/v1/news/delete-report:
+  post:
+    tags: [News]
+    summary: 删除单条军情
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId, reportId]
+            properties:
+              playerId:
+                type: string
+              reportId:
+                type: string
+    responses:
+      '200':
+        description: 返回未读数局部结果。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportActionResult'
+/api/v1/news/delete-all-reports:
+  post:
+    tags: [News]
+    summary: 删除全部军情
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId]
+            properties:
+              playerId:
+                type: string
+    responses:
+      '200':
+        description: 返回未读数局部结果。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportActionResult'

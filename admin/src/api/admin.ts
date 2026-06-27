@@ -1,5 +1,12 @@
+/* 本文件封装 GM 后台调用后端管理接口的请求方法。 */
 import type {
   AccountSummary,
+  AdminSavePvpSeasonRequest,
+  AdminPvpSeasonListResponse,
+  AdminSettlePvpSeasonResponse,
+  AdminPvpOverviewResponse,
+  AdminAnnouncementPage,
+  Announcement,
   BalanceConfig,
   CombatConfig,
   FactionsConfig,
@@ -14,6 +21,10 @@ import type {
   MailPage,
   NpcConfig,
   NpcState,
+  PvpBattle,
+  PvpMarchActionResponse,
+  PvpStateResponse,
+  SaveAnnouncementPayload,
   TraitRegistryResponse,
   UnitsConfig,
 } from '@/types'
@@ -51,6 +62,46 @@ export const adminApi = {
   },
   getPlayerState(playerId: string) {
     return request<GameState>(`${API_BASE}/admin/players/${playerId}/state`)
+  },
+  getPvpOverview(playerId = '', limit = 100) {
+    const params = new URLSearchParams()
+    if (playerId) params.set('playerId', playerId)
+    if (limit > 0) params.set('limit', String(limit))
+    const query = params.toString()
+    return request<AdminPvpOverviewResponse>(`${API_BASE}/admin/pvp/overview${query ? `?${query}` : ''}`)
+  },
+  getPvpSeasons() {
+    return request<AdminPvpSeasonListResponse>(`${API_BASE}/admin/pvp/seasons`)
+  },
+  createPvpSeason(payload: AdminSavePvpSeasonRequest) {
+    return request<AdminPvpSeasonListResponse['seasons'][number]>(`${API_BASE}/admin/pvp/seasons`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  },
+  updatePvpSeason(seasonId: string, payload: AdminSavePvpSeasonRequest) {
+    return request<AdminPvpSeasonListResponse['seasons'][number]>(`${API_BASE}/admin/pvp/seasons/${seasonId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  },
+  settlePvpSeason(seasonId: string) {
+    return request<AdminSettlePvpSeasonResponse>(`${API_BASE}/admin/pvp/seasons/${seasonId}/settle`, { method: 'POST' })
+  },
+  setPvpProtection(playerId: string, protectionType: string, hours: number, reason = '') {
+    return request<PvpStateResponse>(`${API_BASE}/admin/pvp/players/${playerId}/protection`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ protectionType, hours, reason }),
+    })
+  },
+  forceResolvePvpMarch(marchId: string) {
+    return request<PvpBattle>(`${API_BASE}/admin/pvp/marches/${marchId}/force-resolve`, { method: 'POST' })
+  },
+  cancelPvpMarch(marchId: string) {
+    return request<PvpMarchActionResponse>(`${API_BASE}/admin/pvp/marches/${marchId}/cancel`, { method: 'POST' })
   },
   adjustResources(playerId: string, adjustments: Record<string, number>) {
     return request<{ state: GameState }>(`${API_BASE}/admin/resources/adjust`, {
@@ -271,5 +322,46 @@ export const adminApi = {
   },
   getPlayerMails(playerId: string, page = 1, pageSize = 10) {
     return request<MailPage>(`${API_BASE}/admin/players/${playerId}/mails?page=${page}&pageSize=${pageSize}`)
+  },
+  listAnnouncements(filter: { type?: string; status?: string; page?: number; pageSize?: number } = {}) {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(filter)) {
+      if (value !== undefined && value !== '') params.set(key, String(value))
+    }
+    const query = params.toString()
+    return request<AdminAnnouncementPage>(`${API_BASE}/admin/announcements${query ? `?${query}` : ''}`)
+  },
+  createAnnouncement(payload: SaveAnnouncementPayload) {
+    return request<Announcement>(`${API_BASE}/admin/announcements`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  },
+  updateAnnouncement(announcementId: string, payload: SaveAnnouncementPayload) {
+    return request<Announcement>(`${API_BASE}/admin/announcements/${announcementId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  },
+  publishAnnouncement(announcementId: string) {
+    return request<Announcement>(`${API_BASE}/admin/announcements/${announcementId}/publish`, { method: 'POST' })
+  },
+  scheduleAnnouncement(announcementId: string, startsAt: string) {
+    return request<Announcement>(`${API_BASE}/admin/announcements/${announcementId}/schedule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ startsAt }),
+    })
+  },
+  withdrawAnnouncement(announcementId: string) {
+    return request<Announcement>(`${API_BASE}/admin/announcements/${announcementId}/withdraw`, { method: 'POST' })
+  },
+  archiveAnnouncement(announcementId: string) {
+    return request<Announcement>(`${API_BASE}/admin/announcements/${announcementId}/archive`, { method: 'POST' })
+  },
+  deleteAnnouncement(announcementId: string) {
+    return request<{ status: string }>(`${API_BASE}/admin/announcements/${announcementId}`, { method: 'DELETE' })
   },
 }

@@ -29,7 +29,7 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
   const [now, setNow] = useState(Date.now())
   const containerRef = useRef<HTMLDivElement>(null)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
-  const setState = useGameStore((s) => s.setState)
+  const patchResourceAction = useGameStore((s) => s.patchResourceAction)
   const balance = useConfigStore((s) => s.balance)
   const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
   const boostEnd = useGameStore((s) => s.state?.productionBoostEnd)
@@ -88,7 +88,7 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
     setLoading(true)
     try {
       const result = await gameApi.purchaseBoost(activePlayerId, selectedMultiplier, hours)
-      setState(result.state)
+      patchResourceAction(result)
       toast.success(`产量 ×${selectedMultiplier} 加成已激活`)
       setOpen(false)
       setConfirmOpen(false)

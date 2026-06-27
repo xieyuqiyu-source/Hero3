@@ -88,7 +88,7 @@ const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, ow
   const [visible, setVisible] = useState(false)
   const [recruiting, setRecruiting] = useState(false)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
-  const setState = useGameStore((s) => s.setState)
+  const patchMilitaryAction = useGameStore((s) => s.patchMilitaryAction)
   const gameState = useGameStore((s) => s.state)
   const resources = useProjectedResources()
   const attack = getEffectiveUnitStat(gameState, 'attack', config.stats.attack ?? 0)
@@ -131,7 +131,7 @@ const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, ow
       const result = await gameApi.recruit(activePlayerId, unitId, amount)
       handleClose()
       // 延迟更新 state，等弹窗动画结束
-      setTimeout(() => setState(result.state), 200)
+      setTimeout(() => patchMilitaryAction(result), 200)
     } catch {
       // 错误由全局拦截器处理
     } finally {

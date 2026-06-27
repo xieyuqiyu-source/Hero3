@@ -38,6 +38,17 @@ func TestBalanceConfigLoadsMilitaryBuildingModifiers(t *testing.T) {
 	if levelTwenty[0].Key != StatInfantryRecruitSpeedBonus || math.Abs(levelTwenty[0].Value-11) > 1e-6 {
 		t.Fatalf("expected level 20 recruit speed bonus 11, got %+v", levelTwenty[0])
 	}
+	relayStation, exists := cfg.Buildings["relay_station"]
+	if !exists {
+		t.Fatal("expected relay_station config to exist")
+	}
+	relayLevelTwenty := relayStation.ModifiersByLevel[20]
+	if len(relayLevelTwenty) != 1 {
+		t.Fatalf("expected 1 relay station level 20 modifier, got %d", len(relayLevelTwenty))
+	}
+	if relayLevelTwenty[0].Key != StatMarchSpeedBonus || math.Abs(relayLevelTwenty[0].Value-0.2) > 1e-6 {
+		t.Fatalf("expected relay station level 20 march speed bonus 0.2, got %+v", relayLevelTwenty[0])
+	}
 }
 
 func TestMilitaryBuildingsApplyCombatModifiers(t *testing.T) {

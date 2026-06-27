@@ -4,7 +4,7 @@ import "testing"
 
 // 本文件验证玩法模块边界注册表。
 
-func TestGameplayModuleRegistryIncludesMailAndMiniGame(t *testing.T) {
+func TestGameplayModuleRegistryIncludesCoreModules(t *testing.T) {
 	mail, exists := GetGameplayModuleDefinition("mail")
 	if !exists {
 		t.Fatal("expected mail gameplay module to be registered")
@@ -19,6 +19,22 @@ func TestGameplayModuleRegistryIncludesMailAndMiniGame(t *testing.T) {
 	}
 	if minigame.RewardEntrypoint != "ApplyRewardsToStateWithContext" {
 		t.Fatalf("expected minigame reward entrypoint, got %q", minigame.RewardEntrypoint)
+	}
+
+	reinforcement, exists := GetGameplayModuleDefinition("reinforcement")
+	if !exists {
+		t.Fatal("expected reinforcement gameplay module to be registered")
+	}
+	if reinforcement.RepositoryPort != "ReinforcementRepository" {
+		t.Fatalf("expected reinforcement repository port, got %q", reinforcement.RepositoryPort)
+	}
+
+	pvp, exists := GetGameplayModuleDefinition(PVPModuleID)
+	if !exists {
+		t.Fatal("expected pvp gameplay module to be registered")
+	}
+	if pvp.RepositoryPort != "PvpRepository" {
+		t.Fatalf("expected pvp repository port, got %q", pvp.RepositoryPort)
 	}
 }
 
@@ -48,6 +64,12 @@ func TestBootstrapIncludesGameplayModules(t *testing.T) {
 	}
 	if !stringSliceContains(bootstrap.Modules, "minigame") {
 		t.Fatalf("expected bootstrap modules to include minigame, got %+v", bootstrap.Modules)
+	}
+	if !stringSliceContains(bootstrap.Modules, "reinforcement") {
+		t.Fatalf("expected bootstrap modules to include reinforcement, got %+v", bootstrap.Modules)
+	}
+	if !stringSliceContains(bootstrap.Modules, PVPModuleID) {
+		t.Fatalf("expected bootstrap modules to include pvp, got %+v", bootstrap.Modules)
 	}
 }
 

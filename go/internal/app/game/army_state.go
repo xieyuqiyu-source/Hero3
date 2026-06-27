@@ -19,6 +19,37 @@ func mergeIntoArmy(state *GameState, unitType string, count int) {
 	AddArmyUnit(state, unitType, count)
 }
 
+// splitCapturedUnitsByOwnerFaction 按玩家阵营拆分俘虏兵：本阵营进军队，非本阵营进驻防。
+func splitCapturedUnitsByOwnerFaction(ownerFaction string, captured map[string]int) (map[string]int, map[string]int) {
+	toArmy := map[string]int{}
+	toGarrison := map[string]int{}
+	for unitType, amount := range captured {
+		if amount <= 0 || unitType == "" {
+			continue
+		}
+		if _, ok := GetUnitConfig(ownerFaction, unitType); ok {
+			toArmy[unitType] += amount
+			continue
+		}
+		toGarrison[unitType] += amount
+	}
+	return toArmy, toGarrison
+}
+
+// mergeTroopMaps 合并多组兵力 map，并过滤空兵种和非正数。
+func mergeTroopMaps(groups ...map[string]int) map[string]int {
+	merged := map[string]int{}
+	for _, group := range groups {
+		for unitType, amount := range group {
+			if amount <= 0 || unitType == "" {
+				continue
+			}
+			merged[unitType] += amount
+		}
+	}
+	return merged
+}
+
 // addToArmy 给兵力切片增加指定兵种数量。
 func addToArmy(army *[]ArmyUnit, unitType string, amount int) {
 	if army == nil || unitType == "" || amount <= 0 {

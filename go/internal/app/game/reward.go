@@ -210,7 +210,7 @@ func (s *Service) GrantRewards(playerID string, rewards []Reward, ctx RewardGran
 
 func (s *Service) grantRewardsWithAccount(accountID string, playerID string, rewards []Reward, ctx RewardGrantContext, now time.Time) (Account, GameState, RewardApplyResult, error) {
 	var applyResult RewardApplyResult
-	account, state, err := s.repo.UpdateAccountPlayerState(accountID, playerID, now, func(account *Account, state *GameState) error {
+	account, state, err := s.repo.UpdateAccountRewardState(accountID, playerID, now, func(account *Account, state *GameState) error {
 		result, err := ApplyRewardsToStateWithContext(state, rewards, ctx, now)
 		if err != nil {
 			return err
@@ -242,7 +242,7 @@ func (s *Service) grantRewardsWithAccount(accountID string, playerID string, rew
 
 func (s *Service) grantRewardsToPlayerState(playerID string, rewards []Reward, ctx RewardGrantContext, now time.Time) (GameState, RewardApplyResult, error) {
 	var applyResult RewardApplyResult
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateRewardState(playerID, now, func(state *GameState) error {
 		result, err := ApplyRewardsToStateWithContext(state, rewards, ctx, now)
 		if err != nil {
 			return err

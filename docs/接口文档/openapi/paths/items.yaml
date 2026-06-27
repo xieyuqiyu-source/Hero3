@@ -1,0 +1,40 @@
+/api/v1/items/config:
+  get:
+    tags: [Game]
+    summary: 查询道具配置
+    responses:
+      '200':
+        description: 道具配置
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: object
+/api/v1/items/use:
+  post:
+    tags: [Game]
+    summary: 使用道具
+    description: 返回局部补丁，不再返回完整 GameState。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId, itemId, amount]
+            properties:
+              playerId:
+                type: string
+              itemId:
+                type: string
+              amount:
+                type: integer
+                minimum: 1
+    responses:
+      '200':
+        description: 使用成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UseItemResult'

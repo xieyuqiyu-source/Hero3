@@ -13,16 +13,11 @@
             $ref: '#/components/schemas/UpgradeBuildingRequest'
     responses:
       '200':
-        description: 升级已开始，返回更新后的游戏状态
+        description: 升级已开始，返回城池相关局部状态
         content:
           application/json:
             schema:
-              type: object
-              required:
-              - state
-              properties:
-                state:
-                  $ref: '#/components/schemas/GameState'
+              $ref: '#/components/schemas/CityActionResult'
       '404':
         description: 玩家或建筑不存在
         content:
@@ -66,17 +61,7 @@
         content:
           application/json:
             schema:
-              type: object
-              required:
-              - state
-              - upgraded
-              properties:
-                state:
-                  $ref: '#/components/schemas/GameState'
-                upgraded:
-                  type: integer
-                  description: 本次成功升级的建筑数量
-                  example: 3
+              $ref: '#/components/schemas/CityActionResult'
       '404':
         description: 玩家不存在
         content:
@@ -114,12 +99,7 @@
         content:
           application/json:
             schema:
-              type: object
-              required:
-              - state
-              properties:
-                state:
-                  $ref: '#/components/schemas/GameState'
+              $ref: '#/components/schemas/ResourceActionResult'
       '404':
         description: 玩家不存在
         content:

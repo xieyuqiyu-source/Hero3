@@ -168,12 +168,33 @@ AttackNpcResponse:
   type: object
   required:
   - battleReport
-  - state
+  - resources
+  - army
+  - cityGold
+  - serverTime
   properties:
     battleReport:
       $ref: '#/components/schemas/BattleReport'
-    state:
-      $ref: '#/components/schemas/GameState'
+    resources:
+      $ref: '#/components/schemas/ResourceState'
+    army:
+      type: array
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    general:
+      $ref: '#/components/schemas/General'
+    generals:
+      type: array
+      items:
+        $ref: '#/components/schemas/General'
+    cityGold:
+      type: integer
+      example: 120
+    npcState:
+      $ref: '#/components/schemas/NpcState'
+    serverTime:
+      type: string
+      format: date-time
 ScoutNpcRequest:
   type: object
   required:
@@ -189,13 +210,28 @@ ScoutNpcRequest:
 ScoutNpcResponse:
   type: object
   required:
+  - success
   - npcCity
-  - state
+  - army
+  - serverTime
   properties:
+    success:
+      type: boolean
+      example: true
+    battleReport:
+      $ref: '#/components/schemas/BattleReport'
     npcCity:
       $ref: '#/components/schemas/NpcCity'
-    state:
-      $ref: '#/components/schemas/GameState'
+      nullable: true
+    army:
+      type: array
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    npcState:
+      $ref: '#/components/schemas/NpcState'
+    serverTime:
+      type: string
+      format: date-time
 NpcConfig:
   type: object
   required:

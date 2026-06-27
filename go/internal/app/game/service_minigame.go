@@ -32,28 +32,35 @@ type MiniGameSummary struct {
 
 type MiniGameRedeemResult struct {
 	Record         MiniGameRecord `json:"record"`
-	State          GameState      `json:"state"`
+	Army           []ArmyUnit     `json:"army,omitempty"`
+	ServerTime     string         `json:"serverTime"`
 	RedeemedUnitID string         `json:"redeemedUnitId"`
 	RedeemedUnit   string         `json:"redeemedUnit"`
 	RedeemedAmount int            `json:"redeemedAmount"`
+	RedeemedTarget string         `json:"redeemedTarget"`
+	Garrison       *Reinforcement `json:"garrison,omitempty"`
 	GrantedRewards []Reward       `json:"grantedRewards,omitempty"`
 }
 
 type MiniGameRedeemAllResult struct {
-	State           GameState      `json:"state"`
+	Army            []ArmyUnit     `json:"army,omitempty"`
+	ServerTime      string         `json:"serverTime"`
 	RedeemedUnits   map[string]int `json:"redeemedUnits"`
 	RedeemedAmount  int            `json:"redeemedAmount"`
 	RedeemedRecords int            `json:"redeemedRecords"`
+	GarrisonedUnits map[string]int `json:"garrisonedUnits,omitempty"`
+	GarrisonRecords int            `json:"garrisonRecords,omitempty"`
 	SkippedUnits    map[string]int `json:"skippedUnits"`
 	SkippedRecords  int            `json:"skippedRecords"`
 	GrantedRewards  []Reward       `json:"grantedRewards,omitempty"`
 }
 
 type FishingBaitUseResult struct {
-	State          GameState `json:"state"`
-	BaitID         string    `json:"baitId"`
-	CityGoldCost   int       `json:"cityGoldCost"`
-	CityGoldRemain int       `json:"cityGoldRemain"`
+	BaitID         string   `json:"baitId"`
+	CityGold       *FlexInt `json:"cityGold,omitempty"`
+	ServerTime     string   `json:"serverTime"`
+	CityGoldCost   int      `json:"cityGoldCost"`
+	CityGoldRemain *int     `json:"cityGoldRemain,omitempty"`
 }
 
 func fishingBaitCost(baitID string) (int, bool) {
@@ -105,9 +112,11 @@ func (s *Service) UseFishingBait(playerID string, baitID string) (FishingBaitUse
 	now := time.Now()
 	refID := "fishing_bait_" + baitID
 	var state GameState
+	var cityGold *FlexInt
+	var cityGoldRemain *int
 	if cost > 0 {
 		var err error
-		state, err = s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+		state, err = s.repo.UpdateRewardState(playerID, now, func(state *GameState) error {
 			if int(state.CityGold) < cost {
 				return ErrInsufficientCityGold
 			}
@@ -129,19 +138,20 @@ func (s *Service) UseFishingBait(playerID string, baitID string) (FishingBaitUse
 			Reason:       "钓鱼鱼饵消耗",
 		})
 		s.publishCurrencyChanged(playerID, "", refID, LedgerRefMiniGameBait)
+		currentCityGold := state.CityGold
+		currentCityGoldRemain := int(state.CityGold)
+		cityGold = &currentCityGold
+		cityGoldRemain = &currentCityGoldRemain
 	} else {
-		var err error
-		state, err = s.repo.GetState(playerID)
-		if err != nil {
-			return FishingBaitUseResult{}, err
-		}
+		state.ServerTime = now.UTC().Format(resourceDateLayout)
 	}
 
 	return FishingBaitUseResult{
-		State:          state,
 		BaitID:         baitID,
+		CityGold:       cityGold,
+		ServerTime:     state.ServerTime,
 		CityGoldCost:   cost,
-		CityGoldRemain: int(state.CityGold),
+		CityGoldRemain: cityGoldRemain,
 	}, nil
 }
 
@@ -161,8 +171,10 @@ func (s *Service) RedeemMiniGameReward(playerID string, recordID string, amount 
 	var selectedRecord MiniGameRecord
 	var redeemedUnitID string
 	var redeemedUnit string
+	var redeemedTarget string
 	var grantedRewards []Reward
 	var applyResult RewardApplyResult
+	var pendingGarrison *CreateGarrisonDetachmentRequest
 	state, _, err := s.repo.UpdateMiniGamePlayerState(playerID, redeemedAt, func(state *GameState, records []MiniGameRecord) ([]MiniGameRecord, error) {
 		for i := range records {
 			record := records[i]
@@ -176,28 +188,49 @@ func (s *Service) RedeemMiniGameReward(playerID string, recordID string, amount 
 				return nil, ErrMiniGameStockShort
 			}
 			unitID, unitCfg, ok := FindFactionUnitByName(state.Player.Faction, record.RewardUnit)
-			if !ok {
-				return nil, ErrCrossFactionReward
-			}
-			reward := Reward{Type: RewardTypeUnit, ID: unitID, Amount: amount}
 			record.RemainingAmount -= amount
 			records[i] = record
-			effectResult, err := ExecuteEffectsOnState(state, rewardsToEffects("minigame", []Reward{reward}), EffectContext{
-				PlayerID: playerID,
-				RefType:  LedgerRefMiniGameRedeem,
-				RefID:    record.ID,
-				Reason:   "minigame_redeem",
-				Source:   "minigame",
-			}, redeemedAt)
-			if err != nil {
-				return nil, err
-			}
 			state.ServerTime = redeemedAt.UTC().Format(resourceDateLayout)
 			selectedRecord = record
-			redeemedUnitID = unitID
-			redeemedUnit = unitCfg.Name
-			grantedRewards = []Reward{reward}
-			applyResult = effectResult.Reward
+			if ok {
+				reward := Reward{Type: RewardTypeUnit, ID: unitID, Amount: amount}
+				effectResult, err := ExecuteEffectsOnState(state, rewardsToEffects("minigame", []Reward{reward}), EffectContext{
+					PlayerID: playerID,
+					RefType:  LedgerRefMiniGameRedeem,
+					RefID:    record.ID,
+					Reason:   "minigame_redeem",
+					Source:   "minigame",
+				}, redeemedAt)
+				if err != nil {
+					return nil, err
+				}
+				redeemedUnitID = unitID
+				redeemedUnit = unitCfg.Name
+				redeemedTarget = "army"
+				grantedRewards = []Reward{reward}
+				applyResult = effectResult.Reward
+				return records, nil
+			}
+			sourceFaction, crossUnitID, crossUnitCfg, exists := FindAnyFactionUnitByName(record.RewardUnit)
+			if !exists {
+				return nil, ErrUnitNotFound
+			}
+			redeemedUnitID = crossUnitID
+			redeemedUnit = crossUnitCfg.Name
+			redeemedTarget = "garrison"
+			pendingGarrison = &CreateGarrisonDetachmentRequest{
+				OwnerPlayerID: state.Player.ID,
+				HostPlayerID:  state.Player.ID,
+				SourceType:    GarrisonSourceEventReward,
+				SourceID:      record.ID,
+				SourceFaction: sourceFaction,
+				Troops:        map[string]int{crossUnitID: amount},
+				Metadata: map[string]any{
+					"gameType":   record.GameType,
+					"resultName": record.ResultName,
+					"rewardUnit": record.RewardUnit,
+				},
+			}
 			return records, nil
 		}
 		return nil, ErrMiniGameNotFound
@@ -206,15 +239,31 @@ func (s *Service) RedeemMiniGameReward(playerID string, recordID string, amount 
 		return MiniGameRedeemResult{}, err
 	}
 	s.flushRewardSideEffects(applyResult)
+	var garrison *Reinforcement
+	if pendingGarrison != nil {
+		garrisonResult, err := s.CreateGarrisonDetachment(*pendingGarrison)
+		if err != nil {
+			return MiniGameRedeemResult{}, err
+		}
+		state.Army = garrisonResult.Patch.Army
+		state.Generals = garrisonResult.Patch.Generals
+		state.GeneralAssignments = garrisonResult.Patch.GeneralAssignments
+		state.ServerTime = garrisonResult.Patch.ServerTime
+		record := garrisonResult.Reinforcement
+		garrison = &record
+	}
 	result := MiniGameRedeemResult{
 		Record:         selectedRecord,
-		State:          state,
+		Army:           state.Army,
+		ServerTime:     state.ServerTime,
 		RedeemedUnitID: redeemedUnitID,
 		RedeemedUnit:   redeemedUnit,
 		RedeemedAmount: amount,
+		RedeemedTarget: redeemedTarget,
+		Garrison:       garrison,
 		GrantedRewards: grantedRewards,
 	}
-	s.publishMiniGameRedeemEvents(playerID, result.Record.GameType, result.GrantedRewards, result.Record.ID, result.RedeemedAmount, result.State)
+	s.publishMiniGameRedeemEvents(playerID, result.Record.GameType, result.GrantedRewards, result.Record.ID, result.RedeemedAmount, state)
 	return result, nil
 }
 
@@ -229,11 +278,14 @@ func (s *Service) RedeemAllFactionMiniGameRewards(playerID string, gameType stri
 	}
 	redeemedAt := time.Now()
 	redeemedUnits := map[string]int{}
+	garrisonedUnits := map[string]int{}
 	skippedUnits := map[string]int{}
 	grantedRewards := []Reward{}
 	redeemedRecords := 0
+	garrisonRecords := 0
 	skippedRecords := 0
 	var applyResult RewardApplyResult
+	pendingGarrisons := []CreateGarrisonDetachmentRequest{}
 	state, _, err := s.repo.UpdateMiniGamePlayerState(playerID, redeemedAt, func(state *GameState, records []MiniGameRecord) ([]MiniGameRecord, error) {
 		applyResult = RewardApplyResult{Granted: map[string]int{}}
 		for i := range records {
@@ -242,28 +294,49 @@ func (s *Service) RedeemAllFactionMiniGameRewards(playerID string, gameType stri
 				continue
 			}
 			unitID, unitCfg, ok := FindFactionUnitByName(state.Player.Faction, record.RewardUnit)
-			if !ok {
+			amount := record.RemainingAmount
+			records[i].RemainingAmount = 0
+			if ok {
+				reward := Reward{Type: RewardTypeUnit, ID: unitID, Amount: amount}
+				effectResult, err := ExecuteEffectsOnState(state, rewardsToEffects("minigame", []Reward{reward}), EffectContext{
+					PlayerID: playerID,
+					RefType:  LedgerRefMiniGameRedeem,
+					RefID:    record.ID,
+					Reason:   "minigame_redeem",
+					Source:   "minigame",
+				}, redeemedAt)
+				if err != nil {
+					return nil, err
+				}
+				mergeRewardApplyResult(&applyResult, effectResult.Reward)
+				grantedRewards = append(grantedRewards, reward)
+				redeemedUnits[unitCfg.Name] += amount
+				redeemedRecords++
+				continue
+			}
+			sourceFaction, crossUnitID, crossUnitCfg, exists := FindAnyFactionUnitByName(record.RewardUnit)
+			if !exists {
+				records[i].RemainingAmount = amount
 				skippedUnits[record.RewardUnit] += record.RemainingAmount
 				skippedRecords++
 				continue
 			}
-			amount := record.RemainingAmount
-			reward := Reward{Type: RewardTypeUnit, ID: unitID, Amount: amount}
-			records[i].RemainingAmount = 0
-			effectResult, err := ExecuteEffectsOnState(state, rewardsToEffects("minigame", []Reward{reward}), EffectContext{
-				PlayerID: playerID,
-				RefType:  LedgerRefMiniGameRedeem,
-				RefID:    record.ID,
-				Reason:   "minigame_redeem",
-				Source:   "minigame",
-			}, redeemedAt)
-			if err != nil {
-				return nil, err
-			}
-			mergeRewardApplyResult(&applyResult, effectResult.Reward)
-			grantedRewards = append(grantedRewards, reward)
-			redeemedUnits[unitCfg.Name] += amount
+			garrisonedUnits[crossUnitCfg.Name] += amount
 			redeemedRecords++
+			garrisonRecords++
+			pendingGarrisons = append(pendingGarrisons, CreateGarrisonDetachmentRequest{
+				OwnerPlayerID: state.Player.ID,
+				HostPlayerID:  state.Player.ID,
+				SourceType:    GarrisonSourceEventReward,
+				SourceID:      record.ID,
+				SourceFaction: sourceFaction,
+				Troops:        map[string]int{crossUnitID: amount},
+				Metadata: map[string]any{
+					"gameType":   record.GameType,
+					"resultName": record.ResultName,
+					"rewardUnit": record.RewardUnit,
+				},
+			})
 		}
 		state.ServerTime = redeemedAt.UTC().Format(resourceDateLayout)
 		return records, nil
@@ -272,20 +345,36 @@ func (s *Service) RedeemAllFactionMiniGameRewards(playerID string, gameType stri
 		return MiniGameRedeemAllResult{}, err
 	}
 	s.flushRewardSideEffects(applyResult)
+	for _, pending := range pendingGarrisons {
+		garrisonResult, err := s.CreateGarrisonDetachment(pending)
+		if err != nil {
+			return MiniGameRedeemAllResult{}, err
+		}
+		state.Army = garrisonResult.Patch.Army
+		state.Generals = garrisonResult.Patch.Generals
+		state.GeneralAssignments = garrisonResult.Patch.GeneralAssignments
+		state.ServerTime = garrisonResult.Patch.ServerTime
+	}
 	total := 0
 	for _, amount := range redeemedUnits {
 		total += amount
 	}
+	for _, amount := range garrisonedUnits {
+		total += amount
+	}
 	result := MiniGameRedeemAllResult{
-		State:           state,
+		Army:            state.Army,
+		ServerTime:      state.ServerTime,
 		RedeemedUnits:   redeemedUnits,
 		RedeemedAmount:  total,
 		RedeemedRecords: redeemedRecords,
+		GarrisonedUnits: garrisonedUnits,
+		GarrisonRecords: garrisonRecords,
 		SkippedUnits:    skippedUnits,
 		SkippedRecords:  skippedRecords,
 		GrantedRewards:  grantedRewards,
 	}
-	s.publishMiniGameRedeemEvents(playerID, gameType, result.GrantedRewards, "", result.RedeemedAmount, result.State)
+	s.publishMiniGameRedeemEvents(playerID, gameType, result.GrantedRewards, "", result.RedeemedAmount, state)
 	return result, nil
 }
 

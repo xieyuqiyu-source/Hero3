@@ -11,7 +11,7 @@ const FillButton: FC = () => {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
-  const setState = useGameStore((s) => s.setState)
+  const patchResourceAction = useGameStore((s) => s.patchResourceAction)
   const resources = useGameStore((s) => s.state?.resources)
   const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
 
@@ -35,7 +35,7 @@ const FillButton: FC = () => {
     setLoading(true)
     try {
       const result = await gameApi.fillResourcesPaid(activePlayerId)
-      setState(result.state)
+      patchResourceAction(result)
       toast.success(`爆仓完成，消耗 ${result.cost} 城金`)
       setConfirmOpen(false)
     } catch (e: unknown) {

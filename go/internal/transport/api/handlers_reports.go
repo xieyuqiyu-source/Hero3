@@ -1,7 +1,6 @@
 package api
 
 import (
-	"hero3/internal/app/game"
 	"net/http"
 	"strconv"
 )
@@ -76,15 +75,15 @@ func (h *Handlers) MarkReportsRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var state game.GameState
+	var result any
 	var err error
 
 	if payload.ReportID != "" {
 		// 标记单条
-		state, err = h.gameService.MarkSingleReportRead(payload.PlayerID, payload.ReportID)
+		result, err = h.gameService.MarkSingleReportRead(payload.PlayerID, payload.ReportID)
 	} else {
 		// 标记全部
-		state, err = h.gameService.MarkReportsRead(payload.PlayerID)
+		result, err = h.gameService.MarkReportsRead(payload.PlayerID)
 	}
 
 	if err != nil {
@@ -92,7 +91,7 @@ func (h *Handlers) MarkReportsRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handlers) DeleteReport(w http.ResponseWriter, r *http.Request) {
@@ -107,13 +106,13 @@ func (h *Handlers) DeleteReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.gameService.DeleteReport(payload.PlayerID, payload.ReportID)
+	result, err := h.gameService.DeleteReport(payload.PlayerID, payload.ReportID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handlers) DeleteAllReports(w http.ResponseWriter, r *http.Request) {
@@ -127,11 +126,11 @@ func (h *Handlers) DeleteAllReports(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.gameService.DeleteAllReports(payload.PlayerID)
+	result, err := h.gameService.DeleteAllReports(payload.PlayerID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	writeJSON(w, http.StatusOK, result)
 }

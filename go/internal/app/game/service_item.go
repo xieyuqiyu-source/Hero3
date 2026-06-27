@@ -6,10 +6,10 @@ import (
 )
 
 type UseItemResult struct {
-	State   GameState      `json:"state"`
-	ItemID  string         `json:"itemId"`
-	Used    int            `json:"used"`
-	Effects map[string]int `json:"effects"`
+	Patch   ItemActionResult `json:"patch"`
+	ItemID  string           `json:"itemId"`
+	Used    int              `json:"used"`
+	Effects map[string]int   `json:"effects"`
 }
 
 func (s *Service) ListItemsConfig() ItemsConfig {
@@ -71,7 +71,7 @@ func (s *Service) UseItem(playerID string, itemID string, amount int) (UseItemRe
 	now := time.Now()
 	effects := map[string]int{}
 	var before, after coreAssetSnapshot
-	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateItemState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		before = snapshotCoreAssets(state)
@@ -89,6 +89,9 @@ func (s *Service) UseItem(playerID string, itemID string, amount int) (UseItemRe
 	if err != nil {
 		return UseItemResult{}, err
 	}
+	if err := s.applyPvpProtectionItemEffects(playerID, item, amount, now); err != nil {
+		return UseItemResult{}, err
+	}
 	s.publishEvent(GameEvent{
 		Type:     EventItemUsed,
 		PlayerID: playerID,
@@ -103,5 +106,19 @@ func (s *Service) UseItem(playerID string, itemID string, amount int) (UseItemRe
 	})
 	s.publishCoreAssetDiff(playerID, "item_use", itemID, before, after, now)
 	hydrateStateForResponse(&state, now)
-	return UseItemResult{State: state, ItemID: itemID, Used: amount, Effects: effects}, nil
+	return UseItemResult{Patch: BuildItemActionResult(state), ItemID: itemID, Used: amount, Effects: effects}, nil
+}
+
+// applyPvpProtectionItemEffects 应用道具中的 PVP 保护模块效果。
+func (s *Service) applyPvpProtectionItemEffects(playerID string, item ItemDefinition, amount int, now time.Time) error {
+	for _, effect := range item.Effects {
+		if strings.TrimSpace(effect.Type) != "pvp_protection" {
+			continue
+		}
+		duration := time.Duration(effect.DurationSeconds*amount) * time.Second
+		if _, err := s.SetPvpProtection(playerID, effect.ProtectionType, duration, "item:"+item.ID, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }

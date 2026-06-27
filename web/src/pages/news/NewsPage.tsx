@@ -23,7 +23,7 @@ const NewsPage: FC = () => {
   const [loading, setLoading] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
-  const setState = useGameStore((s) => s.setState)
+  const patchState = useGameStore((s) => s.patchState)
 
   const totalPages = Math.max(1, Math.ceil(totalReports / PAGE_SIZE))
 
@@ -62,7 +62,7 @@ const NewsPage: FC = () => {
     if (!report.read && activePlayerId) {
       setReports((items) => items.map((item) => item.id === report.id ? { ...item, read: true } : item))
       gameApi.markReportsRead(activePlayerId, report.id).then((res) => {
-        setState(res.state)
+        patchState({ unreadMessageCount: res.unreadMessageCount, serverTime: res.serverTime })
       }).catch(() => {})
     }
   }
@@ -95,7 +95,7 @@ const NewsPage: FC = () => {
     e.stopPropagation()
     if (!activePlayerId) return
     gameApi.deleteReport(activePlayerId, reportId).then((res) => {
-      setState(res.state)
+      patchState({ unreadMessageCount: res.unreadMessageCount, serverTime: res.serverTime })
       loadReports(currentPage)
     }).catch(() => {})
   }
@@ -103,7 +103,7 @@ const NewsPage: FC = () => {
   const handleDeleteAll = () => {
     if (!activePlayerId) return
     gameApi.deleteAllReports(activePlayerId).then((res) => {
-      setState(res.state)
+      patchState({ unreadMessageCount: res.unreadMessageCount, serverTime: res.serverTime })
       setCurrentPage(1)
       loadReports(1)
     }).catch(() => {})

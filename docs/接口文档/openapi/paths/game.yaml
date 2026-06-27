@@ -44,3 +44,159 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/game/summary:
+  get:
+    tags:
+    - Game
+    summary: 获取玩家摘要视图
+    operationId: getGameSummary
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      description: 玩家存档 ID。
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 玩家摘要视图
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerSummaryView'
+      '400':
+        description: 缺少玩家存档 ID
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/city/view:
+  get:
+    tags:
+    - City
+    summary: 获取城池视图
+    operationId: getCityView
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      description: 玩家存档 ID。
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 城池、建筑和资源田视图
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CityView'
+      '400':
+        description: 缺少玩家存档 ID
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/resources/view:
+  get:
+    tags:
+    - City
+    summary: 获取资源视图
+    operationId: getResourceView
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      description: 玩家存档 ID。
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 资源栏和产量视图
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceView'
+      '400':
+        description: 缺少玩家存档 ID
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/military/view:
+  get:
+    tags:
+    - Military
+    summary: 获取军事视图
+    operationId: getMilitaryView
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      description: 玩家存档 ID。
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 兵力、征兵队列和武将摘要视图
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MilitaryView'
+      '400':
+        description: 缺少玩家存档 ID
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/inventory/view:
+  get:
+    tags:
+    - Game
+    summary: 获取背包视图
+    operationId: getInventoryView
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      description: 玩家存档 ID。
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 背包视图
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryView'
+      '400':
+        description: 缺少玩家存档 ID
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/generals/view:
+  get:
+    tags:
+    - Military
+    summary: 获取武将视图
+    operationId: getGeneralsView
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      description: 玩家存档 ID。
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 武将和派驻视图
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeneralsView'
+      '400':
+        description: 缺少玩家存档 ID
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

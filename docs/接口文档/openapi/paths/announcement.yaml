@@ -1,0 +1,357 @@
+/api/v1/announcements:
+  get:
+    tags:
+    - Announcement
+    summary: 获取玩家可见公告列表
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    - name: type
+      in: query
+      schema:
+        type: string
+        enum: [system, maintenance, update, activity, compensation, emergency]
+    - name: includeArchived
+      in: query
+      schema:
+        type: boolean
+        default: false
+    - name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    - name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+    responses:
+      '200':
+        description: 公告分页结果
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementPage'
+/api/v1/announcements/popups:
+  get:
+    tags:
+    - Announcement
+    summary: 获取玩家待弹窗公告队列
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 公告弹窗摘要列表
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementPopupPage'
+/api/v1/announcements/{announcementId}:
+  get:
+    tags:
+    - Announcement
+    summary: 获取公告详情
+    parameters:
+    - name: announcementId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 公告详情
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementDetail'
+      '404':
+        description: 公告不存在或当前玩家不可见
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/announcements/{announcementId}/read:
+  post:
+    tags:
+    - Announcement
+    summary: 标记公告已读
+    parameters:
+    - name: announcementId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId]
+            properties:
+              playerId:
+                type: string
+    responses:
+      '200':
+        description: 玩家公告阅读状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementReadState'
+/api/v1/announcements/{announcementId}/popup-shown:
+  post:
+    tags:
+    - Announcement
+    summary: 记录公告弹窗已展示
+    parameters:
+    - name: announcementId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId]
+            properties:
+              playerId:
+                type: string
+    responses:
+      '200':
+        description: 玩家公告弹窗状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementReadState'
+/api/v1/announcements/{announcementId}/dismiss:
+  post:
+    tags:
+    - Announcement
+    summary: 关闭公告弹窗并记录忽略状态
+    parameters:
+    - name: announcementId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId]
+            properties:
+              playerId:
+                type: string
+    responses:
+      '200':
+        description: 玩家公告弹窗状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnnouncementReadState'
+/api/v1/admin/announcements:
+  get:
+    tags:
+    - Admin
+    - Announcement
+    summary: GM 获取公告列表
+    parameters:
+    - name: type
+      in: query
+      schema:
+        type: string
+        enum: [system, maintenance, update, activity, compensation, emergency]
+    - name: status
+      in: query
+      schema:
+        type: string
+        enum: [draft, scheduled, published, withdrawn, archived]
+    - name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    - name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+    responses:
+      '200':
+        description: GM 公告分页结果
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminAnnouncementPage'
+  post:
+    tags:
+    - Admin
+    - Announcement
+    summary: GM 新建公告
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SaveAnnouncementRequest'
+    responses:
+      '201':
+        description: 已创建公告
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Announcement'
+/api/v1/admin/announcements/{announcementId}:
+  put:
+    tags:
+    - Admin
+    - Announcement
+    summary: GM 编辑公告
+    parameters:
+    - name: announcementId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SaveAnnouncementRequest'
+    responses:
+      '200':
+        description: 已更新公告
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Announcement'
+  delete:
+    tags:
+    - Admin
+    - Announcement
+    summary: GM 删除草稿公告
+    parameters:
+    - name: announcementId
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 删除成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteResponse'
+/api/v1/admin/announcements/{announcementId}/publish:
+  post:
+    tags:
+    - Admin
+    - Announcement
+    summary: GM 立即发布公告
+    parameters:
+    - name: announcementId
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 已发布公告
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Announcement'
+/api/v1/admin/announcements/{announcementId}/schedule:
+  post:
+    tags:
+    - Admin
+    - Announcement
+    summary: GM 定时发布公告
+    parameters:
+    - name: announcementId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [startsAt]
+            properties:
+              startsAt:
+                type: string
+                format: date-time
+    responses:
+      '200':
+        description: 已设为定时发布
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Announcement'
+/api/v1/admin/announcements/{announcementId}/withdraw:
+  post:
+    tags:
+    - Admin
+    - Announcement
+    summary: GM 撤回公告
+    parameters:
+    - name: announcementId
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 已撤回公告
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Announcement'
+/api/v1/admin/announcements/{announcementId}/archive:
+  post:
+    tags:
+    - Admin
+    - Announcement
+    summary: GM 归档公告
+    parameters:
+    - name: announcementId
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 已归档公告
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Announcement'

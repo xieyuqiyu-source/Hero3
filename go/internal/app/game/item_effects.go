@@ -31,6 +31,8 @@ func itemEffectsToPipelineEffects(state *GameState, item ItemDefinition, count i
 	rewards := make([]Reward, 0, len(item.Effects))
 	for _, effect := range item.Effects {
 		switch effect.Type {
+		case "pvp_protection":
+			continue
 		case "general":
 			generalID := strings.TrimSpace(effect.GeneralID)
 			if generalID == "" {

@@ -72,7 +72,7 @@ func (h *Handlers) AddGold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.gameService.AddGold(payload.PlayerID, payload.Amount, payload.Reason)
+	result, err := h.gameService.AddGold(payload.PlayerID, payload.Amount, payload.Reason)
 	if err != nil {
 		status := http.StatusBadRequest
 		switch {
@@ -85,7 +85,7 @@ func (h *Handlers) AddGold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handlers) DeductGold(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +98,7 @@ func (h *Handlers) DeductGold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.gameService.DeductGold(payload.PlayerID, payload.Amount, payload.Reason)
+	result, err := h.gameService.DeductGold(payload.PlayerID, payload.Amount, payload.Reason)
 	if err != nil {
 		status := http.StatusBadRequest
 		switch {
@@ -113,7 +113,7 @@ func (h *Handlers) DeductGold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handlers) ExchangeGold(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +134,7 @@ func (h *Handlers) ExchangeGold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.gameService.ExchangeGoldToCityGold(payload.AccountID, payload.PlayerID, payload.Amount)
+	result, err := h.gameService.ExchangeGoldToCityGold(payload.AccountID, payload.PlayerID, payload.Amount)
 	if err != nil {
 		status := http.StatusBadRequest
 		switch {
@@ -153,9 +153,7 @@ func (h *Handlers) ExchangeGold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 读取最新账户信息，返回更新后的账户金币
-	account, _ := h.gameService.GetAccountByID(payload.AccountID)
-	writeJSON(w, http.StatusOK, map[string]any{"state": state, "accountGold": account.Gold})
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handlers) ReverseExchangeGold(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +174,7 @@ func (h *Handlers) ReverseExchangeGold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.gameService.ExchangeCityGoldToGold(payload.AccountID, payload.PlayerID, payload.CityGoldAmount)
+	result, err := h.gameService.ExchangeCityGoldToGold(payload.AccountID, payload.PlayerID, payload.CityGoldAmount)
 	if err != nil {
 		status := http.StatusBadRequest
 		switch {
@@ -197,9 +195,7 @@ func (h *Handlers) ReverseExchangeGold(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 读取最新账户信息，返回更新后的账户金币
-	account, _ := h.gameService.GetAccountByID(payload.AccountID)
-	writeJSON(w, http.StatusOK, map[string]any{"state": state, "accountGold": account.Gold})
+	writeJSON(w, http.StatusOK, result)
 }
 
 // --- Buff 管理 ---
