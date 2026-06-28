@@ -17,7 +17,7 @@ jobs:
   deploy:
     name: Build and deploy on server
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 30
 
     env:
       HERO3_HEALTH_URL: https://hero3.ccoos.cn/healthz
@@ -52,7 +52,7 @@ jobs:
           test -n "$HERO3_SSH_USER"
           git archive --format=tar.gz -o /tmp/hero3-source.$GITHUB_SHA.tar.gz "$GITHUB_SHA"
           SSH_OPTS="-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 -i ~/.ssh/hero3_deploy_key -p $HERO3_SSH_PORT"
-          RSYNC_RSH="ssh $SSH_OPTS" rsync -azc --info=stats2 /tmp/hero3-source.$GITHUB_SHA.tar.gz "$HERO3_SSH_USER@$HERO3_SSH_HOST:/tmp/hero3-source.$GITHUB_SHA.tar.gz"
+          scp $SSH_OPTS /tmp/hero3-source.$GITHUB_SHA.tar.gz "$HERO3_SSH_USER@$HERO3_SSH_HOST:/tmp/hero3-source.$GITHUB_SHA.tar.gz"
 
       - name: Build and deploy on server
         env:
