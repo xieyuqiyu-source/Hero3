@@ -118,6 +118,8 @@ func (s *Service) ChangeGeneral(playerID string, generalID string, itemID string
 	}
 
 	now := time.Now()
+	beforeItemAmount := 0
+	afterItemAmount := 0
 	state, err := s.repo.UpdateGeneralState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
@@ -139,9 +141,11 @@ func (s *Service) ChangeGeneral(playerID string, generalID string, itemID string
 			if _, ok := GetItemDefinition(itemID); !ok {
 				return ErrItemNotFound
 			}
+			beforeItemAmount = inventoryItemAmount(state, itemID)
 			if !consumeItemFromInventory(state, itemID, 1, now) {
 				return ErrInsufficientItem
 			}
+			afterItemAmount = inventoryItemAmount(state, itemID)
 		}
 
 		EnsureGeneralRoster(state, now)
@@ -162,6 +166,20 @@ func (s *Service) ChangeGeneral(playerID string, generalID string, itemID string
 	})
 	if err != nil {
 		return GeneralActionResult{}, err
+	}
+	if itemID != "" {
+		_ = s.repo.WriteItemLedger(ItemLedgerEntry{
+			ID:           "item_ledger_" + randomID(12),
+			PlayerID:     playerID,
+			ItemID:       itemID,
+			ChangeAmount: -1,
+			BeforeAmount: beforeItemAmount,
+			AfterAmount:  afterItemAmount,
+			Reason:       "item_use",
+			RefType:      "general_change",
+			RefID:        generalID,
+			CreatedAt:    now.UTC().Format(resourceDateLayout),
+		})
 	}
 
 	accountGold := 0

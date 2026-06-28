@@ -15,7 +15,9 @@ import type {
   GeneralsConfig,
   GoldLedgerEntry,
   HealthState,
+  InventoryView,
   ItemDefinition,
+  ItemLedgerPage,
   Mail,
   MailAttachment,
   MailPage,
@@ -112,6 +114,35 @@ export const adminApi = {
   },
   getItemsConfig() {
     return request<Record<string, ItemDefinition>>(`${API_BASE}/items/config`)
+  },
+  getAdminItemsConfig() {
+    return request<Record<string, ItemDefinition>>(`${API_BASE}/admin/items/config`)
+  },
+  updateItemsConfig(config: Record<string, ItemDefinition>) {
+    return request<Record<string, ItemDefinition>>(`${API_BASE}/admin/items/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+  },
+  validateItemsConfig(config: Record<string, ItemDefinition>) {
+    return request<{ ok: boolean; error?: string }>(`${API_BASE}/admin/items/config/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+  },
+  getPlayerInventory(playerId: string) {
+    return request<InventoryView>(`${API_BASE}/admin/items/inventory?playerId=${encodeURIComponent(playerId)}`)
+  },
+  getItemLedger(params: { playerId?: string; itemId?: string; refType?: string; limit?: number; offset?: number }) {
+    const query = new URLSearchParams()
+    if (params.playerId) query.set('playerId', params.playerId)
+    if (params.itemId) query.set('itemId', params.itemId)
+    if (params.refType) query.set('refType', params.refType)
+    if (params.limit) query.set('limit', String(params.limit))
+    if (params.offset) query.set('offset', String(params.offset))
+    return request<ItemLedgerPage>(`${API_BASE}/admin/items/ledger?${query.toString()}`)
   },
   grantItem(playerId: string, itemId: string, amount: number) {
     return request<{ state: GameState }>(`${API_BASE}/admin/items/grant`, {

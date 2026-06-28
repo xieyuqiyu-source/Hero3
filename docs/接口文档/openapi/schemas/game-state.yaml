@@ -243,6 +243,10 @@ InventoryView:
       type: object
       additionalProperties:
         $ref: '#/components/schemas/ItemStack'
+    inventorySlots:
+      type: array
+      items:
+        $ref: '#/components/schemas/ItemStack'
     serverTime:
       type: string
       format: date-time
@@ -332,6 +336,9 @@ ItemStack:
   - itemId
   - amount
   properties:
+    slotId:
+      type: string
+      example: slot_0001
     itemId:
       type: string
       example: general_exp_small

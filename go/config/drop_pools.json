@@ -1,0 +1,11 @@
+{
+  "starter_item_pool": {
+    "id": "starter_item_pool",
+    "rolls": 1,
+    "items": [
+      { "type": "item", "id": "resource_pack_small", "amount": 1, "weight": 6000 },
+      { "type": "item", "id": "general_exp_small", "amount": 1, "weight": 3000 },
+      { "type": "item", "id": "recruit_ticket_small", "amount": 1, "weight": 1000 }
+    ]
+  }
+}

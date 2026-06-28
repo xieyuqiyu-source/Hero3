@@ -97,7 +97,7 @@ func (r *MySQLRepository) GetInventoryView(playerID string) (game.InventoryView,
 	if state.Inventory == nil {
 		state.Inventory = map[string]game.ItemStack{}
 	}
-	return game.InventoryView{Inventory: state.Inventory, ServerTime: state.ServerTime}, nil
+	return game.InventoryView{Inventory: state.Inventory, InventorySlots: state.InventorySlots, ServerTime: state.ServerTime}, nil
 }
 
 // GetGeneralsView 直接读取武将页面需要的武将、占用和 Buff。
@@ -163,11 +163,11 @@ func (r *MySQLRepository) loadViewState(playerID string, options viewLoadOptions
 		}
 	}
 	if options.inventory {
-		inventory, found, err := loadPlayerInventory(r.db, playerID)
+		inventory, slots, found, err := loadPlayerInventory(r.db, playerID)
 		if err != nil {
 			return game.GameState{}, err
 		}
-		if err := applyAuthoritativeInventory(&state, inventory, found); err != nil {
+		if err := applyAuthoritativeInventory(&state, inventory, slots, found); err != nil {
 			return game.GameState{}, err
 		}
 	}

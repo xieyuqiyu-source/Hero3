@@ -1,143 +1,218 @@
 {
-  "general_exp_small": {
-    "id": "general_exp_small",
-    "name": "将领小经验包",
-    "description": "使用后为当前将领增加 500 经验。",
-    "type": "consumable",
-    "rarity": "common",
-    "usable": true,
+  "general_change_card": {
+    "id": "general_change_card",
+    "name": "换将卡",
+    "description": "用于更换当前存档将领。换将后保留等级和经验，四维加点重置。",
+    "category": "token",
+    "quality": "epic",
+    "usable": false,
     "stackable": true,
-    "maxStack": 999999,
-    "useTarget": "current_general",
-    "effects": [
-      { "type": "general_exp", "amount": 500 }
-    ],
-    "metadata": { "version": 1 }
-  },
-  "general_exp_medium": {
-    "id": "general_exp_medium",
-    "name": "将领中经验包",
-    "description": "使用后为当前将领增加 2500 经验。",
-    "type": "consumable",
-    "rarity": "rare",
-    "usable": true,
-    "stackable": true,
-    "maxStack": 999999,
-    "useTarget": "current_general",
-    "effects": [
-      { "type": "general_exp", "amount": 2500 }
-    ],
-    "metadata": { "version": 1 }
+    "maxStack": 999,
+    "bindType": "bound",
+    "useTarget": "general_change",
+    "confirmOnUse": "auto",
+    "effects": [],
+    "metadata": {
+      "reservedFor": "general_change",
+      "version": 1
+    }
   },
   "general_exp_large": {
     "id": "general_exp_large",
     "name": "将领大经验包",
-    "description": "使用后为当前将领增加 10000 经验。",
-    "type": "consumable",
-    "rarity": "epic",
+    "description": "使用后为当前将领增加 200000 经验。",
+    "category": "general_exp",
+    "quality": "epic",
     "usable": true,
     "stackable": true,
-    "maxStack": 999999,
+    "maxStack": 999,
+    "bindType": "bound",
     "useTarget": "current_general",
-    "effects": [
-      { "type": "general_exp", "amount": 10000 }
-    ],
-    "metadata": { "version": 1 }
-  },
-  "resource_pack_small": {
-    "id": "resource_pack_small",
-    "name": "小资源包",
-    "description": "使用后获得少量木材、石料、铁矿和粮食，受仓库上限限制。",
-    "type": "consumable",
-    "rarity": "common",
-    "usable": true,
-    "stackable": true,
-    "maxStack": 999999,
-    "useTarget": "player",
-    "effects": [
-      { "type": "resources", "resources": { "wood": 1000, "stone": 1000, "iron": 1000, "food": 1000 } }
-    ],
-    "metadata": { "version": 1 }
-  },
-  "resource_pack_medium": {
-    "id": "resource_pack_medium",
-    "name": "中资源包",
-    "description": "使用后获得一批木材、石料、铁矿和粮食，受仓库上限限制。",
-    "type": "consumable",
-    "rarity": "rare",
-    "usable": true,
-    "stackable": true,
-    "maxStack": 999999,
-    "useTarget": "player",
-    "effects": [
-      { "type": "resources", "resources": { "wood": 5000, "stone": 5000, "iron": 5000, "food": 5000 } }
-    ],
-    "metadata": { "version": 1 }
-  },
-  "resource_pack_large": {
-    "id": "resource_pack_large",
-    "name": "大资源包",
-    "description": "使用后获得大量木材、石料、铁矿和粮食，受仓库上限限制。",
-    "type": "consumable",
-    "rarity": "epic",
-    "usable": true,
-    "stackable": true,
-    "maxStack": 999999,
-    "useTarget": "player",
-    "effects": [
-      { "type": "resources", "resources": { "wood": 20000, "stone": 20000, "iron": 20000, "food": 20000 } }
-    ],
-    "metadata": { "version": 1 }
-  },
-  "recruit_ticket_small": {
-    "id": "recruit_ticket_small",
-    "name": "小征募券",
-    "description": "使用后获得本阵营基础步兵 50 名。",
-    "type": "consumable",
-    "rarity": "common",
-    "usable": true,
-    "stackable": true,
-    "maxStack": 999999,
-    "useTarget": "player",
+    "confirmOnUse": "auto",
     "effects": [
       {
-        "type": "unit_by_faction",
-        "amount": 50,
-        "unitByFaction": {
-          "wei": "qingZhouArmy",
-          "shu": "greedyWolf",
-          "wu": "shadowGuard"
-        }
+        "type": "general_exp",
+        "amount": 200000
       }
     ],
-    "metadata": { "version": 1 }
+    "metadata": {
+      "version": 1
+    }
+  },
+  "general_exp_medium": {
+    "id": "general_exp_medium",
+    "name": "将领中经验包",
+    "description": "使用后为当前将领增加 50000 经验。",
+    "category": "general_exp",
+    "quality": "rare",
+    "usable": true,
+    "stackable": true,
+    "maxStack": 999,
+    "bindType": "bound",
+    "useTarget": "current_general",
+    "confirmOnUse": "auto",
+    "effects": [
+      {
+        "type": "general_exp",
+        "amount": 50000
+      }
+    ],
+    "metadata": {
+      "version": 1
+    }
+  },
+  "general_exp_small": {
+    "id": "general_exp_small",
+    "name": "将领小经验包",
+    "description": "使用后为当前将领增加 10000 经验。",
+    "category": "general_exp",
+    "quality": "common",
+    "usable": true,
+    "stackable": true,
+    "maxStack": 999,
+    "bindType": "bound",
+    "useTarget": "current_general",
+    "confirmOnUse": "auto",
+    "effects": [
+      {
+        "type": "general_exp",
+        "amount": 10000
+      }
+    ],
+    "metadata": {
+      "version": 1
+    }
   },
   "pvp_truce_8h": {
     "id": "pvp_truce_8h",
     "name": "免战令",
     "description": "使用后获得 8 小时 PVP 主动免战保护，主动攻击会打破该保护。",
-    "type": "consumable",
-    "rarity": "rare",
+    "category": "pvp_item",
+    "quality": "rare",
     "usable": true,
     "stackable": true,
-    "maxStack": 999999,
+    "maxStack": 999,
+    "bindType": "bound",
     "useTarget": "player",
+    "confirmOnUse": "auto",
     "effects": [
-      { "type": "pvp_protection", "protectionType": "manual", "durationSeconds": 28800 }
+      {
+        "type": "pvp_protection",
+        "protectionType": "manual",
+        "durationSeconds": 28800
+      }
     ],
-    "metadata": { "version": 1, "module": "pvp" }
+    "metadata": {
+      "module": "pvp",
+      "version": 1
+    }
   },
-  "general_change_card": {
-    "id": "general_change_card",
-    "name": "换将卡",
-    "description": "用于更换当前存档将领。换将后保留等级和经验，四维加点重置。",
-    "type": "token",
-    "rarity": "epic",
-    "usable": false,
+  "recruit_ticket_small": {
+    "id": "recruit_ticket_small",
+    "name": "小征募券",
+    "description": "使用后获得本阵营基础步兵 50 名。",
+    "category": "recruit_ticket",
+    "quality": "common",
+    "usable": true,
     "stackable": true,
-    "maxStack": 999999,
-    "useTarget": "general_change",
-    "effects": [],
-    "metadata": { "version": 1, "reservedFor": "general_change" }
+    "maxStack": 999,
+    "bindType": "bound",
+    "useTarget": "player",
+    "confirmOnUse": "auto",
+    "effects": [
+      {
+        "type": "unit_by_faction",
+        "amount": 50,
+        "unitByFaction": {
+          "shu": "greedyWolf",
+          "wei": "qingZhouArmy",
+          "wu": "shadowGuard"
+        }
+      }
+    ],
+    "metadata": {
+      "version": 1
+    }
+  },
+  "resource_pack_large": {
+    "id": "resource_pack_large",
+    "name": "大资源包",
+    "description": "使用后获得大量木材、石料、铁矿和粮食，受仓库上限限制。",
+    "category": "resource_pack",
+    "quality": "epic",
+    "usable": true,
+    "stackable": true,
+    "maxStack": 999,
+    "bindType": "bound",
+    "useTarget": "player",
+    "confirmOnUse": "auto",
+    "effects": [
+      {
+        "type": "resources",
+        "resources": {
+          "food": 320000,
+          "iron": 320000,
+          "stone": 320000,
+          "wood": 320000
+        }
+      }
+    ],
+    "metadata": {
+      "version": 1
+    }
+  },
+  "resource_pack_medium": {
+    "id": "resource_pack_medium",
+    "name": "中资源包",
+    "description": "使用后获得一批木材、石料、铁矿和粮食，受仓库上限限制。",
+    "category": "resource_pack",
+    "quality": "rare",
+    "usable": true,
+    "stackable": true,
+    "maxStack": 999,
+    "bindType": "bound",
+    "useTarget": "player",
+    "confirmOnUse": "auto",
+    "effects": [
+      {
+        "type": "resources",
+        "resources": {
+          "food": 100000,
+          "iron": 10000,
+          "stone": 10000,
+          "wood": 10000
+        }
+      }
+    ],
+    "metadata": {
+      "version": 1
+    }
+  },
+  "resource_pack_small": {
+    "id": "resource_pack_small",
+    "name": "小资源包",
+    "description": "使用后获得少量木材、石料、铁矿和粮食，受仓库上限限制。",
+    "category": "resource_pack",
+    "quality": "common",
+    "usable": true,
+    "stackable": true,
+    "maxStack": 999,
+    "bindType": "bound",
+    "useTarget": "player",
+    "confirmOnUse": "auto",
+    "effects": [
+      {
+        "type": "resources",
+        "resources": {
+          "food": 30000,
+          "iron": 30000,
+          "stone": 30000,
+          "wood": 30000
+        }
+      }
+    ],
+    "metadata": {
+      "version": 1
+    }
   }
 }

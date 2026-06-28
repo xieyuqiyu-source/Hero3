@@ -63,6 +63,7 @@ func applyAuthoritativeBuildings(state *game.GameState, buildings []game.Buildin
 		return errPlayerBuildingsMissing
 	}
 	state.Buildings = buildings
+	game.EnsureCoreBuildings(state)
 	return nil
 }
 

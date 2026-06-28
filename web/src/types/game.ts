@@ -122,6 +122,7 @@ export interface GeneralViewActionResult {
 }
 
 export interface ItemStack {
+  slotId?: string
   itemId: string
   amount: number
   obtainedAt?: string
@@ -141,13 +142,17 @@ export interface ItemDefinition {
   id: string
   name: string
   description: string
-  type: string
-  rarity: string
+  category?: string
+  quality?: string
+  type?: string
+  rarity?: string
   icon?: string
   usable: boolean
   stackable: boolean
   maxStack: number
+  bindType?: string
   useTarget: string
+  confirmOnUse?: 'auto' | 'always' | 'never' | string
   effects: ItemEffect[]
   metadata?: Record<string, unknown>
 }
@@ -453,6 +458,7 @@ export interface ReportActionResult {
 
 export interface ItemActionResult {
   inventory?: Record<string, ItemStack>
+  inventorySlots?: ItemStack[]
   resources?: ResourceState
   army?: ArmyUnit[]
   general?: General
@@ -766,6 +772,7 @@ export interface GameState {
   player: Player
   resources: ResourceState
   inventory?: Record<string, ItemStack>
+  inventorySlots?: ItemStack[]
   resourceProduction: ResourceProduction
   resourceSettledAt: string
   /** 存档级城金 */

@@ -177,7 +177,7 @@ export const gameApi = {
 
   /** 获取背包视图 */
   getInventoryView(playerId: string) {
-    return api.get<Pick<GameState, 'inventory' | 'serverTime'>>(`/inventory/view?playerId=${playerId}`)
+    return api.get<Pick<GameState, 'inventory' | 'inventorySlots' | 'serverTime'>>(`/inventory/view?playerId=${playerId}`)
   },
 
   /** 获取武将视图 */

@@ -61,6 +61,7 @@ type ResourceState struct {
 type ResourceProduction map[string]int
 
 type ItemStack struct {
+	SlotID     string `json:"slotId,omitempty"`
 	ItemID     string `json:"itemId"`
 	Amount     int    `json:"amount"`
 	ObtainedAt string `json:"obtainedAt,omitempty"`
@@ -483,6 +484,7 @@ type GameState struct {
 	Player              Player                  `json:"player"`
 	Resources           ResourceState           `json:"resources"`
 	Inventory           map[string]ItemStack    `json:"inventory,omitempty"`
+	InventorySlots      []ItemStack             `json:"inventorySlots,omitempty"`
 	ResourceProduction  ResourceProduction      `json:"resourceProduction"`
 	ResourceSettledAt   string                  `json:"resourceSettledAt"`
 	CityGold            FlexInt                 `json:"cityGold"`

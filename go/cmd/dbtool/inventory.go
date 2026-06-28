@@ -121,9 +121,10 @@ func backfillPlayerInventory(ctx context.Context, dsn string) (inventoryBackfill
 	for playerID, inventory := range players {
 		for itemID, snapshot := range inventory {
 			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO player_inventory (player_id, item_id, amount, obtained_at, updated_at)
-				 VALUES (?, ?, ?, ?, ?)`,
+				`INSERT INTO player_inventory (player_id, slot_id, item_id, amount, obtained_at, updated_at)
+				 VALUES (?, ?, ?, ?, ?, ?)`,
 				playerID,
+				"slot_"+itemID,
 				itemID,
 				snapshot.Amount,
 				inventoryTimeArg(snapshot.ObtainedAt),

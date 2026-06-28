@@ -24,10 +24,11 @@ type Reward = corereward.Reward
 type RewardGrantContext = corereward.GrantContext
 
 type RewardApplyResult struct {
-	Granted       map[string]int    `json:"granted"`
-	AccountGold   int               `json:"accountGold,omitempty"`
-	LedgerEntries []GoldLedgerEntry `json:"ledgerEntries,omitempty"`
-	Events        []GameEvent       `json:"events,omitempty"`
+	Granted           map[string]int    `json:"granted"`
+	AccountGold       int               `json:"accountGold,omitempty"`
+	LedgerEntries     []GoldLedgerEntry `json:"ledgerEntries,omitempty"`
+	ItemLedgerEntries []ItemLedgerEntry `json:"itemLedgerEntries,omitempty"`
+	Events            []GameEvent       `json:"events,omitempty"`
 }
 
 type RewardGrantResult struct {
@@ -51,6 +52,7 @@ func ApplyRewardsToStateWithContext(state *GameState, rewards []Reward, ctx Rewa
 	if state.Inventory == nil {
 		state.Inventory = map[string]ItemStack{}
 	}
+	normalizeInventoryState(state, now)
 	if now.IsZero() {
 		now = time.Now()
 	}
@@ -107,7 +109,24 @@ func ApplyRewardsToStateWithContext(state *GameState, rewards []Reward, ctx Rewa
 			if _, ok := GetItemDefinition(rewardID); !ok {
 				return RewardApplyResult{}, ErrItemNotFound
 			}
-			addItemToInventory(state, rewardID, reward.Amount, now)
+			beforeAmount := inventoryItemAmount(state, rewardID)
+			if err := addItemToInventory(state, rewardID, reward.Amount, now); err != nil {
+				return RewardApplyResult{}, err
+			}
+			afterAmount := inventoryItemAmount(state, rewardID)
+			result.ItemLedgerEntries = append(result.ItemLedgerEntries, ItemLedgerEntry{
+				ID:           "item_ledger_" + randomID(12),
+				PlayerID:     state.Player.ID,
+				ItemID:       rewardID,
+				ChangeAmount: reward.Amount,
+				BeforeAmount: beforeAmount,
+				AfterAmount:  afterAmount,
+				Reason:       firstNonEmpty(ctx.Reason, "reward"),
+				RefType:      ctx.RefType,
+				RefID:        ctx.RefID,
+				Metadata:     reward.Metadata,
+				CreatedAt:    now.UTC().Format(resourceDateLayout),
+			})
 			result.Granted[rewardID] += reward.Amount
 			result.Events = append(result.Events, buildRewardEvent(ctx, state.Player.ID, reward, reward.Amount, now))
 		case RewardTypeUnit:
@@ -261,6 +280,9 @@ func (s *Service) flushRewardSideEffects(result RewardApplyResult) {
 	for _, entry := range result.LedgerEntries {
 		s.recordLedger(entry)
 	}
+	for _, entry := range result.ItemLedgerEntries {
+		_ = s.repo.WriteItemLedger(entry)
+	}
 	for _, event := range result.Events {
 		s.publishEvent(event)
 	}
@@ -275,6 +297,7 @@ func mergeRewardApplyResult(dst *RewardApplyResult, src RewardApplyResult) {
 	}
 	dst.AccountGold += src.AccountGold
 	dst.LedgerEntries = append(dst.LedgerEntries, src.LedgerEntries...)
+	dst.ItemLedgerEntries = append(dst.ItemLedgerEntries, src.ItemLedgerEntries...)
 	dst.Events = append(dst.Events, src.Events...)
 }
 

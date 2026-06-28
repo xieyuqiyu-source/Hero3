@@ -19,6 +19,7 @@ import MiniGameRecordsPanel from '@/components/MiniGameRecordsPanel'
 import AdminTokenPanel from '@/components/AdminTokenPanel'
 import GeneralsConfigPanel from '@/components/GeneralsConfigPanel'
 import FishingConfigPanel from '@/components/FishingConfigPanel'
+import ItemsConfigPanel from '@/components/ItemsConfigPanel'
 import GoldLedgerPanel from '@/components/GoldLedgerPanel'
 import MailAdminPanel from '@/components/MailAdminPanel'
 import AnnouncementAdminPanel from '@/components/AnnouncementAdminPanel'
@@ -26,7 +27,7 @@ import PvpAdminPanel from '@/components/PvpAdminPanel'
 import DungeonAssetConfigPanel from '@/components/DungeonAssetConfigPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
-import { Sliders, MapPin, Swords, Flag, Shield, Users, Fish } from 'lucide-react'
+import { Sliders, MapPin, Swords, Flag, Shield, Users, Fish, Package } from 'lucide-react'
 
 function App() {
   const [activePage, setActivePage] = useState<AdminPage>('overview')
@@ -118,6 +119,9 @@ function App() {
             </CollapsiblePanel>
             <CollapsiblePanel icon={<Users size={16} className="text-[var(--color-accent)]" />} title="将领配置">
               <GeneralsConfigPanel />
+            </CollapsiblePanel>
+            <CollapsiblePanel icon={<Package size={16} className="text-[var(--color-accent)]" />} title="物品配置">
+              <ItemsConfigPanel />
             </CollapsiblePanel>
             <CollapsiblePanel icon={<Fish size={16} className="text-[var(--color-accent)]" />} title="钓鱼配置">
               <FishingConfigPanel />

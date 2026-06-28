@@ -169,6 +169,11 @@ type GoldLedgerRepository interface {
 	ListGoldLedger(filter GoldLedgerFilter) ([]GoldLedgerEntry, error)
 }
 
+type ItemLedgerRepository interface {
+	WriteItemLedger(entry ItemLedgerEntry) error
+	ListItemLedger(filter ItemLedgerFilter) ([]ItemLedgerEntry, int, error)
+}
+
 type EventProcessingRepository interface {
 	ClaimEventProcessing(moduleID string, handlerKey string, eventKey string, processedAt time.Time) (bool, error)
 }
@@ -193,6 +198,7 @@ type Repository interface {
 	PvpRepository
 	AnnouncementRepository
 	GoldLedgerRepository
+	ItemLedgerRepository
 	EventProcessingRepository
 }
 
@@ -216,6 +222,7 @@ type MemoryRepository struct {
 	announcementReads map[string]AnnouncementReadState
 	ledger            []GoldLedgerEntry
 	ledgerNextID      int64
+	itemLedger        []ItemLedgerEntry
 	eventClaims       map[string]struct{}
 }
 
@@ -580,7 +587,8 @@ func (r *MemoryRepository) GetInventoryView(playerID string) (InventoryView, err
 	if state.Inventory == nil {
 		state.Inventory = map[string]ItemStack{}
 	}
-	return InventoryView{Inventory: state.Inventory, ServerTime: state.ServerTime}, nil
+	normalizeInventoryState(&state, time.Now())
+	return InventoryView{Inventory: state.Inventory, InventorySlots: state.InventorySlots, ServerTime: state.ServerTime}, nil
 }
 
 // GetGeneralsView 从内存状态投影武将视图。
@@ -1876,6 +1884,57 @@ func (r *MemoryRepository) ListGoldLedger(filter GoldLedgerFilter) ([]GoldLedger
 		matches = append(matches, entry)
 	}
 	return matches, nil
+}
+
+// WriteItemLedger 写入内存物品流水。
+func (r *MemoryRepository) WriteItemLedger(entry ItemLedgerEntry) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if entry.ID == "" {
+		entry.ID = randomID(12)
+	}
+	if entry.CreatedAt == "" {
+		entry.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	r.itemLedger = append(r.itemLedger, entry)
+	return nil
+}
+
+// ListItemLedger 按筛选条件读取内存物品流水。
+func (r *MemoryRepository) ListItemLedger(filter ItemLedgerFilter) ([]ItemLedgerEntry, int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	limit := filter.Limit
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	matches := []ItemLedgerEntry{}
+	for i := len(r.itemLedger) - 1; i >= 0; i-- {
+		entry := r.itemLedger[i]
+		if filter.PlayerID != "" && entry.PlayerID != filter.PlayerID {
+			continue
+		}
+		if filter.ItemID != "" && entry.ItemID != filter.ItemID {
+			continue
+		}
+		if filter.RefType != "" && entry.RefType != filter.RefType {
+			continue
+		}
+		matches = append(matches, entry)
+	}
+	total := len(matches)
+	if offset >= total {
+		return []ItemLedgerEntry{}, total, nil
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return append([]ItemLedgerEntry(nil), matches[offset:end]...), total, nil
 }
 
 func (r *MemoryRepository) GetAccountIDByPlayerID(playerID string) (string, error) {

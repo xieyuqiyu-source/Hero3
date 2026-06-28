@@ -29,6 +29,10 @@ ItemActionResult:
       type: object
       additionalProperties:
         $ref: '#/components/schemas/ItemStack'
+    inventorySlots:
+      type: array
+      items:
+        $ref: '#/components/schemas/ItemStack'
     resources:
       $ref: '#/components/schemas/ResourceState'
     army:

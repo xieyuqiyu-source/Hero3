@@ -16,6 +16,39 @@ func (s *Service) ListItemsConfig() ItemsConfig {
 	return GetItemsConfig()
 }
 
+// UpdateItemsConfig 保存并热更新物品配置。
+func (s *Service) UpdateItemsConfig(config ItemsConfig) error {
+	current := GetItemsConfig()
+	for itemID := range current {
+		if _, ok := config[itemID]; !ok {
+			return ErrItemIDLocked
+		}
+	}
+	return SaveItemsConfig(s.itemsPath, config)
+}
+
+// ValidateItemsConfigForAdmin 校验 GM 提交的物品配置。
+func (s *Service) ValidateItemsConfigForAdmin(config ItemsConfig) error {
+	return ValidateItemsConfig(config)
+}
+
+// ListItemLedger 查询物品流水。
+func (s *Service) ListItemLedger(filter ItemLedgerFilter) (ItemLedgerPage, error) {
+	entries, total, err := s.repo.ListItemLedger(filter)
+	if err != nil {
+		return ItemLedgerPage{}, err
+	}
+	limit := filter.Limit
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	return ItemLedgerPage{Entries: entries, Total: total, Limit: limit, Offset: offset}, nil
+}
+
 func (s *Service) GrantItem(playerID string, itemID string, amount int) (GameState, error) {
 	playerID = strings.TrimSpace(playerID)
 	itemID = strings.TrimSpace(itemID)
@@ -71,10 +104,13 @@ func (s *Service) UseItem(playerID string, itemID string, amount int) (UseItemRe
 	now := time.Now()
 	effects := map[string]int{}
 	var before, after coreAssetSnapshot
+	beforeItemAmount := 0
+	afterItemAmount := 0
 	state, err := s.repo.UpdateItemState(playerID, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		before = snapshotCoreAssets(state)
+		beforeItemAmount = inventoryItemAmount(state, itemID)
 		if !consumeItemFromInventory(state, itemID, amount, now) {
 			return ErrInsufficientItem
 		}
@@ -83,6 +119,7 @@ func (s *Service) UseItem(playerID string, itemID string, amount int) (UseItemRe
 			return err
 		}
 		effects = applied
+		afterItemAmount = inventoryItemAmount(state, itemID)
 		after = snapshotCoreAssets(state)
 		return nil
 	})
@@ -103,6 +140,18 @@ func (s *Service) UseItem(playerID string, itemID string, amount int) (UseItemRe
 			"effects": effects,
 		},
 		CreatedAt: now.UTC().Format(resourceDateLayout),
+	})
+	_ = s.repo.WriteItemLedger(ItemLedgerEntry{
+		ID:           "item_ledger_" + randomID(12),
+		PlayerID:     playerID,
+		ItemID:       itemID,
+		ChangeAmount: -amount,
+		BeforeAmount: beforeItemAmount,
+		AfterAmount:  afterItemAmount,
+		Reason:       "item_use",
+		RefType:      "item_use",
+		RefID:        itemID,
+		CreatedAt:    now.UTC().Format(resourceDateLayout),
 	})
 	s.publishCoreAssetDiff(playerID, "item_use", itemID, before, after, now)
 	hydrateStateForResponse(&state, now)

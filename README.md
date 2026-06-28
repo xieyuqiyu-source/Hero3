@@ -66,6 +66,8 @@ go build ./cmd/server
 - `make healthcheck-authority` 是当前权威表健康检查；`verify-*` 仍保留为旧快照迁移期校验，不作为轻量 `state_json` 后的日常通过标准。
 - `clone-data` 允许目标测试库比源库多出迁移后的新列，复制时只写公共列；源库列在目标库不存在时会中止。
 - `clone-data` 不复制或清空 `schema_migrations`，测试库迁移记录由测试库自己的迁移命令维护。
+- 物品系统使用 `go/config/items.json` 和 `go/config/drop_pools.json` 配置注册；背包权威表按格子 `slot_id` 存储，兼容接口仍返回按物品聚合的 `inventory`。
+- 物品获得和消耗会写入 `item_ledger`，GM 后台可查看物品配置、玩家背包格子和物品流水。
 
 示例：
 

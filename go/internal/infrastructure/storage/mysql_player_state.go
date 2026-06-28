@@ -50,7 +50,7 @@ func (r *MySQLRepository) CreatePlayer(accountID string, state game.GameState, u
 	if err := syncPlayerResourcesTx(tx, state.Player.ID, state.Resources, now); err != nil {
 		return err
 	}
-	if err := syncPlayerInventoryTx(tx, state.Player.ID, state.Inventory, now); err != nil {
+	if err := syncPlayerInventoryTx(tx, state.Player.ID, state.Inventory, state.InventorySlots, now); err != nil {
 		return err
 	}
 	if err := syncPlayerBuildingsTx(tx, state.Player.ID, state.Buildings, now); err != nil {
@@ -212,7 +212,15 @@ func (r *MySQLRepository) UpdatePlayerState(playerID string, updatedAt time.Time
 	if err := overlayAuthoritativeInventoryTx(tx, &state, playerID); err != nil {
 		return game.GameState{}, err
 	}
-	if err := overlayAuthoritativeBuildingsTx(tx, &state, playerID); err != nil {
+	buildings, buildingsFound, err := loadPlayerBuildingsTx(tx, playerID)
+	if err != nil {
+		return game.GameState{}, err
+	}
+	previousBuildingSnapshot := buildingSnapshotsFromStorageState(buildings)
+	if !buildingsFound {
+		previousBuildingSnapshot = buildingSnapshotsFromStorageState(state.Buildings)
+	}
+	if err := applyAuthoritativeBuildings(&state, buildings, buildingsFound); err != nil {
 		return game.GameState{}, err
 	}
 	if err := overlayAuthoritativeResourceSlotsTx(tx, &state, playerID); err != nil {
@@ -232,7 +240,6 @@ func (r *MySQLRepository) UpdatePlayerState(playerID string, updatedAt time.Time
 	}
 	previousResourceSnapshot := resourceSnapshotsFromStorageState(state.Resources)
 	previousInventorySnapshot := inventorySnapshotsFromStorageState(state.Inventory)
-	previousBuildingSnapshot := buildingSnapshotsFromStorageState(state.Buildings)
 	previousResourceSlotSnapshot := resourceSlotSnapshotsFromStorageState(state.ResourceSlots)
 	previousArmySnapshot := armySnapshotsFromStorageState(state.Army)
 	previousRecruitQueueSnapshot := recruitQueueSnapshotsFromStorageState(state.RecruitQueues)
@@ -259,7 +266,7 @@ func (r *MySQLRepository) UpdatePlayerState(playerID string, updatedAt time.Time
 		}
 	}
 	if inventorySnapshotChanged(previousInventorySnapshot, state.Inventory) {
-		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, updatedAt.UTC()); err != nil {
+		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, state.InventorySlots, updatedAt.UTC()); err != nil {
 			return game.GameState{}, err
 		}
 	}
@@ -434,7 +441,7 @@ func (r *MySQLRepository) UpdateAccountPlayerState(accountID string, playerID st
 		}
 	}
 	if inventorySnapshotChanged(previousInventorySnapshot, state.Inventory) {
-		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, updatedAt.UTC()); err != nil {
+		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, state.InventorySlots, updatedAt.UTC()); err != nil {
 			return game.Account{}, game.GameState{}, err
 		}
 	}
@@ -530,35 +537,37 @@ func overlayAuthoritativeResourcesTx(tx *sql.Tx, state *game.GameState, playerID
 
 // overlayAuthoritativeInventory 用 player_inventory 权威表覆盖兼容快照中的背包。
 func (r *MySQLRepository) overlayAuthoritativeInventory(state *game.GameState, playerID string) error {
-	inventory, found, err := loadPlayerInventory(r.db, playerID)
+	inventory, slots, found, err := loadPlayerInventory(r.db, playerID)
 	if err != nil {
 		return err
 	}
-	return applyAuthoritativeInventory(state, inventory, found)
+	return applyAuthoritativeInventory(state, inventory, slots, found)
 }
 
 // overlayAuthoritativeInventoryTx 在事务内锁定并加载玩家背包权威表。
 func overlayAuthoritativeInventoryTx(tx *sql.Tx, state *game.GameState, playerID string) error {
-	inventory, found, err := loadPlayerInventoryTx(tx, playerID)
+	inventory, slots, found, err := loadPlayerInventoryTx(tx, playerID)
 	if err != nil {
 		return err
 	}
-	return applyAuthoritativeInventory(state, inventory, found)
+	return applyAuthoritativeInventory(state, inventory, slots, found)
 }
 
 // applyAuthoritativeInventory 将背包权威表结果写回 GameState；旧快照有道具但表为空时显式报错。
-func applyAuthoritativeInventory(state *game.GameState, inventory map[string]game.ItemStack, found bool) error {
+func applyAuthoritativeInventory(state *game.GameState, inventory map[string]game.ItemStack, slots []game.ItemStack, found bool) error {
 	if state == nil {
 		return game.ErrPlayerNotFound
 	}
 	if !found {
 		if len(state.Inventory) == 0 {
 			state.Inventory = map[string]game.ItemStack{}
+			state.InventorySlots = []game.ItemStack{}
 			return nil
 		}
 		return errPlayerInventoryMissing
 	}
 	state.Inventory = inventory
+	state.InventorySlots = slots
 	return nil
 }
 
@@ -633,57 +642,60 @@ func loadPlayerResourcesWithQuery(queryer resourceQueryer, playerID string, lock
 }
 
 // loadPlayerInventory 从 player_inventory 读取玩家背包权威状态。
-func loadPlayerInventory(queryer resourceQueryer, playerID string) (map[string]game.ItemStack, bool, error) {
+func loadPlayerInventory(queryer resourceQueryer, playerID string) (map[string]game.ItemStack, []game.ItemStack, bool, error) {
 	return loadPlayerInventoryWithQuery(queryer, playerID, "")
 }
 
 // loadPlayerInventoryTx 在事务内读取并锁定玩家背包权威状态。
-func loadPlayerInventoryTx(tx *sql.Tx, playerID string) (map[string]game.ItemStack, bool, error) {
+func loadPlayerInventoryTx(tx *sql.Tx, playerID string) (map[string]game.ItemStack, []game.ItemStack, bool, error) {
 	return loadPlayerInventoryWithQuery(tx, playerID, " FOR UPDATE")
 }
 
 // loadPlayerInventoryWithQuery 读取背包表并还原 Inventory。
-func loadPlayerInventoryWithQuery(queryer resourceQueryer, playerID string, lockClause string) (map[string]game.ItemStack, bool, error) {
+func loadPlayerInventoryWithQuery(queryer resourceQueryer, playerID string, lockClause string) (map[string]game.ItemStack, []game.ItemStack, bool, error) {
 	rows, err := queryer.Query(
-		`SELECT item_id, amount, obtained_at, updated_at
+		`SELECT slot_id, item_id, amount, obtained_at, updated_at
 		 FROM player_inventory
 		 WHERE player_id = ?
-		 ORDER BY item_id`+lockClause,
+		 ORDER BY slot_id`+lockClause,
 		playerID,
 	)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 	defer rows.Close()
 
-	inventory := map[string]game.ItemStack{}
+	slots := []game.ItemStack{}
 	found := false
 	for rows.Next() {
+		var slotID string
 		var itemID string
 		var amount int
 		var obtainedAt sql.NullTime
 		var updatedAt sql.NullTime
-		if err := rows.Scan(&itemID, &amount, &obtainedAt, &updatedAt); err != nil {
-			return nil, false, err
+		if err := rows.Scan(&slotID, &itemID, &amount, &obtainedAt, &updatedAt); err != nil {
+			return nil, nil, false, err
 		}
+		slotID = strings.TrimSpace(slotID)
 		itemID = strings.TrimSpace(itemID)
 		if itemID == "" || amount <= 0 {
 			continue
 		}
-		stack := game.ItemStack{ItemID: itemID, Amount: amount}
+		stack := game.ItemStack{SlotID: slotID, ItemID: itemID, Amount: amount}
 		if obtainedAt.Valid {
 			stack.ObtainedAt = obtainedAt.Time.UTC().Format(time.RFC3339)
 		}
 		if updatedAt.Valid {
 			stack.UpdatedAt = updatedAt.Time.UTC().Format(time.RFC3339)
 		}
-		inventory[itemID] = stack
+		slots = append(slots, stack)
 		found = true
 	}
 	if err := rows.Err(); err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
-	return inventory, found, nil
+	inventory := game.AggregateInventorySlotsForStorage(slots)
+	return inventory, slots, found, nil
 }
 
 // syncPlayerResourcesTx 把事务内资源快照同步到 player_resources 权威表，并让 state_json.resources 只作为兼容快照。
@@ -718,29 +730,32 @@ func syncPlayerResourcesTx(tx *sql.Tx, playerID string, resources game.ResourceS
 }
 
 // syncPlayerInventoryTx 把事务内背包快照同步到 player_inventory 权威表，并让 state_json.inventory 只作为兼容快照。
-func syncPlayerInventoryTx(tx *sql.Tx, playerID string, inventory map[string]game.ItemStack, updatedAt time.Time) error {
-	itemIDs := itemIDsFromInventory(inventory)
-	if len(itemIDs) == 0 {
+func syncPlayerInventoryTx(tx *sql.Tx, playerID string, inventory map[string]game.ItemStack, slots []game.ItemStack, updatedAt time.Time) error {
+	slots = inventorySlotsFromStorageState(inventory, slots, updatedAt)
+	if len(slots) == 0 {
 		_, err := tx.Exec(`DELETE FROM player_inventory WHERE player_id = ?`, playerID)
 		return err
 	}
 
-	for _, itemID := range itemIDs {
-		stack := inventory[itemID]
+	slotIDs := make([]string, 0, len(slots))
+	for _, stack := range slots {
+		slotIDs = append(slotIDs, stack.SlotID)
 		obtainedAt := parseInventoryTime(stack.ObtainedAt)
 		stackUpdatedAt := parseInventoryTime(stack.UpdatedAt)
 		if !stackUpdatedAt.Valid {
 			stackUpdatedAt = sql.NullTime{Time: updatedAt.UTC(), Valid: true}
 		}
 		if _, err := tx.Exec(
-			`INSERT INTO player_inventory (player_id, item_id, amount, obtained_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?)
+			`INSERT INTO player_inventory (player_id, slot_id, item_id, amount, obtained_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?)
 			 ON DUPLICATE KEY UPDATE
+				item_id = VALUES(item_id),
 				amount = VALUES(amount),
 				obtained_at = VALUES(obtained_at),
 				updated_at = VALUES(updated_at)`,
 			playerID,
-			itemID,
+			stack.SlotID,
+			stack.ItemID,
 			stack.Amount,
 			nullableTimeArg(obtainedAt),
 			nullableTimeArg(stackUpdatedAt),
@@ -748,7 +763,7 @@ func syncPlayerInventoryTx(tx *sql.Tx, playerID string, inventory map[string]gam
 			return err
 		}
 	}
-	return deleteStalePlayerInventoryTx(tx, playerID, itemIDs)
+	return deleteStalePlayerInventoryTx(tx, playerID, slotIDs)
 }
 
 // resourceSnapshotChanged 判断资源数量或容量是否发生变化。
@@ -809,6 +824,8 @@ type storageResourceSnapshot struct {
 }
 
 type storageInventorySnapshot struct {
+	SlotID     string
+	ItemID     string
 	Amount     int
 	ObtainedAt string
 	UpdatedAt  string
@@ -829,15 +846,54 @@ func resourceSnapshotsFromStorageState(resources game.ResourceState) map[string]
 // inventorySnapshotsFromStorageState 从 Inventory 生成同步比较快照。
 func inventorySnapshotsFromStorageState(inventory map[string]game.ItemStack) map[string]storageInventorySnapshot {
 	snapshots := map[string]storageInventorySnapshot{}
-	for _, itemID := range itemIDsFromInventory(inventory) {
-		stack := inventory[itemID]
-		snapshots[itemID] = storageInventorySnapshot{
+	for _, stack := range inventorySlotsFromStorageState(inventory, nil, time.Time{}) {
+		snapshots[stack.SlotID] = storageInventorySnapshot{
+			SlotID:     stack.SlotID,
+			ItemID:     stack.ItemID,
 			Amount:     stack.Amount,
 			ObtainedAt: stack.ObtainedAt,
 			UpdatedAt:  stack.UpdatedAt,
 		}
 	}
 	return snapshots
+}
+
+// inventorySlotsFromStorageState 生成用于存储和比较的背包格子列表。
+func inventorySlotsFromStorageState(inventory map[string]game.ItemStack, slots []game.ItemStack, now time.Time) []game.ItemStack {
+	if len(slots) > 0 {
+		normalized := make([]game.ItemStack, 0, len(slots))
+		for _, stack := range slots {
+			stack.ItemID = strings.TrimSpace(stack.ItemID)
+			stack.SlotID = strings.TrimSpace(stack.SlotID)
+			if stack.ItemID == "" || stack.Amount <= 0 {
+				continue
+			}
+			if stack.SlotID == "" {
+				stack.SlotID = "slot_" + stack.ItemID
+			}
+			normalized = append(normalized, stack)
+		}
+		sort.SliceStable(normalized, func(i, j int) bool {
+			return normalized[i].SlotID < normalized[j].SlotID
+		})
+		return normalized
+	}
+	result := make([]game.ItemStack, 0, len(inventory))
+	for _, itemID := range itemIDsFromInventory(inventory) {
+		stack := inventory[itemID]
+		stack.ItemID = strings.TrimSpace(firstNonEmptyStorage(stack.ItemID, itemID))
+		if stack.ItemID == "" || stack.Amount <= 0 {
+			continue
+		}
+		if stack.SlotID == "" {
+			stack.SlotID = "slot_" + stack.ItemID
+		}
+		result = append(result, stack)
+	}
+	sort.SliceStable(result, func(i, j int) bool {
+		return result[i].SlotID < result[j].SlotID
+	})
+	return result
 }
 
 // resourceSnapshotMapsEqual 比较两个资源快照集合是否一致。
@@ -882,17 +938,17 @@ func deleteStalePlayerResourcesTx(tx *sql.Tx, playerID string, resourceTypes []s
 	return err
 }
 
-// deleteStalePlayerInventoryTx 删除兼容快照里已经不存在的道具。
-func deleteStalePlayerInventoryTx(tx *sql.Tx, playerID string, itemIDs []string) error {
-	placeholders := strings.TrimRight(strings.Repeat("?,", len(itemIDs)), ",")
-	args := make([]any, 0, len(itemIDs)+1)
+// deleteStalePlayerInventoryTx 删除兼容快照里已经不存在的背包格子。
+func deleteStalePlayerInventoryTx(tx *sql.Tx, playerID string, slotIDs []string) error {
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(slotIDs)), ",")
+	args := make([]any, 0, len(slotIDs)+1)
 	args = append(args, playerID)
-	for _, itemID := range itemIDs {
-		args = append(args, itemID)
+	for _, slotID := range slotIDs {
+		args = append(args, slotID)
 	}
 	_, err := tx.Exec(
 		`DELETE FROM player_inventory
-		 WHERE player_id = ? AND item_id NOT IN (`+placeholders+`)`,
+		 WHERE player_id = ? AND slot_id NOT IN (`+placeholders+`)`,
 		args...,
 	)
 	return err

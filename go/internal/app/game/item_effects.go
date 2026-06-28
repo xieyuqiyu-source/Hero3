@@ -33,6 +33,8 @@ func itemEffectsToPipelineEffects(state *GameState, item ItemDefinition, count i
 		switch effect.Type {
 		case "pvp_protection":
 			continue
+		case "item":
+			rewards = append(rewards, Reward{Type: RewardTypeItem, ID: strings.TrimSpace(effect.ID), Amount: effect.Amount * count})
 		case "general":
 			generalID := strings.TrimSpace(effect.GeneralID)
 			if generalID == "" {
@@ -54,6 +56,29 @@ func itemEffectsToPipelineEffects(state *GameState, item ItemDefinition, count i
 				return nil, ErrUnitNotFound
 			}
 			rewards = append(rewards, Reward{Type: RewardTypeUnit, ID: unitID, Amount: effect.Amount * count})
+		case "currency":
+			rewards = append(rewards, Reward{Type: strings.TrimSpace(effect.CurrencyType), ID: strings.TrimSpace(effect.CurrencyType), Amount: effect.Amount * count})
+		case "buff":
+			rewards = append(rewards, Reward{
+				Type:   RewardTypeBuff,
+				ID:     strings.TrimSpace(effect.BuffKey),
+				Amount: effect.Amount,
+				Metadata: map[string]any{
+					"mode":   strings.TrimSpace(effect.BuffMode),
+					"value":  effect.BuffValue,
+					"source": "item",
+					"note":   item.Name,
+				},
+			})
+		case "random_reward":
+			rolled, err := RollDropPoolRewards(effect.DropPoolID)
+			if err != nil {
+				return nil, err
+			}
+			for _, reward := range rolled {
+				reward.Amount *= count
+				rewards = append(rewards, reward)
+			}
 		default:
 			return nil, ErrItemNotUsable
 		}

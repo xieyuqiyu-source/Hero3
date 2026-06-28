@@ -56,6 +56,9 @@ var (
 	ErrItemNotFound            = errors.New("item not found")
 	ErrItemNotUsable           = errors.New("item is not usable")
 	ErrInsufficientItem        = errors.New("insufficient item")
+	ErrInventoryFull           = errors.New("inventory is full")
+	ErrDropPoolNotFound        = errors.New("drop pool not found")
+	ErrItemIDLocked            = errors.New("物品 ID 已锁定，不能删除或改名")
 	ErrReinforcementNotFound   = errors.New("reinforcement not found")
 	ErrInvalidReinforcement    = errors.New("invalid reinforcement")
 	ErrReinforcementTargetSelf = errors.New("cannot reinforce yourself")
@@ -78,6 +81,7 @@ type Service struct {
 	combatPath    string
 	generalsPath  string
 	itemsPath     string
+	dropPoolsPath string
 	fishingPath   string
 }
 
@@ -88,14 +92,15 @@ func (s *Service) getPlayerLock(playerID string) *sync.Mutex {
 }
 
 type BootstrapResponse struct {
-	GameName string         `json:"gameName"`
-	Modules  []string       `json:"modules"`
-	Balance  BalanceConfig  `json:"balance"`
-	Factions FactionsConfig `json:"factions"`
-	Units    UnitsConfig    `json:"units"`
-	Items    ItemsConfig    `json:"items"`
-	Fishing  FishingConfig  `json:"fishing"`
-	Message  string         `json:"message"`
+	GameName  string          `json:"gameName"`
+	Modules   []string        `json:"modules"`
+	Balance   BalanceConfig   `json:"balance"`
+	Factions  FactionsConfig  `json:"factions"`
+	Units     UnitsConfig     `json:"units"`
+	Items     ItemsConfig     `json:"items"`
+	DropPools DropPoolsConfig `json:"dropPools"`
+	Fishing   FishingConfig   `json:"fishing"`
+	Message   string          `json:"message"`
 }
 
 const (
@@ -153,6 +158,11 @@ func (s *Service) SetGeneralsPath(path string) error {
 func (s *Service) SetItemsPath(path string) error {
 	s.itemsPath = path
 	return LoadItemsConfig(path)
+}
+
+func (s *Service) SetDropPoolsPath(path string) error {
+	s.dropPoolsPath = path
+	return LoadDropPoolsConfig(path)
 }
 
 func (s *Service) SetFishingPath(path string) error {
@@ -491,6 +501,7 @@ func hydrateStateForResponse(state *GameState, now time.Time) {
 		return
 	}
 	state.ServerTime = now.UTC().Format(resourceDateLayout)
+	normalizeInventoryState(state, now)
 	state.ActiveModifiers = GetModifierBreakdown(state, now)
 }
 
@@ -499,6 +510,7 @@ func (s *Service) Bootstrap() BootstrapResponse {
 	factions := GetFactionsConfig()
 	units := GetUnitsConfig()
 	items := GetItemsConfig()
+	dropPools := GetDropPoolsConfig()
 	fishing := GetFishingConfig()
 	return BootstrapResponse{
 		GameName: "Hero3",
@@ -512,12 +524,13 @@ func (s *Service) Bootstrap() BootstrapResponse {
 			"save",
 			"item",
 		}, ListGameplayModuleIDs()...),
-		Balance:  balance,
-		Factions: factions,
-		Units:    units,
-		Items:    items,
-		Fishing:  fishing,
-		Message:  "Hero3 后端基础服务已就绪，具体玩法逻辑待接入。",
+		Balance:   balance,
+		Factions:  factions,
+		Units:     units,
+		Items:     items,
+		DropPools: dropPools,
+		Fishing:   fishing,
+		Message:   "Hero3 后端基础服务已就绪，具体玩法逻辑待接入。",
 	}
 }
 

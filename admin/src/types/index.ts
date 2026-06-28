@@ -19,6 +19,7 @@ export interface GameState {
     capacity: Record<string, number>
   }
   inventory?: Record<string, ItemStack>
+  inventorySlots?: ItemStack[]
   resourceProduction: Record<string, number>
   resourceSettledAt: string
   buildings: Array<{
@@ -105,6 +106,7 @@ export interface GameState {
 }
 
 export interface ItemStack {
+  slotId?: string
   itemId: string
   amount: number
   obtainedAt?: string
@@ -124,15 +126,45 @@ export interface ItemDefinition {
   id: string
   name: string
   description: string
-  type: string
-  rarity: string
+  category?: string
+  quality?: string
+  type?: string
+  rarity?: string
   icon?: string
   usable: boolean
   stackable: boolean
   maxStack: number
+  bindType?: string
   useTarget: string
+  confirmOnUse?: string
   effects: ItemEffect[]
   metadata?: Record<string, unknown>
+}
+
+export interface InventoryView {
+  inventory: Record<string, ItemStack>
+  inventorySlots?: ItemStack[]
+  serverTime: string
+}
+
+export interface ItemLedgerEntry {
+  id: string
+  playerId: string
+  itemId: string
+  changeAmount: number
+  beforeAmount: number
+  afterAmount: number
+  reason: string
+  refType?: string
+  refId?: string
+  createdAt: string
+}
+
+export interface ItemLedgerPage {
+  entries: ItemLedgerEntry[]
+  total: number
+  limit: number
+  offset: number
 }
 
 export interface UnitConfig {

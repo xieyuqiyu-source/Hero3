@@ -60,7 +60,9 @@ go/
 道具/Buff 系统当前集中在：
 
 - `item_registry.go`：道具配置查询、道具注册判断、全部道具配置列表。
-- `inventory_state.go`：玩家背包道具增加和消耗。
+- `inventory_state.go`：玩家背包格子、堆叠拆分、聚合视图、道具增加和消耗。
+- `drop_pools_config.go`：掉落池配置加载、查询和引用校验。
+- `item_ledger.go`：物品流水模型和查询条件。
 - `item_effects.go`：道具使用后的效果执行。
 - `service_item.go`：道具发放、使用等玩家操作。
 - `buff_effects.go`：Buff/DeBuff 状态、过期清理、Modifier scope 校验和 Modifier 来源。
@@ -125,7 +127,8 @@ HERO3_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localho
 - `accounts`：轻账号
 - `players`：账号绑定的游戏存档，`state_json` 只保留轻量兼容快照，不再保存资源、建筑、兵力、武将、背包、Buff 等权威资产大字段
 - `player_resources`：玩家资源权威表
-- `player_inventory`：玩家背包权威表
+- `player_inventory`：玩家背包权威表，按 `slot_id` 存储真实格子并兼容聚合视图
+- `item_ledger`：物品获得和消耗流水
 - `player_buildings`：玩家建筑权威表
 - `player_resource_slots`：玩家资源田格子权威表
 - `player_army_units` / `player_recruit_queues`：玩家兵力和征兵队列权威表

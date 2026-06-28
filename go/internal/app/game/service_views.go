@@ -44,8 +44,9 @@ type MilitaryView struct {
 }
 
 type InventoryView struct {
-	Inventory  map[string]ItemStack `json:"inventory"`
-	ServerTime string               `json:"serverTime"`
+	Inventory      map[string]ItemStack `json:"inventory"`
+	InventorySlots []ItemStack          `json:"inventorySlots,omitempty"`
+	ServerTime     string               `json:"serverTime"`
 }
 
 type GeneralsView struct {
@@ -114,6 +115,7 @@ type ReportActionResult struct {
 
 type ItemActionResult struct {
 	Inventory          map[string]ItemStack    `json:"inventory,omitempty"`
+	InventorySlots     []ItemStack             `json:"inventorySlots,omitempty"`
 	Resources          ResourceState           `json:"resources,omitempty"`
 	Army               []ArmyUnit              `json:"army,omitempty"`
 	General            *General                `json:"general,omitempty"`
@@ -258,6 +260,7 @@ func BuildItemActionResult(state GameState) ItemActionResult {
 	}
 	return ItemActionResult{
 		Inventory:          state.Inventory,
+		InventorySlots:     state.InventorySlots,
 		Resources:          state.Resources,
 		Army:               state.Army,
 		General:            state.General,

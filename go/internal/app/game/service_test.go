@@ -2235,6 +2235,36 @@ func TestUseItemConsumesInventoryAndAppliesGeneralExp(t *testing.T) {
 	}
 }
 
+func TestGrantItemSplitsInventoryStacksByMaxStack(t *testing.T) {
+	svc := NewService()
+	loadStackSplitItemsConfig(t)
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "account_item_stack_split", Username: "item_stack_split", PasswordHash: "hash", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_item_stack_split", "ItemStackSplit", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	state, err := svc.GrantItem(state.Player.ID, "test_stack_item", 2500)
+	if err != nil {
+		t.Fatalf("GrantItem failed: %v", err)
+	}
+	if state.Inventory["test_stack_item"].Amount != 2500 {
+		t.Fatalf("expected aggregate amount 2500, got %d", state.Inventory["test_stack_item"].Amount)
+	}
+	if len(state.InventorySlots) != 3 {
+		t.Fatalf("expected 3 inventory slots, got %+v", state.InventorySlots)
+	}
+	amounts := []int{state.InventorySlots[0].Amount, state.InventorySlots[1].Amount, state.InventorySlots[2].Amount}
+	if amounts[0] != 999 || amounts[1] != 999 || amounts[2] != 502 {
+		t.Fatalf("expected split 999/999/502, got %+v", amounts)
+	}
+}
+
 func TestUseItemPublishesItemUsedEvent(t *testing.T) {
 	svc := NewService()
 	loadTestItemsConfig(t)
@@ -2263,6 +2293,35 @@ func TestUseItemPublishesItemUsedEvent(t *testing.T) {
 	if len(events) != 1 || events[0].Type != EventItemUsed || events[0].RefID != "test_general_exp_small" {
 		t.Fatalf("expected item used event, got %+v", events)
 	}
+}
+
+func loadStackSplitItemsConfig(t *testing.T) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "items.json")
+	data := []byte(`{
+		"test_stack_item": {
+			"id": "test_stack_item",
+			"name": "测试堆叠物品",
+			"description": "测试用",
+			"category": "material",
+			"quality": "common",
+			"usable": false,
+			"stackable": true,
+			"maxStack": 999,
+			"useTarget": "self",
+			"confirmOnUse": "auto",
+			"effects": []
+		}
+	}`)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write stack item config: %v", err)
+	}
+	if err := LoadItemsConfig(path); err != nil {
+		t.Fatalf("load stack item config: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = LoadItemsConfig(filepath.Join("..", "..", "..", "config", "items.json"))
+	})
 }
 
 func TestMailItemAttachmentAddsInventory(t *testing.T) {

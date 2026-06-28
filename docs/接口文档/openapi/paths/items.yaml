@@ -38,3 +38,101 @@
           application/json:
             schema:
               $ref: '#/components/schemas/UseItemResult'
+/api/v1/admin/items/config:
+  get:
+    tags: [Admin]
+    summary: GM 查询物品配置
+    responses:
+      '200':
+        description: 物品配置
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: object
+  put:
+    tags: [Admin]
+    summary: GM 保存物品配置
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties:
+              type: object
+    responses:
+      '200':
+        description: 保存后的物品配置
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: object
+/api/v1/admin/items/config/validate:
+  post:
+    tags: [Admin]
+    summary: GM 校验物品配置
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties:
+              type: object
+    responses:
+      '200':
+        description: 校验结果
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ok:
+                  type: boolean
+                error:
+                  type: string
+/api/v1/admin/items/inventory:
+  get:
+    tags: [Admin]
+    summary: GM 查询玩家背包
+    parameters:
+    - in: query
+      name: playerId
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 背包视图
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryView'
+/api/v1/admin/items/ledger:
+  get:
+    tags: [Admin]
+    summary: GM 查询物品流水
+    parameters:
+    - in: query
+      name: playerId
+      schema:
+        type: string
+    - in: query
+      name: itemId
+      schema:
+        type: string
+    - in: query
+      name: refType
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 物品流水分页
+        content:
+          application/json:
+            schema:
+              type: object

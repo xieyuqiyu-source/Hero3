@@ -78,7 +78,7 @@ func (r *MySQLRepository) UpdateRewardState(playerID string, updatedAt time.Time
 		}
 	}
 	if inventorySnapshotChanged(previousInventorySnapshot, state.Inventory) {
-		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, updatedAt.UTC()); err != nil {
+		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, state.InventorySlots, updatedAt.UTC()); err != nil {
 			return game.GameState{}, err
 		}
 	}
@@ -218,7 +218,7 @@ func (r *MySQLRepository) UpdateAccountRewardState(accountID string, playerID st
 		}
 	}
 	if inventorySnapshotChanged(previousInventorySnapshot, state.Inventory) {
-		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, updatedAt.UTC()); err != nil {
+		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, state.InventorySlots, updatedAt.UTC()); err != nil {
 			return game.Account{}, game.GameState{}, err
 		}
 	}

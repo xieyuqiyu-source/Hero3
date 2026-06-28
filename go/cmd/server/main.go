@@ -58,6 +58,10 @@ func main() {
 		logger.Error("items config load failed", "path", cfg.ItemsPath, "error", err)
 		os.Exit(1)
 	}
+	if err := gameService.SetDropPoolsPath(cfg.DropPoolsPath); err != nil {
+		logger.Error("drop pools config load failed", "path", cfg.DropPoolsPath, "error", err)
+		os.Exit(1)
+	}
 	if err := gameService.SetFishingPath(cfg.FishingPath); err != nil {
 		logger.Error("fishing config load failed", "path", cfg.FishingPath, "error", err)
 		os.Exit(1)
@@ -110,6 +114,10 @@ func main() {
 		}
 		if err := gameService.SetItemsPath(cfg.ItemsPath); err != nil {
 			logger.Error("items config load failed", "path", cfg.ItemsPath, "error", err)
+			os.Exit(1)
+		}
+		if err := gameService.SetDropPoolsPath(cfg.DropPoolsPath); err != nil {
+			logger.Error("drop pools config load failed", "path", cfg.DropPoolsPath, "error", err)
 			os.Exit(1)
 		}
 		if err := gameService.SetFishingPath(cfg.FishingPath); err != nil {

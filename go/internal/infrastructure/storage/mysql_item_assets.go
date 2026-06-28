@@ -93,7 +93,7 @@ func (r *MySQLRepository) UpdateItemState(playerID string, updatedAt time.Time, 
 		}
 	}
 	if inventorySnapshotChanged(previousInventorySnapshot, state.Inventory) {
-		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, updatedAt.UTC()); err != nil {
+		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, state.InventorySlots, updatedAt.UTC()); err != nil {
 			return game.GameState{}, err
 		}
 	}

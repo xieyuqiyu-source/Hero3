@@ -197,6 +197,52 @@ func isDuplicateKeyName(err error) bool {
 	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1061
 }
 
+// ensurePlayerInventorySlots 把旧版按物品聚合的背包表升级为按格子存储。
+func ensurePlayerInventorySlots(ctx context.Context, db *sql.DB) error {
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE player_inventory ADD COLUMN slot_id VARCHAR(64) NOT NULL DEFAULT '' AFTER player_id`); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE player_inventory SET slot_id = CONCAT('slot_', item_id) WHERE slot_id = ''`); err != nil {
+		return err
+	}
+	columns, err := primaryKeyColumns(ctx, db, "player_inventory")
+	if err != nil {
+		return err
+	}
+	if len(columns) == 2 && columns[0] == "player_id" && columns[1] == "slot_id" {
+		return nil
+	}
+	if _, err := db.ExecContext(ctx, `ALTER TABLE player_inventory DROP PRIMARY KEY, ADD PRIMARY KEY (player_id, slot_id)`); err != nil {
+		return err
+	}
+	return nil
+}
+
+// primaryKeyColumns 查询表主键列顺序。
+func primaryKeyColumns(ctx context.Context, db *sql.DB, tableName string) ([]string, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT COLUMN_NAME
+		FROM information_schema.KEY_COLUMN_USAGE
+		WHERE TABLE_SCHEMA = DATABASE()
+		  AND TABLE_NAME = ?
+		  AND CONSTRAINT_NAME = 'PRIMARY'
+		ORDER BY ORDINAL_POSITION
+	`, tableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	columns := []string{}
+	for rows.Next() {
+		var column string
+		if err := rows.Scan(&column); err != nil {
+			return nil, err
+		}
+		columns = append(columns, column)
+	}
+	return columns, rows.Err()
+}
+
 // recordMySQLMigration 记录当前轻量迁移已经应用，便于后续排查库结构来源。
 func recordMySQLMigration(ctx context.Context, db *sql.DB, migrationID string, description string) error {
 	_, err := db.ExecContext(ctx, `
@@ -251,13 +297,33 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS player_inventory (
 			player_id VARCHAR(64) NOT NULL,
+			slot_id VARCHAR(64) NOT NULL,
 			item_id VARCHAR(64) NOT NULL,
 			amount INT NOT NULL DEFAULT 0,
 			obtained_at DATETIME(6) NULL,
 			updated_at DATETIME(6) NULL,
-			PRIMARY KEY (player_id, item_id),
+			PRIMARY KEY (player_id, slot_id),
 			INDEX idx_player_inventory_item (item_id),
 			CONSTRAINT fk_player_inventory_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS item_ledger (
+			id VARCHAR(64) PRIMARY KEY,
+			player_id VARCHAR(64) NOT NULL,
+			item_id VARCHAR(64) NOT NULL,
+			change_amount INT NOT NULL,
+			before_amount INT NOT NULL,
+			after_amount INT NOT NULL,
+			reason VARCHAR(64) NOT NULL DEFAULT '',
+			ref_type VARCHAR(64) NOT NULL DEFAULT '',
+			ref_id VARCHAR(128) NOT NULL DEFAULT '',
+			metadata_json JSON NULL,
+			created_at DATETIME(6) NOT NULL,
+			INDEX idx_item_ledger_player_created (player_id, created_at),
+			INDEX idx_item_ledger_item_created (item_id, created_at),
+			INDEX idx_item_ledger_ref_created (ref_type, created_at),
+			CONSTRAINT fk_item_ledger_player
 				FOREIGN KEY (player_id) REFERENCES players(id)
 				ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
@@ -790,6 +856,9 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 		if _, err := db.ExecContext(ctx, statement); err != nil {
 			return err
 		}
+	}
+	if err := ensurePlayerInventorySlots(ctx, db); err != nil {
+		return err
 	}
 
 	if err := addColumnIfMissing(ctx, db, `ALTER TABLE accounts ADD COLUMN gold INT NOT NULL DEFAULT 0`); err != nil {
