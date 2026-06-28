@@ -509,6 +509,18 @@ func loadPvpPlayerStateTx(tx *sql.Tx, playerID string) (game.GameState, []byte, 
 	if err := overlayAuthoritativeResourcesTx(tx, &state, playerID); err != nil {
 		return game.GameState{}, nil, err
 	}
+	if err := overlayAuthoritativeBuildingsTx(tx, &state, playerID); err != nil {
+		return game.GameState{}, nil, err
+	}
+	if err := overlayAuthoritativeResourceSlotsTx(tx, &state, playerID); err != nil {
+		return game.GameState{}, nil, err
+	}
+	if err := overlayAuthoritativeRecruitQueuesTx(tx, &state, playerID); err != nil {
+		return game.GameState{}, nil, err
+	}
+	if err := overlayAuthoritativeBuffsTx(tx, &state, playerID); err != nil {
+		return game.GameState{}, nil, err
+	}
 	return state, previousJSON, nil
 }
 
@@ -751,7 +763,7 @@ func insertBattleReportTx(tx *sql.Tx, report game.BattleReport) error {
 		`INSERT INTO battle_report_states (id, report_id, player_id, is_read, is_deleted, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, 0, ?, ?)
 		 ON DUPLICATE KEY UPDATE is_read = VALUES(is_read), updated_at = VALUES(updated_at)`,
-		"state_"+report.ID+"_"+report.PlayerID, report.ID, report.PlayerID, report.Read, createdAt.UTC(), createdAt.UTC(),
+		battleReportStateID(report.ID, report.PlayerID), report.ID, report.PlayerID, report.Read, createdAt.UTC(), createdAt.UTC(),
 	)
 	return err
 }

@@ -29,6 +29,24 @@ type SendPlayerMailRequest struct {
 	Content        string `json:"content"`
 }
 
+type SendServerBroadcastMailRequest struct {
+	SenderPlayerID string `json:"senderPlayerId"`
+	Title          string `json:"title"`
+	Content        string `json:"content"`
+}
+
+type SendServerBroadcastMailResult struct {
+	Cost           int     `json:"cost"`
+	CityGold       FlexInt `json:"cityGold"`
+	RecipientCount int     `json:"recipientCount"`
+	ServerTime     string  `json:"serverTime"`
+}
+
+const (
+	ServerBroadcastMailType = "server_broadcast"
+	ServerBroadcastCost     = 100000
+)
+
 var mailAddressPattern = regexp.MustCompile(`^(.+)#([0-9]{6})$`)
 
 func (s *Service) ListMails(playerID string, page int, pageSize int, mailType string) (MailPage, error) {
@@ -251,6 +269,86 @@ func (s *Service) SendPlayerMail(req SendPlayerMailRequest) (Mail, error) {
 	})
 }
 
+// SendServerBroadcastMail 消耗城金后向全服玩家投递一封玩家喊话信函。
+func (s *Service) SendServerBroadcastMail(req SendServerBroadcastMailRequest) (SendServerBroadcastMailResult, error) {
+	senderID := strings.TrimSpace(req.SenderPlayerID)
+	title := strings.TrimSpace(req.Title)
+	content := strings.TrimSpace(req.Content)
+	if senderID == "" {
+		return SendServerBroadcastMailResult{}, ErrPlayerNotFound
+	}
+	if title == "" || content == "" || utf8.RuneCountInString(title) > 60 || utf8.RuneCountInString(content) > 5000 {
+		return SendServerBroadcastMailResult{}, ErrInvalidMail
+	}
+	recipients, err := s.repo.ListAllPlayers()
+	if err != nil {
+		return SendServerBroadcastMailResult{}, err
+	}
+	if len(recipients) == 0 {
+		return SendServerBroadcastMailResult{}, ErrPlayerNotFound
+	}
+
+	now := time.Now()
+	var senderState GameState
+	state, err := s.repo.UpdateRewardState(senderID, now, func(state *GameState) error {
+		if int(state.CityGold) < ServerBroadcastCost {
+			return ErrInsufficientCityGold
+		}
+		state.CityGold -= FlexInt(ServerBroadcastCost)
+		state.ServerTime = now.UTC().Format(resourceDateLayout)
+		senderState = *state
+		return nil
+	})
+	if err != nil {
+		return SendServerBroadcastMailResult{}, err
+	}
+	if senderState.Player.ID == "" {
+		senderState = state
+	}
+
+	broadcastID := "server_broadcast_" + randomID(12)
+	senderName := formatMailAddress(senderState.Player.Nickname, senderState.Player.MailCode)
+	for _, recipient := range recipients {
+		if strings.TrimSpace(recipient.ID) == "" {
+			continue
+		}
+		if _, err := s.SendMail(SendMailRequest{
+			PlayerID:    recipient.ID,
+			MailType:    ServerBroadcastMailType,
+			SenderType:  "player",
+			SenderID:    senderID,
+			SenderName:  "全服喊话 · " + senderName,
+			Title:       title,
+			Content:     content,
+			SourceType:  "player",
+			SourceID:    broadcastID,
+			Attachments: nil,
+		}); err != nil {
+			return SendServerBroadcastMailResult{}, err
+		}
+	}
+
+	s.recordLedger(GoldLedgerEntry{
+		PlayerID:     senderID,
+		Currency:     LedgerCurrencyCityGold,
+		Direction:    LedgerDirectionDebit,
+		Amount:       ServerBroadcastCost,
+		BalanceAfter: int(state.CityGold),
+		RefType:      LedgerRefServerBroadcast,
+		RefID:        broadcastID,
+		Reason:       "server_broadcast_mail",
+		CreatedAt:    now.UTC().Format(resourceDateLayout),
+	})
+	s.publishCurrencyChanged(senderID, "", broadcastID, LedgerRefServerBroadcast)
+
+	return SendServerBroadcastMailResult{
+		Cost:           ServerBroadcastCost,
+		CityGold:       state.CityGold,
+		RecipientCount: len(recipients),
+		ServerTime:     state.ServerTime,
+	}, nil
+}
+
 func buildMail(req SendMailRequest, now time.Time) (Mail, error) {
 	playerID := strings.TrimSpace(req.PlayerID)
 	title := strings.TrimSpace(req.Title)
@@ -307,7 +405,7 @@ func buildMail(req SendMailRequest, now time.Time) (Mail, error) {
 
 func normalizeMailType(mailType string) string {
 	switch strings.TrimSpace(mailType) {
-	case "compensation", "reward", "event_reward", "system_notice", "player_message", PvpSeasonRewardMailType:
+	case "compensation", "reward", "event_reward", "system_notice", "player_message", PvpSeasonRewardMailType, ServerBroadcastMailType:
 		return strings.TrimSpace(mailType)
 	default:
 		return "gm_notice"
@@ -318,7 +416,7 @@ func normalizeMailTypeFilter(mailType string) (string, bool) {
 	switch strings.TrimSpace(mailType) {
 	case "", "all":
 		return "", true
-	case "gm_notice", "compensation", "reward", "event_reward", "system_notice", "player_message", PvpSeasonRewardMailType:
+	case "gm_notice", "compensation", "reward", "event_reward", "system_notice", "player_message", PvpSeasonRewardMailType, ServerBroadcastMailType:
 		return strings.TrimSpace(mailType), true
 	default:
 		return "", false

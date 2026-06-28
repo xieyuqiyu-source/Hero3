@@ -27,6 +27,15 @@ function safeArray<T>(value?: T[] | null): T[] {
   return Array.isArray(value) ? value : []
 }
 
+// isHiddenReportUnit 判断战报中不展示的非战斗兵种。
+function isHiddenReportUnit(unitType: string, units?: Record<string, Record<string, { name?: string; role?: string }>>): boolean {
+  for (const factionUnits of Object.values(units ?? {})) {
+    const config = factionUnits[unitType]
+    if (config?.role === 'transport' || config?.name?.includes('商人')) return true
+  }
+  return unitType.toLowerCase().includes('merchant')
+}
+
 const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => {
   const faction = useGameStore((s) => s.state?.player.faction) || report.playerFaction || ''
   const general = useGameStore((s) => s.state?.general)
@@ -36,6 +45,8 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
 
   const isVictory = report.result === 'attacker_victory'
   const isDraw = report.result === 'draw'
+  const isDefenseView = report.viewType === 'defense' || report.type === 'defense'
+  const selfDisplayName = report.playerName || useGameStore.getState().state?.player.nickname || '主公'
   const targetDisplayName = report.targetName || report.targetId
 
   const handleShare = async () => {
@@ -57,6 +68,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const allUnitIds = Object.keys(factionUnits).length > 0
     ? Object.keys(factionUnits)
     : Object.keys(report.dispatchedUnits ?? {})
+  const visibleAllUnitIds = allUnitIds.filter((unitType) => !isHiddenReportUnit(unitType, units ?? undefined))
 
   // 防守方阵营兵种
   const defenderFaction = report.defenderFaction || ''
@@ -64,6 +76,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const defenderAllUnitIds = Object.keys(defenderFactionUnits).length > 0
     ? Object.keys(defenderFactionUnits)
     : Object.keys(report.defenderUnits ?? {})
+  const visibleDefenderAllUnitIds = defenderAllUnitIds.filter((unitType) => !isHiddenReportUnit(unitType, units ?? undefined))
 
   const getUnitName = (unitType: string): string => {
     // 尝试从所有阵营配置里找名字
@@ -102,6 +115,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const pvpReinforcements = safeArray(report.pvpReinforcements)
   const pvpReinforcementLosses = report.pvpReinforcementLosses ?? {}
   const hasPvpGenerals = pvpAttackerGenerals.length > 0 || pvpDefenderGenerals.length > 0
+  const isPvpReport = report.sourceType === 'player_city' || hasPvpGenerals || pvpPointEntries.length > 0
   const dispatchedUnits = safeMap(report.dispatchedUnits)
   const lostUnits = safeMap(report.lostUnits)
   const rewards = safeMap(report.rewards)
@@ -111,6 +125,29 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const capturedToGarrison = safeMap(report.capturedToGarrison)
   const revivedUnits = safeMap(report.revivedUnits)
   const traitTriggered = safeArray(report.traitTriggered)
+  const topDisplayName = isDefenseView ? targetDisplayName : selfDisplayName
+  const bottomDisplayName = isDefenseView ? selfDisplayName : targetDisplayName
+  const topPower = isDefenseView ? report.enemyPower : report.playerPower
+  const bottomPower = isDefenseView ? report.playerPower : report.enemyPower
+  const topUnitIds = isDefenseView ? visibleDefenderAllUnitIds : visibleAllUnitIds
+  const bottomUnitIds = isDefenseView ? visibleAllUnitIds : visibleDefenderAllUnitIds
+  const topUnits = isDefenseView ? defenderUnits : dispatchedUnits
+  const topLostUnits = isDefenseView ? defenderLostUnits : lostUnits
+  const bottomUnits = isDefenseView ? dispatchedUnits : defenderUnits
+  const bottomLostUnits = isDefenseView ? lostUnits : defenderLostUnits
+  const bottomRevealed = isDefenseView ? true : report.defenderRevealed
+  const topGeneralText = isPvpReport
+    ? formatPvpGenerals(pvpAttackerGenerals)
+    : `${general?.name ?? '—'}${general ? ` Lv.${general.level}` : ''}`
+  const bottomGeneralText = isPvpReport ? formatPvpGenerals(pvpDefenderGenerals) : '无'
+  const reportGeneralExp = report.generalExpGained ?? report.detail?.rewards?.generalExp ?? 0
+  const generalExpText = reportGeneralExp > 0
+    ? `+${reportGeneralExp}${report.generalLevelAfter && report.generalLevelBefore && report.generalLevelAfter > report.generalLevelBefore
+      ? ` Lv.${report.generalLevelBefore} → Lv.${report.generalLevelAfter}`
+      : ''}`
+    : '—'
+  const topGeneralExpText = isPvpReport && isDefenseView ? '—' : generalExpText
+  const bottomGeneralExpText = isPvpReport && isDefenseView ? generalExpText : '—'
 
   const formatOutcomeDetail = (key: string, value: number | string | Record<string, number>): string => {
     const labels: Record<string, string> = {
@@ -166,7 +203,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
       {/* Title */}
       <div className={`text-center py-3 rounded-xl ${isVictory ? 'bg-green-500/10' : isDraw ? 'bg-slate-500/10' : 'bg-red-500/10'}`}>
         <h2 className={`text-base font-bold ${isVictory ? 'text-green-600' : isDraw ? 'text-slate-500' : 'text-red-600'}`}>
-          {report.playerName || useGameStore.getState().state?.player.nickname || '主公'} {TYPE_LABELS[report.type] ?? '攻击'} {targetDisplayName}
+          {topDisplayName} {TYPE_LABELS[report.type] ?? '攻击'} {bottomDisplayName}
         </h2>
         <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
           {new Date(report.createdAt).toLocaleString('zh-CN')}
@@ -177,7 +214,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
         <div className="px-4 py-2 border-b border-[var(--color-border)] bg-red-500/5">
           <span className="text-xs font-bold text-red-600">⚔ 进攻方</span>
-          <span className="text-[10px] text-[var(--color-text-muted)] ml-2">战力 {report.playerPower.toLocaleString()}</span>
+          <span className="text-[10px] text-[var(--color-text-muted)] ml-2">战力 {topPower.toLocaleString()}</span>
         </div>
 
         {/* 将领 & 经验 */}
@@ -185,17 +222,13 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
           <div className="flex items-center">
             <span className="text-xs text-[var(--color-text-secondary)] w-12 flex-shrink-0">将领</span>
             <span className="text-xs font-semibold text-[var(--color-text-primary)] flex-1 text-center">
-              {general?.name ?? '—'} {general ? `Lv.${general.level}` : ''}
+              {topGeneralText}
             </span>
           </div>
           <div className="flex items-center mt-1">
             <span className="text-xs text-[var(--color-text-secondary)] w-12 flex-shrink-0">经验</span>
             <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">
-              {(report.generalExpGained ?? 0) > 0
-                ? `+${report.generalExpGained}${report.generalLevelAfter && report.generalLevelBefore && report.generalLevelAfter > report.generalLevelBefore
-                  ? ` Lv.${report.generalLevelBefore} → Lv.${report.generalLevelAfter}`
-                  : ''}`
-                : '—'}
+              {topGeneralExpText}
             </span>
           </div>
         </div>
@@ -208,7 +241,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
               <thead>
                 <tr className="text-[var(--color-text-muted)]">
                   <td className="py-1 text-left font-medium">兵种</td>
-                  {allUnitIds.map((uid) => (
+                  {topUnitIds.map((uid) => (
                     <td key={uid} className="py-1 px-1 min-w-[40px]">
                       <span className="text-[9px]">{getUnitName(uid)}</span>
                     </td>
@@ -218,8 +251,8 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
               <tbody>
                 <tr>
                   <td className="py-1 text-left font-medium text-[var(--color-text-secondary)]">出动</td>
-                  {allUnitIds.map((uid) => {
-                    const dispatched = dispatchedUnits[uid] ?? 0
+                  {topUnitIds.map((uid) => {
+                    const dispatched = topUnits[uid] ?? 0
                     return (
                       <td key={uid} className={`py-1 px-1 ${dispatched > 0 ? 'font-bold text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
                         {dispatched}
@@ -229,8 +262,8 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
                 </tr>
                 <tr>
                   <td className="py-1 text-left font-medium text-red-500">阵亡</td>
-                  {allUnitIds.map((uid) => {
-                    const lost = lostUnits[uid] ?? 0
+                  {topUnitIds.map((uid) => {
+                    const lost = topLostUnits[uid] ?? 0
                     return (
                       <td key={uid} className={`py-1 px-1 ${lost > 0 ? 'font-bold text-red-600' : 'text-[var(--color-text-muted)]'}`}>
                         {lost}
@@ -243,11 +276,11 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
           </div>
           {/* Mobile: vertical list, only show units with dispatched > 0 */}
           <div className="sm:hidden space-y-1.5">
-            {allUnitIds
-              .filter((uid) => (dispatchedUnits[uid] ?? 0) > 0)
+            {topUnitIds
+              .filter((uid) => (topUnits[uid] ?? 0) > 0)
               .map((uid) => {
-                const dispatched = dispatchedUnits[uid] ?? 0
-                const lost = lostUnits[uid] ?? 0
+                const dispatched = topUnits[uid] ?? 0
+                const lost = topLostUnits[uid] ?? 0
                 return (
                   <div key={uid} className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
                     <span className="text-[10px] font-medium text-[var(--color-text-primary)]">{getUnitName(uid)}</span>
@@ -258,7 +291,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
                   </div>
                 )
               })}
-            {allUnitIds.filter((uid) => (dispatchedUnits[uid] ?? 0) > 0).length === 0 && (
+            {topUnitIds.filter((uid) => (topUnits[uid] ?? 0) > 0).length === 0 && (
               <span className="text-[10px] text-[var(--color-text-muted)]">无出动兵种</span>
             )}
           </div>
@@ -478,25 +511,25 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
       {/* 防守方 */}
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
         <div className="px-4 py-2 border-b border-[var(--color-border)] bg-blue-500/5">
-          <span className="text-xs font-bold text-blue-600">🛡 防守方 — {targetDisplayName}</span>
-          <span className="text-[10px] text-[var(--color-text-muted)] ml-2">战力 {report.enemyPower.toLocaleString()}</span>
+          <span className="text-xs font-bold text-blue-600">🛡 防守方 — {bottomDisplayName}</span>
+          <span className="text-[10px] text-[var(--color-text-muted)] ml-2">战力 {bottomPower.toLocaleString()}</span>
         </div>
 
         {/* 将领 & 经验 */}
         <div className="px-4 py-2 border-b border-[var(--color-border)]">
           <div className="flex items-center">
             <span className="text-xs text-[var(--color-text-secondary)] w-12 flex-shrink-0">将领</span>
-            <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">无</span>
+            <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">{bottomGeneralText}</span>
           </div>
           <div className="flex items-center mt-1">
             <span className="text-xs text-[var(--color-text-secondary)] w-12 flex-shrink-0">经验</span>
-            <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">—</span>
+            <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">{bottomGeneralExpText}</span>
           </div>
         </div>
 
         {/* 防守方兵种 */}
         <div className="px-4 py-2 border-b border-[var(--color-border)]">
-          {report.defenderRevealed && defenderAllUnitIds.length > 0 ? (
+          {bottomRevealed && bottomUnitIds.length > 0 ? (
             <>
               {/* Desktop: horizontal table */}
               <div className="hidden sm:block overflow-x-auto">
@@ -504,7 +537,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
                   <thead>
                     <tr className="text-[var(--color-text-muted)]">
                       <td className="py-1 text-left font-medium">兵种</td>
-                      {defenderAllUnitIds.map((uid) => (
+                      {bottomUnitIds.map((uid) => (
                         <td key={uid} className="py-1 px-1 min-w-[40px]">
                           <span className="text-[9px]">{getDefenderUnitName(uid)}</span>
                         </td>
@@ -514,8 +547,8 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
                   <tbody>
                     <tr>
                       <td className="py-1 text-left font-medium text-[var(--color-text-secondary)]">驻守</td>
-                      {defenderAllUnitIds.map((uid) => {
-                        const count = defenderUnits[uid] ?? 0
+                      {bottomUnitIds.map((uid) => {
+                        const count = bottomUnits[uid] ?? 0
                         return (
                           <td key={uid} className={`py-1 px-1 ${count > 0 ? 'font-bold text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
                             {count}
@@ -525,8 +558,8 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
                     </tr>
                     <tr>
                       <td className="py-1 text-left font-medium text-red-500">阵亡</td>
-                      {defenderAllUnitIds.map((uid) => {
-                        const lost = defenderLostUnits[uid] ?? 0
+                      {bottomUnitIds.map((uid) => {
+                        const lost = bottomLostUnits[uid] ?? 0
                         return (
                           <td key={uid} className={`py-1 px-1 ${lost > 0 ? 'font-bold text-red-600' : 'text-[var(--color-text-muted)]'}`}>
                             {lost}
@@ -539,11 +572,11 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
               </div>
               {/* Mobile: vertical list, only show units with count > 0 */}
               <div className="sm:hidden space-y-1.5">
-                {defenderAllUnitIds
-                  .filter((uid) => (defenderUnits[uid] ?? 0) > 0)
+                {bottomUnitIds
+                  .filter((uid) => (bottomUnits[uid] ?? 0) > 0)
                   .map((uid) => {
-                    const count = defenderUnits[uid] ?? 0
-                    const lost = defenderLostUnits[uid] ?? 0
+                    const count = bottomUnits[uid] ?? 0
+                    const lost = bottomLostUnits[uid] ?? 0
                     return (
                       <div key={uid} className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
                         <span className="text-[10px] font-medium text-[var(--color-text-primary)]">{getDefenderUnitName(uid)}</span>

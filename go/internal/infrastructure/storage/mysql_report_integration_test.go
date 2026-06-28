@@ -202,3 +202,49 @@ func TestMySQLBattleReportEventStateAndShare(t *testing.T) {
 		t.Fatal("expected report state to be marked deleted")
 	}
 }
+
+// TestMySQLBattleReportStateIDUsesSafeLength 验证长 report/player ID 不会撑爆状态表主键。
+func TestMySQLBattleReportStateIDUsesSafeLength(t *testing.T) {
+	repo, db := openReportTestRepository(t)
+	now := time.Now().UTC()
+	suffix := strings.NewReplacer(".", "_").Replace(now.Format("150405.000000"))
+	eventID := "it_evt_long_state_" + suffix
+	reportID := "br_pvp_scout_" + strings.Repeat("abcdef", 7)
+	playerID := "player_" + strings.Repeat("123456", 5)
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM battle_report_participants WHERE event_id = ?`, eventID)
+		_, _ = db.Exec(`DELETE FROM battle_report_states WHERE report_id = ?`, reportID)
+		_, _ = db.Exec(`DELETE FROM battle_reports WHERE id = ?`, reportID)
+		_, _ = db.Exec(`DELETE FROM battle_events WHERE id = ?`, eventID)
+	})
+
+	report := game.NormalizeBattleReport(game.BattleReport{
+		ID:               reportID,
+		EventID:          eventID,
+		PlayerID:         playerID,
+		OwnerPlayerID:    playerID,
+		PlayerName:       "长 ID 侦查方",
+		PlayerFaction:    "wei",
+		TargetID:         "player_target_" + suffix,
+		TargetName:       "目标",
+		Type:             "scout",
+		ViewType:         game.ReportViewAttack,
+		SourceType:       game.ReportSourcePlayerCity,
+		BattleType:       "scout",
+		Result:           "attacker_victory",
+		DispatchedUnits:  map[string]int{"weiScout": 3},
+		DefenderFaction:  "shu",
+		DefenderRevealed: true,
+		CreatedAt:        now.Format(time.RFC3339),
+	})
+	if err := repo.SaveReports([]game.BattleReport{report}); err != nil {
+		t.Fatalf("save long id report: %v", err)
+	}
+	var stateID string
+	if err := db.QueryRow(`SELECT id FROM battle_report_states WHERE report_id = ? AND player_id = ?`, reportID, playerID).Scan(&stateID); err != nil {
+		t.Fatalf("read battle report state: %v", err)
+	}
+	if len(stateID) > 64 {
+		t.Fatalf("expected state id length <= 64, got %d: %s", len(stateID), stateID)
+	}
+}

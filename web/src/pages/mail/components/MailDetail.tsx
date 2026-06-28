@@ -1,7 +1,7 @@
 import { type FC } from 'react'
 import { Bell, Gift, Loader2, Trash2 } from 'lucide-react'
 import type { Mail } from '@/types/game'
-import { TYPE_CONFIG } from '../data'
+import { getMailTypeConfig } from '../data'
 
 const MailDetail: FC<{
   mail: Mail
@@ -9,7 +9,7 @@ const MailDetail: FC<{
   onClaim: () => void
   claiming: boolean
 }> = ({ mail, onDelete, onClaim, claiming }) => {
-  const config = TYPE_CONFIG[mail.mailType]
+  const config = getMailTypeConfig(mail.mailType)
   const Icon = config.icon
   const hasAttachment = (mail.attachments?.length ?? 0) > 0
 

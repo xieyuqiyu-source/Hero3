@@ -15,7 +15,10 @@ import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
 import type { Mail as PlayerMail } from '@/types/game'
 import MailDetail from './components/MailDetail'
-import { PAGE_SIZE, TYPE_CONFIG, TYPE_OPTIONS, type MailType } from './data'
+import { getMailTypeConfig, PAGE_SIZE, TYPE_OPTIONS, type MailType } from './data'
+
+const SERVER_BROADCAST_COST = 100000
+type SendMode = 'player' | 'server_broadcast'
 
 const MailPage: FC = () => {
   const [activeType, setActiveType] = useState<MailType>('all')
@@ -29,6 +32,7 @@ const MailPage: FC = () => {
   const [hasLoaded, setHasLoaded] = useState(false)
   const [claiming, setClaiming] = useState(false)
   const [sendOpen, setSendOpen] = useState(false)
+  const [sendMode, setSendMode] = useState<SendMode>('player')
   const [sendRecipient, setSendRecipient] = useState('')
   const [sendTitle, setSendTitle] = useState('')
   const [sendContent, setSendContent] = useState('')
@@ -149,15 +153,29 @@ const MailPage: FC = () => {
 
   const handleSendPlayerMail = async () => {
     if (!activePlayerId || sending) return
-    if (!sendRecipient.trim() || !sendTitle.trim() || !sendContent.trim()) {
+    if (sendMode === 'player' && !sendRecipient.trim()) {
       setSendMessage('请填写收信地址、标题和正文')
+      return
+    }
+    if (!sendTitle.trim() || !sendContent.trim()) {
+      setSendMessage('请填写标题和正文')
+      return
+    }
+    if (sendMode === 'server_broadcast' && Number(gameState?.cityGold ?? 0) < SERVER_BROADCAST_COST) {
+      setSendMessage('城金不足，全服喊话需要 100000 城金')
       return
     }
     setSending(true)
     setSendMessage('')
     try {
-      await gameApi.sendPlayerMail(activePlayerId, sendRecipient.trim(), sendTitle.trim(), sendContent.trim())
-      toast.success('信函已发送')
+      if (sendMode === 'server_broadcast') {
+        const result = await gameApi.sendServerBroadcastMail(activePlayerId, sendTitle.trim(), sendContent.trim())
+        patchState({ cityGold: result.cityGold, serverTime: result.serverTime })
+        toast.success(`全服喊话已发送，送达 ${result.recipientCount} 位玩家`)
+      } else {
+        await gameApi.sendPlayerMail(activePlayerId, sendRecipient.trim(), sendTitle.trim(), sendContent.trim())
+        toast.success('信函已发送')
+      }
       setSendRecipient('')
       setSendTitle('')
       setSendContent('')
@@ -249,7 +267,7 @@ const MailPage: FC = () => {
             </div>
           )}
           {mails.map((mail, index) => {
-            const config = TYPE_CONFIG[mail.mailType]
+            const config = getMailTypeConfig(mail.mailType)
             const Icon = mail.isRead ? MailOpen : config.icon
             return (
               <button
@@ -369,12 +387,37 @@ const MailPage: FC = () => {
               )}
             </div>
             <div className="mt-4 space-y-3">
-              <input
-                value={sendRecipient}
-                onChange={(event) => setSendRecipient(event.target.value)}
-                placeholder="收信地址，例如 玄术#482193"
-                className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent-border)]"
-              />
+              <div className="grid grid-cols-2 gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-1">
+                {([
+                  ['player', '普通私信'],
+                  ['server_broadcast', '全服喊话'],
+                ] as const).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setSendMode(mode)}
+                    className={`h-8 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                      sendMode === mode
+                        ? 'bg-[var(--color-accent)] text-white'
+                        : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-accent-light)]'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {sendMode === 'player' ? (
+                <input
+                  value={sendRecipient}
+                  onChange={(event) => setSendRecipient(event.target.value)}
+                  placeholder="收信地址，例如 玄术#482193"
+                  className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent-border)]"
+                />
+              ) : (
+                <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-600">
+                  全服喊话会以信函发送给所有玩家，发送消耗 {SERVER_BROADCAST_COST.toLocaleString()} 城金。
+                </div>
+              )}
               <input
                 value={sendTitle}
                 onChange={(event) => setSendTitle(event.target.value)}

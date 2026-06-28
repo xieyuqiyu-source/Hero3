@@ -19,7 +19,7 @@ const NewsPage: FC = () => {
   const [currentPage, setCurrentPage] = useState(1)
   const [reports, setReports] = useState<BattleReport[]>(EMPTY_REPORTS)
   const [totalReports, setTotalReports] = useState(0)
-  const [activeView, setActiveView] = useState('attack')
+  const [activeView, setActiveView] = useState('all')
   const [loading, setLoading] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
@@ -36,7 +36,7 @@ const NewsPage: FC = () => {
     }
     setLoading(true)
     try {
-      const result = await gameApi.listReports(activePlayerId, page, PAGE_SIZE, { viewType: activeView })
+      const result = await gameApi.listReports(activePlayerId, page, PAGE_SIZE, activeView === 'all' ? undefined : { viewType: activeView })
       const nextReports = Array.isArray(result.reports) ? result.reports : EMPTY_REPORTS
       const nextTotal = typeof result.total === 'number' ? result.total : nextReports.length
       setReports(nextReports)
@@ -103,7 +103,7 @@ const NewsPage: FC = () => {
 
   const handleDeleteAll = () => {
     if (!activePlayerId) return
-    gameApi.deleteAllReports(activePlayerId, activeView).then((res) => {
+    gameApi.deleteAllReports(activePlayerId, activeView === 'all' ? undefined : activeView).then((res) => {
       patchState({ unreadMessageCount: res.unreadMessageCount, serverTime: res.serverTime })
       setCurrentPage(1)
       loadReports(1)
@@ -112,7 +112,7 @@ const NewsPage: FC = () => {
 
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-3 gap-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-1">
+      <div className="grid grid-cols-5 gap-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-1">
         {REPORT_VIEW_TABS.map((tab) => (
           <button
             key={tab.key}

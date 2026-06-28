@@ -300,19 +300,41 @@ func repairBattleReportStates(ctx context.Context, dsn string) (int64, error) {
 	}
 	defer db.Close()
 	now := time.Now().UTC()
-	result, err := db.ExecContext(ctx,
-		`INSERT INTO battle_report_states (id, report_id, player_id, is_read, is_deleted, created_at, updated_at)
-		 SELECT CONCAT('state_', br.id, '_', br.owner_player_id), br.id, br.owner_player_id, br.is_read, br.deleted_by_player, ?, ?
+	rows, err := db.QueryContext(ctx,
+		`SELECT br.id, br.owner_player_id, br.is_read, br.deleted_by_player
 		 FROM battle_reports br
 		 LEFT JOIN battle_report_states s ON s.report_id = br.id AND s.player_id = br.owner_player_id
 		 WHERE br.owner_player_id <> '' AND s.id IS NULL`,
-		now,
-		now,
 	)
 	if err != nil {
 		return 0, err
 	}
-	return result.RowsAffected()
+	defer rows.Close()
+	var inserted int64
+	for rows.Next() {
+		var reportID, playerID string
+		var isRead, isDeleted bool
+		if err := rows.Scan(&reportID, &playerID, &isRead, &isDeleted); err != nil {
+			return inserted, err
+		}
+		result, err := db.ExecContext(ctx,
+			`INSERT INTO battle_report_states (id, report_id, player_id, is_read, is_deleted, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			battleReportStateID(reportID, playerID),
+			reportID,
+			playerID,
+			isRead,
+			isDeleted,
+			now,
+			now,
+		)
+		if err != nil {
+			return inserted, err
+		}
+		affected, _ := result.RowsAffected()
+		inserted += affected
+	}
+	return inserted, rows.Err()
 }
 
 // repairBattleEventLinks 补齐 event_id 和 battle_events。
@@ -578,6 +600,16 @@ func battleReportParticipantID(reportID string, side string) string {
 	}
 	sum := sha1.Sum([]byte(raw))
 	return "participant_" + hex.EncodeToString(sum[:])
+}
+
+// battleReportStateID 生成长度安全的玩家战报状态 ID。
+func battleReportStateID(reportID string, playerID string) string {
+	raw := "state_" + reportID + "_" + playerID
+	if len(raw) <= 64 {
+		return raw
+	}
+	sum := sha1.Sum([]byte(raw))
+	return "state_" + hex.EncodeToString(sum[:])
 }
 
 // scanCount 执行单值 COUNT 查询。

@@ -9,8 +9,8 @@ export class ApiError extends Error {
   status: number
   body: unknown
 
-  constructor(status: number, body: unknown) {
-    super(`API Error ${status}`)
+  constructor(status: number, body: unknown, message?: string) {
+    super(message || `请求失败 (${status})`)
     this.name = 'ApiError'
     this.status = status
     this.body = body
@@ -93,8 +93,9 @@ async function request<T>(
       headers,
     })
   } catch {
-    toast.error('网络连接失败，请检查网络')
-    throw new ApiError(0, null)
+    const message = '网络连接失败，请检查网络'
+    toast.error(message)
+    throw new ApiError(0, null, message)
   }
 
   if (!res.ok) {
@@ -106,8 +107,9 @@ async function request<T>(
       // logout 内部会清掉 hero3_token / hero3_account_* 以及活跃玩家
       useAccountStore.getState().logout()
       // 之前有 token 才提示「重新登录」，否则按普通未授权处理
-      toast.error(hadToken ? '登录已过期，请重新登录' : '系统已更新，请重新登录以继续游戏')
-      throw new ApiError(res.status, body)
+      const message = hadToken ? '登录已过期，请重新登录' : '系统已更新，请重新登录以继续游戏'
+      toast.error(message)
+      throw new ApiError(res.status, body, message)
     }
 
     const message = extractMessage(res.status, body)
@@ -118,7 +120,7 @@ async function request<T>(
       useAccountStore.getState().logout()
     }
 
-    throw new ApiError(res.status, body)
+    throw new ApiError(res.status, body, message)
   }
 
   return res.json() as Promise<T>

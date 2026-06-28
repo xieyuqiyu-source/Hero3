@@ -3,7 +3,6 @@ package storage
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -115,12 +114,25 @@ func (r *MySQLRepository) FindPlayerByMailAddress(nickname string, mailCode stri
 	var summary game.PlayerSummary
 	var updatedAt time.Time
 	err := r.db.QueryRow(
-		`SELECT id, nickname, faction, mail_code, updated_at
-		 FROM players
-		 WHERE nickname = ? AND mail_code = ?
-		 LIMIT 1`,
+		`SELECT p.id, p.nickname, p.faction, p.mail_code,
+			COALESCE(army.total_army, 0),
+			COALESCE(buildings.building_level, 0),
+			p.updated_at
+			 FROM players
+			 LEFT JOIN (
+				SELECT player_id, SUM(amount) AS total_army
+				FROM player_army_units
+				GROUP BY player_id
+			 ) army ON army.player_id = p.id
+			 LEFT JOIN (
+				SELECT player_id, SUM(level) AS building_level
+				FROM player_buildings
+				GROUP BY player_id
+			 ) buildings ON buildings.player_id = p.id
+			 WHERE p.nickname = ? AND p.mail_code = ?
+			 LIMIT 1`,
 		nickname, mailCode,
-	).Scan(&summary.ID, &summary.Nickname, &summary.Faction, &summary.MailCode, &updatedAt)
+	).Scan(&summary.ID, &summary.Nickname, &summary.Faction, &summary.MailCode, &summary.TotalArmy, &summary.BuildingLevel, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return game.PlayerSummary{}, game.ErrPlayerNotFound
 	}
@@ -138,13 +150,25 @@ func (r *MySQLRepository) ListAccounts() ([]game.AccountSummary, error) {
 			a.username,
 			a.created_at,
 			p.id,
-			p.nickname,
-			p.faction,
-			p.mail_code,
-			p.updated_at
-		FROM accounts a
-		LEFT JOIN players p ON p.account_id = a.id
-		ORDER BY a.created_at DESC, p.updated_at DESC`,
+				p.nickname,
+				p.faction,
+				p.mail_code,
+				COALESCE(army.total_army, 0),
+				COALESCE(buildings.building_level, 0),
+				p.updated_at
+			FROM accounts a
+			LEFT JOIN players p ON p.account_id = a.id
+			LEFT JOIN (
+				SELECT player_id, SUM(amount) AS total_army
+				FROM player_army_units
+				GROUP BY player_id
+			) army ON army.player_id = p.id
+			LEFT JOIN (
+				SELECT player_id, SUM(level) AS building_level
+				FROM player_buildings
+				GROUP BY player_id
+			) buildings ON buildings.player_id = p.id
+			ORDER BY a.created_at DESC, p.updated_at DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -161,9 +185,11 @@ func (r *MySQLRepository) ListAccounts() ([]game.AccountSummary, error) {
 		var nickname sql.NullString
 		var faction sql.NullString
 		var mailCode sql.NullString
+		var totalArmy sql.NullInt64
+		var buildingLevel sql.NullInt64
 		var updatedAt sql.NullTime
 
-		if err := rows.Scan(&accountID, &username, &createdAt, &playerID, &nickname, &faction, &mailCode, &updatedAt); err != nil {
+		if err := rows.Scan(&accountID, &username, &createdAt, &playerID, &nickname, &faction, &mailCode, &totalArmy, &buildingLevel, &updatedAt); err != nil {
 			return nil, err
 		}
 
@@ -185,6 +211,12 @@ func (r *MySQLRepository) ListAccounts() ([]game.AccountSummary, error) {
 				Nickname: nickname.String,
 				Faction:  faction.String,
 				MailCode: mailCode.String,
+			}
+			if totalArmy.Valid {
+				player.TotalArmy = int(totalArmy.Int64)
+			}
+			if buildingLevel.Valid {
+				player.BuildingLevel = int(buildingLevel.Int64)
 			}
 			if updatedAt.Valid {
 				player.UpdatedAt = updatedAt.Time.UTC().Format(time.RFC3339)
@@ -213,10 +245,23 @@ func (r *MySQLRepository) ListPlayers(accountID string) ([]game.PlayerSummary, e
 	}
 
 	rows, err := r.db.Query(
-		`SELECT id, nickname, faction, mail_code, state_json, updated_at
-		 FROM players
-		 WHERE account_id = ?
-		 ORDER BY updated_at DESC`,
+		`SELECT p.id, p.nickname, p.faction, p.mail_code,
+			COALESCE(army.total_army, 0),
+			COALESCE(buildings.building_level, 0),
+			p.updated_at
+			 FROM players p
+			 LEFT JOIN (
+				SELECT player_id, SUM(amount) AS total_army
+				FROM player_army_units
+				GROUP BY player_id
+			 ) army ON army.player_id = p.id
+			 LEFT JOIN (
+				SELECT player_id, SUM(level) AS building_level
+				FROM player_buildings
+				GROUP BY player_id
+			 ) buildings ON buildings.player_id = p.id
+			 WHERE p.account_id = ?
+			 ORDER BY p.updated_at DESC`,
 		accountID,
 	)
 	if err != nil {
@@ -227,34 +272,64 @@ func (r *MySQLRepository) ListPlayers(accountID string) ([]game.PlayerSummary, e
 	players := []game.PlayerSummary{}
 	for rows.Next() {
 		var id, nickname, faction, mailCode string
-		var stateJSON []byte
+		var totalArmy int
+		var buildingLevel int
 		var updatedAt time.Time
-		if err := rows.Scan(&id, &nickname, &faction, &mailCode, &stateJSON, &updatedAt); err != nil {
+		if err := rows.Scan(&id, &nickname, &faction, &mailCode, &totalArmy, &buildingLevel, &updatedAt); err != nil {
 			return nil, err
 		}
 
 		summary := game.PlayerSummary{
-			ID:        id,
-			Nickname:  nickname,
-			Faction:   faction,
-			MailCode:  mailCode,
-			UpdatedAt: updatedAt.UTC().Format(time.RFC3339),
-		}
-
-		// 从 state_json 提取摘要
-		var state game.GameState
-		if err := json.Unmarshal(stateJSON, &state); err == nil {
-			for _, unit := range state.Army {
-				summary.TotalArmy += unit.Amount
-			}
-			for _, b := range state.Buildings {
-				summary.BuildingLevel += b.Level
-			}
+			ID:            id,
+			Nickname:      nickname,
+			Faction:       faction,
+			MailCode:      mailCode,
+			TotalArmy:     totalArmy,
+			BuildingLevel: buildingLevel,
+			UpdatedAt:     updatedAt.UTC().Format(time.RFC3339),
 		}
 
 		players = append(players, summary)
 	}
 
+	return players, rows.Err()
+}
+
+// ListAllPlayers 返回全服玩家摘要，用于系统信函和全服喊话投递。
+func (r *MySQLRepository) ListAllPlayers() ([]game.PlayerSummary, error) {
+	rows, err := r.db.Query(
+		`SELECT p.id, p.nickname, p.faction, p.mail_code,
+				COALESCE(army.total_army, 0),
+				COALESCE(buildings.building_level, 0),
+				p.updated_at
+			 FROM players p
+			 LEFT JOIN (
+				SELECT player_id, SUM(amount) AS total_army
+				FROM player_army_units
+				GROUP BY player_id
+			 ) army ON army.player_id = p.id
+			 LEFT JOIN (
+				SELECT player_id, SUM(level) AS building_level
+				FROM player_buildings
+				GROUP BY player_id
+			 ) buildings ON buildings.player_id = p.id
+			 ORDER BY p.updated_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	players := []game.PlayerSummary{}
+	for rows.Next() {
+		var summary game.PlayerSummary
+		var updatedAt time.Time
+		if err := rows.Scan(&summary.ID, &summary.Nickname, &summary.Faction, &summary.MailCode, &summary.TotalArmy, &summary.BuildingLevel, &updatedAt); err != nil {
+			return nil, err
+		}
+		summary.UpdatedAt = updatedAt.UTC().Format(time.RFC3339)
+		players = append(players, summary)
+	}
 	return players, rows.Err()
 }
 

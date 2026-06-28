@@ -18,7 +18,6 @@ var (
 	ErrPvpTargetSelf          = errors.New("cannot attack self")
 	ErrPvpSameAccountTarget   = errors.New("cannot attack another save in same account")
 	ErrPvpTargetProtected     = errors.New("pvp target is protected")
-	ErrPvpAttackCooldown      = errors.New("pvp attack is on cooldown")
 	ErrPvpDailyLimitReached   = errors.New("pvp daily attack limit reached")
 	ErrPvpMarchNotReady       = errors.New("pvp march has not arrived")
 	ErrPvpMarchNotRecallable  = errors.New("pvp march cannot be recalled")
@@ -66,17 +65,12 @@ func (s *Service) ListPvpTargetsInArea(playerID string, filter PvpTargetFilter) 
 			canAttack := account.ID != requestAccountID
 			reason := ""
 			protectedUntil := ""
-			cooldownUntil := requestPvpState.CooldownUntil
 			targetPvpState, _ := s.repo.GetPvpPlayerState(player.ID, now)
 			protected, protectionType, activeUntil := activePvpProtection(targetPvpState, now)
 			if protected {
 				canAttack = false
 				protectedUntil = activeUntil
 				reason = pvpProtectionReason(protectionType)
-			}
-			if pvpTimeAfter(requestPvpState.CooldownUntil, now) {
-				canAttack = false
-				reason = "攻击冷却中"
 			}
 			if requestPvpState.DailyAttackLimit > 0 && requestPvpState.DailyAttackCount >= requestPvpState.DailyAttackLimit {
 				canAttack = false
@@ -97,7 +91,6 @@ func (s *Service) ListPvpTargetsInArea(playerID string, filter PvpTargetFilter) 
 				CanReinforce:   true,
 				Protected:      protectedUntil != "",
 				ProtectedUntil: protectedUntil,
-				CooldownUntil:  cooldownUntil,
 				Reason:         reason,
 			})
 		}
@@ -216,8 +209,14 @@ func (s *Service) ScoutPvpTarget(req PvpScoutRequest) (PvpScoutResponse, error) 
 	}
 	now := time.Now().UTC()
 	var report BattleReport
+	var defenderReport BattleReport
 	var scoutSuccess bool
 	_, _, err := s.repo.UpdatePvpScoutStates(playerID, targetPlayerID, now, func(scout *GameState, target *GameState) error {
+		settledScout, _ := settleResources(*scout, now)
+		*scout = settledScout
+		settledTarget, _ := settleResources(*target, now)
+		*target = settledTarget
+
 		scoutUnitID := findScoutUnit(scout.Player.Faction)
 		if scoutUnitID == "" {
 			return ErrNoUnitsSelected
@@ -228,6 +227,8 @@ func (s *Service) ScoutPvpTarget(req PvpScoutRequest) (PvpScoutResponse, error) 
 		}
 		targetScoutUnitID := findScoutUnit(target.Player.Faction)
 		targetScoutCount, targetScoutIdx := armyUnitAmountAndIndex(target.Army, targetScoutUnitID)
+		scoutUnitsBefore := map[string]int{scoutUnitID: scoutCount}
+		targetUnitsBefore := armySliceToMap(target.Army)
 		scoutLost, targetLost, success := resolveScoutSkirmish(scoutCount, targetScoutCount)
 		scoutSuccess = success
 		if scoutLost > 0 {
@@ -251,6 +252,8 @@ func (s *Service) ScoutPvpTarget(req PvpScoutRequest) (PvpScoutResponse, error) 
 		report = BattleReport{
 			ID:                "br_pvp_scout_" + randomID(8),
 			PlayerID:          scout.Player.ID,
+			OwnerPlayerID:     scout.Player.ID,
+			ViewType:          ReportViewAttack,
 			PlayerFaction:     scout.Player.Faction,
 			PlayerName:        scout.Player.Nickname,
 			TargetID:          target.Player.ID,
@@ -261,11 +264,38 @@ func (s *Service) ScoutPvpTarget(req PvpScoutRequest) (PvpScoutResponse, error) 
 			Result:            result,
 			PlayerPower:       scoutCount,
 			EnemyPower:        targetScoutCount,
-			DispatchedUnits:   map[string]int{scoutUnitID: scoutCount},
+			DispatchedUnits:   scoutUnitsBefore,
 			LostUnits:         lostUnits,
 			DefenderFaction:   target.Player.Faction,
 			DefenderLostUnits: targetLostUnits,
 			DefenderRevealed:  success,
+			Rewards:           map[string]int{},
+			Read:              false,
+			CreatedAt:         now.Format(resourceDateLayout),
+		}
+		defenderReport = BattleReport{
+			ID:                "br_pvp_scout_def_" + randomID(8),
+			PlayerID:          target.Player.ID,
+			OwnerPlayerID:     target.Player.ID,
+			ViewType:          ReportViewDefense,
+			PlayerFaction:     target.Player.Faction,
+			PlayerName:        target.Player.Nickname,
+			TargetID:          scout.Player.ID,
+			TargetName:        scout.Player.Nickname + "（玩家）",
+			Type:              "scout",
+			SourceType:        ReportSourcePlayerCity,
+			BattleType:        "scout",
+			Title:             scout.Player.Nickname + " 侦查 " + target.Player.Nickname + "（玩家）",
+			Result:            result,
+			PlayerPower:       targetScoutCount,
+			EnemyPower:        scoutCount,
+			DispatchedUnits:   targetUnitsBefore,
+			LostUnits:         targetLostUnits,
+			DefenderFaction:   scout.Player.Faction,
+			DefenderUnits:     scoutUnitsBefore,
+			DefenderLostUnits: lostUnits,
+			DefenderRevealed:  true,
+			DefenderResources: map[string]int{},
 			Rewards:           map[string]int{},
 			Read:              false,
 			CreatedAt:         now.Format(resourceDateLayout),
@@ -289,13 +319,16 @@ func (s *Service) ScoutPvpTarget(req PvpScoutRequest) (PvpScoutResponse, error) 
 		BattleType: report.BattleType,
 		Result:     report.Result,
 		OccurredAt: report.CreatedAt,
-		Reports:    []BattleReport{report},
+		Reports:    []BattleReport{report, defenderReport},
 	})
 	if err != nil {
 		return PvpScoutResponse{}, err
 	}
-	if len(createResult.Reports) > 0 {
-		report = createResult.Reports[0]
+	for _, created := range createResult.Reports {
+		if created.PlayerID == playerID {
+			report = created
+			break
+		}
 	}
 	return PvpScoutResponse{Success: scoutSuccess, BattleReport: report, ServerTime: now.Format(resourceDateLayout)}, nil
 }
@@ -359,20 +392,20 @@ func (s *Service) StartPvpAttack(req PvpAttackRequest) (PvpAttackResponse, error
 	attackerState, _, march, err := s.repo.CreatePvpMarchWithState(playerID, targetPlayerID, now, func(attacker *GameState, defender *GameState) (PvpMarch, error) {
 		nextState, _ := settleResources(*attacker, now)
 		*attacker = nextState
+		EnsureGeneralRoster(attacker, now)
 		if _, err := validateAndConsumeArmy(attacker, troops); err != nil {
 			return PvpMarch{}, err
 		}
-		durationSeconds, speedMultiplier, err := calculatePvpMarchTravel(attacker.Player.Faction, troops, now, CollectModifierSources(attacker))
-		if err != nil {
-			return PvpMarch{}, err
-		}
-		arrivesAt := now.Add(time.Duration(durationSeconds) * time.Second).Format(resourceDateLayout)
-		EnsureGeneralRoster(attacker, now)
 		marchID := "pvp_march_" + randomID(12)
 		generalIDs, err := reservePvpGenerals(attacker, req.GeneralIDs, marchID, now)
 		if err != nil {
 			return PvpMarch{}, err
 		}
+		durationSeconds, speedMultiplier, err := calculatePvpMarchTravel(attacker.Player.Faction, troops, now, pvpModifierSourcesForGenerals(attacker, generalIDs))
+		if err != nil {
+			return PvpMarch{}, err
+		}
+		arrivesAt := now.Add(time.Duration(durationSeconds) * time.Second).Format(resourceDateLayout)
 		attacker.ServerTime = nowText
 		return PvpMarch{
 			ID:               marchID,
@@ -399,14 +432,20 @@ func (s *Service) StartPvpAttack(req PvpAttackRequest) (PvpAttackResponse, error
 	}
 	attackerPvpState.DailyAttackCount++
 	clearBreakablePvpProtectionOnAttack(&attackerPvpState, now)
-	attackerPvpState.CooldownUntil = now.Add(defaultPvpAttackCooldownSec * time.Second).Format(resourceDateLayout)
-	attackerPvpState.Status = "cooldown"
+	attackerPvpState.CooldownUntil = ""
+	attackerPvpState.Status = "normal"
 	attackerPvpState.UpdatedAt = nowText
 	_ = defenderPvpState
 	if err := s.repo.SavePvpPlayerState(attackerPvpState, now); err != nil {
 		return PvpAttackResponse{}, err
 	}
-	return PvpAttackResponse{March: march, Army: attackerState.Army, Generals: attackerState.Generals, ServerTime: attackerState.ServerTime}, nil
+	return PvpAttackResponse{
+		March:              march,
+		Army:               attackerState.Army,
+		Generals:           attackerState.Generals,
+		GeneralAssignments: attackerState.GeneralAssignments,
+		ServerTime:         attackerState.ServerTime,
+	}, nil
 }
 
 // ListPvpMarches 返回玩家相关行军，并尝试结算已经到达的行军。
@@ -440,6 +479,9 @@ func (s *Service) RecallPvpMarch(playerID string, marchID string) (PvpMarchActio
 		if march.Status != PvpMarchStatusMarching {
 			return ErrPvpMarchNotRecallable
 		}
+		if !pvpMarchRecallableAt(march, now) {
+			return ErrPvpMarchNotRecallable
+		}
 		arrivesAt, err := time.Parse(resourceDateLayout, strings.TrimSpace(march.ArrivesAt))
 		if err == nil && !arrivesAt.After(now) {
 			return ErrPvpMarchNotRecallable
@@ -460,6 +502,18 @@ func (s *Service) RecallPvpMarch(playerID string, marchID string) (PvpMarchActio
 	return PvpMarchActionResponse{March: march, Army: state.Army, Generals: state.Generals, ServerTime: state.ServerTime}, nil
 }
 
+// pvpMarchRecallableAt 判断 PVP 行军是否仍处于出发后可召回窗口。
+func pvpMarchRecallableAt(march *PvpMarch, now time.Time) bool {
+	if march == nil {
+		return false
+	}
+	startedAt, err := time.Parse(resourceDateLayout, strings.TrimSpace(march.StartedAt))
+	if err != nil {
+		return false
+	}
+	return now.Sub(startedAt) <= pvpRecallWindowSeconds*time.Second
+}
+
 // AcceleratePvpMarch 使用城金加速玩家自己的 PVP 行军。
 func (s *Service) AcceleratePvpMarch(playerID string, marchID string) (PvpMarchActionResponse, error) {
 	playerID = strings.TrimSpace(playerID)
@@ -473,6 +527,9 @@ func (s *Service) AcceleratePvpMarch(playerID string, marchID string) (PvpMarchA
 			return ErrPlayerNotFound
 		}
 		if march.Status != PvpMarchStatusMarching {
+			return ErrPvpMarchNotAccelerable
+		}
+		if march.AcceleratedTimes >= pvpMaxAccelerateTimes {
 			return ErrPvpMarchNotAccelerable
 		}
 		arrivesAt, err := time.Parse(resourceDateLayout, strings.TrimSpace(march.ArrivesAt))
@@ -1124,7 +1181,7 @@ func (s *Service) ResolvePvpMarch(marchID string) (PvpBattle, error) {
 		}
 		nowText := now.Format(resourceDateLayout)
 		if totalTroops(march.AttackTroops) > 0 {
-			returnSeconds, returnSpeed, err := calculatePvpMarchTravel(attacker.Player.Faction, march.AttackTroops, now, CollectModifierSources(attacker))
+			returnSeconds, returnSpeed, err := calculatePvpMarchTravel(attacker.Player.Faction, march.AttackTroops, now, pvpModifierSourcesForGenerals(attacker, march.AttackGenerals))
 			if err != nil {
 				return PvpBattle{}, BattleReport{}, BattleReport{}, nil, nil, err
 			}
@@ -1183,7 +1240,7 @@ func normalizePvpMarchMode(mode string) string {
 	return PvpMarchTypeAttack
 }
 
-// validatePvpAttackState 校验保护、冷却和每日次数。
+// validatePvpAttackState 校验保护和每日次数。
 func (s *Service) validatePvpAttackState(playerID string, targetPlayerID string, now time.Time) (PvpPlayerState, PvpPlayerState, error) {
 	attackerState, err := s.repo.GetPvpPlayerState(playerID, now)
 	if err != nil {
@@ -1195,9 +1252,6 @@ func (s *Service) validatePvpAttackState(playerID string, targetPlayerID string,
 	}
 	if protected, _, _ := activePvpProtection(defenderState, now); protected {
 		return PvpPlayerState{}, PvpPlayerState{}, ErrPvpTargetProtected
-	}
-	if pvpTimeAfter(attackerState.CooldownUntil, now) {
-		return PvpPlayerState{}, PvpPlayerState{}, ErrPvpAttackCooldown
 	}
 	if attackerState.DailyAttackLimit > 0 && attackerState.DailyAttackCount >= attackerState.DailyAttackLimit {
 		return PvpPlayerState{}, PvpPlayerState{}, ErrPvpDailyLimitReached
@@ -1282,8 +1336,6 @@ func normalizePvpPlayerState(state PvpPlayerState, now time.Time) PvpPlayerState
 	}
 	if pvpTimeAfter(state.ProtectedUntil, now) {
 		state.Status = "protected"
-	} else if pvpTimeAfter(state.CooldownUntil, now) {
-		state.Status = "cooldown"
 	} else {
 		state.Status = "normal"
 	}
@@ -1872,7 +1924,7 @@ func updatePvpGeneralAssignmentStatus(state *GameState, march *PvpMarch, status 
 // resolvePvpCombat 调用核心战斗引擎并回写双方和援军损耗。
 func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements []Reinforcement, march *PvpMarch, now time.Time) (PvpBattle, BattleReport, BattleReport, []BattleReport, []Reinforcement, error) {
 	dispatchedTroops := cloneStringIntMap(march.AttackTroops)
-	attackerUnits, err := buildSimulatedCombatUnits(attacker.Player.Faction, march.AttackTroops, now, CollectModifierSources(attacker)...)
+	attackerUnits, err := buildSimulatedCombatUnits(attacker.Player.Faction, march.AttackTroops, now, pvpModifierSourcesForGenerals(attacker, march.AttackGenerals)...)
 	if err != nil {
 		return PvpBattle{}, BattleReport{}, BattleReport{}, nil, nil, err
 	}
@@ -1904,6 +1956,8 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	defenderLosses, reinforcementLosses := allocatePvpDefenderLosses(defenderTotalLosses, sourceGroups)
 	applyArmyLosses(defender, defenderLosses)
 	changedReinforcements := applyPvpReinforcementLosses(reinforcements, reinforcementLosses, now)
+	attackerExpResult := applyGeneralBattleExpToRoster(attacker, march.AttackGenerals, calculateGeneralBattleExpFromLosses(defender.Player.Faction, result.DefenderLosses))
+	defenderExpResult := applyGeneralBattleExpToRoster(defender, pvpDefenseGeneralIDs(defender), calculateGeneralBattleExpFromLosses(attacker.Player.Faction, result.AttackerLosses))
 	defenderLossRatio := pvpDefenderLossRatio(sourceGroups, defenderTotalLosses)
 	revealThreshold := enemyLossRevealThreshold(defender, now)
 	attackerSurvived := totalTroops(attackerSurvivors) > 0
@@ -1939,6 +1993,11 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	attackerReport.PvpDefenderGenerals = defenderGenerals
 	attackerReport.PvpReinforcements = reinforcementSnapshot
 	attackerReport.PvpReinforcementLosses = cloneNestedStringIntMap(reinforcementLosses)
+	if attackerExpResult.Gained > 0 {
+		attackerReport.GeneralExpGained = attackerExpResult.Gained
+		attackerReport.GeneralLevelBefore = attackerExpResult.LevelBefore
+		attackerReport.GeneralLevelAfter = attackerExpResult.LevelAfter
+	}
 	defenderReport := buildPvpBattleReport(defenderReportID, defender, attacker, march, invertPvpReportResult(reportResult), int(result.DefensePower), int(result.AttackPower), defenderOwnTroops, defenderLosses, dispatchedTroops, attackerLosses, map[string]int{}, nowText, "defense")
 	defenderReport.EventID = battleID
 	defenderReport.ViewType = ReportViewDefense
@@ -1952,6 +2011,11 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	defenderReport.PvpDefenderGenerals = defenderGenerals
 	defenderReport.PvpReinforcements = reinforcementSnapshot
 	defenderReport.PvpReinforcementLosses = cloneNestedStringIntMap(reinforcementLosses)
+	if defenderExpResult.Gained > 0 {
+		defenderReport.GeneralExpGained = defenderExpResult.Gained
+		defenderReport.GeneralLevelBefore = defenderExpResult.LevelBefore
+		defenderReport.GeneralLevelAfter = defenderExpResult.LevelAfter
+	}
 	reinforcementReports := buildPvpReinforcementReports(battleID, defender, changedReinforcements, reinforcementLosses, reportResult, nowText)
 	battle := PvpBattle{
 		ID:                    battleID,
@@ -1972,6 +2036,69 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		UpdatedAt:             nowText,
 	}
 	return battle, attackerReport, defenderReport, reinforcementReports, changedReinforcements, nil
+}
+
+// pvpDefenseGeneralIDs 返回本次 PVP 防守方参战主将 ID。
+func pvpDefenseGeneralIDs(state *GameState) []string {
+	general := pvpHomeDefenseGeneral(state)
+	if general == nil || strings.TrimSpace(general.ID) == "" {
+		return nil
+	}
+	return []string{general.ID}
+}
+
+// pvpHomeDefenseGeneral 返回真正留在城里的防守主将，出征或增援中的武将不参与守城。
+func pvpHomeDefenseGeneral(state *GameState) *General {
+	if state == nil || state.General == nil {
+		return nil
+	}
+	generalID := strings.TrimSpace(state.General.ID)
+	if generalID == "" || !generalAvailableForReinforcement(state.GeneralAssignments, generalID) {
+		return nil
+	}
+	if general, ok := findOwnedGeneral(state.Generals, generalID); ok {
+		return cloneGeneralPtr(general)
+	}
+	return cloneGeneralPtr(*state.General)
+}
+
+// pvpModifierSourcesForGenerals 构建 PVP 出征专用加成：基础加成保留，武将加成只来自本次携带武将。
+func pvpModifierSourcesForGenerals(state *GameState, generalIDs []string) []ModifierSource {
+	if state == nil {
+		return nil
+	}
+	base := *state
+	base.General = nil
+	sources := CollectModifierSources(&base)
+	seen := map[string]bool{}
+	for _, generalID := range generalIDs {
+		generalID = strings.TrimSpace(generalID)
+		if generalID == "" || seen[generalID] {
+			continue
+		}
+		seen[generalID] = true
+		if general, ok := findOwnedGeneral(state.Generals, generalID); ok {
+			generalCopy := cloneGeneral(general)
+			applyHeroConfigToGeneral(&generalCopy)
+			sources = append(sources, &GeneralModifierSource{General: &generalCopy})
+		}
+	}
+	return sources
+}
+
+// pvpModifierSourcesForHomeDefense 构建守城专用加成，只有留在城内的主将会提供武将加成。
+func pvpModifierSourcesForHomeDefense(state *GameState) []ModifierSource {
+	if state == nil {
+		return nil
+	}
+	base := *state
+	base.General = nil
+	sources := CollectModifierSources(&base)
+	if general := pvpHomeDefenseGeneral(state); general != nil {
+		applyHeroConfigToGeneral(general)
+		sources = append(sources, &GeneralModifierSource{General: general})
+	}
+	return sources
 }
 
 type pvpDefenseSourceGroup struct {
@@ -2007,7 +2134,7 @@ func buildPvpDefenderUnits(defender *GameState, reinforcements []Reinforcement, 
 		if !ok {
 			return nil, nil, ErrUnitNotFound
 		}
-		units = append(units, buildCombatUnitFromConfig(unitType, amount, unitCfg, now, CollectModifierSources(defender)...))
+		units = append(units, buildCombatUnitFromConfig(unitType, amount, unitCfg, now, pvpModifierSourcesForHomeDefense(defender)...))
 		_ = faction
 	}
 	if len(units) == 0 {
@@ -2104,7 +2231,7 @@ func pvpDefenderLossRatio(groups []pvpDefenseSourceGroup, totalLosses map[string
 
 // enemyLossRevealThreshold 通过 Modifier 管线计算敌方剩余兵力暴露阈值。
 func enemyLossRevealThreshold(defender *GameState, now time.Time) float64 {
-	threshold := ComputeAttributeAt(0.25, StatEnemyLossRevealThreshold, now, CollectModifierSources(defender)...)
+	threshold := ComputeAttributeAt(0.25, StatEnemyLossRevealThreshold, now, pvpModifierSourcesForHomeDefense(defender)...)
 	if threshold < 0 {
 		return 0
 	}
@@ -2401,13 +2528,11 @@ func buildPvpGeneralSnapshots(state *GameState, generalIDs []string) []PvpGenera
 
 // buildPvpDefenseGeneralSnapshots 选择当前主将作为第一版 PVP 防守武将。
 func buildPvpDefenseGeneralSnapshots(state *GameState) []PvpGeneralSnapshot {
-	if state == nil {
+	general := pvpHomeDefenseGeneral(state)
+	if general == nil {
 		return nil
 	}
-	if state.General == nil {
-		return nil
-	}
-	return []PvpGeneralSnapshot{snapshotPvpGeneral(*state.General)}
+	return []PvpGeneralSnapshot{snapshotPvpGeneral(*general)}
 }
 
 // snapshotPvpGeneral 复制 PVP 战斗中需要展示的武将字段。

@@ -94,22 +94,64 @@ func calculateGeneralBattleExpFromLosses(faction string, losses []combat.UnitLos
 	if len(losses) == 0 {
 		return 0
 	}
-	units := GetFactionUnits(faction)
 	total := 0
 	for _, loss := range losses {
 		if loss.Losses <= 0 {
 			continue
 		}
-		upkeep := 0
-		if unit, ok := units[loss.ID]; ok {
-			upkeep = unit.Stats["upkeep"]
-		}
+		upkeep := unitUpkeepForBattleExp(faction, loss.ID)
 		if upkeep <= 0 {
 			continue
 		}
 		total += loss.Losses * upkeep
 	}
 	return total
+}
+
+// unitUpkeepForBattleExp 获取战斗经验使用的兵种维护费，PVP 混编援军会回退到全阵营查找。
+func unitUpkeepForBattleExp(preferredFaction string, unitType string) int {
+	if unit, ok := GetUnitConfig(preferredFaction, unitType); ok {
+		return unit.Stats["upkeep"]
+	}
+	for _, faction := range []string{"wei", "shu", "wu", "neutral"} {
+		if unit, ok := GetUnitConfig(faction, unitType); ok {
+			return unit.Stats["upkeep"]
+		}
+	}
+	return 0
+}
+
+// applyGeneralBattleExpToRoster 给指定参战武将发放战斗经验，并同步当前主将。
+func applyGeneralBattleExpToRoster(state *GameState, generalIDs []string, gained int) generalExpResult {
+	if state == nil || gained <= 0 || len(generalIDs) == 0 {
+		return generalExpResult{}
+	}
+	seen := map[string]bool{}
+	first := generalExpResult{}
+	activeID := ""
+	if state.General != nil {
+		activeID = state.General.ID
+	}
+	for _, generalID := range generalIDs {
+		if generalID == "" || seen[generalID] {
+			continue
+		}
+		seen[generalID] = true
+		for index := range state.Generals {
+			if state.Generals[index].ID != generalID {
+				continue
+			}
+			result := applyGeneralBattleExp(&state.Generals[index], gained)
+			if result.Gained > 0 && first.Gained == 0 {
+				first = result
+			}
+			if activeID == generalID {
+				state.General = cloneGeneralPtr(state.Generals[index])
+			}
+			break
+		}
+	}
+	return first
 }
 
 // generalLevelAttributes 返回等级成长提供的通用属性。

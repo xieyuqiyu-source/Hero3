@@ -42,6 +42,7 @@ const (
 	LedgerRefMiniGameRedeem      = "minigame_redeem"
 	LedgerRefGeneralReset        = "general_reset"
 	LedgerRefMailClaim           = "mail_claim"
+	LedgerRefServerBroadcast     = "server_broadcast"
 )
 
 // GoldLedgerEntry 一条货币流水记录

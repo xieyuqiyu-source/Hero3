@@ -19,6 +19,7 @@ import FillButton from './FillButton'
 import CapacityBoostButton from './CapacityBoostButton'
 import ProductionTooltip from './ProductionTooltip'
 import GarrisonPanel from './GarrisonPanel'
+import MarchAlertTags from './MarchAlertTags'
 import type { GameState } from '@/types/game'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
 import { useConfigStore } from '@/store/configStore'
@@ -57,6 +58,9 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
   const factionUnits = units?.[gameState?.player.faction ?? '']
   const visibleArmy = sortArmyForDisplay(gameState?.army, factionUnits)
   const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
+  const mainGeneralBusy = Boolean(gameState?.general && gameState.generalAssignments?.some((item) => (
+    item.generalId === gameState.general?.id && item.id !== 'main' && item.slot !== 'main'
+  )))
   const unreadMessageCount = gameState?.unreadMessageCount ?? 0
   const unreadMailCount = gameState?.unreadMailCount ?? 0
   const announcementUnread = useAnnouncementUnread()
@@ -283,7 +287,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
         )}
 
         {/* General */}
-        {!collapsed && gameState?.general && (
+        {!collapsed && gameState?.general && !mainGeneralBusy && (
           <button
             type="button"
             onClick={() => navigate('/military?tab=generals')}
@@ -341,6 +345,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
               ) : (
                 <p className="text-xs text-[var(--color-text-secondary)] opacity-50">暂无兵力</p>
               )}
+              <MarchAlertTags />
             </>
           )}
         </div>
@@ -455,7 +460,7 @@ const PlayerSwitcher: FC<{ nickname: string; civilizationLevel: number; cityGold
               >
                 <span className={`text-[10px] font-bold ${FACTION_COLORS[p.faction] ?? 'text-[var(--color-text-muted)]'}`}>{FACTION_LABELS[p.faction] ?? p.faction}</span>
                 <span className="flex-1 text-left truncate">{p.nickname}</span>
-                <span className="text-[10px] text-[var(--color-text-muted)] tabular-nums">{p.buildingLevel}</span>
+                <span className="text-[10px] text-[var(--color-text-muted)] tabular-nums">建 {p.buildingLevel}</span>
               </button>
             ))}
           </div>

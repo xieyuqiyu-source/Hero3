@@ -95,7 +95,7 @@ func (r *MySQLRepository) saveReportLegacy(report game.BattleReport) error {
 		`INSERT INTO battle_report_states (id, report_id, player_id, is_read, is_deleted, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, 0, ?, ?)
 		 ON DUPLICATE KEY UPDATE is_read = VALUES(is_read), updated_at = VALUES(updated_at)`,
-		"state_"+report.ID+"_"+report.PlayerID,
+		battleReportStateID(report.ID, report.PlayerID),
 		report.ID,
 		report.PlayerID,
 		report.Read,
@@ -105,6 +105,16 @@ func (r *MySQLRepository) saveReportLegacy(report game.BattleReport) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// battleReportStateID 生成长度安全的玩家战报状态主键。
+func battleReportStateID(reportID string, playerID string) string {
+	raw := "state_" + reportID + "_" + playerID
+	if len(raw) <= 64 {
+		return raw
+	}
+	sum := sha1.Sum([]byte(raw))
+	return "state_" + hex.EncodeToString(sum[:])
 }
 
 // insertBattleEventForReportTx 按战报快照幂等写入战斗事件。

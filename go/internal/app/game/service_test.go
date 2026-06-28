@@ -54,10 +54,10 @@ func TestSettleResourcesCapsAtCapacity(t *testing.T) {
 	state := newPlayerState("player_test", "主公", "wei", "caocao", settledAt)
 	state.Resources = ResourceState{
 		Items: map[string]int{
-			"wood":  7499,
-			"stone": 7499,
-			"iron":  7499,
-			"food":  7499,
+			"wood":  4700,
+			"stone": 4700,
+			"iron":  4700,
+			"food":  4700,
 		},
 		Capacity: map[string]int{
 			"wood":  7500,
@@ -77,15 +77,43 @@ func TestSettleResourcesCapsAtCapacity(t *testing.T) {
 	}
 }
 
+func TestSettleResourcesPreservesOverflowResources(t *testing.T) {
+	settledAt := time.Date(2026, 5, 22, 10, 0, 0, 0, time.UTC)
+	state := newPlayerState("player_test", "主公", "wei", "caocao", settledAt)
+	state.Resources = ResourceState{
+		Items: map[string]int{
+			"wood":  320000,
+			"stone": 280000,
+			"iron":  240000,
+			"food":  160000,
+		},
+		Capacity: map[string]int{
+			"wood":  3200,
+			"stone": 3200,
+			"iron":  3200,
+			"food":  3200,
+		},
+	}
+	state.ResourceSettledAt = settledAt.Format(time.RFC3339)
+
+	next, _ := settleResources(state, settledAt.Add(time.Hour))
+	if next.Resources.Items["wood"] != 320000 || next.Resources.Items["stone"] != 280000 {
+		t.Fatalf("expected overflow resources to be preserved, got %+v", next.Resources.Items)
+	}
+	if next.Resources.Items["iron"] != 240000 || next.Resources.Items["food"] != 160000 {
+		t.Fatalf("expected overflow resources to be preserved, got %+v", next.Resources.Items)
+	}
+}
+
 func TestSettleResourcesAdvancesTimestampWhenCapacityIsFull(t *testing.T) {
 	settledAt := time.Date(2026, 5, 22, 10, 0, 0, 0, time.UTC)
 	state := newPlayerState("player_test", "主公", "wei", "caocao", settledAt)
 	state.Resources = ResourceState{
 		Items: map[string]int{
-			"wood":  7500,
-			"stone": 7500,
-			"iron":  7500,
-			"food":  7500,
+			"wood":  4800,
+			"stone": 4800,
+			"iron":  4800,
+			"food":  4800,
 		},
 		Capacity: map[string]int{
 			"wood":  7500,
@@ -2439,6 +2467,152 @@ func TestGMSendMailAppearsInPlayerMailbox(t *testing.T) {
 	}
 	if page.Mails[0].ID != mail.ID || page.Mails[0].Title != "GM 测试" {
 		t.Fatalf("unexpected listed mail: %+v", page.Mails[0])
+	}
+}
+
+func TestCreatePlayerSendsNewPlayerRewardMail(t *testing.T) {
+	setTestFactionsAndGenerals(t, FactionsConfig{
+		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "caocao", Name: "曹操"}}},
+	}, GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"caocao": {ID: "caocao", Name: "曹操", Faction: "wei", Enabled: true},
+		},
+	})
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "account_new_player_reward", Username: "new_player_reward", PasswordHash: "hash", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+
+	playerID, _, err := svc.CreatePlayer(account.ID, "新手奖励测试", "wei", "caocao")
+	if err != nil {
+		t.Fatalf("CreatePlayer failed: %v", err)
+	}
+	page, err := svc.ListMails(playerID, 1, 10, newPlayerRewardMailType)
+	if err != nil {
+		t.Fatalf("ListMails failed: %v", err)
+	}
+	if page.Total != 1 || len(page.Mails) != 1 {
+		t.Fatalf("expected one new player reward mail, got %+v", page)
+	}
+	mail := page.Mails[0]
+	if mail.Title != "新手奖励" || mail.SenderType != "system" || mail.IsClaimed || len(mail.Attachments) != 1 {
+		t.Fatalf("unexpected new player reward mail: %+v", mail)
+	}
+	attachment := mail.Attachments[0]
+	if attachment.Type != RewardTypeGold || attachment.ItemID != RewardTypeGold || attachment.Amount != newPlayerRewardGold {
+		t.Fatalf("unexpected new player reward attachment: %+v", attachment)
+	}
+
+	claimed, err := svc.ClaimMailAttachments(playerID, mail.ID)
+	if err != nil {
+		t.Fatalf("ClaimMailAttachments failed: %v", err)
+	}
+	if claimed.AccountGold != newPlayerRewardGold || claimed.GrantedItems[RewardTypeGold] != newPlayerRewardGold {
+		t.Fatalf("unexpected new player reward claim: %+v", claimed)
+	}
+	currentAccount, err := repo.GetAccountByID(account.ID)
+	if err != nil {
+		t.Fatalf("GetAccountByID failed: %v", err)
+	}
+	if currentAccount.Gold != newPlayerRewardGold {
+		t.Fatalf("expected account gold %d, got %d", newPlayerRewardGold, currentAccount.Gold)
+	}
+}
+
+func TestSendServerBroadcastMailDeductsCityGoldAndDeliversToAllPlayers(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	senderAccount := Account{ID: "account_broadcast_sender", Username: "broadcast_sender", PasswordHash: "hash", CreatedAt: now}
+	receiverAccount := Account{ID: "account_broadcast_receiver", Username: "broadcast_receiver", PasswordHash: "hash", CreatedAt: now}
+	if err := repo.CreateAccount(senderAccount); err != nil {
+		t.Fatalf("create sender account: %v", err)
+	}
+	if err := repo.CreateAccount(receiverAccount); err != nil {
+		t.Fatalf("create receiver account: %v", err)
+	}
+	sender := newPlayerState("player_broadcast_sender", "喊话者", "wei", "caocao", now)
+	sender.CityGold = FlexInt(ServerBroadcastCost)
+	sender.Player.MailCode = "111111"
+	receiver := newPlayerState("player_broadcast_receiver", "听众", "wei", "caocao", now)
+	receiver.Player.MailCode = "222222"
+	if err := repo.CreatePlayer(senderAccount.ID, sender, now); err != nil {
+		t.Fatalf("create sender: %v", err)
+	}
+	if err := repo.CreatePlayer(receiverAccount.ID, receiver, now); err != nil {
+		t.Fatalf("create receiver: %v", err)
+	}
+
+	result, err := svc.SendServerBroadcastMail(SendServerBroadcastMailRequest{
+		SenderPlayerID: sender.Player.ID,
+		Title:          "全服集合",
+		Content:        "此乃全服喊话",
+	})
+	if err != nil {
+		t.Fatalf("SendServerBroadcastMail failed: %v", err)
+	}
+	if result.Cost != ServerBroadcastCost || int(result.CityGold) != 0 || result.RecipientCount != 2 {
+		t.Fatalf("unexpected broadcast result: %+v", result)
+	}
+	currentSender, err := repo.GetState(sender.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState sender failed: %v", err)
+	}
+	if int(currentSender.CityGold) != 0 {
+		t.Fatalf("expected sender city gold 0, got %d", currentSender.CityGold)
+	}
+	for _, playerID := range []string{sender.Player.ID, receiver.Player.ID} {
+		page, err := svc.ListMails(playerID, 1, 10, ServerBroadcastMailType)
+		if err != nil {
+			t.Fatalf("ListMails failed: %v", err)
+		}
+		if page.Total != 1 || len(page.Mails) != 1 {
+			t.Fatalf("expected one broadcast mail for %s, got %+v", playerID, page)
+		}
+		if page.Mails[0].Title != "全服集合" || page.Mails[0].MailType != ServerBroadcastMailType {
+			t.Fatalf("unexpected broadcast mail: %+v", page.Mails[0])
+		}
+	}
+	entries, err := svc.ListGoldLedger(GoldLedgerFilter{PlayerID: sender.Player.ID, RefType: LedgerRefServerBroadcast})
+	if err != nil {
+		t.Fatalf("ListGoldLedger failed: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Amount != ServerBroadcastCost || entries[0].BalanceAfter != 0 {
+		t.Fatalf("unexpected broadcast ledger: %+v", entries)
+	}
+}
+
+func TestSendServerBroadcastMailRejectsInsufficientCityGold(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "account_broadcast_poor", Username: "broadcast_poor", PasswordHash: "hash", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_broadcast_poor", "贫穷喊话者", "wei", "caocao", now)
+	state.CityGold = FlexInt(ServerBroadcastCost - 1)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	if _, err := svc.SendServerBroadcastMail(SendServerBroadcastMailRequest{
+		SenderPlayerID: state.Player.ID,
+		Title:          "发不起",
+		Content:        "城金不足",
+	}); !errors.Is(err, ErrInsufficientCityGold) {
+		t.Fatalf("expected ErrInsufficientCityGold, got %v", err)
+	}
+	page, err := svc.ListMails(state.Player.ID, 1, 10, ServerBroadcastMailType)
+	if err != nil {
+		t.Fatalf("ListMails failed: %v", err)
+	}
+	if page.Total != 0 {
+		t.Fatalf("expected no broadcast mail, got %+v", page)
 	}
 }
 

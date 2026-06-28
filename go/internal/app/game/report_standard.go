@@ -155,12 +155,29 @@ func inferReportSourceType(report BattleReport) string {
 
 // buildReportTitle 生成列表标题。
 func buildReportTitle(report BattleReport) string {
-	view := reportViewLabel(valueOrDefault(report.ViewType, inferReportViewType(report)))
+	viewType := valueOrDefault(report.ViewType, inferReportViewType(report))
+	battleType := valueOrDefault(report.BattleType, report.Type)
+	action := reportViewLabel(viewType)
+	if battleType == "plunder" {
+		action = "掠夺"
+	} else if battleType == "scout" {
+		action = "侦查"
+	}
+	player := valueOrDefault(report.PlayerName, report.PlayerID)
 	target := valueOrDefault(report.TargetName, report.TargetID)
+	if player == "" {
+		player = "我方"
+	}
 	if target == "" {
 		target = "未知目标"
 	}
-	return view + " " + target
+	if viewType == ReportViewDefense {
+		return target + " 攻击 " + player
+	}
+	if viewType == ReportViewReinforcement {
+		return "增援 " + target
+	}
+	return player + " " + action + " " + target
 }
 
 // buildReportSummary 生成列表摘要。
@@ -182,11 +199,20 @@ func buildReportUnits(faction string, dispatched map[string]int, lost map[string
 	keys := orderedReportUnitKeys(faction, dispatched, lost, survived)
 	units := make([]BattleReportUnit, 0, len(keys))
 	for _, unitType := range keys {
+		if hiddenReportUnitType(unitType) {
+			continue
+		}
 		unitFaction := faction
 		unitName := ""
 		if cfg, ok := GetUnitConfig(faction, unitType); ok {
+			if cfg.Role == "transport" {
+				continue
+			}
 			unitName = cfg.Name
 		} else if foundFaction, cfg, ok := findReportUnitConfig(unitType); ok {
+			if cfg.Role == "transport" {
+				continue
+			}
 			unitFaction = foundFaction
 			unitName = cfg.Name
 		}
@@ -217,16 +243,34 @@ func orderedReportUnitKeys(faction string, maps ...map[string]int) []string {
 	seen := map[string]bool{}
 	keys := make([]string, 0)
 	for _, unitID := range sortedFactionUnitIDs(faction) {
+		if hiddenReportUnitType(unitID) {
+			continue
+		}
+		if cfg, ok := GetUnitConfig(faction, unitID); ok && cfg.Role == "transport" {
+			continue
+		}
 		seen[unitID] = true
 		keys = append(keys, unitID)
 	}
 	for _, unitID := range mergeIntMapKeys(maps...) {
 		if !seen[unitID] {
+			if hiddenReportUnitType(unitID) {
+				continue
+			}
+			if _, cfg, ok := findReportUnitConfig(unitID); ok && cfg.Role == "transport" {
+				continue
+			}
 			seen[unitID] = true
 			keys = append(keys, unitID)
 		}
 	}
 	return keys
+}
+
+// hiddenReportUnitType 判断战报中应隐藏的非战斗兵种。
+func hiddenReportUnitType(unitType string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(unitType))
+	return strings.Contains(normalized, "merchant")
 }
 
 // sortedFactionUnitIDs 返回固定兵种展示顺序：步兵、骑兵、攻城、特殊、其他。

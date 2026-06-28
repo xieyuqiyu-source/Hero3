@@ -15,14 +15,25 @@ interface ToastStore {
 }
 
 let nextId = 0
+const DUPLICATE_WINDOW_MS = 1200
+const MAX_TOASTS = 3
 
 export const useToastStore = create<ToastStore>((set) => ({
   items: [],
   add: (type, message) => {
     const id = nextId++
-    set((state) => ({ items: [...state.items, { id, type, message }] }))
+    const now = Date.now()
+    set((state) => {
+      const duplicate = state.items.some((toast) => (
+        toast.type === type &&
+        toast.message === message &&
+        now - toast.id <= DUPLICATE_WINDOW_MS
+      ))
+      if (duplicate) return state
+      return { items: [...state.items, { id: now + id, type, message }].slice(-MAX_TOASTS) }
+    })
     setTimeout(() => {
-      set((state) => ({ items: state.items.filter((toast) => toast.id !== id) }))
+      set((state) => ({ items: state.items.filter((toast) => toast.id !== now + id) }))
     }, 3500)
   },
   remove: (id) => set((state) => ({ items: state.items.filter((toast) => toast.id !== id) })),

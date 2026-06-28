@@ -113,6 +113,28 @@ func TestNormalizeBattleReportBuildsDefenseDetail(t *testing.T) {
 	if report.Detail.PrimarySide.Role != "attacker" || report.Detail.SecondarySide == nil || report.Detail.SecondarySide.Role != "defender" {
 		t.Fatalf("defense report should show attacker first and defender second, got primary=%+v secondary=%+v", report.Detail.PrimarySide, report.Detail.SecondarySide)
 	}
+	if report.Title != "许昌（玩家） 攻击 成都" {
+		t.Fatalf("defense report title should swap attacker and defender, got %q", report.Title)
+	}
+}
+
+func TestNormalizeBattleReportHidesMerchantUnits(t *testing.T) {
+	report := NormalizeBattleReport(BattleReport{
+		ID:              "br_hide_merchant",
+		PlayerID:        "player_hide_merchant",
+		PlayerFaction:   "wei",
+		TargetID:        "npc_hide_merchant",
+		Type:            "attack",
+		Result:          "attacker_victory",
+		DispatchedUnits: map[string]int{"weiInfantry": 10, "weiMerchant": 5},
+		LostUnits:       map[string]int{"weiInfantry": 1, "weiMerchant": 1},
+		CreatedAt:       time.Now().UTC().Format(time.RFC3339),
+	})
+	for _, unit := range report.Detail.PrimarySide.Units {
+		if unit.UnitType == "weiMerchant" {
+			t.Fatalf("merchant unit should be hidden from battle report: %+v", report.Detail.PrimarySide.Units)
+		}
+	}
 }
 
 func TestNormalizeBattleReportBuildsReinforcementDetailWithoutSecondarySide(t *testing.T) {

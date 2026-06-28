@@ -20,8 +20,9 @@ const (
 
 	defaultPvpMarchSeconds         = 3 * 3600
 	pvpAccelerateFixedCityGoldCost = 10
+	pvpMaxAccelerateTimes          = 2
+	pvpRecallWindowSeconds         = 120
 	defaultPvpDailyAttackLimit     = 30
-	defaultPvpAttackCooldownSec    = 30
 	defaultPvpDefeatProtectSec     = 600
 	defaultPvpRevengeExpireSec     = 72 * 3600
 
@@ -316,10 +317,11 @@ type PvpAttackRequest struct {
 
 // PvpAttackResponse 是发起 PVP 行军后的响应。
 type PvpAttackResponse struct {
-	March      PvpMarch   `json:"march"`
-	Army       []ArmyUnit `json:"army"`
-	Generals   []General  `json:"generals,omitempty"`
-	ServerTime string     `json:"serverTime"`
+	March              PvpMarch            `json:"march"`
+	Army               []ArmyUnit          `json:"army"`
+	Generals           []General           `json:"generals,omitempty"`
+	GeneralAssignments []GeneralAssignment `json:"generalAssignments,omitempty"`
+	ServerTime         string              `json:"serverTime"`
 }
 
 // PvpMarchActionResponse 是召回、加速等行军操作响应。

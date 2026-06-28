@@ -22,6 +22,7 @@ type AccountRepository interface {
 	FindPlayerByMailAddress(nickname string, mailCode string) (PlayerSummary, error)
 	ListAccounts() ([]AccountSummary, error)
 	ListPlayers(accountID string) ([]PlayerSummary, error)
+	ListAllPlayers() ([]PlayerSummary, error)
 	GetAccountIDByPlayerID(playerID string) (string, error)
 }
 
@@ -401,6 +402,21 @@ func (r *MemoryRepository) ListPlayers(accountID string) ([]PlayerSummary, error
 		players = append(players, buildPlayerSummary(state, r.playerUpdatedAt[playerID]))
 	}
 
+	return players, nil
+}
+
+// ListAllPlayers 返回全服玩家摘要，用于系统信函和全服喊话投递。
+func (r *MemoryRepository) ListAllPlayers() ([]PlayerSummary, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	players := make([]PlayerSummary, 0, len(r.players))
+	for playerID, state := range r.players {
+		players = append(players, buildPlayerSummary(state, r.playerUpdatedAt[playerID]))
+	}
+	sort.Slice(players, func(i, j int) bool {
+		return players[i].UpdatedAt > players[j].UpdatedAt
+	})
 	return players, nil
 }
 

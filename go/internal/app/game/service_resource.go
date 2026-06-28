@@ -267,6 +267,9 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 			}
 			state.ResourceSettledAt = now.Format(resourceDateLayout)
 			changed = true
+		} else if state.ResourceSettledAt != now.Format(resourceDateLayout) {
+			state.ResourceSettledAt = now.Format(resourceDateLayout)
+			changed = true
 		}
 	}
 
@@ -320,7 +323,7 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 
 func addProducedResource(current int, perHour int, elapsedSeconds float64, capacity int) int {
 	if current >= capacity || perHour <= 0 || elapsedSeconds <= 0 {
-		return min(current, capacity)
+		return current
 	}
 
 	produced := int(float64(perHour) * elapsedSeconds / 3600)

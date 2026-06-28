@@ -98,6 +98,11 @@ type BootstrapResponse struct {
 	Message  string         `json:"message"`
 }
 
+const (
+	newPlayerRewardMailType = "reward"
+	newPlayerRewardGold     = 10000
+)
+
 func NewService() *Service {
 	return NewServiceWithRepository(NewMemoryRepository())
 }
@@ -351,6 +356,9 @@ func (s *Service) CreatePlayer(accountID string, nickname string, faction string
 	if err := s.repo.CreatePlayer(accountID, state, now); err != nil {
 		return "", GameState{}, err
 	}
+	if _, err := s.sendNewPlayerRewardMail(playerID); err != nil {
+		return "", GameState{}, err
+	}
 	s.publishEvent(GameEvent{
 		Type:      EventPlayerCreated,
 		PlayerID:  playerID,
@@ -366,6 +374,25 @@ func (s *Service) CreatePlayer(accountID string, nickname string, faction string
 	})
 
 	return playerID, state, nil
+}
+
+// sendNewPlayerRewardMail 给新建角色投递可领取的新手奖励信函。
+func (s *Service) sendNewPlayerRewardMail(playerID string) (Mail, error) {
+	return s.SendMail(SendMailRequest{
+		PlayerID:   playerID,
+		MailType:   newPlayerRewardMailType,
+		SenderType: "system",
+		SenderName: "系统",
+		Title:      "新手奖励",
+		Content:    "欢迎来到 Hero3。请领取新手奖励，愿这笔金币助你快速建立第一座强城。",
+		Attachments: []MailAttachment{{
+			Type:   RewardTypeGold,
+			ItemID: RewardTypeGold,
+			Amount: newPlayerRewardGold,
+		}},
+		SourceType: "system",
+		SourceID:   "new_player_reward",
+	})
 }
 
 // defaultGeneralForFaction 返回阵营第一个可用将领，用于兼容未显式选择将领的旧客户端。

@@ -54,7 +54,7 @@ const ToastItem: FC<{ item: ToastItemData; onClose: () => void }> = ({ item, onC
   return (
     <div
       className={`
-        pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl
+        pointer-events-auto flex w-full max-w-[360px] items-center gap-2.5 rounded-xl px-4 py-3
         bg-[var(--color-surface)] border border-[var(--color-border)]
         shadow-[0_8px_24px_rgba(15,23,42,0.1)]
         backdrop-blur-md
@@ -62,8 +62,8 @@ const ToastItem: FC<{ item: ToastItemData; onClose: () => void }> = ({ item, onC
         ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}
       `}
     >
-      <Icon size={16} className={colors[item.type]} />
-      <span className="text-sm text-[var(--color-text-primary)] flex-1">{item.message}</span>
+      <Icon size={16} className={`${colors[item.type]} shrink-0`} />
+      <span className="min-w-0 flex-1 break-words text-sm leading-5 text-[var(--color-text-primary)]">{item.message}</span>
       <button
         type="button"
         onClick={handleClose}

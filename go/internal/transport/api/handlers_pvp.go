@@ -235,7 +235,7 @@ func writePvpError(w http.ResponseWriter, err error) {
 		status = http.StatusNotFound
 	case errors.Is(err, game.ErrPvpTargetSelf), errors.Is(err, game.ErrPvpSameAccountTarget):
 		status = http.StatusForbidden
-	case errors.Is(err, game.ErrPvpTargetProtected), errors.Is(err, game.ErrPvpAttackCooldown), errors.Is(err, game.ErrPvpDailyLimitReached):
+	case errors.Is(err, game.ErrPvpTargetProtected), errors.Is(err, game.ErrPvpDailyLimitReached):
 		status = http.StatusForbidden
 	case errors.Is(err, game.ErrPvpMarchNotRecallable):
 		status = http.StatusConflict

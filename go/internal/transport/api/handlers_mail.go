@@ -112,6 +112,31 @@ func (h *Handlers) SendPlayerMail(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, mail)
 }
 
+func (h *Handlers) SendServerBroadcastMail(w http.ResponseWriter, r *http.Request) {
+	var payload game.SendServerBroadcastMailRequest
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.SenderPlayerID) {
+		return
+	}
+	result, err := h.gameService.SendServerBroadcastMail(payload)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInsufficientCityGold):
+			status = http.StatusConflict
+		case errors.Is(err, game.ErrInvalidMail):
+			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
+}
+
 func (h *Handlers) AdminSendMail(w http.ResponseWriter, r *http.Request) {
 	var payload game.SendMailRequest
 	if !decodeJSON(w, r, &payload) {

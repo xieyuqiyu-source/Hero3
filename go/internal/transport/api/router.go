@@ -180,6 +180,7 @@ func registerMailRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("POST /api/v1/mails/{mailId}/delete", handlers.DeleteMail)
 	mux.HandleFunc("POST /api/v1/mails/{mailId}/claim", handlers.ClaimMailAttachments)
 	mux.HandleFunc("POST /api/v1/mails/send-player", handlers.SendPlayerMail)
+	mux.HandleFunc("POST /api/v1/mails/server-broadcast", handlers.SendServerBroadcastMail)
 }
 
 // registerAnnouncementRoutes 注册公告系统路由。

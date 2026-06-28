@@ -88,6 +88,9 @@ func SetActiveGeneral(state *GameState, generalID string, now time.Time) error {
 	if !ok {
 		return ErrGeneralNotFound
 	}
+	if !generalAvailableForReinforcement(state.GeneralAssignments, generalID) {
+		return ErrGeneralBusy
+	}
 	state.General = cloneGeneralPtr(general)
 	state.GeneralAssignments = upsertMainGeneralAssignment(state.GeneralAssignments, generalID, now)
 	return nil

@@ -351,7 +351,7 @@ export interface MailAttachment {
 export interface Mail {
   id: string
   playerId: string
-  mailType: 'gm_notice' | 'compensation' | 'reward' | 'event_reward' | 'system_notice' | 'player_message'
+  mailType: 'gm_notice' | 'compensation' | 'reward' | 'event_reward' | 'system_notice' | 'player_message' | 'pvp_season_reward' | 'server_broadcast' | string
   senderType: 'system' | 'gm' | 'player'
   senderId?: string
   senderName: string
@@ -376,6 +376,13 @@ export interface MailClaimResult {
   cityGold: number
   accountGold?: number
   grantedItems: Record<string, number>
+}
+
+export interface ServerBroadcastMailResult {
+  cost: number
+  cityGold: number
+  recipientCount: number
+  serverTime: string
 }
 
 export interface MiniGameRecord {
@@ -707,6 +714,7 @@ export interface PvpAttackResponse {
   march: PvpMarch
   army: ArmyUnit[]
   generals?: General[]
+  generalAssignments?: GeneralAssignment[]
   serverTime: string
 }
 

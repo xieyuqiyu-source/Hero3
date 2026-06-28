@@ -1,6 +1,6 @@
 // 本文件实现地图页的 PVP 玩家目标列表和快捷操作。
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react'
-import { LoaderCircle, LocateFixed, MapPin, Minus, Plus, RefreshCw, RotateCcw, Search, ShieldAlert, ShieldPlus, Swords, Zap } from 'lucide-react'
+import { LoaderCircle, LocateFixed, MapPin, Minus, Plus, RefreshCw, Search, ShieldAlert, ShieldPlus, Swords } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
 import { useGameStore } from '@/store/gameStore'
@@ -9,19 +9,11 @@ import { FACTION_COLORS, FACTION_LABELS } from '@/utils/faction'
 import type { BattleReport, PvpMarch, PvpRankingResponse, PvpStateResponse, PvpTargetSummary, PvpTargetsResponse, PvpWorldPosition } from '@/types/game'
 import ScoutResultModal from './ScoutResultModal'
 
-const PVP_STATUS_LABELS: Record<PvpMarch['status'], string> = {
-  marching: '行军中',
-  returning: '返回中',
-  resolving: '结算中',
-  resolved: '已结算',
-  recalled: '已召回',
-  cancelled: '已取消',
-  failed: '异常',
-}
-
 // PlayerTargetsTab 展示 PVP 玩家目标和行军状态。
 const PlayerTargetsTab: FC = () => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
+  const generals = useGameStore((s) => s.state?.generals ?? [])
+  const generalAssignments = useGameStore((s) => s.state?.generalAssignments ?? [])
   const army = useGameStore((s) => s.state?.army ?? [])
   const faction = useGameStore((s) => s.state?.player.faction ?? 'wei')
   const units = useConfigStore((s) => s.units)
@@ -34,11 +26,11 @@ const PlayerTargetsTab: FC = () => {
   const [focusedTargetId, setFocusedTargetId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyTarget, setBusyTarget] = useState<string | null>(null)
-  const [busyMarch, setBusyMarch] = useState<string | null>(null)
   const [scoutReport, setScoutReport] = useState<BattleReport | null>(null)
   const [selectedMarchTarget, setSelectedMarchTarget] = useState<PvpTargetSummary | null>(null)
   const [selectedMarchMode, setSelectedMarchMode] = useState<'attack' | 'plunder'>('attack')
   const [selections, setSelections] = useState<Record<string, number>>({})
+  const [selectedGeneralIds, setSelectedGeneralIds] = useState<string[]>([])
   const autoRefreshingRef = useRef(false)
   const lastAutoRefreshAtRef = useRef(0)
 
@@ -95,6 +87,10 @@ const PlayerTargetsTab: FC = () => {
   }, [army])
   const totalSelected = Object.values(selections).reduce((sum, amount) => sum + amount, 0)
   const focusedTarget = useMemo(() => targets.find((target) => target.playerId === focusedTargetId) ?? null, [focusedTargetId, targets])
+  const availableGenerals = useMemo(() => {
+    const busy = new Set(generalAssignments.filter((item) => item.id !== 'main' && item.slot !== 'main').map((item) => item.generalId))
+    return generals.filter((general) => !busy.has(general.id))
+  }, [generalAssignments, generals])
 
   // getUnitName 获取当前阵营兵种名。
   const getUnitName = (unitType: string) => factionUnits[unitType]?.name ?? unitType
@@ -104,6 +100,7 @@ const PlayerTargetsTab: FC = () => {
     setSelectedMarchTarget(target)
     setSelectedMarchMode(mode)
     setSelections({})
+    setSelectedGeneralIds([])
   }, [])
 
   // handleSelectionChange 修改某个兵种出征数量。
@@ -119,10 +116,16 @@ const PlayerTargetsTab: FC = () => {
     setSelections((prev) => ({ ...prev, [unitType]: max }))
   }, [armyAmountByType])
 
+  // handleGeneralToggle 切换本次 PVP 出征携带武将。
+  const handleGeneralToggle = useCallback((generalId: string) => {
+    setSelectedGeneralIds((prev) => prev.includes(generalId) ? prev.filter((id) => id !== generalId) : [...prev, generalId])
+  }, [])
+
   // handleScout 执行玩家侦查。
   const handleScout = useCallback(async (target: PvpTargetSummary) => {
     if (!activePlayerId || busyTarget) return
     setBusyTarget(`${target.playerId}:scout`)
+    setScoutReport(null)
     try {
       const result = await gameApi.scoutPvpTarget(activePlayerId, target.playerId)
       setScoutReport(result.battleReport)
@@ -147,15 +150,17 @@ const PlayerTargetsTab: FC = () => {
     }
     setBusyTarget(`${target.playerId}:${mode}`)
     try {
-      const result = await gameApi.startPvpAttack(activePlayerId, target.playerId, mode, troops)
+      const result = await gameApi.startPvpAttack(activePlayerId, target.playerId, mode, troops, selectedGeneralIds)
       useGameStore.getState().patchState({
         army: result.army,
         generals: result.generals,
+        generalAssignments: result.generalAssignments,
         serverTime: result.serverTime,
       })
       setMarches((prev) => [result.march, ...prev])
       setSelectedMarchTarget(null)
       setSelections({})
+      setSelectedGeneralIds([])
       void useGameStore.getState().loadMilitaryView()
       toast.success(`已向 ${target.nickname} 发起${mode === 'plunder' ? '掠夺' : '攻击'}行军。`)
     } catch (err) {
@@ -194,46 +199,6 @@ const PlayerTargetsTab: FC = () => {
     if (!targetView?.self) return
     setViewport((prev) => ({ ...prev, centerX: targetView.self.x, centerY: targetView.self.y }))
   }, [targetView])
-
-  // handleRecallMarch 召回一条自己的 PVP 行军。
-  const handleRecallMarch = async (march: PvpMarch) => {
-    if (!activePlayerId || busyMarch) return
-    setBusyMarch(march.id)
-    try {
-      const result = await gameApi.recallPvpMarch(activePlayerId, march.id)
-      useGameStore.getState().patchState({
-        ...(result.army ? { army: result.army } : {}),
-        ...(result.generals ? { generals: result.generals } : {}),
-        serverTime: result.serverTime,
-      })
-      setMarches((prev) => prev.map((item) => item.id === result.march.id ? result.march : item))
-      void useGameStore.getState().loadMilitaryView()
-      toast.success('行军已召回，返程完成后兵力会归队。')
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : '召回失败')
-    } finally {
-      setBusyMarch(null)
-    }
-  }
-
-  // handleAccelerateMarch 使用城金加速自己的 PVP 行军。
-  const handleAccelerateMarch = async (march: PvpMarch) => {
-    if (!activePlayerId || busyMarch) return
-    setBusyMarch(march.id)
-    try {
-      const result = await gameApi.acceleratePvpMarch(activePlayerId, march.id)
-      useGameStore.getState().patchState({
-        ...(typeof result.cityGold === 'number' ? { cityGold: result.cityGold } : {}),
-        serverTime: result.serverTime,
-      })
-      setMarches((prev) => prev.map((item) => item.id === result.march.id ? result.march : item))
-      toast.success(`行军已加速，消耗 ${result.cost ?? 0} 城金。`)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : '加速失败')
-    } finally {
-      setBusyMarch(null)
-    }
-  }
 
   if (loading) {
     return (
@@ -289,49 +254,6 @@ const PlayerTargetsTab: FC = () => {
         </div>
       )}
 
-      {activeMarches.length > 0 && (
-        <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-          <div className="mb-2 text-xs font-bold text-[var(--color-text-primary)]">我的 PVP 行军</div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {activeMarches.slice(0, 6).map((march) => (
-              <div key={march.id} className="rounded-lg bg-[var(--color-surface-dim)] px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-xs font-semibold text-[var(--color-text-primary)]">{march.defenderName}</span>
-                  <span className="ml-auto rounded bg-white/60 px-1.5 py-0.5 text-[9px] font-bold text-[var(--color-accent)]">{PVP_STATUS_LABELS[march.status]}</span>
-                </div>
-                <div className="mt-1 flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-[10px] text-[var(--color-text-muted)]">
-                    {march.marchType === 'plunder' ? '掠夺' : '攻击'} · {march.status === 'returning' ? '返程' : '剩余'} <CountdownText value={march.status === 'returning' ? march.returnsAt : march.arrivesAt} />
-                  </span>
-                  {march.attackerPlayerId === activePlayerId && march.status === 'marching' && (
-                    <div className="flex shrink-0 items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => void handleAccelerateMarch(march)}
-                        disabled={busyMarch !== null}
-                        className="inline-flex h-6 items-center justify-center gap-1 rounded-md bg-amber-500/10 px-2 text-[10px] font-bold text-amber-600 cursor-pointer hover:bg-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {busyMarch === march.id ? <LoaderCircle size={10} className="animate-spin" /> : <Zap size={10} />}
-                        加速
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleRecallMarch(march)}
-                        disabled={busyMarch !== null}
-                        className="inline-flex h-6 items-center justify-center gap-1 rounded-md bg-slate-500/10 px-2 text-[10px] font-bold text-slate-600 cursor-pointer hover:bg-slate-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {busyMarch === march.id ? <LoaderCircle size={10} className="animate-spin" /> : <RotateCcw size={10} />}
-                        召回
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {targets.map((target) => (
           <PlayerTargetCard
@@ -352,7 +274,7 @@ const PlayerTargetsTab: FC = () => {
         </div>
       )}
 
-      {scoutReport && <ScoutResultModal report={scoutReport} onClose={() => setScoutReport(null)} />}
+      {scoutReport && <ScoutResultModal key={scoutReport.id} report={scoutReport} onClose={() => setScoutReport(null)} />}
       {selectedMarchTarget && (
         <div className="fixed inset-0 z-[9000] flex items-end justify-center bg-slate-950/45 p-0 sm:items-center sm:p-4">
           <div className="w-full max-w-md rounded-t-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xl sm:rounded-2xl">
@@ -361,7 +283,7 @@ const PlayerTargetsTab: FC = () => {
                 <h3 className="text-sm font-bold text-[var(--color-text-primary)]">
                   {selectedMarchMode === 'plunder' ? '掠夺' : '攻击'} · {selectedMarchTarget.nickname}
                 </h3>
-                <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">选择本次出征兵力</p>
+                <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">选择本次出征兵力和随军武将</p>
               </div>
               <button
                 type="button"
@@ -371,7 +293,32 @@ const PlayerTargetsTab: FC = () => {
                 关闭
               </button>
             </div>
-            <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+            <div className="mt-3 max-h-72 space-y-3 overflow-y-auto">
+              <div className="rounded-xl bg-[var(--color-surface-dim)] px-3 py-2">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-bold text-[var(--color-text-primary)]">随军武将</span>
+                  <span className="text-[10px] text-[var(--color-text-muted)]">{selectedGeneralIds.length > 0 ? `已带 ${selectedGeneralIds.length}` : '不带将'}</span>
+                </div>
+                <div className="grid gap-1.5">
+                  {availableGenerals.map((general) => {
+                    const selected = selectedGeneralIds.includes(general.id)
+                    return (
+                      <button
+                        key={general.id}
+                        type="button"
+                        onClick={() => handleGeneralToggle(general.id)}
+                        className={`flex h-9 items-center justify-between rounded-lg border px-2 text-left text-xs transition-colors ${selected ? 'border-amber-400 bg-amber-400/15 text-amber-700' : 'border-[var(--color-border)] bg-white/60 text-[var(--color-text-secondary)] dark:bg-white/5'}`}
+                      >
+                        <span className="font-bold">{general.name}</span>
+                        <span className="text-[10px]">Lv.{general.level}</span>
+                      </button>
+                    )
+                  })}
+                  {availableGenerals.length === 0 && (
+                    <p className="py-2 text-center text-xs text-[var(--color-text-muted)]">暂无可随军武将</p>
+                  )}
+                </div>
+              </div>
               {availableArmy.map((unit) => (
                 <div key={unit.unitType} className="flex items-center justify-between gap-3 rounded-xl bg-[var(--color-surface-dim)] px-3 py-2">
                   <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--color-text-primary)]">
@@ -589,29 +536,6 @@ const ActionButton: FC<{ label: string; icon: ReactNode; busy: boolean; disabled
     <span>{label}</span>
   </button>
 )
-
-// CountdownText 独立刷新倒计时，避免整个玩家目标页每秒重渲染。
-const CountdownText: FC<{ value?: string }> = memo(({ value }) => {
-  const [nowMs, setNowMs] = useState(Date.now())
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNowMs(Date.now()), 1000)
-    return () => window.clearInterval(timer)
-  }, [])
-
-  return <>{formatCountdown(value, nowMs)}</>
-})
-
-// formatCountdown 将行军时间显示为剩余倒计时。
-function formatCountdown(value: string | undefined, nowMs: number) {
-  if (!value) return '-'
-  const targetMs = new Date(value).getTime()
-  if (Number.isNaN(targetMs)) return '-'
-  const remaining = Math.max(0, Math.ceil((targetMs - nowMs) / 1000))
-  const minutes = Math.floor(remaining / 60)
-  const seconds = remaining % 60
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`
-}
 
 // isMarchDue 判断行军或返程是否已经到期，需要触发刷新结算。
 function isMarchDue(march: PvpMarch, nowMs: number) {

@@ -2,9 +2,11 @@
 import type { BattleReport, BattleReportDetailData } from '@/types/game'
 
 export const REPORT_VIEW_TABS = [
+  { key: 'all', label: '全部' },
   { key: 'attack', label: '进攻' },
   { key: 'defense', label: '防守' },
   { key: 'reinforcement', label: '增援' },
+  { key: 'scout', label: '侦查' },
 ]
 
 export const REPORT_VIEW_CONFIG: Record<string, { label: string; color: string }> = {

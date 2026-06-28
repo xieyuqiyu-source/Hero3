@@ -21,6 +21,7 @@ import FillButton from './FillButton'
 import CapacityBoostButton from './CapacityBoostButton'
 import ProductionTooltip from './ProductionTooltip'
 import GarrisonPanel from './GarrisonPanel'
+import MarchAlertTags from './MarchAlertTags'
 import { useGameStore } from '@/store/gameStore'
 import { useAccountStore } from '@/store/accountStore'
 import { useAnnouncementUnread } from '@/hooks/useAnnouncementUnread'
@@ -383,6 +384,7 @@ const MobileSidebarContent: FC<{
           ) : (
             <p className="text-xs text-[var(--color-text-secondary)] opacity-50">暂无兵力</p>
           )}
+          <MarchAlertTags />
         </div>
         <div className="mb-2.5">
           <GarrisonPanel gameStateReady={gameState !== null} compact />
@@ -477,7 +479,7 @@ const MobilePlayerSwitcher: FC<{ gameState: GameState | null }> = ({ gameState }
               >
                 <span className={`text-[10px] font-bold ${FACTION_COLORS[p.faction] ?? 'text-[var(--color-text-muted)]'}`}>{FACTION_LABELS[p.faction] ?? p.faction}</span>
                 <span className="flex-1 text-left truncate">{p.nickname}</span>
-                <span className="text-[10px] text-[var(--color-text-muted)] tabular-nums">{p.buildingLevel}</span>
+                <span className="text-[10px] text-[var(--color-text-muted)] tabular-nums">建 {p.buildingLevel}</span>
               </button>
             ))}
           </div>

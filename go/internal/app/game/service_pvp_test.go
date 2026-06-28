@@ -3,6 +3,7 @@ package game
 
 import (
 	"errors"
+	"hero3/internal/core/combat"
 	"math"
 	"os"
 	"path/filepath"
@@ -108,8 +109,12 @@ func TestPvpTargetsFilterByMapViewport(t *testing.T) {
 func TestPvpScoutUsesFactionScoutUnitsAndRevealsOnSurvival(t *testing.T) {
 	svc, repo, attacker, defender := newPvpTestService(t)
 	addPvpScoutTestUnits(t)
+	oldSettledAt := time.Now().Add(-2 * time.Hour).UTC()
 	attacker.Army = []ArmyUnit{{UnitType: "weiScout", Amount: 5}, {UnitType: "weiInfantry", Amount: 20}}
 	defender.Army = []ArmyUnit{{UnitType: "shuScout", Amount: 2}, {UnitType: "shuInfantry", Amount: 10}}
+	defender.Resources.Items = map[string]int{"wood": 0, "stone": 0, "iron": 0, "food": 0}
+	defender.Resources.Capacity = map[string]int{"wood": 4800, "stone": 4800, "iron": 4800, "food": 4800}
+	defender.ResourceSettledAt = oldSettledAt.Format(resourceDateLayout)
 	repo.players[attacker.Player.ID] = attacker
 	repo.players[defender.Player.ID] = defender
 
@@ -134,12 +139,29 @@ func TestPvpScoutUsesFactionScoutUnitsAndRevealsOnSurvival(t *testing.T) {
 	if armySliceToMap(updatedDefender.Army)["shuScout"] != 0 {
 		t.Fatalf("expected defender scout units removed, got %+v", updatedDefender.Army)
 	}
+	if updatedDefender.Resources.Items["wood"] <= 0 || result.BattleReport.DefenderResources["wood"] <= 0 {
+		t.Fatalf("expected scout to settle defender resources into report, state=%+v report=%+v", updatedDefender.Resources.Items, result.BattleReport.DefenderResources)
+	}
+	settledAt, err := time.Parse(resourceDateLayout, updatedDefender.ResourceSettledAt)
+	if err != nil || !settledAt.After(oldSettledAt) {
+		t.Fatalf("expected defender resource settlement timestamp to advance, got %s err=%v", updatedDefender.ResourceSettledAt, err)
+	}
 	if result.BattleReport.Detail == nil || !result.BattleReport.Detail.Visibility.ShowEnemyResources {
 		t.Fatalf("expected standard scout detail to reveal resources, got %+v", result.BattleReport.Detail)
 	}
 	scoutExtra, ok := result.BattleReport.Detail.Extra["scout"].(map[string]interface{})
 	if !ok || scoutExtra["success"] != true || scoutExtra["scoutUnitType"] != "weiScout" {
 		t.Fatalf("expected scout extra snapshot, got %+v", result.BattleReport.Detail.Extra)
+	}
+	defenderReports, total, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: defender.Player.ID, ViewType: ReportViewDefense, BattleType: "scout", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListReportsByQuery defender scout failed: %v", err)
+	}
+	if total != 1 || len(defenderReports) != 1 {
+		t.Fatalf("expected one defender scout report, total=%d reports=%+v", total, defenderReports)
+	}
+	if defenderReports[0].PlayerID != defender.Player.ID || defenderReports[0].TargetID != attacker.Player.ID || defenderReports[0].Title == "" {
+		t.Fatalf("unexpected defender scout report: %+v", defenderReports[0])
 	}
 }
 
@@ -207,6 +229,9 @@ func TestPvpMarchResolvesBattleAndReturnsSurvivors(t *testing.T) {
 	if armySliceToMap(afterStart.Army)["weiInfantry"] != 50 {
 		t.Fatalf("expected 50 infantry reserved for march, got %+v", afterStart.Army)
 	}
+	if len(started.GeneralAssignments) == 0 {
+		t.Fatalf("expected pvp response to include general assignments")
+	}
 
 	forcePvpMarchDue(t, repo, started.March.ID)
 	battle, err := svc.ResolvePvpMarch(started.March.ID)
@@ -272,6 +297,33 @@ func TestPvpMarchResolvesBattleAndReturnsSurvivors(t *testing.T) {
 	}
 	if len(defenderReports[0].PvpDefenderGenerals) != 1 || defenderReports[0].PvpDefenderGenerals[0].ID != "liubei" {
 		t.Fatalf("expected defender report auto general snapshot, got %+v", defenderReports[0].PvpDefenderGenerals)
+	}
+	attackerLosses := pvpTestLossesFromBattle(t, battle, "attacker")
+	defenderLosses := pvpTestLossesFromBattle(t, battle, "defender")
+	expectedAttackerExp := calculateGeneralBattleExpFromLosses(defender.Player.Faction, pvpTestUnitLosses(defenderLosses))
+	expectedDefenderExp := calculateGeneralBattleExpFromLosses(attacker.Player.Faction, pvpTestUnitLosses(attackerLosses))
+	if expectedAttackerExp <= 0 || expectedDefenderExp <= 0 {
+		t.Fatalf("expected both sides to gain positive exp, attackerExp=%d defenderExp=%d battleLosses=%+v", expectedAttackerExp, expectedDefenderExp, battle.Losses)
+	}
+	attackerAfterExp, err := repo.GetState(attacker.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState attacker exp failed: %v", err)
+	}
+	defenderAfterExp, err := repo.GetState(defender.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState defender exp failed: %v", err)
+	}
+	if got := pvpTestGeneralExp(attackerAfterExp, "caocao"); got != expectedAttackerExp {
+		t.Fatalf("expected attacker general exp %d, got %d losses=%+v", expectedAttackerExp, got, defenderLosses)
+	}
+	if got := pvpTestGeneralExp(defenderAfterExp, "liubei"); got != expectedDefenderExp {
+		t.Fatalf("expected defender general exp %d, got %d losses=%+v", expectedDefenderExp, got, attackerLosses)
+	}
+	if reports[0].GeneralExpGained != expectedAttackerExp {
+		t.Fatalf("expected attacker report exp %d, got %d", expectedAttackerExp, reports[0].GeneralExpGained)
+	}
+	if defenderReports[0].GeneralExpGained != expectedDefenderExp {
+		t.Fatalf("expected defender report exp %d, got %d", expectedDefenderExp, defenderReports[0].GeneralExpGained)
 	}
 	detail, err := svc.GetPvpBattle(attacker.Player.ID, battle.ID)
 	if err != nil {
@@ -547,6 +599,27 @@ func TestPvpMarchRecallReturnsTroopsWhenReturnDue(t *testing.T) {
 	}
 }
 
+func TestPvpMarchRecallExpiresAfterTwoMinutes(t *testing.T) {
+	svc, repo, attacker, defender := newPvpTestService(t)
+	attacker.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	repo.players[attacker.Player.ID] = attacker
+	repo.players[defender.Player.ID] = defender
+
+	started, err := svc.StartPvpAttack(PvpAttackRequest{
+		PlayerID:       attacker.Player.ID,
+		TargetPlayerID: defender.Player.ID,
+		MarchMode:      PvpMarchTypeAttack,
+		Troops:         map[string]int{"weiInfantry": 40},
+	})
+	if err != nil {
+		t.Fatalf("StartPvpAttack failed: %v", err)
+	}
+	agePvpMarch(t, repo, started.March.ID, 3*time.Minute)
+	if _, err := svc.RecallPvpMarch(attacker.Player.ID, started.March.ID); !errors.Is(err, ErrPvpMarchNotRecallable) {
+		t.Fatalf("expected recall window error, got %v", err)
+	}
+}
+
 func TestMilitaryViewSettlesDuePvpReturn(t *testing.T) {
 	svc, repo, attacker, defender := newPvpTestService(t)
 	attacker.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
@@ -745,6 +818,35 @@ func TestPvpMarchDurationUsesSlowestUnitSpeed(t *testing.T) {
 	}
 }
 
+func TestPvpModifierSourcesOnlyUseCarriedGenerals(t *testing.T) {
+	setTestFactionsAndGenerals(t, FactionsConfig{
+		"wei": {Generals: []GeneralInfo{{ID: "caocao", Name: "曹操"}}},
+	}, GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"caocao": {ID: "caocao", Name: "曹操", Faction: "wei", Enabled: true, Buffs: map[string]float64{StatAttackBonus: 0.5}},
+		},
+	})
+	_, _, attacker, _ := newPvpTestService(t)
+	now := time.Now()
+	EnsureGeneralRoster(&attacker, now)
+	if attacker.General == nil {
+		t.Fatal("expected attacker general")
+	}
+	attacker.Buildings = nil
+	attacker.Buffs = nil
+	syncActiveGeneralToRoster(&attacker)
+
+	withoutGeneral := ComputeIntAttributeAt(100, StatAttackBonus, now, pvpModifierSourcesForGenerals(&attacker, nil)...)
+	withGeneral := ComputeIntAttributeAt(100, StatAttackBonus, now, pvpModifierSourcesForGenerals(&attacker, []string{attacker.General.ID})...)
+	if withoutGeneral != 100 {
+		t.Fatalf("expected pvp without carried general to ignore home general bonus, got %d", withoutGeneral)
+	}
+	if withGeneral <= withoutGeneral {
+		t.Fatalf("expected carried general to increase pvp attack, without=%d with=%d", withoutGeneral, withGeneral)
+	}
+}
+
 func TestPvpMarchListFailsInvalidEmptyAttackTroopsWithoutBlocking(t *testing.T) {
 	svc, repo, attacker, defender := newPvpTestService(t)
 	now := time.Now().UTC()
@@ -848,9 +950,19 @@ func TestPvpMarchAccelerateDeductsCityGoldAndShortensArrival(t *testing.T) {
 	if accelerated.March.AcceleratedTimes != 1 || accelerated.March.SpeedMultiplier <= 1 {
 		t.Fatalf("expected acceleration metadata updated, march=%+v", accelerated.March)
 	}
+	second, err := svc.AcceleratePvpMarch(attacker.Player.ID, started.March.ID)
+	if err != nil {
+		t.Fatalf("second AcceleratePvpMarch failed: %v", err)
+	}
+	if second.March.AcceleratedTimes != 2 {
+		t.Fatalf("expected second acceleration count, got %+v", second.March)
+	}
+	if _, err := svc.AcceleratePvpMarch(attacker.Player.ID, started.March.ID); !errors.Is(err, ErrPvpMarchNotAccelerable) {
+		t.Fatalf("expected third acceleration rejected, got %v", err)
+	}
 }
 
-func TestPvpAttackRespectsCooldownDailyLimitAndProtection(t *testing.T) {
+func TestPvpAttackRespectsDailyLimitAndProtection(t *testing.T) {
 	svc, repo, attacker, defender := newPvpTestService(t)
 	now := time.Now().UTC()
 	attacker.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
@@ -858,19 +970,6 @@ func TestPvpAttackRespectsCooldownDailyLimitAndProtection(t *testing.T) {
 	repo.players[defender.Player.ID] = defender
 
 	state := newDefaultPvpPlayerState(attacker.Player.ID, now)
-	state.CooldownUntil = now.Add(time.Minute).Format(resourceDateLayout)
-	if err := repo.SavePvpPlayerState(state, now); err != nil {
-		t.Fatalf("SavePvpPlayerState cooldown failed: %v", err)
-	}
-	if _, err := svc.StartPvpAttack(PvpAttackRequest{
-		PlayerID:       attacker.Player.ID,
-		TargetPlayerID: defender.Player.ID,
-		Troops:         map[string]int{"weiInfantry": 1},
-	}); !errors.Is(err, ErrPvpAttackCooldown) {
-		t.Fatalf("expected cooldown error, got %v", err)
-	}
-
-	state.CooldownUntil = ""
 	state.DailyAttackCount = state.DailyAttackLimit
 	if err := repo.SavePvpPlayerState(state, now); err != nil {
 		t.Fatalf("SavePvpPlayerState daily limit failed: %v", err)
@@ -1031,6 +1130,35 @@ func addPvpScoutTestUnits(t *testing.T) {
 	}
 }
 
+// pvpTestLossesFromBattle 从 PVP 战斗记录里取出某一侧损失。
+func pvpTestLossesFromBattle(t *testing.T, battle PvpBattle, side string) map[string]int {
+	t.Helper()
+	losses, ok := battle.Losses[side].(map[string]int)
+	if !ok {
+		t.Fatalf("expected %s losses map, got %+v", side, battle.Losses[side])
+	}
+	return losses
+}
+
+// pvpTestUnitLosses 把 map 损失转换为核心战斗损失结构。
+func pvpTestUnitLosses(losses map[string]int) []combat.UnitLoss {
+	result := make([]combat.UnitLoss, 0, len(losses))
+	for unitType, amount := range losses {
+		result = append(result, combat.UnitLoss{ID: unitType, Losses: amount})
+	}
+	return result
+}
+
+// pvpTestGeneralExp 读取测试玩家指定武将经验。
+func pvpTestGeneralExp(state GameState, generalID string) int {
+	for _, general := range state.Generals {
+		if general.ID == generalID {
+			return general.Exp
+		}
+	}
+	return 0
+}
+
 func loadPvpProtectionTestItemsConfig(t *testing.T) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "items.json")
@@ -1067,6 +1195,15 @@ func forcePvpMarchDue(t *testing.T, repo *MemoryRepository, marchID string) {
 	defer repo.mu.Unlock()
 	march := repo.pvpMarches[marchID]
 	march.ArrivesAt = time.Now().Add(-time.Second).UTC().Format(resourceDateLayout)
+	repo.pvpMarches[marchID] = march
+}
+
+func agePvpMarch(t *testing.T, repo *MemoryRepository, marchID string, age time.Duration) {
+	t.Helper()
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	march := repo.pvpMarches[marchID]
+	march.StartedAt = time.Now().Add(-age).UTC().Format(resourceDateLayout)
 	repo.pvpMarches[marchID] = march
 }
 

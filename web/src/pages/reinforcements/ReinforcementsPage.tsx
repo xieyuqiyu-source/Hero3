@@ -52,7 +52,7 @@ const ReinforcementsPage: FC = () => {
   const factionUnits = useConfigStore((s) => (state?.player.faction ? s.units?.[state.player.faction] : undefined))
   const unitOptions = useMemo(() => Object.entries(factionUnits ?? {}), [factionUnits])
   const availableGenerals = useMemo(() => {
-    const busy = new Set((state?.generalAssignments ?? []).filter((item) => item.moduleId === 'reinforcement').map((item) => item.generalId))
+    const busy = new Set((state?.generalAssignments ?? []).filter((item) => item.id !== 'main' && item.slot !== 'main').map((item) => item.generalId))
     return (state?.generals ?? []).filter((general) => !busy.has(general.id))
   }, [state?.generalAssignments, state?.generals])
 
