@@ -51,8 +51,8 @@ jobs:
           set -euo pipefail
           test -n "$HERO3_SSH_USER"
           git archive --format=tar.gz -o /tmp/hero3-source.$GITHUB_SHA.tar.gz "$GITHUB_SHA"
-          SSH_OPTS="-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 -i ~/.ssh/hero3_deploy_key -p $HERO3_SSH_PORT"
-          scp $SSH_OPTS /tmp/hero3-source.$GITHUB_SHA.tar.gz "$HERO3_SSH_USER@$HERO3_SSH_HOST:/tmp/hero3-source.$GITHUB_SHA.tar.gz"
+          SCP_OPTS="-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 -i ~/.ssh/hero3_deploy_key -P $HERO3_SSH_PORT"
+          scp $SCP_OPTS /tmp/hero3-source.$GITHUB_SHA.tar.gz "$HERO3_SSH_USER@$HERO3_SSH_HOST:/tmp/hero3-source.$GITHUB_SHA.tar.gz"
 
       - name: Build and deploy on server
         env:
