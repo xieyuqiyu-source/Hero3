@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { gameApi } from '@/api/game'
-import type { ItemDefinition } from '@/types/game'
+import type { ItemDefinition, ReincarnationConfig } from '@/types/game'
 
 export interface BuildingConfig {
   type: string
@@ -108,6 +108,7 @@ interface ConfigStore {
   units: Record<string, Record<string, UnitConfig>> | null
   items: Record<string, ItemDefinition> | null
   fishing: FishingConfig | null
+  reincarnation: ReincarnationConfig | null
   loaded: boolean
   loadBootstrap: () => Promise<void>
 }
@@ -118,6 +119,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   units: null,
   items: null,
   fishing: null,
+  reincarnation: null,
   loaded: false,
 
   loadBootstrap: async () => {
@@ -130,6 +132,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         units: data.units,
         items: data.items,
         fishing: data.fishing,
+        reincarnation: data.reincarnation,
         loaded: true,
       })
     } catch {

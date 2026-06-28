@@ -66,6 +66,10 @@ func main() {
 		logger.Error("fishing config load failed", "path", cfg.FishingPath, "error", err)
 		os.Exit(1)
 	}
+	if err := gameService.SetReincarnationPath(cfg.ReincarnationPath); err != nil {
+		logger.Error("reincarnation config load failed", "path", cfg.ReincarnationPath, "error", err)
+		os.Exit(1)
+	}
 	if cfg.DatabaseDSN != "" {
 		if err := validateDevelopmentDatabase(cfg); err != nil {
 			logger.Error("database safety check failed", "error", err)
@@ -122,6 +126,10 @@ func main() {
 		}
 		if err := gameService.SetFishingPath(cfg.FishingPath); err != nil {
 			logger.Error("fishing config load failed", "path", cfg.FishingPath, "error", err)
+			os.Exit(1)
+		}
+		if err := gameService.SetReincarnationPath(cfg.ReincarnationPath); err != nil {
+			logger.Error("reincarnation config load failed", "path", cfg.ReincarnationPath, "error", err)
 			os.Exit(1)
 		}
 		logger.Info("database storage enabled")

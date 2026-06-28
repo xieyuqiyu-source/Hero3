@@ -19,9 +19,21 @@ func (r *MySQLRepository) UpdateItemState(playerID string, updatedAt time.Time, 
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	state, err := updateItemStateTx(tx, playerID, updatedAt, update)
+	if err != nil {
+		return game.GameState{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return game.GameState{}, err
+	}
+	return state, nil
+}
+
+// updateItemStateTx 在外部事务内更新玩家权威资产快照。
+func updateItemStateTx(tx *sql.Tx, playerID string, updatedAt time.Time, update func(state *game.GameState) error) (game.GameState, error) {
 	var stateJSON []byte
 	var mailCode string
-	err = tx.QueryRow(
+	err := tx.QueryRow(
 		`SELECT state_json, mail_code FROM players WHERE id = ? LIMIT 1 FOR UPDATE`,
 		playerID,
 	).Scan(&stateJSON, &mailCode)
@@ -152,9 +164,6 @@ func (r *MySQLRepository) UpdateItemState(playerID string, updatedAt time.Time, 
 		} else if affected == 0 {
 			return game.GameState{}, game.ErrPlayerNotFound
 		}
-	}
-	if err = tx.Commit(); err != nil {
-		return game.GameState{}, err
 	}
 	return state, nil
 }

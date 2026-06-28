@@ -21,6 +21,8 @@ tags:
   description: 军事与征兵
 - name: Map
   description: 地图、NPC 城池与战斗
+- name: Dungeon
+  description: 地图副本玩法
 - name: News
   description: 军情与战报
 - name: Mail
@@ -1007,6 +1009,178 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/dungeons/reincarnation/config:
+    get:
+      tags:
+      - Dungeon
+      summary: 查询轮回绝境配置
+      responses:
+        '200':
+          description: 玩家侧轮回绝境配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReincarnationConfig'
+  /api/v1/dungeons/reincarnation/run:
+    get:
+      tags:
+      - Dungeon
+      summary: 查询当前轮回绝境实例
+      parameters:
+      - in: query
+        name: playerId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 当前实例和兵力快照
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReincarnationRunResponse'
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/dungeons/reincarnation/start:
+    post:
+      tags:
+      - Dungeon
+      summary: 开启轮回绝境
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartReincarnationRequest'
+      responses:
+        '201':
+          description: 已创建副本实例
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReincarnationActionResult'
+        '400':
+          description: 开启失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/dungeons/reincarnation/waves/{waveId}/attack:
+    post:
+      tags:
+      - Dungeon
+      summary: 结算进攻波
+      parameters:
+      - in: path
+        name: waveId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationTroopRequest'
+      responses:
+        '200':
+          description: 进攻结算结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReincarnationActionResult'
+        '400':
+          description: 结算失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/dungeons/reincarnation/waves/{waveId}/defense-ready:
+    post:
+      tags:
+      - Dungeon
+      summary: 确认防守波并结算
+      parameters:
+      - in: path
+        name: waveId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationTroopRequest'
+      responses:
+        '200':
+          description: 防守结算结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReincarnationActionResult'
+        '400':
+          description: 结算失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/dungeons/reincarnation/settle:
+    post:
+      tags:
+      - Dungeon
+      summary: 主动结算当前轮回绝境
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationSettleRequest'
+      responses:
+        '200':
+          description: 结算结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReincarnationActionResult'
+        '400':
+          description: 结算失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/dungeons/reincarnation/reports:
+    get:
+      tags:
+      - Dungeon
+      summary: 查询轮回绝境战报
+      parameters:
+      - in: query
+        name: playerId
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: page
+        schema:
+          type: integer
+          default: 1
+      - in: query
+        name: pageSize
+        schema:
+          type: integer
+          default: 10
+      responses:
+        '200':
+          description: 轮回绝境战报分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BattleReportPage'
   /api/v1/news/reports:
     get:
       tags:
@@ -2761,6 +2935,140 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/dungeons/reincarnation/config:
+    get:
+      tags:
+      - Admin
+      summary: GM 查询轮回绝境配置
+      responses:
+        '200':
+          description: 当前轮回绝境配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReincarnationConfig'
+    put:
+      tags:
+      - Admin
+      summary: GM 保存轮回绝境配置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationConfig'
+      responses:
+        '200':
+          description: 保存后的轮回绝境配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReincarnationConfig'
+        '400':
+          description: 配置格式或内容不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/dungeons/reincarnation/runs:
+    get:
+      tags:
+      - Admin
+      summary: GM 查询轮回绝境实例列表
+      parameters:
+      - in: query
+        name: playerId
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          type: integer
+          default: 20
+      - in: query
+        name: offset
+        schema:
+          type: integer
+          default: 0
+      responses:
+        '200':
+          description: 实例列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReincarnationRunPage'
+  /api/v1/admin/dungeons/reincarnation/runs/{runId}:
+    get:
+      tags:
+      - Admin
+      summary: GM 查询单个轮回绝境实例
+      parameters:
+      - in: path
+        name: runId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 实例详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReincarnationRun'
+        '404':
+          description: 实例不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/dungeons/reincarnation/runs/{runId}/force-settle:
+    post:
+      tags:
+      - Admin
+      summary: GM 强制结算异常轮回实例
+      parameters:
+      - in: path
+        name: runId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 强制结算后的实例
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReincarnationRun'
+        '400':
+          description: 操作失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/dungeons/reincarnation/runs/{runId}/repair-reward:
+    post:
+      tags:
+      - Admin
+      summary: GM 幂等修复轮回奖励
+      parameters:
+      - in: path
+        name: runId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 修复后的实例
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReincarnationRun'
+        '400':
+          description: 操作失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
     HealthState:
@@ -2832,6 +3140,8 @@ components:
           description: 道具配置。
         fishing:
           $ref: '#/components/schemas/FishingConfig'
+        reincarnation:
+          $ref: '#/components/schemas/ReincarnationConfig'
         message:
           type: string
           example: Hero3 后端基础服务已就绪，具体玩法逻辑待接入。
@@ -5808,6 +6118,425 @@ components:
         serverTime:
           type: string
           format: date-time
+    Reward:
+      type: object
+      required:
+      - type
+      - id
+      - amount
+      properties:
+        type:
+          type: string
+          example: item
+        id:
+          type: string
+          example: token_reincarnation
+        amount:
+          type: integer
+          example: 10
+        metadata:
+          type: object
+          additionalProperties: true
+    ReincarnationConfig:
+      type: object
+      required:
+      - levels
+      - waves
+      - enemyFactions
+      - bonusValues
+      - defenseCountdownSeconds
+      properties:
+        levels:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReincarnationLevelConfig'
+        waves:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReincarnationWaveConfig'
+        enemyFactions:
+          type: array
+          items:
+            type: string
+        bonusValues:
+          type: array
+          items:
+            type: number
+            format: double
+        defenseCountdownSeconds:
+          type: integer
+          example: 3
+    ReincarnationLevelConfig:
+      type: object
+      required:
+      - level
+      - name
+      - wavePowerBase
+      - playerTroopCap
+      - enemyTroopBase
+      - durationSeconds
+      - rewardExpCap
+      - enabled
+      properties:
+        level:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: 初入轮回
+        wavePowerBase:
+          type: integer
+          format: int64
+        playerTroopCap:
+          type: integer
+          format: int64
+        enemyTroopBase:
+          type: integer
+          format: int64
+        durationSeconds:
+          type: integer
+        rewardExpCap:
+          type: integer
+          format: int64
+        enabled:
+          type: boolean
+    ReincarnationWaveConfig:
+      type: object
+      required:
+      - waveIndex
+      - expBudgetRate
+      - expRandomMin
+      - expRandomMax
+      - fixedRewards
+      properties:
+        waveIndex:
+          type: integer
+          minimum: 1
+          maximum: 18
+        rewardPreview:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reward'
+        expBudgetRate:
+          type: number
+          format: double
+        expRandomMin:
+          type: number
+          format: double
+        expRandomMax:
+          type: number
+          format: double
+        fixedRewards:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reward'
+        dropPoolId:
+          type: string
+    ReincarnationBonus:
+      type: object
+      required:
+      - side
+      - unitType
+      - stat
+      - value
+      - label
+      properties:
+        side:
+          type: string
+          enum:
+          - ally
+          - enemy
+        unitType:
+          type: string
+        stat:
+          type: string
+        value:
+          type: number
+          format: double
+        label:
+          type: string
+        unitName:
+          type: string
+        faction:
+          type: string
+    ReincarnationWave:
+      type: object
+      required:
+      - id
+      - runId
+      - waveIndex
+      - waveType
+      - enemyFaction
+      - enemyTroops
+      - enemyRemaining
+      - allyBonus
+      - enemyBonus
+      - rewardPreview
+      - troopCap
+      - status
+      - startedAt
+      properties:
+        id:
+          type: string
+        runId:
+          type: string
+        waveIndex:
+          type: integer
+        waveType:
+          type: string
+          enum:
+          - attack
+          - defense
+        enemyFaction:
+          type: string
+        enemyTroops:
+          type: object
+          additionalProperties:
+            type: integer
+        enemyRemaining:
+          type: object
+          additionalProperties:
+            type: integer
+        allyBonus:
+          $ref: '#/components/schemas/ReincarnationBonus'
+        enemyBonus:
+          $ref: '#/components/schemas/ReincarnationBonus'
+        rewardPreview:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reward'
+        rewardResult:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reward'
+        troopCap:
+          type: integer
+        status:
+          type: string
+          enum:
+          - locked
+          - active
+          - cleared
+          - failed
+          - expired
+        startedAt:
+          type: string
+          format: date-time
+        clearedAt:
+          type: string
+          format: date-time
+          nullable: true
+        defenseReadyAt:
+          type: string
+          format: date-time
+          nullable: true
+        defenseResolveAt:
+          type: string
+          format: date-time
+          nullable: true
+    ReincarnationBattle:
+      type: object
+      required:
+      - id
+      - runId
+      - waveId
+      - playerId
+      - waveIndex
+      - waveType
+      - attackTroops
+      - losses
+      - enemyLosses
+      - passed
+      - reportId
+      - createdAt
+      properties:
+        id:
+          type: string
+        runId:
+          type: string
+        waveId:
+          type: string
+        playerId:
+          type: string
+        clientActionId:
+          type: string
+          description: 客户端动作幂等 ID，相同波次重复提交会返回同一份战报。
+        waveIndex:
+          type: integer
+        waveType:
+          type: string
+        attackTroops:
+          type: object
+          additionalProperties:
+            type: integer
+        losses:
+          type: object
+          additionalProperties:
+            type: integer
+        enemyLosses:
+          type: object
+          additionalProperties:
+            type: integer
+        passed:
+          type: boolean
+        reportId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ReincarnationRun:
+      type: object
+      required:
+      - id
+      - playerId
+      - level
+      - levelName
+      - status
+      - currentWave
+      - startedAt
+      - expiresAt
+      - pendingRewards
+      - waves
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+        playerId:
+          type: string
+        level:
+          type: integer
+        levelName:
+          type: string
+        status:
+          type: string
+          enum:
+          - running
+          - completed
+          - failed
+          - expired
+          - rewarded
+        currentWave:
+          type: integer
+        startedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        failedAt:
+          type: string
+          format: date-time
+          nullable: true
+        endedReason:
+          type: string
+        pendingRewards:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reward'
+        rewardGrantedAt:
+          type: string
+          format: date-time
+          nullable: true
+        waves:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReincarnationWave'
+        battles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReincarnationBattle'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ReincarnationRunResponse:
+      type: object
+      required:
+      - serverTime
+      properties:
+        run:
+          $ref: '#/components/schemas/ReincarnationRun'
+        army:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        serverTime:
+          type: string
+          format: date-time
+    ReincarnationActionResult:
+      type: object
+      required:
+      - run
+      - serverTime
+      properties:
+        run:
+          $ref: '#/components/schemas/ReincarnationRun'
+        battleReport:
+          $ref: '#/components/schemas/BattleReport'
+        army:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        serverTime:
+          type: string
+          format: date-time
+    StartReincarnationRequest:
+      type: object
+      required:
+      - playerId
+      - level
+      properties:
+        playerId:
+          type: string
+        level:
+          type: integer
+    ReincarnationTroopRequest:
+      type: object
+      required:
+      - playerId
+      - troops
+      properties:
+        playerId:
+          type: string
+        troops:
+          type: object
+          additionalProperties:
+            type: integer
+        clientActionId:
+          type: string
+          description: 建议每次真实操作生成一次，用于网络重试幂等。
+    ReincarnationSettleRequest:
+      type: object
+      required:
+      - playerId
+      properties:
+        playerId:
+          type: string
+    ReincarnationRunPage:
+      type: object
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReincarnationRun'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
     ErrorResponse:
       type: object
       required:

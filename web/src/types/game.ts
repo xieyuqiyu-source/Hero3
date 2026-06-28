@@ -179,6 +179,102 @@ export interface ArmyUnit {
   amount: number
 }
 
+export interface Reward {
+  type: string
+  id: string
+  amount: number
+  metadata?: Record<string, unknown>
+}
+
+export interface ReincarnationLevelConfig {
+  level: number
+  name: string
+  wavePowerBase: number
+  playerTroopCap: number
+  enemyTroopBase: number
+  durationSeconds: number
+  rewardExpCap: number
+  enabled: boolean
+}
+
+export interface ReincarnationConfig {
+  levels: ReincarnationLevelConfig[]
+  waves: Array<{
+    waveIndex: number
+    rewardPreview?: Reward[]
+    expBudgetRate: number
+    expRandomMin: number
+    expRandomMax: number
+    fixedRewards: Reward[]
+    dropPoolId?: string
+  }>
+  enemyFactions: string[]
+  bonusValues: number[]
+  defenseCountdownSeconds: number
+}
+
+export interface ReincarnationBonus {
+  side: string
+  unitType: string
+  stat: string
+  value: number
+  label: string
+  unitName?: string
+  faction?: string
+}
+
+export interface ReincarnationWave {
+  id: string
+  runId: string
+  waveIndex: number
+  waveType: 'attack' | 'defense' | string
+  enemyFaction: string
+  enemyTroops: Record<string, number>
+  enemyRemaining: Record<string, number>
+  allyBonus: ReincarnationBonus
+  enemyBonus: ReincarnationBonus
+  rewardPreview: Reward[]
+  rewardResult?: Reward[]
+  troopCap: number
+  status: string
+  startedAt: string
+  clearedAt?: string
+}
+
+export interface ReincarnationRun {
+  id: string
+  playerId: string
+  level: number
+  levelName: string
+  status: string
+  currentWave: number
+  startedAt: string
+  expiresAt: string
+  completedAt?: string
+  failedAt?: string
+  endedReason?: string
+  pendingRewards: Reward[]
+  rewardGrantedAt?: string
+  waves: ReincarnationWave[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReincarnationRunResponse {
+  run?: ReincarnationRun
+  army?: ArmyUnit[]
+  serverTime: string
+}
+
+export interface ReincarnationActionResult {
+  run: ReincarnationRun
+  battleReport?: BattleReport
+  army?: ArmyUnit[]
+  inventory?: Record<string, ItemStack>
+  inventorySlots?: ItemStack[]
+  serverTime: string
+}
+
 export interface RecruitQueue {
   id: string
   unitType: string

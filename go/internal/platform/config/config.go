@@ -15,60 +15,62 @@ const (
 )
 
 type Config struct {
-	ServiceName    string
-	Version        string
-	Environment    string
-	Addr           string
-	AllowedOrigins []string
-	DatabaseDSN    string
-	AllowDevDB     bool
-	BalancePath    string
-	FactionsPath   string
-	UnitsDir       string
-	NpcConfigPath  string
-	CombatPath     string
-	GeneralsPath   string
-	ItemsPath      string
-	DropPoolsPath  string
-	FishingPath    string
-	HelpDocsDir    string
-	JWTSecret      string
-	AdminToken     string
-	TokenTTL       time.Duration
-	ReadTimeout    time.Duration
-	WriteTimeout   time.Duration
-	IdleTimeout    time.Duration
-	LogLevel       slog.Level
+	ServiceName       string
+	Version           string
+	Environment       string
+	Addr              string
+	AllowedOrigins    []string
+	DatabaseDSN       string
+	AllowDevDB        bool
+	BalancePath       string
+	FactionsPath      string
+	UnitsDir          string
+	NpcConfigPath     string
+	CombatPath        string
+	GeneralsPath      string
+	ItemsPath         string
+	DropPoolsPath     string
+	FishingPath       string
+	ReincarnationPath string
+	HelpDocsDir       string
+	JWTSecret         string
+	AdminToken        string
+	TokenTTL          time.Duration
+	ReadTimeout       time.Duration
+	WriteTimeout      time.Duration
+	IdleTimeout       time.Duration
+	LogLevel          slog.Level
 }
 
 func Load() Config {
 	port := getEnv("HERO3_PORT", defaultPort)
 
 	return Config{
-		ServiceName:    "Hero3 API",
-		Version:        getEnv("HERO3_VERSION", "0.1.0"),
-		Environment:    getEnv("HERO3_ENV", defaultEnvironment),
-		Addr:           ":" + port,
-		AllowedOrigins: splitCSV(getEnv("HERO3_ALLOWED_ORIGINS", defaultAllowedOrigins)),
-		DatabaseDSN:    getEnv("HERO3_DATABASE_DSN", ""),
-		AllowDevDB:     getBoolEnv("HERO3_ALLOW_DEVELOPMENT_DATABASE", false),
-		BalancePath:    getEnv("HERO3_BALANCE_PATH", "config/balance.json"),
-		FactionsPath:   getEnv("HERO3_FACTIONS_PATH", "config/factions.json"),
-		UnitsDir:       getEnv("HERO3_UNITS_DIR", "config/units"),
-		NpcConfigPath:  getEnv("HERO3_NPC_CONFIG_PATH", "config/npc.json"),
-		CombatPath:     getEnv("HERO3_COMBAT_PATH", "config/combat.json"),
-		GeneralsPath:   getEnv("HERO3_GENERALS_PATH", "config/generals.json"),
-		ItemsPath:      getEnv("HERO3_ITEMS_PATH", "config/items.json"),
-		DropPoolsPath:  getEnv("HERO3_DROP_POOLS_PATH", "config/drop_pools.json"),
-		FishingPath:    getEnv("HERO3_FISHING_PATH", "config/fishing.json"),
-		HelpDocsDir:    getEnv("HERO3_HELP_DOCS_DIR", "helpdocs/content"),
-		JWTSecret:      getEnv("HERO3_JWT_SECRET", ""),
-		AdminToken:     getEnv("HERO3_ADMIN_TOKEN", ""),
-		TokenTTL:       getDurationEnv("HERO3_TOKEN_TTL", 7*24*time.Hour),
-		ReadTimeout:    getDurationEnv("HERO3_READ_TIMEOUT", 5*time.Second),
-		WriteTimeout:   getDurationEnv("HERO3_WRITE_TIMEOUT", 10*time.Second),
-		IdleTimeout:    getDurationEnv("HERO3_IDLE_TIMEOUT", 60*time.Second),
-		LogLevel:       getLogLevel(getEnv("HERO3_LOG_LEVEL", "info")),
+		ServiceName:       "Hero3 API",
+		Version:           getEnv("HERO3_VERSION", "0.1.0"),
+		Environment:       getEnv("HERO3_ENV", defaultEnvironment),
+		Addr:              ":" + port,
+		AllowedOrigins:    splitCSV(getEnv("HERO3_ALLOWED_ORIGINS", defaultAllowedOrigins)),
+		DatabaseDSN:       getEnv("HERO3_DATABASE_DSN", ""),
+		AllowDevDB:        getBoolEnv("HERO3_ALLOW_DEVELOPMENT_DATABASE", false),
+		BalancePath:       getEnv("HERO3_BALANCE_PATH", "config/balance.json"),
+		FactionsPath:      getEnv("HERO3_FACTIONS_PATH", "config/factions.json"),
+		UnitsDir:          getEnv("HERO3_UNITS_DIR", "config/units"),
+		NpcConfigPath:     getEnv("HERO3_NPC_CONFIG_PATH", "config/npc.json"),
+		CombatPath:        getEnv("HERO3_COMBAT_PATH", "config/combat.json"),
+		GeneralsPath:      getEnv("HERO3_GENERALS_PATH", "config/generals.json"),
+		ItemsPath:         getEnv("HERO3_ITEMS_PATH", "config/items.json"),
+		DropPoolsPath:     getEnv("HERO3_DROP_POOLS_PATH", "config/drop_pools.json"),
+		FishingPath:       getEnv("HERO3_FISHING_PATH", "config/fishing.json"),
+		ReincarnationPath: getEnv("HERO3_REINCARNATION_PATH", "config/reincarnation.json"),
+		HelpDocsDir:       getEnv("HERO3_HELP_DOCS_DIR", "helpdocs/content"),
+		JWTSecret:         getEnv("HERO3_JWT_SECRET", ""),
+		AdminToken:        getEnv("HERO3_ADMIN_TOKEN", ""),
+		TokenTTL:          getDurationEnv("HERO3_TOKEN_TTL", 7*24*time.Hour),
+		ReadTimeout:       getDurationEnv("HERO3_READ_TIMEOUT", 5*time.Second),
+		WriteTimeout:      getDurationEnv("HERO3_WRITE_TIMEOUT", 10*time.Second),
+		IdleTimeout:       getDurationEnv("HERO3_IDLE_TIMEOUT", 60*time.Second),
+		LogLevel:          getLogLevel(getEnv("HERO3_LOG_LEVEL", "info")),
 	}
 }
 

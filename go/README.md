@@ -70,10 +70,11 @@ go/
 
 玩法模块边界当前集中在：
 
-- `gameplay_module_registry.go`：玩法模块边界声明，当前登记 `mail`、`minigame` 和 `reinforcement`。
+- `gameplay_module_registry.go`：玩法模块边界声明，当前登记 `mail`、`minigame`、`reinforcement`、`pvp` 和 `reincarnation_abyss`。
 - `service_mail.go`：信函列表、阅读、发送、删除和附件领取。
 - `service_minigame.go`：万象幻境记录、鱼饵消耗、奖励兑换和兑换事件。
 - `service_reinforcement.go`：增援派出、召回、遣返、到达、返程和战斗损耗接入。
+- `service_reincarnation.go`：轮回绝境开启、18 波攻防结算、真实战损、累计奖励和副本战报接入。
 
 后续活动/副本应先登记玩法模块边界，再通过奖励、事件、Modifier、建筑变更等核心入口接入长期资产。
 
@@ -134,6 +135,7 @@ HERO3_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localho
 - `player_army_units` / `player_recruit_queues`：玩家兵力和征兵队列权威表
 - `player_generals` / `player_general_assignments`：玩家武将和武将派驻权威表
 - `player_buffs`：玩家 Buff/Modifier 权威表
+- `reincarnation_runs` / `reincarnation_waves` / `reincarnation_battles`：轮回绝境副本实例、波次和战斗记录
 
 本地或服务器 MySQL 可以先创建库和用户：
 

@@ -14,6 +14,7 @@ const (
 
 	ReportSourceNPCCity    = "npc_city"
 	ReportSourcePlayerCity = "player_city"
+	ReportSourceDungeon    = "dungeon"
 	ReportSourceSystem     = "system"
 )
 

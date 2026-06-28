@@ -599,6 +599,68 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 				FOREIGN KEY (player_id) REFERENCES players(id)
 				ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS reincarnation_runs (
+			id VARCHAR(64) PRIMARY KEY,
+			player_id VARCHAR(64) NOT NULL,
+			level INT NOT NULL,
+			status VARCHAR(32) NOT NULL,
+			current_wave INT NOT NULL DEFAULT 1,
+			started_at DATETIME(6) NOT NULL,
+			expires_at DATETIME(6) NOT NULL,
+			completed_at DATETIME(6) NULL,
+			failed_at DATETIME(6) NULL,
+			ended_reason VARCHAR(64) NOT NULL DEFAULT '',
+			pending_rewards_json JSON NULL,
+			reward_granted_at DATETIME(6) NULL,
+			metadata_json JSON NOT NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			INDEX idx_reincarnation_runs_player_status (player_id, status, expires_at),
+			CONSTRAINT fk_reincarnation_runs_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS reincarnation_waves (
+			id VARCHAR(64) PRIMARY KEY,
+			run_id VARCHAR(64) NOT NULL,
+			wave_index INT NOT NULL,
+			wave_type VARCHAR(32) NOT NULL,
+			enemy_faction VARCHAR(32) NOT NULL,
+			enemy_troops_json JSON NOT NULL,
+			enemy_remaining_json JSON NOT NULL,
+			ally_bonus_json JSON NULL,
+			enemy_bonus_json JSON NULL,
+			reward_preview_json JSON NULL,
+			reward_result_json JSON NULL,
+			status VARCHAR(32) NOT NULL,
+			started_at DATETIME(6) NOT NULL,
+			cleared_at DATETIME(6) NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			UNIQUE KEY uniq_reincarnation_wave (run_id, wave_index),
+			CONSTRAINT fk_reincarnation_waves_run
+				FOREIGN KEY (run_id) REFERENCES reincarnation_runs(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS reincarnation_battles (
+			id VARCHAR(64) PRIMARY KEY,
+			run_id VARCHAR(64) NOT NULL,
+			wave_id VARCHAR(64) NOT NULL,
+			player_id VARCHAR(64) NOT NULL,
+			client_action_id VARCHAR(128) NOT NULL DEFAULT '',
+			wave_index INT NOT NULL,
+			wave_type VARCHAR(32) NOT NULL,
+			attack_troops_json JSON NOT NULL,
+			losses_json JSON NOT NULL,
+			enemy_losses_json JSON NOT NULL,
+			result_json JSON NULL,
+			report_id VARCHAR(64) NOT NULL DEFAULT '',
+			created_at DATETIME(6) NOT NULL,
+			INDEX idx_reincarnation_battles_run (run_id, wave_index, created_at),
+			CONSTRAINT fk_reincarnation_battles_run
+				FOREIGN KEY (run_id) REFERENCES reincarnation_runs(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS battle_reports (
 			id VARCHAR(64) PRIMARY KEY,
 			player_id VARCHAR(64) NOT NULL,
@@ -970,6 +1032,9 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := addColumnIfMissing(ctx, db, `ALTER TABLE pvp_marches ADD COLUMN accelerated_times INT NOT NULL DEFAULT 0 AFTER battle_id`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE reincarnation_battles ADD COLUMN client_action_id VARCHAR(128) NOT NULL DEFAULT '' AFTER player_id`); err != nil {
 		return err
 	}
 	if _, err := db.ExecContext(ctx, `UPDATE minigame_records SET remaining_amount = reward_amount WHERE remaining_amount = -1 AND game_type = 'fishing'`); err != nil {

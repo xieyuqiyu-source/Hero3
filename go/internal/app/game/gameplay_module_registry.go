@@ -29,6 +29,23 @@ var (
 
 func init() {
 	mustRegisterGameplayModule(GameplayModuleDefinition{
+		ID:               ReincarnationModuleID,
+		Name:             "轮回绝境",
+		Description:      "玩家主动开启、限时完成、真实消耗兵力的 18 波副本玩法。",
+		StateOwner:       "reincarnation_runs + reincarnation_waves + reincarnation_battles tables",
+		RepositoryPort:   "ReincarnationRepository",
+		RewardEntrypoint: "GrantRewards",
+		EventTypes:       []string{EventBattleFinished, EventRewardGranted},
+		RewardTypes:      []string{RewardTypeItem, RewardTypeResource, RewardTypeGeneralExp, RewardTypeBuff},
+		CoreEntrypoints:  []string{"UpdateReincarnationRunWithState", "validateAndConsumeArmy", "GrantRewards", "CreateBattleReports"},
+		BoundaryRules: []string{
+			"轮回绝境模块拥有副本实例、波次、战斗记录和累计奖励状态。",
+			"每次出兵必须通过核心兵力资产入口校验并扣减真实战损。",
+			"副本奖励必须先累计在副本实例内，结束结算时通过标准 Reward 发放。",
+			"物品奖励只引用 itemId 或 dropPoolId，不在玩法中硬编码物品效果。",
+		},
+	})
+	mustRegisterGameplayModule(GameplayModuleDefinition{
 		ID:               "mail",
 		Name:             "信函",
 		Description:      "玩家信箱、系统邮件、GM 邮件和附件领取模块。",

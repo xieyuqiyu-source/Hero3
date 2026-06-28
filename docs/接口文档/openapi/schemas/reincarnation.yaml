@@ -1,0 +1,330 @@
+Reward:
+  type: object
+  required: [type, id, amount]
+  properties:
+    type:
+      type: string
+      example: item
+    id:
+      type: string
+      example: token_reincarnation
+    amount:
+      type: integer
+      example: 10
+    metadata:
+      type: object
+      additionalProperties: true
+ReincarnationConfig:
+  type: object
+  required: [levels, waves, enemyFactions, bonusValues, defenseCountdownSeconds]
+  properties:
+    levels:
+      type: array
+      items:
+        $ref: '#/components/schemas/ReincarnationLevelConfig'
+    waves:
+      type: array
+      items:
+        $ref: '#/components/schemas/ReincarnationWaveConfig'
+    enemyFactions:
+      type: array
+      items:
+        type: string
+    bonusValues:
+      type: array
+      items:
+        type: number
+        format: double
+    defenseCountdownSeconds:
+      type: integer
+      example: 3
+ReincarnationLevelConfig:
+  type: object
+  required: [level, name, wavePowerBase, playerTroopCap, enemyTroopBase, durationSeconds, rewardExpCap, enabled]
+  properties:
+    level:
+      type: integer
+      example: 1
+    name:
+      type: string
+      example: 初入轮回
+    wavePowerBase:
+      type: integer
+      format: int64
+    playerTroopCap:
+      type: integer
+      format: int64
+    enemyTroopBase:
+      type: integer
+      format: int64
+    durationSeconds:
+      type: integer
+    rewardExpCap:
+      type: integer
+      format: int64
+    enabled:
+      type: boolean
+ReincarnationWaveConfig:
+  type: object
+  required: [waveIndex, expBudgetRate, expRandomMin, expRandomMax, fixedRewards]
+  properties:
+    waveIndex:
+      type: integer
+      minimum: 1
+      maximum: 18
+    rewardPreview:
+      type: array
+      items:
+        $ref: '#/components/schemas/Reward'
+    expBudgetRate:
+      type: number
+      format: double
+    expRandomMin:
+      type: number
+      format: double
+    expRandomMax:
+      type: number
+      format: double
+    fixedRewards:
+      type: array
+      items:
+        $ref: '#/components/schemas/Reward'
+    dropPoolId:
+      type: string
+ReincarnationBonus:
+  type: object
+  required: [side, unitType, stat, value, label]
+  properties:
+    side:
+      type: string
+      enum: [ally, enemy]
+    unitType:
+      type: string
+    stat:
+      type: string
+    value:
+      type: number
+      format: double
+    label:
+      type: string
+    unitName:
+      type: string
+    faction:
+      type: string
+ReincarnationWave:
+  type: object
+  required: [id, runId, waveIndex, waveType, enemyFaction, enemyTroops, enemyRemaining, allyBonus, enemyBonus, rewardPreview, troopCap, status, startedAt]
+  properties:
+    id:
+      type: string
+    runId:
+      type: string
+    waveIndex:
+      type: integer
+    waveType:
+      type: string
+      enum: [attack, defense]
+    enemyFaction:
+      type: string
+    enemyTroops:
+      type: object
+      additionalProperties:
+        type: integer
+    enemyRemaining:
+      type: object
+      additionalProperties:
+        type: integer
+    allyBonus:
+      $ref: '#/components/schemas/ReincarnationBonus'
+    enemyBonus:
+      $ref: '#/components/schemas/ReincarnationBonus'
+    rewardPreview:
+      type: array
+      items:
+        $ref: '#/components/schemas/Reward'
+    rewardResult:
+      type: array
+      items:
+        $ref: '#/components/schemas/Reward'
+    troopCap:
+      type: integer
+    status:
+      type: string
+      enum: [locked, active, cleared, failed, expired]
+    startedAt:
+      type: string
+      format: date-time
+    clearedAt:
+      type: string
+      format: date-time
+      nullable: true
+    defenseReadyAt:
+      type: string
+      format: date-time
+      nullable: true
+    defenseResolveAt:
+      type: string
+      format: date-time
+      nullable: true
+ReincarnationBattle:
+  type: object
+  required: [id, runId, waveId, playerId, waveIndex, waveType, attackTroops, losses, enemyLosses, passed, reportId, createdAt]
+  properties:
+    id:
+      type: string
+    runId:
+      type: string
+    waveId:
+      type: string
+    playerId:
+      type: string
+    clientActionId:
+      type: string
+      description: 客户端动作幂等 ID，相同波次重复提交会返回同一份战报。
+    waveIndex:
+      type: integer
+    waveType:
+      type: string
+    attackTroops:
+      type: object
+      additionalProperties:
+        type: integer
+    losses:
+      type: object
+      additionalProperties:
+        type: integer
+    enemyLosses:
+      type: object
+      additionalProperties:
+        type: integer
+    passed:
+      type: boolean
+    reportId:
+      type: string
+    createdAt:
+      type: string
+      format: date-time
+ReincarnationRun:
+  type: object
+  required: [id, playerId, level, levelName, status, currentWave, startedAt, expiresAt, pendingRewards, waves, createdAt, updatedAt]
+  properties:
+    id:
+      type: string
+    playerId:
+      type: string
+    level:
+      type: integer
+    levelName:
+      type: string
+    status:
+      type: string
+      enum: [running, completed, failed, expired, rewarded]
+    currentWave:
+      type: integer
+    startedAt:
+      type: string
+      format: date-time
+    expiresAt:
+      type: string
+      format: date-time
+    completedAt:
+      type: string
+      format: date-time
+      nullable: true
+    failedAt:
+      type: string
+      format: date-time
+      nullable: true
+    endedReason:
+      type: string
+    pendingRewards:
+      type: array
+      items:
+        $ref: '#/components/schemas/Reward'
+    rewardGrantedAt:
+      type: string
+      format: date-time
+      nullable: true
+    waves:
+      type: array
+      items:
+        $ref: '#/components/schemas/ReincarnationWave'
+    battles:
+      type: array
+      items:
+        $ref: '#/components/schemas/ReincarnationBattle'
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+ReincarnationRunResponse:
+  type: object
+  required: [serverTime]
+  properties:
+    run:
+      $ref: '#/components/schemas/ReincarnationRun'
+    army:
+      type: array
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    serverTime:
+      type: string
+      format: date-time
+ReincarnationActionResult:
+  type: object
+  required: [run, serverTime]
+  properties:
+    run:
+      $ref: '#/components/schemas/ReincarnationRun'
+    battleReport:
+      $ref: '#/components/schemas/BattleReport'
+    army:
+      type: array
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    serverTime:
+      type: string
+      format: date-time
+StartReincarnationRequest:
+  type: object
+  required: [playerId, level]
+  properties:
+    playerId:
+      type: string
+    level:
+      type: integer
+ReincarnationTroopRequest:
+  type: object
+  required: [playerId, troops]
+  properties:
+    playerId:
+      type: string
+    troops:
+      type: object
+      additionalProperties:
+        type: integer
+    clientActionId:
+      type: string
+      description: 建议每次真实操作生成一次，用于网络重试幂等。
+ReincarnationSettleRequest:
+  type: object
+  required: [playerId]
+  properties:
+    playerId:
+      type: string
+ReincarnationRunPage:
+  type: object
+  required: [items, total, limit, offset]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '#/components/schemas/ReincarnationRun'
+    total:
+      type: integer
+    limit:
+      type: integer
+    offset:
+      type: integer

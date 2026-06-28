@@ -178,6 +178,14 @@ type EventProcessingRepository interface {
 	ClaimEventProcessing(moduleID string, handlerKey string, eventKey string, processedAt time.Time) (bool, error)
 }
 
+type ReincarnationRepository interface {
+	GetActiveReincarnationRun(playerID string, now time.Time) (ReincarnationRun, bool, error)
+	GetReincarnationRun(runID string) (ReincarnationRun, error)
+	SaveReincarnationRun(run ReincarnationRun) error
+	UpdateReincarnationRunWithState(playerID string, runID string, updatedAt time.Time, update func(state *GameState, run *ReincarnationRun) ([]BattleReport, error)) (GameState, ReincarnationRun, []BattleReport, error)
+	ListReincarnationRuns(playerID string, limit int, offset int) ([]ReincarnationRun, int, error)
+}
+
 type Repository interface {
 	AccountRepository
 	PlayerStateRepository
@@ -200,6 +208,7 @@ type Repository interface {
 	GoldLedgerRepository
 	ItemLedgerRepository
 	EventProcessingRepository
+	ReincarnationRepository
 }
 
 type MemoryRepository struct {
@@ -224,6 +233,7 @@ type MemoryRepository struct {
 	ledgerNextID      int64
 	itemLedger        []ItemLedgerEntry
 	eventClaims       map[string]struct{}
+	reincarnationRuns map[string]ReincarnationRun
 }
 
 func NewMemoryRepository() *MemoryRepository {
@@ -245,6 +255,7 @@ func NewMemoryRepository() *MemoryRepository {
 		announcements:     make(map[string]Announcement),
 		announcementReads: make(map[string]AnnouncementReadState),
 		eventClaims:       make(map[string]struct{}),
+		reincarnationRuns: make(map[string]ReincarnationRun),
 	}
 }
 

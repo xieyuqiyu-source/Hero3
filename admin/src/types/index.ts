@@ -167,6 +167,59 @@ export interface ItemLedgerPage {
   offset: number
 }
 
+export interface Reward {
+  type: string
+  id: string
+  amount: number
+  metadata?: Record<string, unknown>
+}
+
+export interface ReincarnationConfig {
+  levels: Array<{
+    level: number
+    name: string
+    wavePowerBase: number
+    playerTroopCap: number
+    enemyTroopBase: number
+    durationSeconds: number
+    rewardExpCap: number
+    enabled: boolean
+  }>
+  waves: Array<{
+    waveIndex: number
+    rewardPreview?: Reward[]
+    expBudgetRate: number
+    expRandomMin: number
+    expRandomMax: number
+    fixedRewards: Reward[]
+    dropPoolId?: string
+  }>
+  enemyFactions: string[]
+  bonusValues: number[]
+  defenseCountdownSeconds: number
+}
+
+export interface ReincarnationRun {
+  id: string
+  playerId: string
+  level: number
+  levelName: string
+  status: string
+  currentWave: number
+  startedAt: string
+  expiresAt: string
+  endedReason?: string
+  pendingRewards: Reward[]
+  rewardGrantedAt?: string
+}
+
+export interface ReincarnationRunPage {
+  items: ReincarnationRun[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export interface UnitConfig {
   name: string
   description: string

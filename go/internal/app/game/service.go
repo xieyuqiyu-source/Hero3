@@ -15,74 +15,78 @@ import (
 )
 
 var (
-	ErrAccountExists           = errors.New("account already exists")
-	ErrAccountNotFound         = errors.New("account not found")
-	ErrInvalidCredentials      = errors.New("invalid credentials")
-	ErrPlayerNotFound          = errors.New("player not found")
-	ErrBuildingNotFound        = errors.New("building not found")
-	ErrInsufficientRes         = errors.New("insufficient resources")
-	ErrAlreadyUpgrading        = errors.New("building is already upgrading")
-	ErrNotUpgrading            = errors.New("building is not upgrading")
-	ErrMaxLevel                = errors.New("building is at max level")
-	ErrInvalidBuildingStatus   = errors.New("invalid building status")
-	ErrInvalidBuildingMutation = errors.New("invalid building mutation")
-	ErrBuildingStatusBlocked   = errors.New("building status blocks this action")
-	ErrInvalidEffectType       = errors.New("invalid effect type")
-	ErrMixedEffectAssets       = errors.New("mixed effect assets require split execution")
-	ErrUnitNotFound            = errors.New("unit not found")
-	ErrNonCombatUnit           = errors.New("unit cannot participate in combat")
-	ErrInvalidBuffKey          = errors.New("invalid buff key")
-	ErrInvalidBuffMode         = errors.New("invalid buff mode")
-	ErrInvalidAmount           = errors.New("invalid recruit amount")
-	ErrQueueFull               = errors.New("recruit queue is full")
-	ErrInvalidGeneral          = errors.New("invalid general for faction")
-	ErrGeneralNotFound         = errors.New("general not found")
-	ErrInvalidStatKey          = errors.New("invalid general stat")
-	ErrNoStatPoints            = errors.New("no general stat points available")
-	ErrStatMaxLevel            = errors.New("general stat is at max level")
-	ErrMailNotFound            = errors.New("mail not found")
-	ErrInvalidMail             = errors.New("invalid mail")
-	ErrMailAlreadyClaimed      = errors.New("mail already claimed")
-	ErrMailNoAttachments       = errors.New("mail has no attachments")
-	ErrMailExpired             = errors.New("mail expired")
-	ErrMailClaimForbidden      = errors.New("mail attachments cannot be claimed")
-	ErrMailInvalidAttachment   = errors.New("invalid mail attachment")
-	ErrMailRecipientSelf       = errors.New("cannot send mail to yourself")
-	ErrMiniGameNotFound        = errors.New("minigame record not found")
-	ErrInvalidMiniGame         = errors.New("invalid minigame record")
-	ErrInvalidBait             = errors.New("invalid fishing bait")
-	ErrCrossFactionReward      = errors.New("reward unit is not available for current faction")
-	ErrMiniGameStockShort      = errors.New("insufficient minigame reward stock")
-	ErrItemNotFound            = errors.New("item not found")
-	ErrItemNotUsable           = errors.New("item is not usable")
-	ErrInsufficientItem        = errors.New("insufficient item")
-	ErrInventoryFull           = errors.New("inventory is full")
-	ErrDropPoolNotFound        = errors.New("drop pool not found")
-	ErrItemIDLocked            = errors.New("物品 ID 已锁定，不能删除或改名")
-	ErrReinforcementNotFound   = errors.New("reinforcement not found")
-	ErrInvalidReinforcement    = errors.New("invalid reinforcement")
-	ErrReinforcementTargetSelf = errors.New("cannot reinforce yourself")
-	ErrReinforcementTargetNPC  = errors.New("npc cannot be reinforced")
-	ErrReinforcementSlotFull   = errors.New("reinforcement source slots are full")
-	ErrReinforcementBusy       = errors.New("reinforcement is busy")
-	ErrGeneralBusy             = errors.New("general is already assigned")
+	ErrAccountExists            = errors.New("account already exists")
+	ErrAccountNotFound          = errors.New("account not found")
+	ErrInvalidCredentials       = errors.New("invalid credentials")
+	ErrPlayerNotFound           = errors.New("player not found")
+	ErrBuildingNotFound         = errors.New("building not found")
+	ErrInsufficientRes          = errors.New("insufficient resources")
+	ErrAlreadyUpgrading         = errors.New("building is already upgrading")
+	ErrNotUpgrading             = errors.New("building is not upgrading")
+	ErrMaxLevel                 = errors.New("building is at max level")
+	ErrInvalidBuildingStatus    = errors.New("invalid building status")
+	ErrInvalidBuildingMutation  = errors.New("invalid building mutation")
+	ErrBuildingStatusBlocked    = errors.New("building status blocks this action")
+	ErrInvalidEffectType        = errors.New("invalid effect type")
+	ErrMixedEffectAssets        = errors.New("mixed effect assets require split execution")
+	ErrUnitNotFound             = errors.New("unit not found")
+	ErrNonCombatUnit            = errors.New("unit cannot participate in combat")
+	ErrInvalidBuffKey           = errors.New("invalid buff key")
+	ErrInvalidBuffMode          = errors.New("invalid buff mode")
+	ErrInvalidAmount            = errors.New("invalid recruit amount")
+	ErrQueueFull                = errors.New("recruit queue is full")
+	ErrInvalidGeneral           = errors.New("invalid general for faction")
+	ErrGeneralNotFound          = errors.New("general not found")
+	ErrInvalidStatKey           = errors.New("invalid general stat")
+	ErrNoStatPoints             = errors.New("no general stat points available")
+	ErrStatMaxLevel             = errors.New("general stat is at max level")
+	ErrMailNotFound             = errors.New("mail not found")
+	ErrInvalidMail              = errors.New("invalid mail")
+	ErrMailAlreadyClaimed       = errors.New("mail already claimed")
+	ErrMailNoAttachments        = errors.New("mail has no attachments")
+	ErrMailExpired              = errors.New("mail expired")
+	ErrMailClaimForbidden       = errors.New("mail attachments cannot be claimed")
+	ErrMailInvalidAttachment    = errors.New("invalid mail attachment")
+	ErrMailRecipientSelf        = errors.New("cannot send mail to yourself")
+	ErrMiniGameNotFound         = errors.New("minigame record not found")
+	ErrInvalidMiniGame          = errors.New("invalid minigame record")
+	ErrInvalidBait              = errors.New("invalid fishing bait")
+	ErrCrossFactionReward       = errors.New("reward unit is not available for current faction")
+	ErrMiniGameStockShort       = errors.New("insufficient minigame reward stock")
+	ErrItemNotFound             = errors.New("item not found")
+	ErrItemNotUsable            = errors.New("item is not usable")
+	ErrInsufficientItem         = errors.New("insufficient item")
+	ErrInventoryFull            = errors.New("inventory is full")
+	ErrDropPoolNotFound         = errors.New("drop pool not found")
+	ErrItemIDLocked             = errors.New("物品 ID 已锁定，不能删除或改名")
+	ErrReincarnationRunNotFound = errors.New("reincarnation run not found")
+	ErrReincarnationActive      = errors.New("reincarnation run already active")
+	ErrInvalidReincarnation     = errors.New("invalid reincarnation run")
+	ErrReinforcementNotFound    = errors.New("reinforcement not found")
+	ErrInvalidReinforcement     = errors.New("invalid reinforcement")
+	ErrReinforcementTargetSelf  = errors.New("cannot reinforce yourself")
+	ErrReinforcementTargetNPC   = errors.New("npc cannot be reinforced")
+	ErrReinforcementSlotFull    = errors.New("reinforcement source slots are full")
+	ErrReinforcementBusy        = errors.New("reinforcement is busy")
+	ErrGeneralBusy              = errors.New("general is already assigned")
 )
 
 const resourceDateLayout = time.RFC3339
 
 type Service struct {
-	repo          Repository
-	eventBus      *EventBus
-	playerLocks   sync.Map // per-player 互斥锁，防止并发购买/兑换竞态
-	balancePath   string
-	factionsPath  string
-	unitsDir      string
-	npcConfigPath string
-	combatPath    string
-	generalsPath  string
-	itemsPath     string
-	dropPoolsPath string
-	fishingPath   string
+	repo              Repository
+	eventBus          *EventBus
+	playerLocks       sync.Map // per-player 互斥锁，防止并发购买/兑换竞态
+	balancePath       string
+	factionsPath      string
+	unitsDir          string
+	npcConfigPath     string
+	combatPath        string
+	generalsPath      string
+	itemsPath         string
+	dropPoolsPath     string
+	fishingPath       string
+	reincarnationPath string
 }
 
 // getPlayerLock 获取指定玩家的互斥锁（懒创建）
@@ -92,15 +96,16 @@ func (s *Service) getPlayerLock(playerID string) *sync.Mutex {
 }
 
 type BootstrapResponse struct {
-	GameName  string          `json:"gameName"`
-	Modules   []string        `json:"modules"`
-	Balance   BalanceConfig   `json:"balance"`
-	Factions  FactionsConfig  `json:"factions"`
-	Units     UnitsConfig     `json:"units"`
-	Items     ItemsConfig     `json:"items"`
-	DropPools DropPoolsConfig `json:"dropPools"`
-	Fishing   FishingConfig   `json:"fishing"`
-	Message   string          `json:"message"`
+	GameName      string              `json:"gameName"`
+	Modules       []string            `json:"modules"`
+	Balance       BalanceConfig       `json:"balance"`
+	Factions      FactionsConfig      `json:"factions"`
+	Units         UnitsConfig         `json:"units"`
+	Items         ItemsConfig         `json:"items"`
+	DropPools     DropPoolsConfig     `json:"dropPools"`
+	Fishing       FishingConfig       `json:"fishing"`
+	Reincarnation ReincarnationConfig `json:"reincarnation"`
+	Message       string              `json:"message"`
 }
 
 const (
@@ -170,6 +175,12 @@ func (s *Service) SetFishingPath(path string) error {
 	return LoadFishingConfig(path)
 }
 
+// SetReincarnationPath 设置并加载轮回绝境配置。
+func (s *Service) SetReincarnationPath(path string) error {
+	s.reincarnationPath = path
+	return LoadReincarnationConfig(path)
+}
+
 func (s *Service) GetGeneralsConfig() GeneralsConfig {
 	return GetGeneralsConfig()
 }
@@ -192,6 +203,16 @@ func (s *Service) GetFishingConfig() FishingConfig {
 
 func (s *Service) UpdateFishingConfig(config FishingConfig) error {
 	return SaveFishingConfig(s.fishingPath, config)
+}
+
+// GetReincarnationConfig 返回轮回绝境配置。
+func (s *Service) GetReincarnationConfig() ReincarnationConfig {
+	return GetReincarnationConfig()
+}
+
+// UpdateReincarnationConfig 保存轮回绝境配置。
+func (s *Service) UpdateReincarnationConfig(config ReincarnationConfig) error {
+	return SaveReincarnationConfig(s.reincarnationPath, config)
 }
 
 func (s *Service) GetFactionsConfig() FactionsConfig {
@@ -512,6 +533,7 @@ func (s *Service) Bootstrap() BootstrapResponse {
 	items := GetItemsConfig()
 	dropPools := GetDropPoolsConfig()
 	fishing := GetFishingConfig()
+	reincarnation := GetReincarnationConfig()
 	return BootstrapResponse{
 		GameName: "Hero3",
 		Modules: append([]string{
@@ -524,13 +546,14 @@ func (s *Service) Bootstrap() BootstrapResponse {
 			"save",
 			"item",
 		}, ListGameplayModuleIDs()...),
-		Balance:   balance,
-		Factions:  factions,
-		Units:     units,
-		Items:     items,
-		DropPools: dropPools,
-		Fishing:   fishing,
-		Message:   "Hero3 后端基础服务已就绪，具体玩法逻辑待接入。",
+		Balance:       balance,
+		Factions:      factions,
+		Units:         units,
+		Items:         items,
+		DropPools:     dropPools,
+		Fishing:       fishing,
+		Reincarnation: reincarnation,
+		Message:       "Hero3 后端基础服务已就绪，具体玩法逻辑待接入。",
 	}
 }
 

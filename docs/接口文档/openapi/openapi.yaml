@@ -21,6 +21,8 @@ tags:
   description: 军事与征兵
 - name: Map
   description: 地图、NPC 城池与战斗
+- name: Dungeon
+  description: 地图副本玩法
 - name: News
   description: 军情与战报
 - name: Mail
@@ -100,6 +102,20 @@ paths:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1attack
   /api/v1/map/npc-cities/scout:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1scout
+  /api/v1/dungeons/reincarnation/config:
+    $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1config
+  /api/v1/dungeons/reincarnation/run:
+    $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1run
+  /api/v1/dungeons/reincarnation/start:
+    $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1start
+  /api/v1/dungeons/reincarnation/waves/{waveId}/attack:
+    $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1waves~1{waveId}~1attack
+  /api/v1/dungeons/reincarnation/waves/{waveId}/defense-ready:
+    $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1waves~1{waveId}~1defense-ready
+  /api/v1/dungeons/reincarnation/settle:
+    $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1settle
+  /api/v1/dungeons/reincarnation/reports:
+    $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1reports
   /api/v1/news/reports:
     $ref: ./paths/news.yaml#/~1api~1v1~1news~1reports
   /api/v1/news/mark-read:
@@ -214,6 +230,16 @@ paths:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1npc-config
   /api/v1/admin/fishing-config:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1fishing-config
+  /api/v1/admin/dungeons/reincarnation/config:
+    $ref: ./paths/dungeon.yaml#/~1api~1v1~1admin~1dungeons~1reincarnation~1config
+  /api/v1/admin/dungeons/reincarnation/runs:
+    $ref: ./paths/dungeon.yaml#/~1api~1v1~1admin~1dungeons~1reincarnation~1runs
+  /api/v1/admin/dungeons/reincarnation/runs/{runId}:
+    $ref: ./paths/dungeon.yaml#/~1api~1v1~1admin~1dungeons~1reincarnation~1runs~1{runId}
+  /api/v1/admin/dungeons/reincarnation/runs/{runId}/force-settle:
+    $ref: ./paths/dungeon.yaml#/~1api~1v1~1admin~1dungeons~1reincarnation~1runs~1{runId}~1force-settle
+  /api/v1/admin/dungeons/reincarnation/runs/{runId}/repair-reward:
+    $ref: ./paths/dungeon.yaml#/~1api~1v1~1admin~1dungeons~1reincarnation~1runs~1{runId}~1repair-reward
 components:
   schemas:
     HealthState:
@@ -430,6 +456,34 @@ components:
       $ref: ./schemas/map.yaml#/ScoutNpcRequest
     ScoutNpcResponse:
       $ref: ./schemas/map.yaml#/ScoutNpcResponse
+    Reward:
+      $ref: ./schemas/reincarnation.yaml#/Reward
+    ReincarnationConfig:
+      $ref: ./schemas/reincarnation.yaml#/ReincarnationConfig
+    ReincarnationLevelConfig:
+      $ref: ./schemas/reincarnation.yaml#/ReincarnationLevelConfig
+    ReincarnationWaveConfig:
+      $ref: ./schemas/reincarnation.yaml#/ReincarnationWaveConfig
+    ReincarnationBonus:
+      $ref: ./schemas/reincarnation.yaml#/ReincarnationBonus
+    ReincarnationWave:
+      $ref: ./schemas/reincarnation.yaml#/ReincarnationWave
+    ReincarnationBattle:
+      $ref: ./schemas/reincarnation.yaml#/ReincarnationBattle
+    ReincarnationRun:
+      $ref: ./schemas/reincarnation.yaml#/ReincarnationRun
+    ReincarnationRunResponse:
+      $ref: ./schemas/reincarnation.yaml#/ReincarnationRunResponse
+    ReincarnationActionResult:
+      $ref: ./schemas/reincarnation.yaml#/ReincarnationActionResult
+    StartReincarnationRequest:
+      $ref: ./schemas/reincarnation.yaml#/StartReincarnationRequest
+    ReincarnationTroopRequest:
+      $ref: ./schemas/reincarnation.yaml#/ReincarnationTroopRequest
+    ReincarnationSettleRequest:
+      $ref: ./schemas/reincarnation.yaml#/ReincarnationSettleRequest
+    ReincarnationRunPage:
+      $ref: ./schemas/reincarnation.yaml#/ReincarnationRunPage
     ErrorResponse:
       $ref: ./schemas/common.yaml#/ErrorResponse
     DeleteResponse:

@@ -68,6 +68,7 @@ go build ./cmd/server
 - `clone-data` 不复制或清空 `schema_migrations`，测试库迁移记录由测试库自己的迁移命令维护。
 - 物品系统使用 `go/config/items.json` 和 `go/config/drop_pools.json` 配置注册；背包权威表按格子 `slot_id` 存储，兼容接口仍返回按物品聚合的 `inventory`。
 - 物品获得和消耗会写入 `item_ledger`，GM 后台可查看物品配置、玩家背包格子和物品流水。
+- 轮回绝境副本使用 `go/config/reincarnation.json` 配置层级、波次、加成和奖励；玩家入口位于“地图 -> 副本”，GM 后台可编辑 JSON 配置、查看实例并处理异常结算。
 
 示例：
 

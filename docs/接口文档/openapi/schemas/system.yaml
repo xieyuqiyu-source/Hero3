@@ -67,6 +67,8 @@ BootstrapResponse:
       description: 道具配置。
     fishing:
       $ref: '#/components/schemas/FishingConfig'
+    reincarnation:
+      $ref: '#/components/schemas/ReincarnationConfig'
     message:
       type: string
       example: Hero3 后端基础服务已就绪，具体玩法逻辑待接入。

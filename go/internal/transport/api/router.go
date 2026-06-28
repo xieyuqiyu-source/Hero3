@@ -44,6 +44,7 @@ func NewRouter(options RouterOptions) http.Handler {
 	registerGoldRoutes(mux, handlers)
 	registerItemRoutes(mux, handlers)
 	registerMiniGameRoutes(mux, handlers)
+	registerReincarnationRoutes(mux, handlers)
 	registerAdminRoutes(mux, handlers)
 	helpdocstransport.RegisterRoutes(mux, helpdocs.NewService(options.Config.HelpDocsDir))
 
@@ -152,6 +153,17 @@ func registerMapRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("POST /api/v1/map/npc-cities/scout", handlers.ScoutNpc)
 }
 
+// registerReincarnationRoutes 注册轮回绝境副本路由。
+func registerReincarnationRoutes(mux *http.ServeMux, handlers *Handlers) {
+	mux.HandleFunc("GET /api/v1/dungeons/reincarnation/config", handlers.ReincarnationConfig)
+	mux.HandleFunc("GET /api/v1/dungeons/reincarnation/run", handlers.ReincarnationRun)
+	mux.HandleFunc("POST /api/v1/dungeons/reincarnation/start", handlers.StartReincarnation)
+	mux.HandleFunc("POST /api/v1/dungeons/reincarnation/waves/{waveId}/attack", handlers.AttackReincarnationWave)
+	mux.HandleFunc("POST /api/v1/dungeons/reincarnation/waves/{waveId}/defense-ready", handlers.ReadyReincarnationDefense)
+	mux.HandleFunc("POST /api/v1/dungeons/reincarnation/settle", handlers.SettleReincarnation)
+	mux.HandleFunc("GET /api/v1/dungeons/reincarnation/reports", handlers.ReincarnationReports)
+}
+
 // registerCombatRoutes 注册战斗模拟路由。
 func registerCombatRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("POST /api/v1/combat/simulate", handlers.SimulateBattle)
@@ -251,6 +263,12 @@ func registerAdminRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("POST /api/v1/admin/items/grant", handlers.AdminGrantItem)
 	mux.HandleFunc("GET /api/v1/admin/items/inventory", handlers.AdminInventoryView)
 	mux.HandleFunc("GET /api/v1/admin/items/ledger", handlers.AdminItemLedger)
+	mux.HandleFunc("GET /api/v1/admin/dungeons/reincarnation/config", handlers.AdminReincarnationConfig)
+	mux.HandleFunc("PUT /api/v1/admin/dungeons/reincarnation/config", handlers.UpdateAdminReincarnationConfig)
+	mux.HandleFunc("GET /api/v1/admin/dungeons/reincarnation/runs", handlers.AdminReincarnationRuns)
+	mux.HandleFunc("GET /api/v1/admin/dungeons/reincarnation/runs/{runId}", handlers.AdminReincarnationRun)
+	mux.HandleFunc("POST /api/v1/admin/dungeons/reincarnation/runs/{runId}/force-settle", handlers.AdminForceSettleReincarnationRun)
+	mux.HandleFunc("POST /api/v1/admin/dungeons/reincarnation/runs/{runId}/repair-reward", handlers.AdminRepairReincarnationReward)
 	mux.HandleFunc("POST /api/v1/admin/gold/add", handlers.AddGold)
 	mux.HandleFunc("POST /api/v1/admin/gold/deduct", handlers.DeductGold)
 	mux.HandleFunc("POST /api/v1/admin/gold/add-account", handlers.AddAccountGold)

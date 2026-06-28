@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult } from '@/types/game'
 import type { BalanceConfig, FactionConfig, FishingConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -80,6 +80,7 @@ export const gameApi = {
       factions: Record<string, FactionConfig>
       units: Record<string, Record<string, UnitConfig>>
       items: Record<string, ItemDefinition>
+      reincarnation: ReincarnationConfig
       fishing: FishingConfig
       message: string
     }>('/game/bootstrap')
@@ -371,6 +372,41 @@ export const gameApi = {
   /** 侦查 NPC 城池 */
   scoutNpc(playerId: string, npcId: string) {
     return api.post<{ success: boolean; battleReport: BattleReport; npcCity: NpcCity | null; army: ArmyUnit[]; npcState?: GameState['npcState']; serverTime: string }>('/map/npc-cities/scout', { playerId, npcId })
+  },
+
+  /** 获取轮回绝境配置 */
+  getReincarnationConfig() {
+    return api.get<ReincarnationConfig>('/dungeons/reincarnation/config')
+  },
+
+  /** 获取当前轮回绝境实例 */
+  getReincarnationRun(playerId: string) {
+    return api.get<ReincarnationRunResponse>(`/dungeons/reincarnation/run?playerId=${playerId}`)
+  },
+
+  /** 开启轮回绝境 */
+  startReincarnation(playerId: string, level: number) {
+    return api.post<ReincarnationActionResult>('/dungeons/reincarnation/start', { playerId, level })
+  },
+
+  /** 进攻轮回绝境波次 */
+  attackReincarnationWave(playerId: string, waveId: string, troops: Record<string, number>, clientActionId?: string) {
+    return api.post<ReincarnationActionResult>(`/dungeons/reincarnation/waves/${waveId}/attack`, { playerId, troops, clientActionId })
+  },
+
+  /** 防守轮回绝境波次 */
+  readyReincarnationDefense(playerId: string, waveId: string, troops: Record<string, number>, clientActionId?: string) {
+    return api.post<ReincarnationActionResult>(`/dungeons/reincarnation/waves/${waveId}/defense-ready`, { playerId, troops, clientActionId })
+  },
+
+  /** 结算轮回绝境 */
+  settleReincarnation(playerId: string) {
+    return api.post<ReincarnationActionResult>('/dungeons/reincarnation/settle', { playerId })
+  },
+
+  /** 获取轮回绝境战报 */
+  listReincarnationReports(playerId: string, page = 1, pageSize = 10) {
+    return api.get<BattleReportPage>(`/dungeons/reincarnation/reports?playerId=${playerId}&page=${page}&pageSize=${pageSize}`)
   },
 
   /** 获取 PVP 玩家目标 */

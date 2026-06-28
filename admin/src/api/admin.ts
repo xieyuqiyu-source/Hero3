@@ -23,6 +23,9 @@ import type {
   MailPage,
   NpcConfig,
   NpcState,
+  ReincarnationConfig,
+  ReincarnationRun,
+  ReincarnationRunPage,
   PvpBattle,
   PvpMarchActionResponse,
   PvpStateResponse,
@@ -150,6 +153,30 @@ export const adminApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId, itemId, amount }),
     })
+  },
+  getReincarnationConfig() {
+    return request<ReincarnationConfig>(`${API_BASE}/admin/dungeons/reincarnation/config`)
+  },
+  updateReincarnationConfig(config: ReincarnationConfig) {
+    return request<ReincarnationConfig>(`${API_BASE}/admin/dungeons/reincarnation/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+  },
+  listReincarnationRuns(playerId = '', limit = 20, offset = 0) {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+    if (playerId) params.set('playerId', playerId)
+    return request<ReincarnationRunPage>(`${API_BASE}/admin/dungeons/reincarnation/runs?${params.toString()}`)
+  },
+  getReincarnationRun(runId: string) {
+    return request<ReincarnationRun>(`${API_BASE}/admin/dungeons/reincarnation/runs/${runId}`)
+  },
+  forceSettleReincarnationRun(runId: string) {
+    return request<ReincarnationRun>(`${API_BASE}/admin/dungeons/reincarnation/runs/${runId}/force-settle`, { method: 'POST' })
+  },
+  repairReincarnationReward(runId: string) {
+    return request<ReincarnationRun>(`${API_BASE}/admin/dungeons/reincarnation/runs/${runId}/repair-reward`, { method: 'POST' })
   },
   instantCompleteRecruit(playerId: string, queueId: string) {
     return request<{ state: GameState }>(`${API_BASE}/military/recruit/instant`, {

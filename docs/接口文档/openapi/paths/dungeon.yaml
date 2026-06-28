@@ -1,0 +1,293 @@
+/api/v1/dungeons/reincarnation/config:
+  get:
+    tags: [Dungeon]
+    summary: 查询轮回绝境配置
+    responses:
+      '200':
+        description: 玩家侧轮回绝境配置
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationConfig'
+/api/v1/dungeons/reincarnation/run:
+  get:
+    tags: [Dungeon]
+    summary: 查询当前轮回绝境实例
+    parameters:
+    - in: query
+      name: playerId
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 当前实例和兵力快照
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationRunResponse'
+      '400':
+        description: 参数错误
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/dungeons/reincarnation/start:
+  post:
+    tags: [Dungeon]
+    summary: 开启轮回绝境
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StartReincarnationRequest'
+    responses:
+      '201':
+        description: 已创建副本实例
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationActionResult'
+      '400':
+        description: 开启失败
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/dungeons/reincarnation/waves/{waveId}/attack:
+  post:
+    tags: [Dungeon]
+    summary: 结算进攻波
+    parameters:
+    - in: path
+      name: waveId
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReincarnationTroopRequest'
+    responses:
+      '200':
+        description: 进攻结算结果
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationActionResult'
+      '400':
+        description: 结算失败
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/dungeons/reincarnation/waves/{waveId}/defense-ready:
+  post:
+    tags: [Dungeon]
+    summary: 确认防守波并结算
+    parameters:
+    - in: path
+      name: waveId
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReincarnationTroopRequest'
+    responses:
+      '200':
+        description: 防守结算结果
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationActionResult'
+      '400':
+        description: 结算失败
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/dungeons/reincarnation/settle:
+  post:
+    tags: [Dungeon]
+    summary: 主动结算当前轮回绝境
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReincarnationSettleRequest'
+    responses:
+      '200':
+        description: 结算结果
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationActionResult'
+      '400':
+        description: 结算失败
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/dungeons/reincarnation/reports:
+  get:
+    tags: [Dungeon]
+    summary: 查询轮回绝境战报
+    parameters:
+    - in: query
+      name: playerId
+      required: true
+      schema:
+        type: string
+    - in: query
+      name: page
+      schema:
+        type: integer
+        default: 1
+    - in: query
+      name: pageSize
+      schema:
+        type: integer
+        default: 10
+    responses:
+      '200':
+        description: 轮回绝境战报分页
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BattleReportPage'
+/api/v1/admin/dungeons/reincarnation/config:
+  get:
+    tags: [Admin]
+    summary: GM 查询轮回绝境配置
+    responses:
+      '200':
+        description: 当前轮回绝境配置
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationConfig'
+  put:
+    tags: [Admin]
+    summary: GM 保存轮回绝境配置
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReincarnationConfig'
+    responses:
+      '200':
+        description: 保存后的轮回绝境配置
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationConfig'
+      '400':
+        description: 配置格式或内容不合法
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/dungeons/reincarnation/runs:
+  get:
+    tags: [Admin]
+    summary: GM 查询轮回绝境实例列表
+    parameters:
+    - in: query
+      name: playerId
+      schema:
+        type: string
+    - in: query
+      name: limit
+      schema:
+        type: integer
+        default: 20
+    - in: query
+      name: offset
+      schema:
+        type: integer
+        default: 0
+    responses:
+      '200':
+        description: 实例列表
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationRunPage'
+/api/v1/admin/dungeons/reincarnation/runs/{runId}:
+  get:
+    tags: [Admin]
+    summary: GM 查询单个轮回绝境实例
+    parameters:
+    - in: path
+      name: runId
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 实例详情
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationRun'
+      '404':
+        description: 实例不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/dungeons/reincarnation/runs/{runId}/force-settle:
+  post:
+    tags: [Admin]
+    summary: GM 强制结算异常轮回实例
+    parameters:
+    - in: path
+      name: runId
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 强制结算后的实例
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationRun'
+      '400':
+        description: 操作失败
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/dungeons/reincarnation/runs/{runId}/repair-reward:
+  post:
+    tags: [Admin]
+    summary: GM 幂等修复轮回奖励
+    parameters:
+    - in: path
+      name: runId
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 修复后的实例
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationRun'
+      '400':
+        description: 操作失败
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
