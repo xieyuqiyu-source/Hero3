@@ -78,6 +78,18 @@ jobs:
             printf '\n[%s] %s\n' "$(date -Is)" "$*"
           }
 
+          git_network() {
+            attempt=1
+            until timeout --kill-after=10s 300s git -c http.version=HTTP/1.1 "$@"; do
+              if [ "$attempt" -ge 3 ]; then
+                return 1
+              fi
+              sleep "$((attempt * 10))"
+              attempt="$((attempt + 1))"
+              log "Retrying git network operation, attempt ${attempt}/3"
+            done
+          }
+
           command -v git >/dev/null
           command -v go >/dev/null
           command -v pnpm >/dev/null
@@ -100,11 +112,11 @@ jobs:
             if git -C "$SOURCE_DIR" cat-file -e "$HERO3_SHA^{commit}" 2>/dev/null; then
               log "Source already has target commit"
             else
-              timeout --kill-after=10s 300s git -C "$SOURCE_DIR" fetch --depth 1 --prune origin "$HERO3_REF_NAME"
+              git_network -C "$SOURCE_DIR" fetch --depth 1 --prune origin "$HERO3_REF_NAME"
             fi
           else
             rm -rf "$SOURCE_DIR"
-            timeout --kill-after=10s 300s git clone --depth 1 --single-branch --branch "$HERO3_REF_NAME" "$REPO_URL" "$SOURCE_DIR"
+            git_network clone --depth 1 --single-branch --branch "$HERO3_REF_NAME" "$REPO_URL" "$SOURCE_DIR"
           fi
 
           git -C "$SOURCE_DIR" checkout -f "$HERO3_SHA"
