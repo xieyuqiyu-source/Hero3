@@ -1,5 +1,6 @@
 /* 本文件实现地图副本页，并接入轮回绝境副本玩法。 */
 import { type FC, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Crown, Flame, Lock, ScrollText, ShieldAlert, Swords, Timer, Trophy } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
@@ -57,6 +58,7 @@ const DungeonTab: FC = () => (
 
 // ReincarnationAbyssPanel 渲染轮回绝境的层级、波次、奖励和出兵操作。
 const ReincarnationAbyssPanel: FC = () => {
+  const navigate = useNavigate()
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const state = useGameStore((s) => s.state)
   const patchState = useGameStore((s) => s.patchState)
@@ -290,7 +292,11 @@ const ReincarnationAbyssPanel: FC = () => {
               </div>
               <div className="flex gap-2">
                 {lastReportId && (
-                  <button type="button" className="h-9 rounded-xl border border-[var(--color-border)] px-3 text-xs font-bold text-[var(--color-text-secondary)]">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/report/${lastReportId}?from=dungeon`)}
+                    className="h-9 rounded-xl border border-[var(--color-border)] px-3 text-xs font-bold text-[var(--color-text-secondary)]"
+                  >
                     战报 {lastReportId.slice(-6)}
                   </button>
                 )}
@@ -332,9 +338,20 @@ const WavePanel: FC<{
   const enemyTotal = totalMapAmount(wave.enemyTroops)
   const enemyRemaining = totalMapAmount(wave.enemyRemaining)
   const enemyProgress = enemyTotal > 0 ? Math.max(0, Math.min(100, Math.round((enemyRemaining / enemyTotal) * 100))) : 0
-  const enemyRows = Object.entries(wave.enemyTroops)
-    .filter(([, amount]) => amount > 0)
-    .map(([unitType, amount]) => ({ unitType, amount, remaining: wave.enemyRemaining[unitType] ?? 0 }))
+  const toggleUnit = (unitType: string, available: number) => {
+    const current = troops[unitType] ?? 0
+    const next = { ...troops }
+    if (current > 0) {
+      delete next[unitType]
+      setTroops(next)
+      return
+    }
+    const remainCap = Math.max(0, wave.troopCap - selectedTotal)
+    const fill = Math.min(available, remainCap)
+    if (fill <= 0) return
+    next[unitType] = fill
+    setTroops(next)
+  }
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">
@@ -354,21 +371,11 @@ const WavePanel: FC<{
         </div>
         <div className="mt-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
           <div className="mb-2 flex items-center justify-between gap-2 text-[11px] font-bold">
-            <span className="text-[var(--color-text-primary)]">敌军剩余</span>
-            <span className="text-rose-500">{compactNumber(enemyRemaining)} / {compactNumber(enemyTotal)}</span>
+            <span className="text-[var(--color-text-primary)]">敌军态势</span>
+            <span className="text-rose-500">剩余压力</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-rose-500/10">
             <div className="h-full rounded-full bg-rose-500 transition-all" style={{ width: `${enemyProgress}%` }} />
-          </div>
-          <div className="mt-2 grid gap-1.5">
-            {enemyRows.map((row) => (
-              <div key={row.unitType} className="flex items-center justify-between gap-2 text-[10px]">
-                <span className="truncate text-[var(--color-text-muted)]">{unitConfig[row.unitType]?.name ?? row.unitType}</span>
-                <span className="shrink-0 font-semibold text-[var(--color-text-secondary)]">
-                  {compactNumber(row.remaining)} / {compactNumber(row.amount)}
-                </span>
-              </div>
-            ))}
           </div>
         </div>
         <p className="mt-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-[11px] text-[var(--color-text-secondary)]">
@@ -383,24 +390,24 @@ const WavePanel: FC<{
         </div>
         <div className="space-y-2">
           {army.filter((unit) => unit.amount > 0).map((unit) => (
-            <div key={unit.unitType} className="grid grid-cols-[1fr_96px] items-center gap-2">
+            <button
+              key={unit.unitType}
+              type="button"
+              onClick={() => toggleUnit(unit.unitType, unit.amount)}
+              className={`grid w-full grid-cols-[1fr_auto] items-center gap-2 rounded-lg border px-3 py-2 text-left transition ${
+                (troops[unit.unitType] ?? 0) > 0
+                  ? 'border-violet-500/55 bg-violet-500/12 shadow-[0_0_0_1px_rgba(139,92,246,0.18)]'
+                  : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-violet-500/35'
+              }`}
+            >
               <div className="min-w-0">
                 <p className="truncate text-xs font-bold text-[var(--color-text-primary)]">{unitConfig[unit.unitType]?.name ?? unit.unitType}</p>
                 <p className="text-[10px] text-[var(--color-text-muted)]">拥有 {unit.amount.toLocaleString()}</p>
               </div>
-              <input
-                type="number"
-                min={0}
-                max={unit.amount}
-                value={troops[unit.unitType] ?? ''}
-                onChange={(event) => {
-                  const next = Math.max(0, Math.min(unit.amount, Number(event.target.value) || 0))
-                  setTroops({ ...troops, [unit.unitType]: next })
-                }}
-                className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-right text-xs text-[var(--color-text-primary)] outline-none focus:border-violet-500/60"
-                placeholder="0"
-              />
-            </div>
+              <span className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-bold ${(troops[unit.unitType] ?? 0) > 0 ? 'bg-violet-500 text-white' : 'bg-[var(--color-surface-dim)] text-[var(--color-text-muted)]'}`}>
+                {(troops[unit.unitType] ?? 0) > 0 ? compactNumber(troops[unit.unitType]) : '点选'}
+              </span>
+            </button>
           ))}
         </div>
         <p className="mt-3 text-[10px] leading-relaxed text-rose-500">真实损耗：阵亡兵力不会返还，请确认后继续。</p>

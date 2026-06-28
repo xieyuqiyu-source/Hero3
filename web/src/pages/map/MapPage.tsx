@@ -1,5 +1,6 @@
 /* 本文件实现地图页入口和地图玩法页签切换。 */
-import { useState, useRef, type FC } from 'react'
+import { useEffect, useState, useRef, type FC } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Castle, Users, Flag, Scroll, Sparkles } from 'lucide-react'
 import NpcCityTab from './components/NpcCityTab'
 import MiniGamesTab from './components/MiniGamesTab'
@@ -9,6 +10,7 @@ import DungeonTab from './components/DungeonTab'
 type MapTab = 'npc' | 'players' | 'stronghold' | 'dungeon' | 'minigames'
 
 const MapPage: FC = () => {
+  const location = useLocation()
   const [activeTab, setActiveTab] = useState<MapTab>('npc')
   const scrollRef = useRef<HTMLDivElement>(null)
   const isDragging = useRef(false)
@@ -28,6 +30,13 @@ const MapPage: FC = () => {
     { key: 'dungeon' as const, label: '副本', icon: Scroll },
     { key: 'minigames' as const, label: '万象幻境', icon: Sparkles },
   ]
+
+  useEffect(() => {
+    const tab = new URLSearchParams(location.search).get('tab')
+    if (tab === 'npc' || tab === 'players' || tab === 'stronghold' || tab === 'dungeon' || tab === 'minigames') {
+      setActiveTab(tab)
+    }
+  }, [location.search])
 
   const handlePointerDown = (e: React.PointerEvent) => {
     const el = scrollRef.current

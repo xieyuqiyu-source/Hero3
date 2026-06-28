@@ -114,6 +114,15 @@ func TestReincarnationDefenseFailureGrantsClearedRewards(t *testing.T) {
 		t.Fatalf("StartReincarnationRun failed: %v", err)
 	}
 	run := started.Run
+	firstEnemyUnit := combatUnitIDsForFaction(run.Waves[0].EnemyFaction)[0]
+	secondEnemyUnit := combatUnitIDsForFaction(run.Waves[1].EnemyFaction)[0]
+	run.Waves[0].EnemyTroops = map[string]int{firstEnemyUnit: 1}
+	run.Waves[0].EnemyRemaining = map[string]int{firstEnemyUnit: 1}
+	run.Waves[1].EnemyTroops = map[string]int{secondEnemyUnit: 100000}
+	run.Waves[1].EnemyRemaining = map[string]int{secondEnemyUnit: 100000}
+	if err := repo.SaveReincarnationRun(run); err != nil {
+		t.Fatalf("SaveReincarnationRun test fixture failed: %v", err)
+	}
 	for attempt := 0; attempt < 10 && run.CurrentWave == 1; attempt++ {
 		wave := run.Waves[0]
 		result, err := service.AttackReincarnationWave(state.Player.ID, wave.ID, map[string]int{"qingZhouArmy": 10000}, "clear-wave-1-"+string(rune('a'+attempt)))

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	mathrand "math/rand"
 	"sort"
 	"strings"
 	"time"
@@ -303,6 +304,7 @@ func (s *Service) RepairReincarnationRewardForAdmin(runID string) (Reincarnation
 
 func (s *Service) buildReincarnationRun(state GameState, levelCfg ReincarnationLevelConfig, now time.Time) ReincarnationRun {
 	runID := "ra_" + randomID(8)
+	rng := mathrand.New(mathrand.NewSource(now.UnixNano()))
 	run := ReincarnationRun{
 		ID:             runID,
 		PlayerID:       state.Player.ID,
@@ -327,16 +329,18 @@ func (s *Service) buildReincarnationRun(state GameState, levelCfg ReincarnationL
 		if i == 1 {
 			status = ReincarnationWaveActive
 		}
+		enemyFaction := pickReincarnationEnemyFaction(rng)
+		enemyTroops := generateReincarnationEnemyTroops(levelCfg, enemyFaction, i, rng)
 		run.Waves = append(run.Waves, ReincarnationWave{
 			ID:             fmt.Sprintf("%s_w%02d", runID, i),
 			RunID:          runID,
 			WaveIndex:      i,
 			WaveType:       waveType,
-			EnemyFaction:   pickReincarnationEnemyFaction(i),
-			EnemyTroops:    generateReincarnationEnemyTroops(levelCfg, i),
-			EnemyRemaining: generateReincarnationEnemyTroops(levelCfg, i),
-			AllyBonus:      buildReincarnationBonus("ally", state.Player.Faction, waveType, i),
-			EnemyBonus:     buildReincarnationBonus("enemy", pickReincarnationEnemyFaction(i), waveType, i+7),
+			EnemyFaction:   enemyFaction,
+			EnemyTroops:    enemyTroops,
+			EnemyRemaining: cloneStringIntMap(enemyTroops),
+			AllyBonus:      buildReincarnationBonus("ally", state.Player.Faction, waveType, rng),
+			EnemyBonus:     buildReincarnationBonus("enemy", enemyFaction, waveType, rng),
 			RewardPreview:  buildReincarnationWaveRewards(levelCfg, i),
 			TroopCap:       int(levelCfg.PlayerTroopCap),
 			Status:         status,
@@ -432,29 +436,41 @@ func buildReincarnationActionResult(run ReincarnationRun, report *BattleReport, 
 	}
 }
 
-func pickReincarnationEnemyFaction(waveIndex int) string {
+func pickReincarnationEnemyFaction(rng *mathrand.Rand) string {
 	cfg := GetReincarnationConfig()
 	if len(cfg.EnemyFactions) == 0 {
 		return "wei"
 	}
-	return cfg.EnemyFactions[(waveIndex-1)%len(cfg.EnemyFactions)]
+	return cfg.EnemyFactions[rng.Intn(len(cfg.EnemyFactions))]
 }
 
-func generateReincarnationEnemyTroops(levelCfg ReincarnationLevelConfig, waveIndex int) map[string]int {
-	faction := pickReincarnationEnemyFaction(waveIndex)
+func generateReincarnationEnemyTroops(levelCfg ReincarnationLevelConfig, faction string, waveIndex int, rng *mathrand.Rand) map[string]int {
 	units := combatUnitIDsForFaction(faction)
 	if len(units) == 0 {
 		return map[string]int{}
 	}
-	total := int(math.Max(1, float64(levelCfg.EnemyTroopBase)*(0.9+float64(waveIndex%5)*0.05)))
+	scale := 0.82 + rng.Float64()*0.32 + math.Min(0.18, float64(waveIndex-1)*0.01)
+	total := int(math.Max(1, float64(levelCfg.EnemyTroopBase)*scale))
 	result := map[string]int{}
-	for i, unitType := range units {
-		share := total / len(units)
-		if i == waveIndex%len(units) {
-			share += total / 5
+	count := 1 + rng.Intn(minInt(4, len(units)))
+	selected := rng.Perm(len(units))[:count]
+	weights := make([]int, 0, count)
+	weightTotal := 0
+	for range selected {
+		weight := 1 + rng.Intn(100)
+		weights = append(weights, weight)
+		weightTotal += weight
+	}
+	assigned := 0
+	for i, unitIndex := range selected {
+		unitType := units[unitIndex]
+		share := total * weights[i] / weightTotal
+		if i == len(selected)-1 {
+			share = total - assigned
 		}
 		if share > 0 {
 			result[unitType] = share
+			assigned += share
 		}
 	}
 	return result
@@ -475,7 +491,7 @@ func combatUnitIDsForFaction(faction string) []string {
 	return ids
 }
 
-func buildReincarnationBonus(side string, faction string, waveType string, seed int) ReincarnationBonus {
+func buildReincarnationBonus(side string, faction string, waveType string, rng *mathrand.Rand) ReincarnationBonus {
 	stat := "attack"
 	if (side == "ally" && waveType == ReincarnationWaveDefense) || (side == "enemy" && waveType == ReincarnationWaveAttack) {
 		stat = "defense"
@@ -483,7 +499,7 @@ func buildReincarnationBonus(side string, faction string, waveType string, seed 
 	cfg := GetReincarnationConfig()
 	value := 0.3
 	if len(cfg.BonusValues) > 0 {
-		value = cfg.BonusValues[seed%len(cfg.BonusValues)]
+		value = cfg.BonusValues[rng.Intn(len(cfg.BonusValues))]
 	}
 	if strings.TrimSpace(faction) == "" {
 		faction = "wei"
@@ -492,7 +508,7 @@ func buildReincarnationBonus(side string, faction string, waveType string, seed 
 	unitType := ""
 	unitName := "全军"
 	if len(units) > 0 {
-		unitType = units[seed%len(units)]
+		unitType = units[rng.Intn(len(units))]
 		if unitCfg, ok := GetUnitConfig(faction, unitType); ok {
 			unitName = unitCfg.Name
 		}

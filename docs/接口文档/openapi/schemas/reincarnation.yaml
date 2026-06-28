@@ -269,6 +269,14 @@ ReincarnationRunResponse:
       type: array
       items:
         $ref: '#/components/schemas/ArmyUnit'
+    inventory:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/ItemStack'
+    inventorySlots:
+      type: array
+      items:
+        $ref: '#/components/schemas/ItemStack'
     serverTime:
       type: string
       format: date-time
