@@ -582,6 +582,10 @@ func (r *MemoryRepository) GetMilitaryView(playerID string) (MilitaryView, error
 	return MilitaryView{
 		Army:               state.Army,
 		RecruitQueues:      state.RecruitQueues,
+		Resources:          state.Resources,
+		CityGold:           state.CityGold,
+		Buildings:          state.Buildings,
+		ActiveModifiers:    state.ActiveModifiers,
 		General:            state.General,
 		Generals:           state.Generals,
 		GeneralAssignments: state.GeneralAssignments,

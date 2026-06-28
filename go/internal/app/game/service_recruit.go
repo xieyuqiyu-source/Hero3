@@ -34,15 +34,12 @@ func (s *Service) Recruit(playerID string, unitID string, amount int) (GameState
 			return ErrUnitNotFound
 		}
 
-		totalCost := make(map[string]int, len(unitConfig.Cost))
-		for resType, costPer := range unitConfig.Cost {
-			totalCost[resType] = costPer * amount
-		}
+		modSources := CollectModifierSources(state)
+		totalCost := calculateRecruitCost(unitConfig, amount, now, modSources)
 		if err := spendResources(state, totalCost); err != nil {
 			return err
 		}
 
-		modSources := CollectModifierSources(state)
 		totalSeconds := calculateRecruitDurationSeconds(unitConfig, amount, now, modSources)
 		queueStart := now
 		for _, q := range state.RecruitQueues {

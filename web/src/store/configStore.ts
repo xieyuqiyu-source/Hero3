@@ -24,6 +24,11 @@ const MODIFIER_LABELS: Record<string, string> = {
   recruitSpeedBonus: '征兵速度',
   infantryRecruitSpeedBonus: '步兵征兵',
   cavalryRecruitSpeedBonus: '骑兵征兵',
+  siegeRecruitSpeedBonus: '攻城征兵',
+  specialRecruitSpeedBonus: '特殊征兵',
+  recruitCostReduction: '征兵消耗',
+  siegeRecruitCostReduction: '攻城消耗',
+  specialRecruitCostReduction: '特殊消耗',
 }
 
 export interface BalanceConfig {

@@ -51,7 +51,9 @@ import (
 //   产量类:  "productionBonus", "woodProductionBonus", "stoneProductionBonus" 等
 //   容量类:  "capacityBonus"
 //   军事类:  "attackBonus", "defenseBonus", "infantryDefenseBonus", "cavalryDefenseBonus"
-//            "infantryRecruitSpeedBonus", "cavalryRecruitSpeedBonus"
+//            "infantryRecruitSpeedBonus", "cavalryRecruitSpeedBonus",
+//            "siegeRecruitSpeedBonus", "specialRecruitSpeedBonus",
+//            "recruitCostReduction", "siegeRecruitCostReduction", "specialRecruitCostReduction"
 //   速度类:  "buildSpeedBonus", "recruitSpeedBonus", "marchSpeedBonus"
 //   经济类:  "exchangeRateBonus"
 //   其他:    按需添加，命名规范为 camelCase + "Bonus" 后缀
@@ -62,44 +64,54 @@ import (
 // 所有合法的加成属性 key。新增 key 时必须在此注册，否则 GM 发放时会被拒绝。
 
 const (
-	StatProductionBonus           = "productionBonus"
-	StatWoodProductionBonus       = "woodProductionBonus"
-	StatStoneProductionBonus      = "stoneProductionBonus"
-	StatIronProductionBonus       = "ironProductionBonus"
-	StatFoodProductionBonus       = "foodProductionBonus"
-	StatCapacityBonus             = "capacityBonus"
-	StatAttackBonus               = "attackBonus"
-	StatDefenseBonus              = "defenseBonus"
-	StatInfantryDefenseBonus      = "infantryDefenseBonus"
-	StatCavalryDefenseBonus       = "cavalryDefenseBonus"
-	StatInfantryRecruitSpeedBonus = "infantryRecruitSpeedBonus"
-	StatCavalryRecruitSpeedBonus  = "cavalryRecruitSpeedBonus"
-	StatBuildSpeedBonus           = "buildSpeedBonus"
-	StatRecruitSpeedBonus         = "recruitSpeedBonus"
-	StatMarchSpeedBonus           = "marchSpeedBonus"
-	StatEnemyLossRevealThreshold  = "enemyLossRevealThresholdBonus"
-	StatExchangeRateBonus         = "exchangeRateBonus"
+	StatProductionBonus             = "productionBonus"
+	StatWoodProductionBonus         = "woodProductionBonus"
+	StatStoneProductionBonus        = "stoneProductionBonus"
+	StatIronProductionBonus         = "ironProductionBonus"
+	StatFoodProductionBonus         = "foodProductionBonus"
+	StatCapacityBonus               = "capacityBonus"
+	StatAttackBonus                 = "attackBonus"
+	StatDefenseBonus                = "defenseBonus"
+	StatInfantryDefenseBonus        = "infantryDefenseBonus"
+	StatCavalryDefenseBonus         = "cavalryDefenseBonus"
+	StatInfantryRecruitSpeedBonus   = "infantryRecruitSpeedBonus"
+	StatCavalryRecruitSpeedBonus    = "cavalryRecruitSpeedBonus"
+	StatSiegeRecruitSpeedBonus      = "siegeRecruitSpeedBonus"
+	StatSpecialRecruitSpeedBonus    = "specialRecruitSpeedBonus"
+	StatBuildSpeedBonus             = "buildSpeedBonus"
+	StatRecruitSpeedBonus           = "recruitSpeedBonus"
+	StatRecruitCostReduction        = "recruitCostReduction"
+	StatSiegeRecruitCostReduction   = "siegeRecruitCostReduction"
+	StatSpecialRecruitCostReduction = "specialRecruitCostReduction"
+	StatMarchSpeedBonus             = "marchSpeedBonus"
+	StatEnemyLossRevealThreshold    = "enemyLossRevealThresholdBonus"
+	StatExchangeRateBonus           = "exchangeRateBonus"
 )
 
 // ValidStatKeys 所有已注册的合法 key 集合
 var ValidStatKeys = map[string]bool{
-	StatProductionBonus:           true,
-	StatWoodProductionBonus:       true,
-	StatStoneProductionBonus:      true,
-	StatIronProductionBonus:       true,
-	StatFoodProductionBonus:       true,
-	StatCapacityBonus:             true,
-	StatAttackBonus:               true,
-	StatDefenseBonus:              true,
-	StatInfantryDefenseBonus:      true,
-	StatCavalryDefenseBonus:       true,
-	StatInfantryRecruitSpeedBonus: true,
-	StatCavalryRecruitSpeedBonus:  true,
-	StatBuildSpeedBonus:           true,
-	StatRecruitSpeedBonus:         true,
-	StatMarchSpeedBonus:           true,
-	StatEnemyLossRevealThreshold:  true,
-	StatExchangeRateBonus:         true,
+	StatProductionBonus:             true,
+	StatWoodProductionBonus:         true,
+	StatStoneProductionBonus:        true,
+	StatIronProductionBonus:         true,
+	StatFoodProductionBonus:         true,
+	StatCapacityBonus:               true,
+	StatAttackBonus:                 true,
+	StatDefenseBonus:                true,
+	StatInfantryDefenseBonus:        true,
+	StatCavalryDefenseBonus:         true,
+	StatInfantryRecruitSpeedBonus:   true,
+	StatCavalryRecruitSpeedBonus:    true,
+	StatSiegeRecruitSpeedBonus:      true,
+	StatSpecialRecruitSpeedBonus:    true,
+	StatBuildSpeedBonus:             true,
+	StatRecruitSpeedBonus:           true,
+	StatRecruitCostReduction:        true,
+	StatSiegeRecruitCostReduction:   true,
+	StatSpecialRecruitCostReduction: true,
+	StatMarchSpeedBonus:             true,
+	StatEnemyLossRevealThreshold:    true,
+	StatExchangeRateBonus:           true,
 }
 
 // IsValidStatKey 校验 key 是否已注册

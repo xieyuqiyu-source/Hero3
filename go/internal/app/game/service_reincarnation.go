@@ -67,6 +67,72 @@ func (s *Service) StartReincarnationRun(playerID string, level int) (Reincarnati
 	return ReincarnationActionResult{Run: run, Army: state.Army, ServerTime: now.Format(resourceDateLayout)}, nil
 }
 
+// ResetReincarnationWaveBonus 消耗账户金币重置当前波随机加成。
+func (s *Service) ResetReincarnationWaveBonus(playerID string, waveID string) (ReincarnationActionResult, error) {
+	now := time.Now().UTC()
+	playerID = strings.TrimSpace(playerID)
+	waveID = strings.TrimSpace(waveID)
+	if playerID == "" {
+		return ReincarnationActionResult{}, ErrPlayerNotFound
+	}
+	if waveID == "" {
+		return ReincarnationActionResult{}, ErrInvalidReincarnation
+	}
+	run, err := s.repo.GetReincarnationRun(runIDFromWaveID(waveID))
+	if err != nil {
+		return ReincarnationActionResult{}, err
+	}
+	if run.PlayerID != playerID || run.Status != ReincarnationRunRunning || now.After(run.ExpiresAt) {
+		return ReincarnationActionResult{}, ErrInvalidReincarnation
+	}
+	wave := activeReincarnationWave(&run)
+	if wave == nil || wave.ID != waveID || wave.Status != ReincarnationWaveActive || hasReincarnationBattleForWave(run, waveID) {
+		return ReincarnationActionResult{}, ErrInvalidReincarnation
+	}
+	cost := GetReincarnationConfig().BonusResetGoldCost
+	if cost <= 0 {
+		return ReincarnationActionResult{}, ErrInvalidReincarnation
+	}
+	accountID, err := s.repo.GetAccountIDByPlayerID(playerID)
+	if err != nil {
+		return ReincarnationActionResult{}, err
+	}
+	account, state, err := s.repo.UpdateAccountBuildingResourceState(accountID, playerID, now, func(account *Account, state *GameState) error {
+		if account.Gold < cost {
+			return ErrInsufficientGold
+		}
+		account.Gold -= cost
+		state.ServerTime = now.Format(resourceDateLayout)
+		return nil
+	})
+	if err != nil {
+		return ReincarnationActionResult{}, err
+	}
+	rng := mathrand.New(mathrand.NewSource(now.UnixNano()))
+	wave.AllyBonus = buildReincarnationBonus("ally", state.Player.Faction, wave.WaveType, rng)
+	wave.EnemyBonus = buildReincarnationBonus("enemy", wave.EnemyFaction, wave.WaveType, rng)
+	run.UpdatedAt = now
+	if err := s.repo.SaveReincarnationRun(run); err != nil {
+		return ReincarnationActionResult{}, err
+	}
+	s.recordLedger(GoldLedgerEntry{
+		AccountID:    account.ID,
+		PlayerID:     playerID,
+		Currency:     LedgerCurrencyGold,
+		Direction:    LedgerDirectionDebit,
+		Amount:       cost,
+		BalanceAfter: account.Gold,
+		RefType:      LedgerRefReincarnationBonusReset,
+		RefID:        waveID,
+	})
+	s.publishCurrencyChanged(playerID, account.ID, waveID, LedgerRefReincarnationBonusReset)
+	hydrateStateForResponse(&state, now)
+	result := buildReincarnationActionResult(run, nil, state, now)
+	result.AccountGold = account.Gold
+	result.Cost = cost
+	return result, nil
+}
+
 // AttackReincarnationWave 结算一次进攻波出兵。
 func (s *Service) AttackReincarnationWave(playerID string, waveID string, troops map[string]int, clientActionID string) (ReincarnationActionResult, error) {
 	now := time.Now().UTC()
@@ -639,6 +705,15 @@ func findReincarnationBattleByAction(run ReincarnationRun, waveID string, client
 		}
 	}
 	return nil
+}
+
+func hasReincarnationBattleForWave(run ReincarnationRun, waveID string) bool {
+	for i := range run.Battles {
+		if run.Battles[i].WaveID == waveID {
+			return true
+		}
+	}
+	return false
 }
 
 func buildReincarnationReport(run ReincarnationRun, wave ReincarnationWave, state *GameState, troops map[string]int, losses map[string]int, enemyLosses map[string]int, result combat.CombatResult, viewType string, passed bool, now time.Time) BattleReport {

@@ -53,7 +53,7 @@ go/
 
 - `unit_registry.go`：兵种配置查询、兵种注册判断、按名称查找兵种。
 - `army_state.go`：玩家兵力增加、兵力切片和 map 转换、战斗后兵力合并。
-- `recruit_timing.go`：征兵时长和征兵速度加成计算。
+- `recruit_timing.go`：征兵时长、征兵消耗和征兵速度/消耗加成计算。
 - `service_recruit.go`：征兵、极速完成征兵等玩家操作。
 - `military_combat.go`：出兵扣兵、非战斗兵种限制、战斗单位构建和场景规则解析。
 
@@ -74,7 +74,7 @@ go/
 - `service_mail.go`：信函列表、阅读、发送、删除和附件领取。
 - `service_minigame.go`：万象幻境记录、鱼饵消耗、奖励兑换和兑换事件。
 - `service_reinforcement.go`：增援派出、召回、遣返、到达、返程和战斗损耗接入。
-- `service_reincarnation.go`：轮回绝境开启、18 波攻防结算、真实战损、累计奖励和副本战报接入。
+- `service_reincarnation.go`：轮回绝境开启、18 波攻防结算、金币重置当前波随机加成、真实战损、累计奖励和副本战报接入。
 
 后续活动/副本应先登记玩法模块边界，再通过奖励、事件、Modifier、建筑变更等核心入口接入长期资产。
 

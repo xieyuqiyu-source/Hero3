@@ -211,6 +211,7 @@ export interface ReincarnationConfig {
   enemyFactions: string[]
   bonusValues: number[]
   defenseCountdownSeconds: number
+  bonusResetGoldCost: number
 }
 
 export interface ReincarnationBonus {
@@ -272,6 +273,8 @@ export interface ReincarnationActionResult {
   army?: ArmyUnit[]
   inventory?: Record<string, ItemStack>
   inventorySlots?: ItemStack[]
+  accountGold?: number
+  cost?: number
   serverTime: string
 }
 

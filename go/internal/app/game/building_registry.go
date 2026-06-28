@@ -77,6 +77,8 @@ func ensureCoreBuildings(state *GameState) bool {
 	required := []Building{
 		{ID: "infantry_camp-1", Type: "infantry_camp", Level: 1},
 		{ID: "cavalry_camp-1", Type: "cavalry_camp", Level: 1},
+		{ID: "siege_camp-1", Type: "siege_camp", Level: 1},
+		{ID: "special_camp-1", Type: "special_camp", Level: 1},
 		{ID: "weapon_bureau-1", Type: "weapon_bureau", Level: 1},
 		{ID: "armor_bureau-1", Type: "armor_bureau", Level: 1},
 		{ID: "construction_bureau-1", Type: "construction_bureau", Level: 1},

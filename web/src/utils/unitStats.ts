@@ -12,6 +12,12 @@ export type EffectiveUnitStat = {
   breakdown: BreakdownItem[]
 }
 
+export type EffectiveRecruitCost = {
+  base: Record<string, number>
+  final: Record<string, number>
+  breakdown: BreakdownItem[]
+}
+
 const STAT_MODIFIER_KEYS: Record<string, string[]> = {
   attack: ['attackBonus'],
   infantryDefense: ['defenseBonus', 'infantryDefenseBonus'],
@@ -56,7 +62,11 @@ export function getEffectiveRecruitSeconds(state: GameState | null | undefined, 
     ? 'infantryRecruitSpeedBonus'
     : category === 'cavalry'
       ? 'cavalryRecruitSpeedBonus'
-      : ''
+      : category === 'siege'
+        ? 'siegeRecruitSpeedBonus'
+        : category === 'special'
+          ? 'specialRecruitSpeedBonus'
+          : ''
   if (categoryKey) {
     const categoryModifiers = collectStatModifiers(state, categoryKey)
     breakdown.push(...categoryModifiers)
@@ -68,6 +78,41 @@ export function getEffectiveRecruitSeconds(state: GameState | null | undefined, 
     final: Math.max(1, Math.floor(seconds)),
     breakdown,
   }
+}
+
+export function getEffectiveRecruitCost(state: GameState | null | undefined, category: string, baseCost: Record<string, number>): EffectiveRecruitCost {
+  const base = { ...baseCost }
+  if (!state) {
+    return { base, final: { ...base }, breakdown: [] }
+  }
+
+  const breakdown: BreakdownItem[] = []
+  const globalModifiers = collectStatModifiers(state, 'recruitCostReduction')
+  breakdown.push(...globalModifiers)
+
+  const categoryKey = category === 'siege'
+    ? 'siegeRecruitCostReduction'
+    : category === 'special'
+      ? 'specialRecruitCostReduction'
+      : ''
+  if (categoryKey) {
+    breakdown.push(...collectStatModifiers(state, categoryKey))
+  }
+
+  const reduction = Math.min(0.8, Math.max(0, breakdown.reduce((sum, item) => {
+    if (item.mode === 'percentMultiply') return sum + item.value
+    return sum + item.value
+  }, 0)))
+  const factor = 1 - reduction
+  const final: Record<string, number> = {}
+  for (const [res, value] of Object.entries(base)) {
+    if (value <= 0) {
+      final[res] = 0
+    } else {
+      final[res] = Math.max(1, Math.floor(value * factor))
+    }
+  }
+  return { base, final, breakdown: breakdown.filter((item) => item.value !== 0) }
 }
 
 export function formatUnitStatTitle(label: string, stat: EffectiveUnitStat): string {

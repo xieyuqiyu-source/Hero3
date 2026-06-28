@@ -16,6 +16,7 @@ type ReincarnationConfig struct {
 	EnemyFactions           []string                   `json:"enemyFactions"`
 	BonusValues             []float64                  `json:"bonusValues"`
 	DefenseCountdownSeconds int                        `json:"defenseCountdownSeconds"`
+	BonusResetGoldCost      int                        `json:"bonusResetGoldCost"`
 }
 
 type ReincarnationLevelConfig struct {
@@ -129,6 +130,9 @@ func ValidateReincarnationConfig(cfg ReincarnationConfig) error {
 	}
 	if len(cfg.BonusValues) == 0 {
 		return errors.New("reincarnation bonus values are required")
+	}
+	if cfg.BonusResetGoldCost <= 0 {
+		return errors.New("reincarnation bonus reset gold cost must be positive")
 	}
 	return nil
 }

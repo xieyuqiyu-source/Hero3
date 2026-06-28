@@ -16,7 +16,7 @@ Reward:
       additionalProperties: true
 ReincarnationConfig:
   type: object
-  required: [levels, waves, enemyFactions, bonusValues, defenseCountdownSeconds]
+  required: [levels, waves, enemyFactions, bonusValues, defenseCountdownSeconds, bonusResetGoldCost]
   properties:
     levels:
       type: array
@@ -38,6 +38,9 @@ ReincarnationConfig:
     defenseCountdownSeconds:
       type: integer
       example: 3
+    bonusResetGoldCost:
+      type: integer
+      example: 10
 ReincarnationLevelConfig:
   type: object
   required: [level, name, wavePowerBase, playerTroopCap, enemyTroopBase, durationSeconds, rewardExpCap, enabled]
@@ -292,6 +295,12 @@ ReincarnationActionResult:
       type: array
       items:
         $ref: '#/components/schemas/ArmyUnit'
+    accountGold:
+      type: integer
+      description: 金币类操作后返回的账户金币余额。
+    cost:
+      type: integer
+      description: 本次金币类操作消耗。
     serverTime:
       type: string
       format: date-time
@@ -316,6 +325,12 @@ ReincarnationTroopRequest:
     clientActionId:
       type: string
       description: 建议每次真实操作生成一次，用于网络重试幂等。
+ReincarnationBonusResetRequest:
+  type: object
+  required: [playerId]
+  properties:
+    playerId:
+      type: string
 ReincarnationSettleRequest:
   type: object
   required: [playerId]

@@ -1459,6 +1459,750 @@
         "19": 4996
       }
     },
+    "siege_camp": {
+      "type": "siege_camp",
+      "name": "攻城武器营",
+      "modifiersByLevel": {
+        "0": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 0,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0,
+            "mode": "percentAdd"
+          }
+        ],
+        "1": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 0,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.01,
+            "mode": "percentAdd"
+          }
+        ],
+        "2": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 0.08757918217184213,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.02,
+            "mode": "percentAdd"
+          }
+        ],
+        "3": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 0.1828284774935729,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.03,
+            "mode": "percentAdd"
+          }
+        ],
+        "4": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 0.28641962820202527,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.04,
+            "mode": "percentAdd"
+          }
+        ],
+        "5": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 0.39908320716976364,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.05,
+            "mode": "percentAdd"
+          }
+        ],
+        "6": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 0.5216137702440495,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.06,
+            "mode": "percentAdd"
+          }
+        ],
+        "7": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 0.6548754598234365,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.07,
+            "mode": "percentAdd"
+          }
+        ],
+        "8": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 0.7998080991910246,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.08,
+            "mode": "percentAdd"
+          }
+        ],
+        "9": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 0.9574338205844319,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.09,
+            "mode": "percentAdd"
+          }
+        ],
+        "10": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 1.1288642737467205,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.1,
+            "mode": "percentAdd"
+          }
+        ],
+        "11": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 1.3153084657963112,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.11,
+            "mode": "percentAdd"
+          }
+        ],
+        "12": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 1.5180812877062944,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.12,
+            "mode": "percentAdd"
+          }
+        ],
+        "13": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 1.7386127875258306,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.13,
+            "mode": "percentAdd"
+          }
+        ],
+        "14": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 1.9784582557426913,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.14,
+            "mode": "percentAdd"
+          }
+        ],
+        "15": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 2.239309193913608,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.15,
+            "mode": "percentAdd"
+          }
+        ],
+        "16": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 2.523005243918291,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.16,
+            "mode": "percentAdd"
+          }
+        ],
+        "17": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 2.831547161967765,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.17,
+            "mode": "percentAdd"
+          }
+        ],
+        "18": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 3.1671109288657453,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.18,
+            "mode": "percentAdd"
+          }
+        ],
+        "19": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 3.5320630960351522,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.19,
+            "mode": "percentAdd"
+          }
+        ],
+        "20": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 3.9289774755370974,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.2,
+            "mode": "percentAdd"
+          }
+        ],
+        "21": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 4.360653291788068,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.21,
+            "mode": "percentAdd"
+          }
+        ],
+        "22": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 4.83013492298966,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.22,
+            "mode": "percentAdd"
+          }
+        ],
+        "23": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 5.340733371496588,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.23,
+            "mode": "percentAdd"
+          }
+        ],
+        "24": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 5.896049614541969,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.24,
+            "mode": "percentAdd"
+          }
+        ],
+        "25": [
+          {
+            "key": "siegeRecruitSpeedBonus",
+            "value": 6.5,
+            "mode": "flat"
+          },
+          {
+            "key": "siegeRecruitCostReduction",
+            "value": 0.25,
+            "mode": "percentAdd"
+          }
+        ]
+      },
+      "goldUpgradeCostByLevel": {
+        "0": 80,
+        "1": 96,
+        "2": 115,
+        "3": 138,
+        "4": 165,
+        "5": 199,
+        "6": 238,
+        "7": 286,
+        "8": 343,
+        "9": 412,
+        "10": 495,
+        "11": 594,
+        "12": 713,
+        "13": 855,
+        "14": 1027,
+        "15": 1232,
+        "16": 1479,
+        "17": 1774,
+        "18": 2129,
+        "19": 2555,
+        "20": 3067,
+        "21": 3680,
+        "22": 4416,
+        "23": 5299,
+        "24": 6359
+      },
+      "upgradeSecondsByLevel": {
+        "0": 96,
+        "1": 120,
+        "2": 150,
+        "3": 187,
+        "4": 234,
+        "5": 292,
+        "6": 366,
+        "7": 457,
+        "8": 572,
+        "9": 715,
+        "10": 894,
+        "11": 1117,
+        "12": 1396,
+        "13": 1746,
+        "14": 2182,
+        "15": 2728,
+        "16": 3410,
+        "17": 4263,
+        "18": 5329,
+        "19": 6661,
+        "20": 8326,
+        "21": 10408,
+        "22": 13010,
+        "23": 16263,
+        "24": 20328
+      }
+    },
+    "special_camp": {
+      "type": "special_camp",
+      "name": "特殊建筑营",
+      "modifiersByLevel": {
+        "0": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 0,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0,
+            "mode": "percentAdd"
+          }
+        ],
+        "1": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 0,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.01,
+            "mode": "percentAdd"
+          }
+        ],
+        "2": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 0.08757918217184213,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.02,
+            "mode": "percentAdd"
+          }
+        ],
+        "3": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 0.1828284774935729,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.03,
+            "mode": "percentAdd"
+          }
+        ],
+        "4": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 0.28641962820202527,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.04,
+            "mode": "percentAdd"
+          }
+        ],
+        "5": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 0.39908320716976364,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.05,
+            "mode": "percentAdd"
+          }
+        ],
+        "6": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 0.5216137702440495,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.06,
+            "mode": "percentAdd"
+          }
+        ],
+        "7": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 0.6548754598234365,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.07,
+            "mode": "percentAdd"
+          }
+        ],
+        "8": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 0.7998080991910246,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.08,
+            "mode": "percentAdd"
+          }
+        ],
+        "9": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 0.9574338205844319,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.09,
+            "mode": "percentAdd"
+          }
+        ],
+        "10": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 1.1288642737467205,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.1,
+            "mode": "percentAdd"
+          }
+        ],
+        "11": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 1.3153084657963112,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.11,
+            "mode": "percentAdd"
+          }
+        ],
+        "12": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 1.5180812877062944,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.12,
+            "mode": "percentAdd"
+          }
+        ],
+        "13": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 1.7386127875258306,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.13,
+            "mode": "percentAdd"
+          }
+        ],
+        "14": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 1.9784582557426913,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.14,
+            "mode": "percentAdd"
+          }
+        ],
+        "15": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 2.239309193913608,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.15,
+            "mode": "percentAdd"
+          }
+        ],
+        "16": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 2.523005243918291,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.16,
+            "mode": "percentAdd"
+          }
+        ],
+        "17": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 2.831547161967765,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.17,
+            "mode": "percentAdd"
+          }
+        ],
+        "18": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 3.1671109288657453,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.18,
+            "mode": "percentAdd"
+          }
+        ],
+        "19": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 3.5320630960351522,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.19,
+            "mode": "percentAdd"
+          }
+        ],
+        "20": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 3.9289774755370974,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.2,
+            "mode": "percentAdd"
+          }
+        ],
+        "21": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 4.360653291788068,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.21,
+            "mode": "percentAdd"
+          }
+        ],
+        "22": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 4.83013492298966,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.22,
+            "mode": "percentAdd"
+          }
+        ],
+        "23": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 5.340733371496588,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.23,
+            "mode": "percentAdd"
+          }
+        ],
+        "24": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 5.896049614541969,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.24,
+            "mode": "percentAdd"
+          }
+        ],
+        "25": [
+          {
+            "key": "specialRecruitSpeedBonus",
+            "value": 6.5,
+            "mode": "flat"
+          },
+          {
+            "key": "specialRecruitCostReduction",
+            "value": 0.25,
+            "mode": "percentAdd"
+          }
+        ]
+      },
+      "goldUpgradeCostByLevel": {
+        "0": 120,
+        "1": 144,
+        "2": 172,
+        "3": 207,
+        "4": 248,
+        "5": 298,
+        "6": 358,
+        "7": 429,
+        "8": 515,
+        "9": 619,
+        "10": 743,
+        "11": 891,
+        "12": 1069,
+        "13": 1283,
+        "14": 1540,
+        "15": 1848,
+        "16": 2218,
+        "17": 2662,
+        "18": 3194,
+        "19": 3833,
+        "20": 4600,
+        "21": 5520,
+        "22": 6624,
+        "23": 7949,
+        "24": 9539
+      },
+      "upgradeSecondsByLevel": {
+        "0": 108,
+        "1": 135,
+        "2": 168,
+        "3": 210,
+        "4": 263,
+        "5": 329,
+        "6": 411,
+        "7": 514,
+        "8": 643,
+        "9": 804,
+        "10": 1005,
+        "11": 1257,
+        "12": 1571,
+        "13": 1964,
+        "14": 2455,
+        "15": 3069,
+        "16": 3836,
+        "17": 4796,
+        "18": 5995,
+        "19": 7494,
+        "20": 9367,
+        "21": 11709,
+        "22": 14636,
+        "23": 18295,
+        "24": 22869
+      }
+    },
     "weapon_bureau": {
       "type": "weapon_bureau",
       "name": "兵器司",

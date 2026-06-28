@@ -1129,6 +1129,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/dungeons/reincarnation/waves/{waveId}/bonus-reset:
+    post:
+      tags:
+      - Dungeon
+      summary: 花费金币重置当前波随机加成
+      parameters:
+      - in: path
+        name: waveId
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationBonusResetRequest'
+      responses:
+        '200':
+          description: 重置后的轮回实例
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReincarnationActionResult'
+        '400':
+          description: 重置失败或金币不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/dungeons/reincarnation/settle:
     post:
       tags:
@@ -6145,6 +6175,7 @@ components:
       - enemyFactions
       - bonusValues
       - defenseCountdownSeconds
+      - bonusResetGoldCost
       properties:
         levels:
           type: array
@@ -6166,6 +6197,9 @@ components:
         defenseCountdownSeconds:
           type: integer
           example: 3
+        bonusResetGoldCost:
+          type: integer
+          example: 10
     ReincarnationLevelConfig:
       type: object
       required:
@@ -6492,6 +6526,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ArmyUnit'
+        accountGold:
+          type: integer
+          description: 金币类操作后返回的账户金币余额。
+        cost:
+          type: integer
+          description: 本次金币类操作消耗。
         serverTime:
           type: string
           format: date-time

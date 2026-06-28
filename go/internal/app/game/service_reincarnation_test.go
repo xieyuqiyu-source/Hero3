@@ -81,6 +81,65 @@ func TestReincarnationStartAndAttack(t *testing.T) {
 	}
 }
 
+// TestReincarnationBonusResetCostsGold 验证重置当前波随机加成会消耗账户金币并写流水。
+func TestReincarnationBonusResetCostsGold(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "config")
+	if err := LoadUnitsConfig(filepath.Join(root, "units")); err != nil {
+		t.Fatalf("LoadUnitsConfig failed: %v", err)
+	}
+	if err := LoadItemsConfig(filepath.Join(root, "items.json")); err != nil {
+		t.Fatalf("LoadItemsConfig failed: %v", err)
+	}
+	if err := LoadDropPoolsConfig(filepath.Join(root, "drop_pools.json")); err != nil {
+		t.Fatalf("LoadDropPoolsConfig failed: %v", err)
+	}
+	if err := LoadReincarnationConfig(filepath.Join(root, "reincarnation.json")); err != nil {
+		t.Fatalf("LoadReincarnationConfig failed: %v", err)
+	}
+
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	now := time.Date(2026, 6, 29, 12, 30, 0, 0, time.UTC)
+	accountID := "account_reincarnation_reset"
+	if err := repo.CreateAccount(Account{ID: accountID, Username: "reincarnation_reset", Gold: 100, CreatedAt: now}); err != nil {
+		t.Fatalf("CreateAccount failed: %v", err)
+	}
+	state := newPlayerState("player_reincarnation_reset", "轮回重置测试", "wei", "caocao", now)
+	if err := repo.CreatePlayer(accountID, state, now); err != nil {
+		t.Fatalf("CreatePlayer failed: %v", err)
+	}
+
+	started, err := service.StartReincarnationRun(state.Player.ID, 1)
+	if err != nil {
+		t.Fatalf("StartReincarnationRun failed: %v", err)
+	}
+	wave := started.Run.Waves[0]
+	reset, err := service.ResetReincarnationWaveBonus(state.Player.ID, wave.ID)
+	if err != nil {
+		t.Fatalf("ResetReincarnationWaveBonus failed: %v", err)
+	}
+	if reset.Cost != GetReincarnationConfig().BonusResetGoldCost {
+		t.Fatalf("expected reset cost %d, got %d", GetReincarnationConfig().BonusResetGoldCost, reset.Cost)
+	}
+	if reset.AccountGold != 100-reset.Cost {
+		t.Fatalf("expected account gold %d, got %d", 100-reset.Cost, reset.AccountGold)
+	}
+	accountAfter, err := repo.GetAccountByID(accountID)
+	if err != nil {
+		t.Fatalf("GetAccountByID failed: %v", err)
+	}
+	if accountAfter.Gold != reset.AccountGold {
+		t.Fatalf("expected stored gold %d, got %d", reset.AccountGold, accountAfter.Gold)
+	}
+	entries, err := service.ListGoldLedger(GoldLedgerFilter{AccountID: accountID, RefType: LedgerRefReincarnationBonusReset})
+	if err != nil {
+		t.Fatalf("ListGoldLedger failed: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Amount != reset.Cost || entries[0].RefID != wave.ID {
+		t.Fatalf("unexpected reset ledger entries: %+v", entries)
+	}
+}
+
 // TestReincarnationDefenseFailureGrantsClearedRewards 验证防守失败会发放此前已通关波次奖励。
 func TestReincarnationDefenseFailureGrantsClearedRewards(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "config")

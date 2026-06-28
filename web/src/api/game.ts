@@ -171,7 +171,7 @@ export const gameApi = {
 
   /** 获取军事视图 */
   getMilitaryView(playerId: string) {
-    return api.get<Pick<GameState, 'army' | 'recruitQueues' | 'general' | 'generals' | 'generalAssignments' | 'serverTime'>>(
+    return api.get<Pick<GameState, 'army' | 'recruitQueues' | 'resources' | 'cityGold' | 'buildings' | 'activeModifiers' | 'general' | 'generals' | 'generalAssignments' | 'serverTime'>>(
       `/military/view?playerId=${playerId}`,
     )
   },
@@ -397,6 +397,11 @@ export const gameApi = {
   /** 防守轮回绝境波次 */
   readyReincarnationDefense(playerId: string, waveId: string, troops: Record<string, number>, clientActionId?: string) {
     return api.post<ReincarnationActionResult>(`/dungeons/reincarnation/waves/${waveId}/defense-ready`, { playerId, troops, clientActionId })
+  },
+
+  /** 重置轮回绝境当前波随机加成 */
+  resetReincarnationBonus(playerId: string, waveId: string) {
+    return api.post<ReincarnationActionResult>(`/dungeons/reincarnation/waves/${waveId}/bonus-reset`, { playerId })
   },
 
   /** 结算轮回绝境 */

@@ -112,6 +112,8 @@ paths:
     $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1waves~1{waveId}~1attack
   /api/v1/dungeons/reincarnation/waves/{waveId}/defense-ready:
     $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1waves~1{waveId}~1defense-ready
+  /api/v1/dungeons/reincarnation/waves/{waveId}/bonus-reset:
+    $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1waves~1{waveId}~1bonus-reset
   /api/v1/dungeons/reincarnation/settle:
     $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1settle
   /api/v1/dungeons/reincarnation/reports:

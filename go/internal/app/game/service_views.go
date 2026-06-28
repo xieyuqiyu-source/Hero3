@@ -35,12 +35,16 @@ type ResourceView struct {
 }
 
 type MilitaryView struct {
-	Army               []ArmyUnit          `json:"army"`
-	RecruitQueues      []RecruitQueue      `json:"recruitQueues"`
-	General            *General            `json:"general"`
-	Generals           []General           `json:"generals,omitempty"`
-	GeneralAssignments []GeneralAssignment `json:"generalAssignments,omitempty"`
-	ServerTime         string              `json:"serverTime"`
+	Army               []ArmyUnit              `json:"army"`
+	RecruitQueues      []RecruitQueue          `json:"recruitQueues"`
+	Resources          ResourceState           `json:"resources"`
+	CityGold           FlexInt                 `json:"cityGold"`
+	Buildings          []Building              `json:"buildings,omitempty"`
+	ActiveModifiers    []ModifierBreakdownItem `json:"activeModifiers,omitempty"`
+	General            *General                `json:"general"`
+	Generals           []General               `json:"generals,omitempty"`
+	GeneralAssignments []GeneralAssignment     `json:"generalAssignments,omitempty"`
+	ServerTime         string                  `json:"serverTime"`
 }
 
 type InventoryView struct {

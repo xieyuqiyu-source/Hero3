@@ -216,6 +216,26 @@ var defaultBalance = BalanceConfig{
 			UpgradeCostByLevel:    militaryUpgradeCostTable(160, 180, 180, 220, 20),
 			UpgradeSecondsByLevel: militaryUpgradeSecondsTable(72, 20),
 		},
+		"siege_camp": {
+			Type: "siege_camp",
+			Name: "攻城武器营",
+			ModifiersByLevel: mergeModifierTables(
+				recruitSpeedCurveModifierTable([]string{StatSiegeRecruitSpeedBonus}, 90, 12, 25),
+				recruitCostReductionModifierTable([]string{StatSiegeRecruitCostReduction}, 0.25, 25),
+			),
+			GoldUpgradeCostByLevel: goldUpgradeCostTable(80, 25),
+			UpgradeSecondsByLevel:  militaryUpgradeSecondsTable(96, 25),
+		},
+		"special_camp": {
+			Type: "special_camp",
+			Name: "特殊建筑营",
+			ModifiersByLevel: mergeModifierTables(
+				recruitSpeedCurveModifierTable([]string{StatSpecialRecruitSpeedBonus}, 90, 12, 25),
+				recruitCostReductionModifierTable([]string{StatSpecialRecruitCostReduction}, 0.25, 25),
+			),
+			GoldUpgradeCostByLevel: goldUpgradeCostTable(120, 25),
+			UpgradeSecondsByLevel:  militaryUpgradeSecondsTable(108, 25),
+		},
 		"weapon_bureau": {
 			Type:                  "weapon_bureau",
 			Name:                  "兵器司",
@@ -524,6 +544,36 @@ func recruitSpeedCurveModifierTable(keys []string, baseSeconds int, finalSeconds
 		table[level] = mods
 	}
 	return table
+}
+
+func recruitCostReductionModifierTable(keys []string, maxReduction float64, maxLevel int) map[int][]Modifier {
+	table := make(map[int][]Modifier, maxLevel+1)
+	for level := 0; level <= maxLevel; level++ {
+		mods := make([]Modifier, 0, len(keys))
+		value := 0.0
+		if level > 0 && maxLevel > 0 {
+			value = maxReduction * float64(level) / float64(maxLevel)
+		}
+		for _, key := range keys {
+			mods = append(mods, Modifier{
+				Key:   key,
+				Value: value,
+				Mode:  "percentAdd",
+			})
+		}
+		table[level] = mods
+	}
+	return table
+}
+
+func mergeModifierTables(tables ...map[int][]Modifier) map[int][]Modifier {
+	merged := map[int][]Modifier{}
+	for _, table := range tables {
+		for level, modifiers := range table {
+			merged[level] = append(merged[level], modifiers...)
+		}
+	}
+	return merged
 }
 
 func recruitSpeedBonusForLevel(level int, baseSeconds int, finalSeconds int, maxLevel int) float64 {

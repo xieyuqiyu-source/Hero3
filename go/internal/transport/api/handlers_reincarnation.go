@@ -86,6 +86,24 @@ func (h *Handlers) ReadyReincarnationDefense(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, result)
 }
 
+// ResetReincarnationWaveBonus 重置当前波随机加成。
+func (h *Handlers) ResetReincarnationWaveBonus(w http.ResponseWriter, r *http.Request) {
+	var req game.ReincarnationBonusResetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if !h.requireOwnership(w, r, req.PlayerID) {
+		return
+	}
+	result, err := h.gameService.ResetReincarnationWaveBonus(req.PlayerID, r.PathValue("waveId"))
+	if err != nil {
+		writeReincarnationError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 // SettleReincarnation 结算当前轮回绝境实例。
 func (h *Handlers) SettleReincarnation(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -132,7 +150,7 @@ func writeReincarnationError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, game.ErrPlayerNotFound), errors.Is(err, game.ErrReincarnationRunNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, game.ErrReincarnationActive), errors.Is(err, game.ErrInvalidReincarnation), errors.Is(err, game.ErrInvalidAmount), errors.Is(err, game.ErrNoUnitsSelected), errors.Is(err, game.ErrInsufficientArmy):
+	case errors.Is(err, game.ErrReincarnationActive), errors.Is(err, game.ErrInvalidReincarnation), errors.Is(err, game.ErrInvalidAmount), errors.Is(err, game.ErrNoUnitsSelected), errors.Is(err, game.ErrInsufficientArmy), errors.Is(err, game.ErrInsufficientGold):
 		writeError(w, http.StatusBadRequest, err.Error())
 	default:
 		writeError(w, http.StatusInternalServerError, err.Error())

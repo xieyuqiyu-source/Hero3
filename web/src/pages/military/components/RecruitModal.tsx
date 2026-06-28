@@ -4,7 +4,7 @@ import type { UnitConfig } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
 import { gameApi } from '@/api/game'
-import { formatBaseFinal, formatModifierValue, formatSecondsBaseFinal, formatUnitStatTitle, getEffectiveRecruitSeconds, getEffectiveUnitStat, type EffectiveUnitStat } from '@/utils/unitStats'
+import { formatBaseFinal, formatModifierValue, formatSecondsBaseFinal, formatUnitStatTitle, getEffectiveRecruitCost, getEffectiveRecruitSeconds, getEffectiveUnitStat, type EffectiveUnitStat } from '@/utils/unitStats'
 
 interface RecruitModalProps {
   open: boolean
@@ -95,12 +95,13 @@ const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, ow
   const infantryDefense = getEffectiveUnitStat(gameState, 'infantryDefense', config.stats.infantryDefense ?? 0)
   const cavalryDefense = getEffectiveUnitStat(gameState, 'cavalryDefense', config.stats.cavalryDefense ?? 0)
   const recruitSeconds = getEffectiveRecruitSeconds(gameState, config.category, config.trainSeconds)
+  const recruitCost = getEffectiveRecruitCost(gameState, config.category, config.cost)
 
   // 计算当前资源能征募的最大数量（任一资源不足则为0），上限 100000
   const maxAmount = (() => {
     if (!resources) return 0
     let max = Infinity
-    for (const [res, costPer] of Object.entries(config.cost)) {
+    for (const [res, costPer] of Object.entries(recruitCost.final)) {
       if (costPer <= 0) continue
       const available = resources.items[res] ?? 0
       max = Math.min(max, Math.floor(available / costPer))
@@ -196,8 +197,8 @@ const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, ow
           <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
             <span className="text-[10px] text-[var(--color-text-muted)]">单个消耗</span>
             <div className="flex items-center gap-2 text-[10px]">
-              {Object.entries(config.cost).map(([res, val]) => (
-                <span key={res} className="text-[var(--color-text-secondary)]">
+              {Object.entries(recruitCost.final).map(([res, val]) => (
+                <span key={res} className={val < (recruitCost.base[res] ?? val) ? 'text-green-500' : 'text-[var(--color-text-secondary)]'}>
                   {RESOURCE_LABELS[res]}<span className="font-semibold ml-0.5">{val}</span>
                 </span>
               ))}

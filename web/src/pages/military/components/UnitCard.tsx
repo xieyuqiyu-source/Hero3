@@ -2,13 +2,20 @@ import { type FC } from 'react'
 import { Clock, Swords, Shield, Zap, Package, Wheat, TreePine, Mountain, Gem } from 'lucide-react'
 import type { UnitConfig } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
-import { formatBaseFinal, formatModifierValue, formatSecondsBaseFinal, formatUnitStatTitle, getEffectiveRecruitSeconds, getEffectiveUnitStat, type EffectiveUnitStat } from '@/utils/unitStats'
+import { formatBaseFinal, formatModifierValue, formatSecondsBaseFinal, formatUnitStatTitle, getEffectiveRecruitCost, getEffectiveRecruitSeconds, getEffectiveUnitStat, type EffectiveUnitStat } from '@/utils/unitStats'
 
 interface UnitCardProps {
   unitId: string
   config: UnitConfig
   owned: number
   onClick: () => void
+}
+
+const COST_RESOURCE_KEYS: Record<string, string> = {
+  木: 'wood',
+  石: 'stone',
+  铁: 'iron',
+  粮: 'food',
 }
 
 const StatValue: FC<{ label: string; stat: EffectiveUnitStat }> = ({ label, stat }) => {
@@ -49,6 +56,7 @@ const UnitCard: FC<UnitCardProps> = ({ config, owned, onClick }) => {
   const infantryDefense = getEffectiveUnitStat(gameState, 'infantryDefense', config.stats.infantryDefense ?? 0)
   const cavalryDefense = getEffectiveUnitStat(gameState, 'cavalryDefense', config.stats.cavalryDefense ?? 0)
   const recruitSeconds = getEffectiveRecruitSeconds(gameState, config.category, config.trainSeconds)
+  const recruitCost = getEffectiveRecruitCost(gameState, config.category, config.cost)
 
   return (
     <div
@@ -99,20 +107,22 @@ const UnitCard: FC<UnitCardProps> = ({ config, owned, onClick }) => {
         {/* Right: cost table */}
         <div className="flex-1 flex flex-col justify-between">
           {[
-            [TreePine, '木', config.cost.wood],
-            [Mountain, '石', config.cost.stone],
-            [Gem, '铁', config.cost.iron],
-            [Wheat, '粮', config.cost.food],
+            [TreePine, '木', recruitCost.final.wood ?? config.cost.wood],
+            [Mountain, '石', recruitCost.final.stone ?? config.cost.stone],
+            [Gem, '铁', recruitCost.final.iron ?? config.cost.iron],
+            [Wheat, '粮', recruitCost.final.food ?? config.cost.food],
             [Wheat, '口粮', config.stats.upkeep],
           ].map(([Icon, label, val]) => {
             const IconComp = Icon as FC<{ size?: number; className?: string }>
+            const original = typeof label === 'string' ? config.cost[COST_RESOURCE_KEYS[label] ?? ''] : undefined
+            const boosted = typeof original === 'number' && typeof val === 'number' && val < original
             return (
               <div key={label as string} className="flex items-center justify-between py-[3px] border-b border-[var(--color-border)] last:border-b-0">
                 <span className="flex items-center gap-1 text-[10px] text-amber-400">
                   <IconComp size={10} />
                   {label as string}
                 </span>
-                <span className="text-[11px] font-bold text-amber-400">{(val as number) ?? 0}</span>
+                <span className={`text-[11px] font-bold ${boosted ? 'text-green-500' : 'text-amber-400'}`}>{(val as number) ?? 0}</span>
               </div>
             )
           })}

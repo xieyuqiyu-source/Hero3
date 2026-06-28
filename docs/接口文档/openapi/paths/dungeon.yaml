@@ -113,6 +113,35 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/dungeons/reincarnation/waves/{waveId}/bonus-reset:
+  post:
+    tags: [Dungeon]
+    summary: 花费金币重置当前波随机加成
+    parameters:
+    - in: path
+      name: waveId
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReincarnationBonusResetRequest'
+    responses:
+      '200':
+        description: 重置后的轮回实例
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationActionResult'
+      '400':
+        description: 重置失败或金币不足
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
 /api/v1/dungeons/reincarnation/settle:
   post:
     tags: [Dungeon]

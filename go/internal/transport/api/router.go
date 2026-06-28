@@ -160,6 +160,7 @@ func registerReincarnationRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("POST /api/v1/dungeons/reincarnation/start", handlers.StartReincarnation)
 	mux.HandleFunc("POST /api/v1/dungeons/reincarnation/waves/{waveId}/attack", handlers.AttackReincarnationWave)
 	mux.HandleFunc("POST /api/v1/dungeons/reincarnation/waves/{waveId}/defense-ready", handlers.ReadyReincarnationDefense)
+	mux.HandleFunc("POST /api/v1/dungeons/reincarnation/waves/{waveId}/bonus-reset", handlers.ResetReincarnationWaveBonus)
 	mux.HandleFunc("POST /api/v1/dungeons/reincarnation/settle", handlers.SettleReincarnation)
 	mux.HandleFunc("GET /api/v1/dungeons/reincarnation/reports", handlers.ReincarnationReports)
 }

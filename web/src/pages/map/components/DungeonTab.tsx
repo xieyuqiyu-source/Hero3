@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Crown, Flame, Lock, ScrollText, ShieldAlert, Swords, Timer, Trophy } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
+import { useAccountStore } from '@/store/accountStore'
 import { useConfigStore } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
 import type { ReincarnationRun, ReincarnationWave, Reward } from '@/types/game'
@@ -66,6 +67,7 @@ const ReincarnationAbyssPanel: FC = () => {
   const items = useConfigStore((s) => s.items)
   const units = useConfigStore((s) => s.units)
   const factions = useConfigStore((s) => s.factions)
+  const account = useAccountStore((s) => s.account)
   const [run, setRun] = useState<ReincarnationRun | null>(null)
   const [selectedLevel, setSelectedLevel] = useState(1)
   const [troops, setTroops] = useState<Record<string, number>>({})
@@ -200,6 +202,29 @@ const ReincarnationAbyssPanel: FC = () => {
     }
   }
 
+  // resetWaveBonus 消耗金币重置当前波双方随机加成。
+  const resetWaveBonus = async () => {
+    if (!activePlayerId || !currentWave || !account || loading) return
+    const cost = reincarnation?.bonusResetGoldCost ?? 0
+    if (cost <= 0) return
+    if (account.gold < cost) {
+      toast.error('金币不足')
+      return
+    }
+    setLoading(true)
+    try {
+      const result = await gameApi.resetReincarnationBonus(activePlayerId, currentWave.id)
+      setRun(result.run)
+      patchState({ army: result.army, serverTime: result.serverTime })
+      useAccountStore.setState({ account: { ...account, gold: result.accountGold ?? Math.max(0, account.gold - cost) } })
+      toast.success('随机加成已重置')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '重置失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const rewardText = (rewards: Reward[]) => rewards.length === 0
     ? '暂无奖励'
     : rewards.map((reward) => `${items?.[reward.id]?.name ?? reward.id} x${reward.amount.toLocaleString()}`).join('、')
@@ -280,6 +305,10 @@ const ReincarnationAbyssPanel: FC = () => {
                 unitConfig={unitConfig}
                 factionName={factions?.[currentWave.enemyFaction]?.name ?? currentWave.enemyFaction}
                 rewardText={rewardText}
+                resetCost={reincarnation?.bonusResetGoldCost ?? 0}
+                canResetBonus={run.status === 'running' && currentWave.status === 'active' && totalMapAmount(currentWave.enemyRemaining) === totalMapAmount(currentWave.enemyTroops)}
+                onResetBonus={() => void resetWaveBonus()}
+                resetDisabled={loading || !account || account.gold < (reincarnation?.bonusResetGoldCost ?? 0)}
               />
             ) : (
               <p className="text-sm text-[var(--color-text-muted)]">当前轮回已结束，可结算累计奖励。</p>
@@ -333,7 +362,11 @@ const WavePanel: FC<{
   unitConfig: Record<string, { name: string }>
   factionName: string
   rewardText: (rewards: Reward[]) => string
-}> = ({ wave, army, troops, setTroops, unitConfig, factionName, rewardText }) => {
+  resetCost: number
+  canResetBonus: boolean
+  onResetBonus: () => void
+  resetDisabled: boolean
+}> = ({ wave, army, troops, setTroops, unitConfig, factionName, rewardText, resetCost, canResetBonus, onResetBonus, resetDisabled }) => {
   const selectedTotal = Object.values(troops).reduce((sum, value) => sum + value, 0)
   const enemyTotal = totalMapAmount(wave.enemyTroops)
   const enemyRemaining = totalMapAmount(wave.enemyRemaining)
@@ -369,6 +402,16 @@ const WavePanel: FC<{
           <InfoLine label="己方加成" value={wave.allyBonus.label} tone="green" />
           <InfoLine label="敌方加成" value={wave.enemyBonus.label} tone="amber" />
         </div>
+        {canResetBonus && resetCost > 0 && (
+          <button
+            type="button"
+            onClick={onResetBonus}
+            disabled={resetDisabled}
+            className="mt-3 h-9 w-full rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 text-xs font-bold text-amber-600 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            花费 {resetCost} 金币重置随机加成
+          </button>
+        )}
         <div className="mt-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
           <div className="mb-2 flex items-center justify-between gap-2 text-[11px] font-bold">
             <span className="text-[var(--color-text-primary)]">敌军态势</span>
