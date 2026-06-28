@@ -191,12 +191,21 @@ export interface MapTarget {
 
 export interface BattleReport {
   id: string
+  eventId?: string
   playerId: string
+  ownerPlayerId?: string
+  viewType?: 'attack' | 'defense' | 'reinforcement' | 'scout' | 'system' | string
+  sourceType?: 'npc_city' | 'player_city' | 'stronghold' | 'dungeon' | 'resource_point' | 'event_target' | 'world_boss' | 'system' | string
+  battleType?: string
+  title?: string
+  summary?: string
+  detail?: BattleReportDetailData
+  share?: BattleReportShare
   playerFaction?: string
   playerName?: string
   targetId: string
   targetName: string
-  type: 'attack' | 'plunder' | 'scout' | 'reinforce'
+  type: 'attack' | 'plunder' | 'scout' | 'reinforce' | 'defense' | string
   result: 'attacker_victory' | 'defender_victory' | 'draw'
   playerPower: number
   enemyPower: number
@@ -229,6 +238,107 @@ export interface BattleReport {
   pvpReinforcementLosses?: Record<string, Record<string, number>>
   read: boolean
   createdAt: string
+}
+
+export interface BattleReportShare {
+  id?: string
+  reportId?: string
+  token?: string
+  url?: string
+  visibility?: string
+  expiresAt?: string
+  createdAt?: string
+}
+
+export interface BattleReportDetailData {
+  id: string
+  eventId?: string
+  ownerPlayerId?: string
+  viewType: string
+  viewLabel: string
+  sourceType: string
+  sourceLabel: string
+  battleType: string
+  result: string
+  title: string
+  summary?: string
+  occurredAt: string
+  primarySide: BattleReportSide
+  secondarySide?: BattleReportSide
+  rewards: BattleReportRewards
+  traits?: BattleReportTrait[]
+  visibility: BattleReportVisibility
+  extra?: Record<string, unknown>
+  read: boolean
+  share?: BattleReportShare
+}
+
+export interface BattleReportSide {
+  role: string
+  playerId?: string
+  playerName?: string
+  cityId?: string
+  cityName?: string
+  faction?: string
+  factionLabel?: string
+  targetType?: string
+  targetId?: string
+  targetName?: string
+  level?: number
+  power: number
+  generals?: BattleReportGeneral[]
+  units: BattleReportUnit[]
+  resources?: Record<string, number>
+}
+
+export interface BattleReportUnit {
+  unitType: string
+  unitName?: string
+  faction?: string
+  amountBefore: number
+  dispatched: number
+  lost: number
+  survived: number
+}
+
+export interface BattleReportGeneral {
+  id: string
+  name?: string
+  level?: number
+  role?: string
+  power?: number
+  attributes?: Record<string, number>
+}
+
+export interface BattleReportTrait {
+  traitId: string
+  traitName?: string
+  ownerSide?: string
+  ownerRole?: string
+  generalId?: string
+  generalName?: string
+  summary?: string
+  detail?: Record<string, number | string | Record<string, number>>
+}
+
+export interface BattleReportRewards {
+  resources?: Record<string, number>
+  drops?: Array<{ type: string; itemId?: string; name?: string; amount: number; quality?: string }>
+  cityGold?: number
+  generalExp?: number
+  generalLevelBefore?: number
+  generalLevelAfter?: number
+  overflow?: Record<string, number>
+}
+
+export interface BattleReportVisibility {
+  showEnemyRemainingUnits: boolean
+  showEnemyResources: boolean
+  showEnemyGenerals: boolean
+  showEnemyCityDefense: boolean
+  reason?: string
+  threshold?: number
+  actualLossRatio?: number
 }
 
 export interface MailAttachment {

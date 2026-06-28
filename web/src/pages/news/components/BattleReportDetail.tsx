@@ -4,6 +4,8 @@ import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
 import type { BattleReport } from '@/types/game'
 import { getTraitMeta } from '@/utils/traits'
+import { gameApi } from '@/api/game'
+import { buildReportShareURL } from '../reportPresentation'
 
 interface BattleReportDetailProps {
   report: BattleReport
@@ -14,6 +16,16 @@ const RESOURCE_LABELS: Record<string, string> = { wood: '木材', stone: '石料
 const RESOURCE_ICONS: Record<string, string> = { wood: '🪵', stone: '🪨', iron: '💎', food: '🌾' }
 const RESOURCE_ORDER = ['wood', 'stone', 'iron', 'food']
 const TYPE_LABELS: Record<string, string> = { attack: '攻击', plunder: '掠夺', scout: '侦查', reinforce: '增援' }
+
+// safeMap 兼容旧战报或异常空字段，避免详情页读取 null。
+function safeMap(value?: Record<string, number> | null): Record<string, number> {
+  return value ?? {}
+}
+
+// safeArray 兼容旧战报或异常空字段，避免详情页对 null 调用 map。
+function safeArray<T>(value?: T[] | null): T[] {
+  return Array.isArray(value) ? value : []
+}
 
 const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => {
   const faction = useGameStore((s) => s.state?.player.faction) || report.playerFaction || ''
@@ -26,8 +38,16 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const isDraw = report.result === 'draw'
   const targetDisplayName = report.targetName || report.targetId
 
-  const handleShare = () => {
-    const url = `${window.location.origin}/report/${report.id}`
+  const handleShare = async () => {
+    let token = report.share?.token || report.detail?.share?.token
+    if (!token) {
+      const activePlayerId = useGameStore.getState().activePlayerId
+      if (activePlayerId) {
+        const link = await gameApi.shareReport(activePlayerId, report.id)
+        token = link.token
+      }
+    }
+    const url = buildReportShareURL(window.location.origin, report, token)
     navigator.clipboard.writeText(url)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -76,12 +96,21 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
     return text || '无'
   }
 
-  const pvpPointEntries = Object.entries(report.pvpPointsDelta ?? {}).filter(([, amount]) => amount !== 0)
-  const pvpAttackerGenerals = report.pvpAttackerGenerals ?? []
-  const pvpDefenderGenerals = report.pvpDefenderGenerals ?? []
-  const pvpReinforcements = report.pvpReinforcements ?? []
+  const pvpPointEntries = Object.entries(safeMap(report.pvpPointsDelta)).filter(([, amount]) => amount !== 0)
+  const pvpAttackerGenerals = safeArray(report.pvpAttackerGenerals)
+  const pvpDefenderGenerals = safeArray(report.pvpDefenderGenerals)
+  const pvpReinforcements = safeArray(report.pvpReinforcements)
   const pvpReinforcementLosses = report.pvpReinforcementLosses ?? {}
   const hasPvpGenerals = pvpAttackerGenerals.length > 0 || pvpDefenderGenerals.length > 0
+  const dispatchedUnits = safeMap(report.dispatchedUnits)
+  const lostUnits = safeMap(report.lostUnits)
+  const rewards = safeMap(report.rewards)
+  const defenderUnits = safeMap(report.defenderUnits)
+  const defenderLostUnits = safeMap(report.defenderLostUnits)
+  const capturedUnits = safeMap(report.capturedUnits)
+  const capturedToGarrison = safeMap(report.capturedToGarrison)
+  const revivedUnits = safeMap(report.revivedUnits)
+  const traitTriggered = safeArray(report.traitTriggered)
 
   const formatOutcomeDetail = (key: string, value: number | string | Record<string, number>): string => {
     const labels: Record<string, string> = {
@@ -190,7 +219,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
                 <tr>
                   <td className="py-1 text-left font-medium text-[var(--color-text-secondary)]">出动</td>
                   {allUnitIds.map((uid) => {
-                    const dispatched = report.dispatchedUnits?.[uid] ?? 0
+                    const dispatched = dispatchedUnits[uid] ?? 0
                     return (
                       <td key={uid} className={`py-1 px-1 ${dispatched > 0 ? 'font-bold text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
                         {dispatched}
@@ -201,7 +230,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
                 <tr>
                   <td className="py-1 text-left font-medium text-red-500">阵亡</td>
                   {allUnitIds.map((uid) => {
-                    const lost = report.lostUnits?.[uid] ?? 0
+                    const lost = lostUnits[uid] ?? 0
                     return (
                       <td key={uid} className={`py-1 px-1 ${lost > 0 ? 'font-bold text-red-600' : 'text-[var(--color-text-muted)]'}`}>
                         {lost}
@@ -215,10 +244,10 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
           {/* Mobile: vertical list, only show units with dispatched > 0 */}
           <div className="sm:hidden space-y-1.5">
             {allUnitIds
-              .filter((uid) => (report.dispatchedUnits?.[uid] ?? 0) > 0)
+              .filter((uid) => (dispatchedUnits[uid] ?? 0) > 0)
               .map((uid) => {
-                const dispatched = report.dispatchedUnits?.[uid] ?? 0
-                const lost = report.lostUnits?.[uid] ?? 0
+                const dispatched = dispatchedUnits[uid] ?? 0
+                const lost = lostUnits[uid] ?? 0
                 return (
                   <div key={uid} className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
                     <span className="text-[10px] font-medium text-[var(--color-text-primary)]">{getUnitName(uid)}</span>
@@ -229,7 +258,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
                   </div>
                 )
               })}
-            {allUnitIds.filter((uid) => (report.dispatchedUnits?.[uid] ?? 0) > 0).length === 0 && (
+            {allUnitIds.filter((uid) => (dispatchedUnits[uid] ?? 0) > 0).length === 0 && (
               <span className="text-[10px] text-[var(--color-text-muted)]">无出动兵种</span>
             )}
           </div>
@@ -240,10 +269,10 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
           <div className="flex items-center">
             <span className="text-xs font-medium text-[var(--color-text-secondary)] w-16 flex-shrink-0">掠夺资源</span>
             <div className="flex flex-wrap items-center justify-center gap-3 flex-1">
-              {RESOURCE_ORDER.filter((res) => (report.rewards?.[res] ?? 0) > 0).length > 0 ? (
-                RESOURCE_ORDER.filter((res) => (report.rewards?.[res] ?? 0) > 0).map((res) => (
+              {RESOURCE_ORDER.filter((res) => (rewards[res] ?? 0) > 0).length > 0 ? (
+                RESOURCE_ORDER.filter((res) => (rewards[res] ?? 0) > 0).map((res) => (
                   <span key={res} className="inline-flex items-center gap-1 text-[10px] text-amber-500 font-semibold">
-                    {RESOURCE_ICONS[res]} {RESOURCE_LABELS[res]} {report.rewards[res].toLocaleString()}
+                    {RESOURCE_ICONS[res]} {RESOURCE_LABELS[res]} {rewards[res].toLocaleString()}
                   </span>
                 ))
               ) : (
@@ -291,19 +320,19 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
 
       {/* 将领特性结果 */}
       {(
-        (report.traitTriggered && report.traitTriggered.length > 0) ||
-        (report.capturedUnits && Object.keys(report.capturedUnits).length > 0) ||
-        (report.capturedToGarrison && Object.keys(report.capturedToGarrison).length > 0) ||
-        (report.revivedUnits && Object.keys(report.revivedUnits).length > 0)
+        traitTriggered.length > 0 ||
+        Object.keys(capturedUnits).length > 0 ||
+        Object.keys(capturedToGarrison).length > 0 ||
+        Object.keys(revivedUnits).length > 0
       ) && (
         <div className="rounded-2xl border border-amber-400/40 bg-amber-400/5 overflow-hidden">
           <div className="px-4 py-2 border-b border-amber-400/30 bg-amber-400/10">
             <span className="text-xs font-bold text-amber-600">将领特性结果</span>
           </div>
           <div className="p-4 space-y-3">
-            {report.traitTriggered && report.traitTriggered.length > 0 && (
+            {traitTriggered.length > 0 && (
               <div className="space-y-1.5">
-                {report.traitTriggered.map((traitId) => {
+                {traitTriggered.map((traitId) => {
                   const meta = getTraitMeta(traitId)
                   const outcome = report.traitOutcomes?.[traitId]
                   return (
@@ -330,11 +359,11 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
               </div>
             )}
 
-            {report.capturedUnits && Object.keys(report.capturedUnits).length > 0 && (
+            {Object.keys(capturedUnits).length > 0 && (
               <div>
                 <div className="text-[11px] font-semibold text-pink-500 mb-1.5">美人计·俘虏归队</div>
                 <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(report.capturedUnits).filter(([, v]) => v > 0).map(([unitType, count]) => (
+                  {Object.entries(capturedUnits).filter(([, v]) => v > 0).map(([unitType, count]) => (
                     <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-pink-500/10 text-pink-600 font-medium">
                       {getUnitName(unitType)} +{count}
                     </span>
@@ -343,11 +372,11 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
               </div>
             )}
 
-            {report.capturedToGarrison && Object.keys(report.capturedToGarrison).length > 0 && (
+            {Object.keys(capturedToGarrison).length > 0 && (
               <div>
                 <div className="text-[11px] font-semibold text-pink-500 mb-1.5">美人计·俘虏驻防</div>
                 <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(report.capturedToGarrison).filter(([, v]) => v > 0).map(([unitType, count]) => (
+                  {Object.entries(capturedToGarrison).filter(([, v]) => v > 0).map(([unitType, count]) => (
                     <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-pink-500/10 text-pink-600 font-medium">
                       {getUnitName(unitType)} +{count}
                     </span>
@@ -356,11 +385,11 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
               </div>
             )}
 
-            {report.revivedUnits && Object.keys(report.revivedUnits).length > 0 && (
+            {Object.keys(revivedUnits).length > 0 && (
               <div>
                 <div className="text-[11px] font-semibold text-emerald-500 mb-1.5">仁德·复活归队</div>
                 <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(report.revivedUnits).filter(([, v]) => v > 0).map(([unitType, count]) => (
+                  {Object.entries(revivedUnits).filter(([, v]) => v > 0).map(([unitType, count]) => (
                     <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 font-medium">
                       {getUnitName(unitType)} +{count}
                     </span>
@@ -486,7 +515,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
                     <tr>
                       <td className="py-1 text-left font-medium text-[var(--color-text-secondary)]">驻守</td>
                       {defenderAllUnitIds.map((uid) => {
-                        const count = report.defenderUnits?.[uid] ?? 0
+                        const count = defenderUnits[uid] ?? 0
                         return (
                           <td key={uid} className={`py-1 px-1 ${count > 0 ? 'font-bold text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
                             {count}
@@ -497,7 +526,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
                     <tr>
                       <td className="py-1 text-left font-medium text-red-500">阵亡</td>
                       {defenderAllUnitIds.map((uid) => {
-                        const lost = report.defenderLostUnits?.[uid] ?? 0
+                        const lost = defenderLostUnits[uid] ?? 0
                         return (
                           <td key={uid} className={`py-1 px-1 ${lost > 0 ? 'font-bold text-red-600' : 'text-[var(--color-text-muted)]'}`}>
                             {lost}
@@ -511,10 +540,10 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
               {/* Mobile: vertical list, only show units with count > 0 */}
               <div className="sm:hidden space-y-1.5">
                 {defenderAllUnitIds
-                  .filter((uid) => (report.defenderUnits?.[uid] ?? 0) > 0)
+                  .filter((uid) => (defenderUnits[uid] ?? 0) > 0)
                   .map((uid) => {
-                    const count = report.defenderUnits?.[uid] ?? 0
-                    const lost = report.defenderLostUnits?.[uid] ?? 0
+                    const count = defenderUnits[uid] ?? 0
+                    const lost = defenderLostUnits[uid] ?? 0
                     return (
                       <div key={uid} className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
                         <span className="text-[10px] font-medium text-[var(--color-text-primary)]">{getDefenderUnitName(uid)}</span>

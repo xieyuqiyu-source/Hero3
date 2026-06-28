@@ -77,6 +77,7 @@ const (
 	StatBuildSpeedBonus           = "buildSpeedBonus"
 	StatRecruitSpeedBonus         = "recruitSpeedBonus"
 	StatMarchSpeedBonus           = "marchSpeedBonus"
+	StatEnemyLossRevealThreshold  = "enemyLossRevealThresholdBonus"
 	StatExchangeRateBonus         = "exchangeRateBonus"
 )
 
@@ -97,6 +98,7 @@ var ValidStatKeys = map[string]bool{
 	StatBuildSpeedBonus:           true,
 	StatRecruitSpeedBonus:         true,
 	StatMarchSpeedBonus:           true,
+	StatEnemyLossRevealThreshold:  true,
 	StatExchangeRateBonus:         true,
 }
 

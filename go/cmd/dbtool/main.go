@@ -63,6 +63,18 @@ func main() {
 		err = runVerifyBuffs(os.Args[2:])
 	case "healthcheck-authority":
 		err = runHealthcheckAuthority(os.Args[2:])
+	case "verify-battle-events":
+		err = runVerifyBattleEvents(os.Args[2:])
+	case "verify-battle-reports":
+		err = runVerifyBattleReports(os.Args[2:])
+	case "verify-battle-report-states":
+		err = runVerifyBattleReportStates(os.Args[2:])
+	case "repair-battle-report-state":
+		err = runRepairBattleReportState(os.Args[2:])
+	case "repair-battle-event-link":
+		err = runRepairBattleEventLink(os.Args[2:])
+	case "backfill-battle-report-v2":
+		err = runBackfillBattleReportV2(os.Args[2:])
 	default:
 		printUsage()
 		err = fmt.Errorf("unknown command: %s", os.Args[1])
@@ -100,4 +112,10 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  backfill-buffs 从 state_json 兼容快照回填 player_buffs")
 	fmt.Fprintln(os.Stderr, "  verify-buffs   校验 player_buffs 与 state_json.buffs 兼容快照")
 	fmt.Fprintln(os.Stderr, "  healthcheck-authority 检查当前权威表覆盖和轻量 state_json 干净度")
+	fmt.Fprintln(os.Stderr, "  verify-battle-events 校验新战报事件关联和 PVP 战报引用")
+	fmt.Fprintln(os.Stderr, "  verify-battle-reports 校验新战报标准字段与 JSON 可解析性")
+	fmt.Fprintln(os.Stderr, "  verify-battle-report-states 校验战报玩家阅读/删除状态")
+	fmt.Fprintln(os.Stderr, "  repair-battle-report-state 为缺失的战报补齐玩家状态")
+	fmt.Fprintln(os.Stderr, "  repair-battle-event-link 为缺失事件的旧战报补齐事件关联")
+	fmt.Fprintln(os.Stderr, "  backfill-battle-report-v2 从旧 report_json 回填标准战报字段")
 }

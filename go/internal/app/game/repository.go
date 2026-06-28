@@ -74,13 +74,24 @@ type AccountAssetRepository interface {
 
 type ReportRepository interface {
 	SaveReport(report BattleReport) error
+	SaveReports(reports []BattleReport) error
 	GetReportByID(reportID string) (BattleReport, error)
+	GetReportForPlayer(playerID string, reportID string) (BattleReport, error)
+	GetReportByShareToken(token string) (BattleReport, error)
 	ListReports(playerID string, limit int, offset int) ([]BattleReport, int, error)
+	ListReportsByQuery(query BattleReportQuery) ([]BattleReport, int, error)
 	ListAllReports(playerID string) ([]BattleReport, error)
 	MarkReportsRead(playerID string) error
+	MarkReportsReadByView(playerID string, viewType string) error
 	MarkSingleReportRead(playerID string, reportID string) error
 	DeleteReport(playerID string, reportID string) error
+	DeleteReportsByView(playerID string, viewType string) error
 	DeleteAllReports(playerID string) error
+	CreateBattleReportShareLink(playerID string, reportID string, visibility string, expiresAt time.Time) (BattleReportShareLink, error)
+	ListBattleEventsForAdmin(query BattleEventQuery) ([]BattleEvent, int, error)
+	GetBattleEventForAdmin(eventID string) (BattleEvent, error)
+	ListReportsByEventForAdmin(eventID string) ([]BattleReport, error)
+	ListParticipantsByEventForAdmin(eventID string) ([]BattleReportParticipant, error)
 	CountUnreadReports(playerID string) (int, error)
 }
 
@@ -119,12 +130,13 @@ type ReinforcementRepository interface {
 
 type PvpRepository interface {
 	CreatePvpMarchWithState(attackerPlayerID string, defenderPlayerID string, updatedAt time.Time, update func(attacker *GameState, defender *GameState) (PvpMarch, error)) (GameState, GameState, PvpMarch, error)
+	UpdatePvpScoutStates(scoutPlayerID string, targetPlayerID string, updatedAt time.Time, update func(scout *GameState, target *GameState) error) (GameState, GameState, error)
 	GetPvpMarch(marchID string) (PvpMarch, error)
 	UpdatePvpMarch(marchID string, updatedAt time.Time, update func(march *PvpMarch) error) (PvpMarch, error)
 	UpdatePvpMarchWithAttackerState(marchID string, updatedAt time.Time, update func(attacker *GameState, march *PvpMarch) error) (GameState, PvpMarch, error)
 	ListPvpMarchesForPlayer(playerID string) ([]PvpMarch, error)
 	ListDuePvpMarches(playerID string, now time.Time) ([]PvpMarch, error)
-	ResolvePvpBattleTransaction(marchID string, updatedAt time.Time, update func(attacker *GameState, defender *GameState, reinforcements []Reinforcement, march *PvpMarch) (PvpBattle, BattleReport, BattleReport, []Reinforcement, error)) (GameState, GameState, PvpMarch, PvpBattle, BattleReport, BattleReport, error)
+	ResolvePvpBattleTransaction(marchID string, updatedAt time.Time, update func(attacker *GameState, defender *GameState, reinforcements []Reinforcement, march *PvpMarch) (PvpBattle, BattleReport, BattleReport, []BattleReport, []Reinforcement, error)) (GameState, GameState, PvpMarch, PvpBattle, BattleReport, BattleReport, error)
 	GetPvpPlayerState(playerID string, now time.Time) (PvpPlayerState, error)
 	SavePvpPlayerState(state PvpPlayerState, updatedAt time.Time) error
 	GetPvpBattle(battleID string) (PvpBattle, error)
@@ -691,15 +703,53 @@ func (r *MemoryRepository) ClaimEventProcessing(moduleID string, handlerKey stri
 // --- Battle Report Methods (MemoryRepository) ---
 
 func (r *MemoryRepository) SaveReport(report BattleReport) error {
+	return r.SaveReports([]BattleReport{report})
+}
+
+// SaveReports 批量保存标准战报，内存仓储用同一把锁模拟事务边界。
+func (r *MemoryRepository) SaveReports(reports []BattleReport) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.reports[report.PlayerID] = append([]BattleReport{report}, r.reports[report.PlayerID]...)
-	// 保留最多 1000 条
-	if len(r.reports[report.PlayerID]) > 1000 {
-		r.reports[report.PlayerID] = r.reports[report.PlayerID][:1000]
+	for _, report := range reports {
+		report = NormalizeBattleReport(report)
+		r.reports[report.PlayerID] = append([]BattleReport{report}, r.reports[report.PlayerID]...)
+		// 保留最多 1000 条
+		if len(r.reports[report.PlayerID]) > 1000 {
+			r.reports[report.PlayerID] = r.reports[report.PlayerID][:1000]
+		}
 	}
 	return nil
+}
+
+// GetReportForPlayer 获取指定玩家拥有且未删除的战报。
+func (r *MemoryRepository) GetReportForPlayer(playerID string, reportID string) (BattleReport, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, report := range r.reports[playerID] {
+		report = NormalizeBattleReport(report)
+		if report.ID == reportID && !report.DeletedByPlayer {
+			return report, nil
+		}
+	}
+	return BattleReport{}, errors.New("report not found")
+}
+
+// GetReportByShareToken 通过分享 token 获取公开战报。
+func (r *MemoryRepository) GetReportByShareToken(token string) (BattleReport, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, reports := range r.reports {
+		for _, report := range reports {
+			report = NormalizeBattleReport(report)
+			if report.Share != nil && report.Share.Token == token {
+				return report, nil
+			}
+		}
+	}
+	return BattleReport{}, errors.New("report not found")
 }
 
 func (r *MemoryRepository) GetReportByID(reportID string) (BattleReport, error) {
@@ -746,6 +796,68 @@ func (r *MemoryRepository) ListReports(playerID string, limit int, offset int) (
 	return result, total, nil
 }
 
+// ListReportsByQuery 按标准筛选条件分页查询玩家战报。
+func (r *MemoryRepository) ListReportsByQuery(query BattleReportQuery) ([]BattleReport, int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	limit := query.PageSize
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	offset := 0
+	if query.Page > 1 {
+		offset = (query.Page - 1) * limit
+	}
+	timeFrom := query.TimeFrom
+	if timeFrom.IsZero() {
+		timeFrom = time.Now().Add(-3 * 24 * time.Hour)
+	}
+
+	var result []BattleReport
+	total := 0
+	for _, raw := range r.reports[query.PlayerID] {
+		report := NormalizeBattleReport(raw)
+		if !query.IncludeDeleted && report.DeletedByPlayer {
+			continue
+		}
+		createdAt, err := time.Parse(time.RFC3339, report.CreatedAt)
+		if err == nil {
+			if createdAt.Before(timeFrom) {
+				continue
+			}
+			if !query.TimeTo.IsZero() && createdAt.After(query.TimeTo) {
+				continue
+			}
+		}
+		if query.ViewType != "" && report.ViewType != query.ViewType {
+			continue
+		}
+		if query.SourceType != "" && report.SourceType != query.SourceType {
+			continue
+		}
+		if query.BattleType != "" && report.BattleType != query.BattleType {
+			continue
+		}
+		if query.Result != "" && report.Result != query.Result {
+			continue
+		}
+		total++
+		if offset > 0 {
+			offset--
+			continue
+		}
+		result = append(result, report)
+		if len(result) >= limit {
+			break
+		}
+	}
+	return result, total, nil
+}
+
 func (r *MemoryRepository) ListAllReports(playerID string) ([]BattleReport, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -759,6 +871,20 @@ func (r *MemoryRepository) MarkReportsRead(playerID string) error {
 
 	for i := range r.reports[playerID] {
 		r.reports[playerID][i].Read = true
+	}
+	return nil
+}
+
+// MarkReportsReadByView 标记指定视角 Tab 的战报为已读。
+func (r *MemoryRepository) MarkReportsReadByView(playerID string, viewType string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i := range r.reports[playerID] {
+		report := NormalizeBattleReport(r.reports[playerID][i])
+		if viewType == "" || report.ViewType == viewType {
+			r.reports[playerID][i].Read = true
+		}
 	}
 	return nil
 }
@@ -789,6 +915,20 @@ func (r *MemoryRepository) DeleteReport(playerID string, reportID string) error 
 	return nil
 }
 
+// DeleteReportsByView 删除指定视角 Tab 下的战报。
+func (r *MemoryRepository) DeleteReportsByView(playerID string, viewType string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i := range r.reports[playerID] {
+		report := NormalizeBattleReport(r.reports[playerID][i])
+		if viewType == "" || report.ViewType == viewType {
+			r.reports[playerID][i].DeletedByPlayer = true
+		}
+	}
+	return nil
+}
+
 func (r *MemoryRepository) DeleteAllReports(playerID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -797,6 +937,188 @@ func (r *MemoryRepository) DeleteAllReports(playerID string) error {
 		r.reports[playerID][i].DeletedByPlayer = true
 	}
 	return nil
+}
+
+// CreateBattleReportShareLink 为玩家战报创建分享 token。
+func (r *MemoryRepository) CreateBattleReportShareLink(playerID string, reportID string, visibility string, expiresAt time.Time) (BattleReportShareLink, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := time.Now().UTC()
+	link := BattleReportShareLink{
+		ID:         "share_" + randomID(12),
+		ReportID:   reportID,
+		Token:      "br_" + randomID(24),
+		Visibility: visibility,
+		CreatedAt:  now.Format(time.RFC3339),
+	}
+	if !expiresAt.IsZero() {
+		link.ExpiresAt = expiresAt.UTC().Format(time.RFC3339)
+	}
+	for i := range r.reports[playerID] {
+		if r.reports[playerID][i].ID == reportID {
+			if r.reports[playerID][i].Share == nil {
+				r.reports[playerID][i].Share = &BattleReportShare{}
+			}
+			r.reports[playerID][i].Share.Token = link.Token
+			r.reports[playerID][i].Share.Visibility = link.Visibility
+			r.reports[playerID][i].Share.ExpiresAt = link.ExpiresAt
+			return link, nil
+		}
+	}
+	return BattleReportShareLink{}, errors.New("report not found")
+}
+
+// ListBattleEventsForAdmin 从内存战报中按 eventId 汇总战斗事件。
+func (r *MemoryRepository) ListBattleEventsForAdmin(query BattleEventQuery) ([]BattleEvent, int, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	eventsByID := map[string]BattleEvent{}
+	for _, reports := range r.reports {
+		for _, raw := range reports {
+			report := NormalizeBattleReport(raw)
+			if query.PlayerID != "" && report.PlayerID != query.PlayerID {
+				continue
+			}
+			if query.EventID != "" && report.EventID != query.EventID {
+				continue
+			}
+			if query.SourceType != "" && report.SourceType != query.SourceType {
+				continue
+			}
+			if query.BattleType != "" && report.BattleType != query.BattleType {
+				continue
+			}
+			if query.Result != "" && report.Result != query.Result {
+				continue
+			}
+			if _, exists := eventsByID[report.EventID]; exists {
+				continue
+			}
+			eventsByID[report.EventID] = BattleEvent{
+				ID:               report.EventID,
+				SourceType:       report.SourceType,
+				SourceID:         report.TargetID,
+				Scene:            report.ViewType,
+				BattleType:       report.BattleType,
+				Result:           report.Result,
+				AttackerPlayerID: report.PlayerID,
+				DefenderPlayerID: report.TargetID,
+				AttackerName:     report.PlayerName,
+				DefenderName:     report.TargetName,
+				AttackerFaction:  report.PlayerFaction,
+				DefenderFaction:  report.DefenderFaction,
+				OccurredAt:       report.CreatedAt,
+				CreatedAt:        report.CreatedAt,
+			}
+		}
+	}
+	items := make([]BattleEvent, 0, len(eventsByID))
+	for _, event := range eventsByID {
+		items = append(items, event)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].OccurredAt > items[j].OccurredAt })
+	total := len(items)
+	pageSize := query.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if query.Page <= 0 {
+		query.Page = 1
+	}
+	start := (query.Page - 1) * pageSize
+	if start >= len(items) {
+		return []BattleEvent{}, total, nil
+	}
+	end := start + pageSize
+	if end > len(items) {
+		end = len(items)
+	}
+	return items[start:end], total, nil
+}
+
+// GetBattleEventForAdmin 获取单个战斗事件。
+func (r *MemoryRepository) GetBattleEventForAdmin(eventID string) (BattleEvent, error) {
+	items, total, err := r.ListBattleEventsForAdmin(BattleEventQuery{EventID: eventID, Page: 1, PageSize: 1})
+	if err != nil {
+		return BattleEvent{}, err
+	}
+	if total == 0 || len(items) == 0 {
+		return BattleEvent{}, errors.New("battle event not found")
+	}
+	return items[0], nil
+}
+
+// ListReportsByEventForAdmin 返回同一事件下所有玩家视角战报。
+func (r *MemoryRepository) ListReportsByEventForAdmin(eventID string) ([]BattleReport, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var reports []BattleReport
+	for _, playerReports := range r.reports {
+		for _, raw := range playerReports {
+			report := NormalizeBattleReport(raw)
+			if report.EventID == eventID {
+				reports = append(reports, report)
+			}
+		}
+	}
+	sort.Slice(reports, func(i, j int) bool { return reports[i].CreatedAt > reports[j].CreatedAt })
+	return reports, nil
+}
+
+// ListParticipantsByEventForAdmin 从内存战报标准详情中汇总事件参与方快照。
+func (r *MemoryRepository) ListParticipantsByEventForAdmin(eventID string) ([]BattleReportParticipant, error) {
+	reports, err := r.ListReportsByEventForAdmin(eventID)
+	if err != nil {
+		return nil, err
+	}
+	participants := make([]BattleReportParticipant, 0, len(reports)*2)
+	for _, report := range reports {
+		if report.Detail == nil {
+			continue
+		}
+		participants = append(participants, buildMemoryBattleReportParticipant(report, "primary", report.Detail.PrimarySide))
+		if report.Detail.SecondarySide != nil {
+			participants = append(participants, buildMemoryBattleReportParticipant(report, "secondary", *report.Detail.SecondarySide))
+		}
+	}
+	sort.Slice(participants, func(i, j int) bool {
+		if participants[i].ReportID == participants[j].ReportID {
+			return participants[i].Role < participants[j].Role
+		}
+		return participants[i].ReportID < participants[j].ReportID
+	})
+	return participants, nil
+}
+
+// buildMemoryBattleReportParticipant 将标准战报一侧转换为内存 GM 参与方快照。
+func buildMemoryBattleReportParticipant(report BattleReport, side string, snapshot BattleReportSide) BattleReportParticipant {
+	troopsBefore := map[string]int{}
+	troopsLost := map[string]int{}
+	troopsSurvived := map[string]int{}
+	for _, unit := range snapshot.Units {
+		troopsBefore[unit.UnitType] = unit.AmountBefore
+		troopsLost[unit.UnitType] = unit.Lost
+		troopsSurvived[unit.UnitType] = unit.Survived
+	}
+	return BattleReportParticipant{
+		ID:             "participant_" + report.ID + "_" + side,
+		EventID:        report.EventID,
+		ReportID:       report.ID,
+		PlayerID:       snapshot.PlayerID,
+		Role:           snapshot.Role,
+		Faction:        snapshot.Faction,
+		Nickname:       snapshot.PlayerName,
+		CityName:       snapshot.CityName,
+		TroopsBefore:   troopsBefore,
+		TroopsLost:     troopsLost,
+		TroopsSurvived: troopsSurvived,
+		Generals:       snapshot.Generals,
+		Rewards:        report.Detail.Rewards,
+		CreatedAt:      report.CreatedAt,
+	}
 }
 
 func (r *MemoryRepository) CountUnreadReports(playerID string) (int, error) {
@@ -1180,6 +1502,28 @@ func (r *MemoryRepository) CreatePvpMarchWithState(attackerPlayerID string, defe
 	return attacker, defender, march, nil
 }
 
+// UpdatePvpScoutStates 在内存仓储中同一锁范围内更新侦查双方状态。
+func (r *MemoryRepository) UpdatePvpScoutStates(scoutPlayerID string, targetPlayerID string, updatedAt time.Time, update func(scout *GameState, target *GameState) error) (GameState, GameState, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	scout, ok := r.players[scoutPlayerID]
+	if !ok {
+		return GameState{}, GameState{}, ErrPlayerNotFound
+	}
+	target, ok := r.players[targetPlayerID]
+	if !ok {
+		return GameState{}, GameState{}, ErrPlayerNotFound
+	}
+	if err := update(&scout, &target); err != nil {
+		return GameState{}, GameState{}, err
+	}
+	r.players[scoutPlayerID] = scout
+	r.players[targetPlayerID] = target
+	r.playerUpdatedAt[scoutPlayerID] = updatedAt.UTC()
+	r.playerUpdatedAt[targetPlayerID] = updatedAt.UTC()
+	return scout, target, nil
+}
+
 // GetPvpMarch 读取单条 PVP 行军。
 func (r *MemoryRepository) GetPvpMarch(marchID string) (PvpMarch, error) {
 	r.mu.RLock()
@@ -1269,7 +1613,7 @@ func (r *MemoryRepository) ListDuePvpMarches(playerID string, now time.Time) ([]
 }
 
 // ResolvePvpBattleTransaction 在内存仓储中结算一场 PVP 战斗。
-func (r *MemoryRepository) ResolvePvpBattleTransaction(marchID string, updatedAt time.Time, update func(attacker *GameState, defender *GameState, reinforcements []Reinforcement, march *PvpMarch) (PvpBattle, BattleReport, BattleReport, []Reinforcement, error)) (GameState, GameState, PvpMarch, PvpBattle, BattleReport, BattleReport, error) {
+func (r *MemoryRepository) ResolvePvpBattleTransaction(marchID string, updatedAt time.Time, update func(attacker *GameState, defender *GameState, reinforcements []Reinforcement, march *PvpMarch) (PvpBattle, BattleReport, BattleReport, []BattleReport, []Reinforcement, error)) (GameState, GameState, PvpMarch, PvpBattle, BattleReport, BattleReport, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	march, ok := r.pvpMarches[marchID]
@@ -1293,7 +1637,7 @@ func (r *MemoryRepository) ResolvePvpBattleTransaction(marchID string, updatedAt
 		}
 	}
 	march.Status = PvpMarchStatusResolving
-	battle, attackerReport, defenderReport, changedReinforcements, err := update(&attacker, &defender, targetRecords, &march)
+	battle, attackerReport, defenderReport, reinforcementReports, changedReinforcements, err := update(&attacker, &defender, targetRecords, &march)
 	if err != nil {
 		return GameState{}, GameState{}, PvpMarch{}, PvpBattle{}, BattleReport{}, BattleReport{}, err
 	}
@@ -1311,6 +1655,11 @@ func (r *MemoryRepository) ResolvePvpBattleTransaction(marchID string, updatedAt
 	}
 	if defenderReport.ID != "" {
 		r.reports[defenderReport.PlayerID] = append([]BattleReport{defenderReport}, r.reports[defenderReport.PlayerID]...)
+	}
+	for _, report := range reinforcementReports {
+		if report.ID != "" {
+			r.reports[report.PlayerID] = append([]BattleReport{NormalizeBattleReport(report)}, r.reports[report.PlayerID]...)
+		}
 	}
 	return attacker, defender, clonePvpMarch(march), battle, attackerReport, defenderReport, nil
 }

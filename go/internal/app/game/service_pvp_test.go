@@ -105,6 +105,84 @@ func TestPvpTargetsFilterByMapViewport(t *testing.T) {
 	}
 }
 
+func TestPvpScoutUsesFactionScoutUnitsAndRevealsOnSurvival(t *testing.T) {
+	svc, repo, attacker, defender := newPvpTestService(t)
+	addPvpScoutTestUnits(t)
+	attacker.Army = []ArmyUnit{{UnitType: "weiScout", Amount: 5}, {UnitType: "weiInfantry", Amount: 20}}
+	defender.Army = []ArmyUnit{{UnitType: "shuScout", Amount: 2}, {UnitType: "shuInfantry", Amount: 10}}
+	repo.players[attacker.Player.ID] = attacker
+	repo.players[defender.Player.ID] = defender
+
+	result, err := svc.ScoutPvpTarget(PvpScoutRequest{PlayerID: attacker.Player.ID, TargetPlayerID: defender.Player.ID})
+	if err != nil {
+		t.Fatalf("ScoutPvpTarget failed: %v", err)
+	}
+	if !result.Success || !result.BattleReport.DefenderRevealed {
+		t.Fatalf("expected successful scout with revealed defender, got %+v", result)
+	}
+	if result.BattleReport.DispatchedUnits["weiScout"] != 5 || result.BattleReport.LostUnits["weiScout"] != 2 {
+		t.Fatalf("unexpected scout losses: %+v", result.BattleReport)
+	}
+	if result.BattleReport.DefenderLostUnits["shuScout"] != 2 {
+		t.Fatalf("expected defender scouts lost, got %+v", result.BattleReport.DefenderLostUnits)
+	}
+	updatedAttacker, _ := repo.GetState(attacker.Player.ID)
+	updatedDefender, _ := repo.GetState(defender.Player.ID)
+	if armySliceToMap(updatedAttacker.Army)["weiScout"] != 3 {
+		t.Fatalf("expected 3 scout units remain, got %+v", updatedAttacker.Army)
+	}
+	if armySliceToMap(updatedDefender.Army)["shuScout"] != 0 {
+		t.Fatalf("expected defender scout units removed, got %+v", updatedDefender.Army)
+	}
+	if result.BattleReport.Detail == nil || !result.BattleReport.Detail.Visibility.ShowEnemyResources {
+		t.Fatalf("expected standard scout detail to reveal resources, got %+v", result.BattleReport.Detail)
+	}
+	scoutExtra, ok := result.BattleReport.Detail.Extra["scout"].(map[string]interface{})
+	if !ok || scoutExtra["success"] != true || scoutExtra["scoutUnitType"] != "weiScout" {
+		t.Fatalf("expected scout extra snapshot, got %+v", result.BattleReport.Detail.Extra)
+	}
+}
+
+func TestPvpScoutFailureHidesTargetIntel(t *testing.T) {
+	svc, repo, attacker, defender := newPvpTestService(t)
+	addPvpScoutTestUnits(t)
+	attacker.Army = []ArmyUnit{{UnitType: "weiScout", Amount: 2}}
+	defender.Army = []ArmyUnit{{UnitType: "shuScout", Amount: 5}, {UnitType: "shuInfantry", Amount: 10}}
+	repo.players[attacker.Player.ID] = attacker
+	repo.players[defender.Player.ID] = defender
+
+	result, err := svc.ScoutPvpTarget(PvpScoutRequest{PlayerID: attacker.Player.ID, TargetPlayerID: defender.Player.ID})
+	if err != nil {
+		t.Fatalf("ScoutPvpTarget failed: %v", err)
+	}
+	if result.Success || result.BattleReport.DefenderRevealed {
+		t.Fatalf("expected failed scout, got %+v", result)
+	}
+	if len(result.BattleReport.DefenderUnits) != 0 || len(result.BattleReport.DefenderResources) != 0 {
+		t.Fatalf("failed scout should hide target intel, got units=%+v resources=%+v", result.BattleReport.DefenderUnits, result.BattleReport.DefenderResources)
+	}
+	if result.BattleReport.Detail == nil || result.BattleReport.Detail.Visibility.ShowEnemyResources {
+		t.Fatalf("expected standard detail to hide scout intel, got %+v", result.BattleReport.Detail)
+	}
+	updatedAttacker, _ := repo.GetState(attacker.Player.ID)
+	if armySliceToMap(updatedAttacker.Army)["weiScout"] != 0 {
+		t.Fatalf("expected attacker scouts annihilated, got %+v", updatedAttacker.Army)
+	}
+}
+
+func TestPvpScoutRequiresOwnFactionScoutUnit(t *testing.T) {
+	svc, repo, attacker, defender := newPvpTestService(t)
+	addPvpScoutTestUnits(t)
+	attacker.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 20}, {UnitType: "shuScout", Amount: 10}}
+	defender.Army = []ArmyUnit{{UnitType: "shuScout", Amount: 1}}
+	repo.players[attacker.Player.ID] = attacker
+	repo.players[defender.Player.ID] = defender
+
+	if _, err := svc.ScoutPvpTarget(PvpScoutRequest{PlayerID: attacker.Player.ID, TargetPlayerID: defender.Player.ID}); !errors.Is(err, ErrInsufficientArmy) {
+		t.Fatalf("expected own faction scout requirement, got %v", err)
+	}
+}
+
 func TestPvpMarchResolvesBattleAndReturnsSurvivors(t *testing.T) {
 	svc, repo, attacker, defender := newPvpTestService(t)
 	attacker.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
@@ -229,6 +307,116 @@ func TestPvpMarchResolvesBattleAndReturnsSurvivors(t *testing.T) {
 	}
 	if season.Season.ID == "" || season.Self == nil || season.Self.PlayerID != attacker.Player.ID {
 		t.Fatalf("unexpected season response: %+v", season)
+	}
+}
+
+// TestPvpPlunderReportUsesAttackView 验证 PVP 掠夺仍使用进攻视角标准详情。
+func TestPvpPlunderReportUsesAttackView(t *testing.T) {
+	_, _, attacker, defender := newPvpTestService(t)
+	now := time.Now().UTC().Format(resourceDateLayout)
+	march := &PvpMarch{ID: "march_plunder_report", MarchType: PvpMarchTypePlunder}
+	report := NormalizeBattleReport(buildPvpBattleReport(
+		"br_pvp_plunder",
+		&attacker,
+		&defender,
+		march,
+		"attacker_victory",
+		120,
+		80,
+		map[string]int{"weiInfantry": 40},
+		map[string]int{"weiInfantry": 4},
+		map[string]int{"shuInfantry": 20},
+		map[string]int{"shuInfantry": 10},
+		map[string]int{"wood": 120},
+		now,
+		PvpMarchTypePlunder,
+	))
+	if report.ViewType != ReportViewAttack || report.BattleType != PvpMarchTypePlunder {
+		t.Fatalf("expected plunder report to use attack view and plunder battle type, got view=%s battle=%s", report.ViewType, report.BattleType)
+	}
+	if report.Detail == nil || report.Detail.PrimarySide.Role != "attacker" || report.Detail.SecondarySide == nil || report.Detail.SecondarySide.Role != "defender" {
+		t.Fatalf("expected attack-style detail for plunder report, got %+v", report.Detail)
+	}
+	if report.Detail.Rewards.Resources["wood"] != 120 {
+		t.Fatalf("expected plundered resources in rewards snapshot, got %+v", report.Detail.Rewards)
+	}
+}
+
+func TestPvpBattleCreatesReinforcementOwnerReport(t *testing.T) {
+	svc, repo, attacker, defender := newPvpTestService(t)
+	now := time.Now()
+	helperAccount := Account{ID: "account_pvp_helper", Username: "pvp_helper", PasswordHash: "hash", CreatedAt: now}
+	if err := repo.CreateAccount(helperAccount); err != nil {
+		t.Fatalf("CreateAccount helper failed: %v", err)
+	}
+	helper := newPlayerState("player_pvp_helper", "援军方", "wu", "sunquan", now)
+	if err := repo.CreatePlayer(helperAccount.ID, helper, now); err != nil {
+		t.Fatalf("CreatePlayer helper failed: %v", err)
+	}
+	attacker.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 400}}
+	defender.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 1}}
+	repo.players[attacker.Player.ID] = attacker
+	repo.players[defender.Player.ID] = defender
+	reinforcement := Reinforcement{
+		ID:                "reinforcement_pvp_report",
+		FromPlayerID:      helper.Player.ID,
+		FromPlayerName:    helper.Player.Nickname,
+		FromPlayerFaction: helper.Player.Faction,
+		ToPlayerID:        defender.Player.ID,
+		ToPlayerName:      defender.Player.Nickname,
+		ToPlayerFaction:   defender.Player.Faction,
+		OwnerPlayerID:     helper.Player.ID,
+		HostPlayerID:      defender.Player.ID,
+		SourceType:        GarrisonSourceReinforcement,
+		SourceID:          "reinforcement_pvp_report",
+		TargetType:        ReinforcementTargetPlayerCity,
+		TargetID:          defender.Player.ID,
+		Status:            ReinforcementStatusStationed,
+		Troops:            map[string]int{"weiInfantry": 20},
+		RemainingTroops:   map[string]int{"weiInfantry": 20},
+		Losses:            map[string]int{},
+		Rules:             defaultGarrisonRules(GarrisonSourceReinforcement),
+		SentAt:            now.Add(-4 * time.Hour).UTC().Format(resourceDateLayout),
+		ArrivedAt:         now.Add(-3 * time.Hour).UTC().Format(resourceDateLayout),
+		CreatedAt:         now.Add(-4 * time.Hour).UTC().Format(resourceDateLayout),
+		UpdatedAt:         now.Add(-3 * time.Hour).UTC().Format(resourceDateLayout),
+	}
+	repo.reinforcements[reinforcement.ID] = reinforcement
+
+	started, err := svc.StartPvpAttack(PvpAttackRequest{
+		PlayerID:       attacker.Player.ID,
+		TargetPlayerID: defender.Player.ID,
+		MarchMode:      PvpMarchTypeAttack,
+		Troops:         map[string]int{"weiInfantry": 300},
+	})
+	if err != nil {
+		t.Fatalf("StartPvpAttack failed: %v", err)
+	}
+	forcePvpMarchDue(t, repo, started.March.ID)
+	battle, err := svc.ResolvePvpMarch(started.March.ID)
+	if err != nil {
+		t.Fatalf("ResolvePvpMarch failed: %v", err)
+	}
+	helperReports, total, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: helper.Player.ID, ViewType: ReportViewReinforcement, Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListReportsByQuery helper failed: %v", err)
+	}
+	if total != 1 || len(helperReports) != 1 {
+		t.Fatalf("expected one helper reinforcement report, total=%d reports=%+v battle=%+v", total, helperReports, battle)
+	}
+	if helperReports[0].EventID != battle.ID || helperReports[0].Detail == nil || helperReports[0].Detail.SecondarySide != nil {
+		t.Fatalf("unexpected helper report detail: %+v", helperReports[0])
+	}
+	updated := repo.reinforcements[reinforcement.ID]
+	if updated.LastBattleReportID != helperReports[0].ID {
+		t.Fatalf("expected reinforcement last report %s, got %+v", helperReports[0].ID, updated)
+	}
+	eventReports, err := svc.ListReportsByEventForAdmin(battle.ID)
+	if err != nil {
+		t.Fatalf("ListReportsByEventForAdmin failed: %v", err)
+	}
+	if len(eventReports) != 3 {
+		t.Fatalf("expected attacker, defender and reinforcement reports for event, got %+v", eventReports)
 	}
 }
 
@@ -809,6 +997,38 @@ func newPvpTestService(t *testing.T) (*Service, *MemoryRepository, GameState, Ga
 		t.Fatalf("CreatePlayer defender failed: %v", err)
 	}
 	return NewServiceWithRepository(repo), repo, attacker, defender
+}
+
+func addPvpScoutTestUnits(t *testing.T) {
+	t.Helper()
+	unitsMu.Lock()
+	defer unitsMu.Unlock()
+	if activeUnits == nil {
+		activeUnits = UnitsConfig{}
+	}
+	if activeUnits["wei"] == nil {
+		activeUnits["wei"] = FactionUnits{}
+	}
+	activeUnits["wei"]["weiScout"] = UnitConfig{
+		Name:     "魏侦察兵",
+		Category: "cavalry",
+		Role:     "scout",
+		Stats:    map[string]int{"attack": 1, "infantryDefense": 1, "cavalryDefense": 1, "speed": 30, "carryCapacity": 1, "upkeep": 1},
+	}
+	if activeUnits["shu"] == nil {
+		activeUnits["shu"] = FactionUnits{}
+	}
+	activeUnits["shu"]["shuScout"] = UnitConfig{
+		Name:     "蜀侦察兵",
+		Category: "infantry",
+		Role:     "scout",
+		Stats:    map[string]int{"attack": 1, "infantryDefense": 1, "cavalryDefense": 1, "speed": 30, "carryCapacity": 1, "upkeep": 1},
+	}
+	activeUnits["shu"]["shuInfantry"] = UnitConfig{
+		Name:     "蜀步兵",
+		Category: "infantry",
+		Stats:    map[string]int{"attack": 10, "infantryDefense": 10, "cavalryDefense": 8, "carryCapacity": 5, "upkeep": 1},
+	}
 }
 
 func loadPvpProtectionTestItemsConfig(t *testing.T) {

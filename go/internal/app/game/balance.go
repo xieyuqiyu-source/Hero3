@@ -258,6 +258,13 @@ var defaultBalance = BalanceConfig{
 			UpgradeCostByLevel:    militaryUpgradeCostTable(120, 260, 180, 100, 20),
 			UpgradeSecondsByLevel: militaryUpgradeSecondsTable(90, 20),
 		},
+		"beacon_tower": {
+			Type:                  "beacon_tower",
+			Name:                  "烽火台",
+			ModifiersByLevel:      militaryModifierTable([]string{StatEnemyLossRevealThreshold}, 0.01, "flat", 20),
+			UpgradeCostByLevel:    militaryUpgradeCostTable(140, 220, 180, 120, 20),
+			UpgradeSecondsByLevel: militaryUpgradeSecondsTable(85, 20),
+		},
 	},
 }
 

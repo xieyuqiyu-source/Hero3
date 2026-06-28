@@ -155,12 +155,9 @@ func (h *Handlers) PurchaseBoost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) BoostPrices(w http.ResponseWriter, r *http.Request) {
-	multipliers := []int{2, 4, 8, 16}
-	hours := []int{1, 6, 12, 24}
-
 	prices := map[string]int{}
-	for _, m := range multipliers {
-		for _, h := range hours {
+	for _, m := range game.GetBoostMultipliers() {
+		for _, h := range game.GetBoostHours() {
 			key := fmt.Sprintf("%dx_%dh", m, h)
 			prices[key] = game.GetBoostCost(m, h)
 		}

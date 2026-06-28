@@ -1133,6 +1133,249 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportActionResult'
+  /api/v1/reports:
+    get:
+      tags:
+      - News
+      summary: 分页获取标准战报
+      parameters:
+      - name: playerId
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: viewType
+        in: query
+        schema:
+          type: string
+          enum:
+          - attack
+          - defense
+          - reinforcement
+          - scout
+          - system
+      - name: sourceType
+        in: query
+        schema:
+          type: string
+      - name: battleType
+        in: query
+        schema:
+          type: string
+      - name: result
+        in: query
+        schema:
+          type: string
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+      responses:
+        '200':
+          description: 战报分页结果。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BattleReportPage'
+  /api/v1/reports/{reportId}:
+    get:
+      tags:
+      - News
+      summary: 获取单条标准战报
+      parameters:
+      - name: reportId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: playerId
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 战报详情。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BattleReport'
+  /api/v1/reports/{reportId}/read:
+    post:
+      tags:
+      - News
+      summary: 标记单条战报已读
+      parameters:
+      - name: reportId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+      responses:
+        '200':
+          description: 战报操作后的局部状态。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportActionResult'
+  /api/v1/reports/read-all:
+    post:
+      tags:
+      - News
+      summary: 按视角或全部标记战报已读
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+                viewType:
+                  type: string
+                  enum:
+                  - attack
+                  - defense
+                  - reinforcement
+                  - scout
+                  - system
+      responses:
+        '200':
+          description: 战报操作后的局部状态。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportActionResult'
+  /api/v1/reports/{reportId}/delete:
+    post:
+      tags:
+      - News
+      summary: 删除单条玩家战报
+      parameters:
+      - name: reportId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+      responses:
+        '200':
+          description: 战报操作后的局部状态。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportActionResult'
+  /api/v1/reports/delete-all:
+    post:
+      tags:
+      - News
+      summary: 按视角或全部删除玩家战报
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+                viewType:
+                  type: string
+                  enum:
+                  - attack
+                  - defense
+                  - reinforcement
+                  - scout
+                  - system
+      responses:
+        '200':
+          description: 战报操作后的局部状态。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportActionResult'
+  /api/v1/reports/{reportId}/share:
+    post:
+      tags:
+      - News
+      summary: 创建战报分享 token
+      parameters:
+      - name: reportId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              properties:
+                playerId:
+                  type: string
+      responses:
+        '200':
+          description: 分享链接记录。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BattleReportShareLink'
+  /api/v1/reports/shared/{token}:
+    get:
+      tags:
+      - News
+      summary: 通过分享 token 获取战报
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 公开战报详情。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BattleReport'
   /api/v1/gold/exchange:
     post:
       tags:
@@ -2025,6 +2268,192 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MailPage'
+  /api/v1/admin/reports:
+    get:
+      tags:
+      - Admin
+      summary: GM 查询战报
+      parameters:
+      - name: playerId
+        in: query
+        schema:
+          type: string
+      - name: reportId
+        in: query
+        schema:
+          type: string
+      - name: viewType
+        in: query
+        schema:
+          type: string
+      - name: sourceType
+        in: query
+        schema:
+          type: string
+      - name: battleType
+        in: query
+        schema:
+          type: string
+      - name: result
+        in: query
+        schema:
+          type: string
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 20
+      responses:
+        '200':
+          description: 单条战报或分页战报。
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/BattleReport'
+                - $ref: '#/components/schemas/BattleReportPage'
+  /api/v1/admin/reports/{reportId}:
+    get:
+      tags:
+      - Admin
+      summary: GM 查询单条战报
+      parameters:
+      - name: reportId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 单条战报。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BattleReport'
+  /api/v1/admin/battle-events:
+    get:
+      tags:
+      - Admin
+      summary: GM 查询战斗事件
+      parameters:
+      - name: playerId
+        in: query
+        schema:
+          type: string
+      - name: eventId
+        in: query
+        schema:
+          type: string
+      - name: sourceType
+        in: query
+        schema:
+          type: string
+      - name: sourceId
+        in: query
+        schema:
+          type: string
+      - name: battleType
+        in: query
+        schema:
+          type: string
+      - name: result
+        in: query
+        schema:
+          type: string
+      - name: relatedMarchId
+        in: query
+        schema:
+          type: string
+      - name: relatedReinforcementId
+        in: query
+        schema:
+          type: string
+      - name: page
+        in: query
+        schema:
+          type: integer
+          default: 1
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          default: 20
+      responses:
+        '200':
+          description: 战斗事件分页。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BattleEventPage'
+  /api/v1/admin/battle-events/{eventId}:
+    get:
+      tags:
+      - Admin
+      summary: GM 查询单个战斗事件
+      parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 战斗事件详情。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BattleEvent'
+  /api/v1/admin/battle-events/{eventId}/reports:
+    get:
+      tags:
+      - Admin
+      summary: GM 查询同一事件下全部视角战报
+      parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 同一战斗事件下的战报列表。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reports:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BattleReport'
+  /api/v1/admin/battle-events/{eventId}/participants:
+    get:
+      tags:
+      - Admin
+      summary: GM 查询同一事件下全部参与方快照
+      parameters:
+      - name: eventId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 同一战斗事件下的参与方快照列表。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  participants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BattleReportParticipant'
   /api/v1/admin/accounts:
     get:
       tags:
@@ -3070,25 +3499,54 @@ components:
             type: integer
     BattleReport:
       type: object
+      description: 标准战报，兼容旧字段并优先提供 detail 标准详情结构。
       properties:
         id:
           type: string
-        targetId:
+        eventId:
+          type: string
+        playerId:
+          type: string
+        ownerPlayerId:
+          type: string
+        viewType:
+          type: string
+          enum:
+          - attack
+          - defense
+          - reinforcement
+          - scout
+          - system
+        sourceType:
+          type: string
+          enum:
+          - npc_city
+          - player_city
+          - stronghold
+          - dungeon
+          - resource_point
+          - alliance
+          - event_target
+          - world_boss
+          - system
+        battleType:
+          type: string
+        title:
+          type: string
+        summary:
           type: string
         result:
           type: string
-        playerPower:
-          type: integer
-        enemyPower:
-          type: integer
-        lostUnits:
-          type: object
-          additionalProperties:
-            type: integer
-        rewards:
-          type: object
-          additionalProperties:
-            type: integer
+        targetId:
+          type: string
+        targetName:
+          type: string
+        detail:
+          $ref: '#/components/schemas/BattleReportDetail'
+        share:
+          $ref: '#/components/schemas/BattleReportShareLink'
+        read:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -3112,8 +3570,336 @@ components:
           example: 10
         total:
           type: integer
-          description: 符合条件的战报总数。
           example: 23
+    BattleEvent:
+      type: object
+      description: 一次真实发生的战斗或侦查事件，可关联多份玩家视角战报。
+      properties:
+        id:
+          type: string
+        sourceType:
+          type: string
+        sourceId:
+          type: string
+        scene:
+          type: string
+        battleType:
+          type: string
+        result:
+          type: string
+        attackerPlayerId:
+          type: string
+        defenderPlayerId:
+          type: string
+        attackerName:
+          type: string
+        defenderName:
+          type: string
+        attackerFaction:
+          type: string
+        defenderFaction:
+          type: string
+        relatedMarchId:
+          type: string
+        relatedReinforcementId:
+          type: string
+        summary:
+          type: object
+          additionalProperties: true
+        snapshot:
+          type: object
+          additionalProperties: true
+        resultData:
+          type: object
+          additionalProperties: true
+        occurredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    BattleEventPage:
+      type: object
+      required:
+      - items
+      - page
+      - pageSize
+      - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BattleEvent'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    BattleReportDetail:
+      type: object
+      required:
+      - id
+      - viewType
+      - sourceType
+      - battleType
+      - result
+      - title
+      - occurredAt
+      - primarySide
+      - rewards
+      - visibility
+      - read
+      properties:
+        id:
+          type: string
+        eventId:
+          type: string
+        ownerPlayerId:
+          type: string
+        viewType:
+          type: string
+        viewLabel:
+          type: string
+        sourceType:
+          type: string
+        sourceLabel:
+          type: string
+        battleType:
+          type: string
+        result:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        primarySide:
+          $ref: '#/components/schemas/BattleReportSide'
+        secondarySide:
+          nullable: true
+          allOf:
+          - $ref: '#/components/schemas/BattleReportSide'
+        rewards:
+          $ref: '#/components/schemas/BattleReportRewards'
+        traits:
+          type: array
+          items:
+            $ref: '#/components/schemas/BattleReportTrait'
+        visibility:
+          $ref: '#/components/schemas/BattleReportVisibility'
+        extra:
+          type: object
+          additionalProperties: true
+        read:
+          type: boolean
+        share:
+          $ref: '#/components/schemas/BattleReportShareLink'
+    BattleReportSide:
+      type: object
+      properties:
+        role:
+          type: string
+        playerId:
+          type: string
+        playerName:
+          type: string
+        cityName:
+          type: string
+        faction:
+          type: string
+        factionLabel:
+          type: string
+        targetType:
+          type: string
+        targetId:
+          type: string
+        targetName:
+          type: string
+        power:
+          type: integer
+        generals:
+          type: array
+          items:
+            $ref: '#/components/schemas/BattleReportGeneral'
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/BattleReportUnit'
+        resources:
+          type: object
+          additionalProperties:
+            type: integer
+    BattleReportUnit:
+      type: object
+      properties:
+        unitType:
+          type: string
+        unitName:
+          type: string
+        faction:
+          type: string
+        amountBefore:
+          type: integer
+        dispatched:
+          type: integer
+        lost:
+          type: integer
+        survived:
+          type: integer
+    BattleReportGeneral:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        level:
+          type: integer
+        role:
+          type: string
+        power:
+          type: integer
+    BattleReportTrait:
+      type: object
+      properties:
+        traitId:
+          type: string
+        traitName:
+          type: string
+        ownerSide:
+          type: string
+        ownerRole:
+          type: string
+        generalId:
+          type: string
+        generalName:
+          type: string
+        summary:
+          type: string
+        detail:
+          type: object
+          additionalProperties: true
+    BattleReportRewards:
+      type: object
+      properties:
+        resources:
+          type: object
+          additionalProperties:
+            type: integer
+        drops:
+          type: array
+          items:
+            $ref: '#/components/schemas/BattleReportDrop'
+        cityGold:
+          type: integer
+        generalExp:
+          type: integer
+        generalLevelBefore:
+          type: integer
+        generalLevelAfter:
+          type: integer
+        overflow:
+          type: object
+          additionalProperties:
+            type: integer
+    BattleReportDrop:
+      type: object
+      properties:
+        type:
+          type: string
+        itemId:
+          type: string
+        name:
+          type: string
+        amount:
+          type: integer
+        quality:
+          type: string
+    BattleReportVisibility:
+      type: object
+      properties:
+        showEnemyRemainingUnits:
+          type: boolean
+        showEnemyResources:
+          type: boolean
+        showEnemyGenerals:
+          type: boolean
+        showEnemyCityDefense:
+          type: boolean
+        reason:
+          type: string
+        threshold:
+          type: number
+        actualLossRatio:
+          type: number
+    BattleReportShareLink:
+      type: object
+      properties:
+        id:
+          type: string
+        reportId:
+          type: string
+        token:
+          type: string
+        visibility:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    BattleReportParticipant:
+      type: object
+      description: GM 排查用的战斗事件参与方快照。
+      properties:
+        id:
+          type: string
+        eventId:
+          type: string
+        reportId:
+          type: string
+        playerId:
+          type: string
+        role:
+          type: string
+        faction:
+          type: string
+        nickname:
+          type: string
+        cityName:
+          type: string
+        troopsBefore:
+          type: object
+          additionalProperties:
+            type: integer
+        troopsLost:
+          type: object
+          additionalProperties:
+            type: integer
+        troopsSurvived:
+          type: object
+          additionalProperties:
+            type: integer
+        generals:
+          type: array
+          items:
+            $ref: '#/components/schemas/BattleReportGeneral'
+        rewards:
+          $ref: '#/components/schemas/BattleReportRewards'
+        pointsDelta:
+          type: object
+          additionalProperties:
+            type: integer
+        extra:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
     Mail:
       type: object
       required:

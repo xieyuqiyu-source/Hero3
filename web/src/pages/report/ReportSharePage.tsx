@@ -21,7 +21,7 @@ const ReportSharePage: FC = () => {
   useEffect(() => {
     if (!reportId) return
     setLoading(true)
-    gameApi.getReport(reportId)
+    gameApi.getSharedReport(reportId)
       .then(setReport)
       .catch(() => setError('战报不存在或已过期'))
       .finally(() => setLoading(false))

@@ -4,28 +4,28 @@ import { useGameStore } from '@/store/gameStore'
 import { gameApi } from '@/api/game'
 import type { BattleReport } from '@/types/game'
 import BattleReportDetail from './components/BattleReportDetail'
-
-const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
-  attack:    { label: '攻击', color: 'text-red-600 bg-red-500/10' },
-  plunder:   { label: '掠夺', color: 'text-amber-600 bg-amber-500/10' },
-  scout:     { label: '侦查', color: 'text-blue-600 bg-blue-500/10' },
-  reinforce: { label: '增援', color: 'text-green-600 bg-green-500/10' },
-}
+import { REPORT_SOURCE_CONFIG, REPORT_VIEW_CONFIG, REPORT_VIEW_TABS, reportTotalPages, shouldShowEmptyReports } from './reportPresentation'
 
 const EMPTY_REPORTS: BattleReport[] = []
 const PAGE_SIZE = 10
+
+// safeReportMap 兼容旧战报或异常空字段，避免列表渲染时读取 null。
+function safeReportMap(value?: Record<string, number> | null): Record<string, number> {
+  return value ?? {}
+}
 
 const NewsPage: FC = () => {
   const [selectedReport, setSelectedReport] = useState<BattleReport | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [reports, setReports] = useState<BattleReport[]>(EMPTY_REPORTS)
   const [totalReports, setTotalReports] = useState(0)
+  const [activeView, setActiveView] = useState('attack')
   const [loading, setLoading] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const patchState = useGameStore((s) => s.patchState)
 
-  const totalPages = Math.max(1, Math.ceil(totalReports / PAGE_SIZE))
+  const totalPages = reportTotalPages(totalReports, PAGE_SIZE)
 
   const loadReports = useCallback(async (page: number) => {
     if (!activePlayerId) {
@@ -36,10 +36,12 @@ const NewsPage: FC = () => {
     }
     setLoading(true)
     try {
-      const result = await gameApi.listReports(activePlayerId, page, PAGE_SIZE)
-      setReports(result.reports)
-      setTotalReports(result.total)
-      const nextTotalPages = Math.max(1, Math.ceil(result.total / PAGE_SIZE))
+      const result = await gameApi.listReports(activePlayerId, page, PAGE_SIZE, { viewType: activeView })
+      const nextReports = Array.isArray(result.reports) ? result.reports : EMPTY_REPORTS
+      const nextTotal = typeof result.total === 'number' ? result.total : nextReports.length
+      setReports(nextReports)
+      setTotalReports(nextTotal)
+      const nextTotalPages = reportTotalPages(nextTotal, PAGE_SIZE)
       if (page > nextTotalPages) {
         setCurrentPage(nextTotalPages)
       }
@@ -50,11 +52,18 @@ const NewsPage: FC = () => {
       setLoading(false)
       setHasLoaded(true)
     }
-  }, [activePlayerId])
+  }, [activePlayerId, activeView])
 
   useEffect(() => {
     loadReports(currentPage)
   }, [currentPage, loadReports])
+
+  // 切换 Tab 时回到第一页，避免上一 Tab 的页码越界。
+  const handleChangeView = (viewType: string) => {
+    setActiveView(viewType)
+    setSelectedReport(null)
+    setCurrentPage(1)
+  }
 
   // 点击单条战报时标记为已读
   const handleSelectReport = (report: BattleReport) => {
@@ -83,14 +92,6 @@ const NewsPage: FC = () => {
     )
   }
 
-  if (totalReports === 0) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <span className="text-sm text-[var(--color-text-muted)]">暂无军情</span>
-      </div>
-    )
-  }
-
   const handleDeleteReport = (e: React.MouseEvent, reportId: string) => {
     e.stopPropagation()
     if (!activePlayerId) return
@@ -102,7 +103,7 @@ const NewsPage: FC = () => {
 
   const handleDeleteAll = () => {
     if (!activePlayerId) return
-    gameApi.deleteAllReports(activePlayerId).then((res) => {
+    gameApi.deleteAllReports(activePlayerId, activeView).then((res) => {
       patchState({ unreadMessageCount: res.unreadMessageCount, serverTime: res.serverTime })
       setCurrentPage(1)
       loadReports(1)
@@ -111,6 +112,23 @@ const NewsPage: FC = () => {
 
   return (
     <div className="space-y-2">
+      <div className="grid grid-cols-3 gap-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-1">
+        {REPORT_VIEW_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => handleChangeView(tab.key)}
+            className={`h-8 rounded-lg text-xs font-semibold transition-colors ${
+              activeView === tab.key
+                ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* 一键删除 */}
       <div className="flex justify-end">
         <button
@@ -134,11 +152,24 @@ const NewsPage: FC = () => {
           </div>
         )}
 
+        {shouldShowEmptyReports(totalReports, loading) && (
+          <div className="flex items-center justify-center py-16">
+            <span className="text-sm text-[var(--color-text-muted)]">暂无军情</span>
+          </div>
+        )}
+
         {reports.map((report) => {
-          const typeConfig = TYPE_CONFIG[report.type] ?? TYPE_CONFIG.attack
+          const viewType = report.viewType || (report.type === 'reinforce' ? 'reinforcement' : 'attack')
+          const sourceType = report.sourceType || 'npc_city'
+          const viewConfig = REPORT_VIEW_CONFIG[viewType] ?? REPORT_VIEW_CONFIG.attack
+          const sourceConfig = REPORT_SOURCE_CONFIG[sourceType] ?? REPORT_SOURCE_CONFIG.npc_city
           const isVictory = report.result === 'attacker_victory'
-          const hasRewards = Object.values(report.rewards).some(v => v > 0)
-          const hasLosses = Object.values(report.lostUnits).some(v => v > 0)
+          const rewards = safeReportMap(report.rewards)
+          const lostUnits = safeReportMap(report.lostUnits)
+          const hasRewards = Object.values(rewards).some(v => v > 0)
+          const hasLosses = Object.values(lostUnits).some(v => v > 0)
+          const title = report.title || report.detail?.title || report.targetName
+          const summary = report.summary || report.detail?.summary
 
           return (
             <button
@@ -154,27 +185,27 @@ const NewsPage: FC = () => {
               `}
             >
               <div className="flex items-center gap-2">
-                {/* 类型标签 */}
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${typeConfig.color}`}>
-                  {typeConfig.label}
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${sourceConfig.color}`}>
+                  {sourceConfig.label}
+                </span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${viewConfig.color}`}>
+                  {viewConfig.label}
                 </span>
                 {/* 胜负 */}
                 <span className={`text-xs font-bold ${isVictory ? 'text-green-600' : 'text-red-600'}`}>
                   {isVictory ? '胜' : report.result === 'draw' ? '平' : '败'}
                 </span>
                 {/* 目标 */}
-                <span className="text-xs text-[var(--color-text-primary)] truncate flex-1">
-                  {report.targetName}
-                </span>
+                <span className="text-xs text-[var(--color-text-primary)] truncate flex-1">{title}</span>
                 {/* 资源/损失摘要 */}
                 {hasRewards && (
                   <span className="text-[10px] text-green-600 flex-shrink-0">
-                    +{Object.values(report.rewards).reduce((s, v) => s + v, 0).toLocaleString()}
+                    +{Object.values(rewards).reduce((s, v) => s + v, 0).toLocaleString()}
                   </span>
                 )}
                 {hasLosses && (
                   <span className="text-[10px] text-red-500 flex-shrink-0">
-                    -{Object.values(report.lostUnits).reduce((s, v) => s + v, 0)}兵
+                    -{Object.values(lostUnits).reduce((s, v) => s + v, 0)}兵
                   </span>
                 )}
                 {/* 时间 */}
@@ -196,6 +227,9 @@ const NewsPage: FC = () => {
                   <Trash2 size={12} />
                 </span>
               </div>
+              {summary && (
+                <div className="mt-1 truncate pl-0.5 text-[10px] text-[var(--color-text-muted)]">{summary}</div>
+              )}
             </button>
           )
         })}

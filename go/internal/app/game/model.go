@@ -149,43 +149,54 @@ type MapTarget struct {
 }
 
 type BattleReport struct {
-	ID                     string                        `json:"id"`
-	PlayerID               string                        `json:"playerId"`
-	PlayerFaction          string                        `json:"playerFaction"`
-	PlayerName             string                        `json:"playerName,omitempty"`
-	TargetID               string                        `json:"targetId"`
-	TargetName             string                        `json:"targetName"`
-	Type                   string                        `json:"type"` // "attack", "plunder", "scout", "reinforce"
-	Result                 string                        `json:"result"`
-	PlayerPower            int                           `json:"playerPower"`
-	EnemyPower             int                           `json:"enemyPower"`
-	DispatchedUnits        map[string]int                `json:"dispatchedUnits"`
-	LostUnits              map[string]int                `json:"lostUnits"`
-	DefenderFaction        string                        `json:"defenderFaction"`
-	DefenderUnits          map[string]int                `json:"defenderUnits"`
-	DefenderLostUnits      map[string]int                `json:"defenderLostUnits"`
-	DefenderRevealed       bool                          `json:"defenderRevealed"`
-	DefenderResources      map[string]int                `json:"defenderResources"`
-	Rewards                map[string]int                `json:"rewards"`
-	GrantedRewards         []Reward                      `json:"grantedRewards,omitempty"`
-	Overflow               map[string]int                `json:"overflow,omitempty"`               // 各资源溢出量
-	OverflowCityGold       int                           `json:"overflowCityGold"`                 // 溢出转换获得的城金
-	GeneralExpGained       int                           `json:"generalExpGained,omitempty"`       // 本次战斗获得将领经验
-	GeneralLevelBefore     int                           `json:"generalLevelBefore,omitempty"`     // 战斗前将领等级
-	GeneralLevelAfter      int                           `json:"generalLevelAfter,omitempty"`      // 战斗后将领等级
-	CapturedUnits          map[string]int                `json:"capturedUnits,omitempty"`          // 美人计俘虏到军队
-	CapturedToGarrison     map[string]int                `json:"capturedToGarrison,omitempty"`     // 美人计俘虏到驻防
-	RevivedUnits           map[string]int                `json:"revivedUnits,omitempty"`           // 仁德复活
-	TraitTriggered         []string                      `json:"traitTriggered,omitempty"`         // 触发了哪些特性（前端展示）
-	TraitOutcomes          map[string]TraitOutcomeReport `json:"traitOutcomes,omitempty"`          // 每个触发特性的具体结果
-	PvpPointsDelta         map[string]int                `json:"pvpPointsDelta,omitempty"`         // PVP 积分变化
-	PvpAttackerGenerals    []PvpGeneralSnapshot          `json:"pvpAttackerGenerals,omitempty"`    // PVP 攻击方参战武将
-	PvpDefenderGenerals    []PvpGeneralSnapshot          `json:"pvpDefenderGenerals,omitempty"`    // PVP 防守方参战武将
-	PvpReinforcements      []DefenseReinforcementUnit    `json:"pvpReinforcements,omitempty"`      // PVP 参战驻防/援军摘要
-	PvpReinforcementLosses map[string]map[string]int     `json:"pvpReinforcementLosses,omitempty"` // PVP 援军损耗
-	Read                   bool                          `json:"read"`
-	DeletedByPlayer        bool                          `json:"deletedByPlayer,omitempty"`
-	CreatedAt              string                        `json:"createdAt"`
+	ID                       string                        `json:"id"`
+	EventID                  string                        `json:"eventId,omitempty"`
+	PlayerID                 string                        `json:"playerId"`
+	OwnerPlayerID            string                        `json:"ownerPlayerId,omitempty"`
+	ViewType                 string                        `json:"viewType,omitempty"`
+	SourceType               string                        `json:"sourceType,omitempty"`
+	BattleType               string                        `json:"battleType,omitempty"`
+	Title                    string                        `json:"title,omitempty"`
+	Summary                  string                        `json:"summary,omitempty"`
+	Detail                   *BattleReportDetail           `json:"detail,omitempty"`
+	Share                    *BattleReportShare            `json:"share,omitempty"`
+	PlayerFaction            string                        `json:"playerFaction"`
+	PlayerName               string                        `json:"playerName,omitempty"`
+	TargetID                 string                        `json:"targetId"`
+	TargetName               string                        `json:"targetName"`
+	Type                     string                        `json:"type"` // "attack", "plunder", "scout", "reinforce"
+	Result                   string                        `json:"result"`
+	PlayerPower              int                           `json:"playerPower"`
+	EnemyPower               int                           `json:"enemyPower"`
+	DispatchedUnits          map[string]int                `json:"dispatchedUnits"`
+	LostUnits                map[string]int                `json:"lostUnits"`
+	DefenderFaction          string                        `json:"defenderFaction"`
+	DefenderUnits            map[string]int                `json:"defenderUnits"`
+	DefenderLostUnits        map[string]int                `json:"defenderLostUnits"`
+	DefenderRevealed         bool                          `json:"defenderRevealed"`
+	DefenderResources        map[string]int                `json:"defenderResources"`
+	EnemyLossRevealThreshold float64                       `json:"enemyLossRevealThreshold,omitempty"`
+	EnemyLossRatio           float64                       `json:"enemyLossRatio,omitempty"`
+	Rewards                  map[string]int                `json:"rewards"`
+	GrantedRewards           []Reward                      `json:"grantedRewards,omitempty"`
+	Overflow                 map[string]int                `json:"overflow,omitempty"`               // 各资源溢出量
+	OverflowCityGold         int                           `json:"overflowCityGold"`                 // 溢出转换获得的城金
+	GeneralExpGained         int                           `json:"generalExpGained,omitempty"`       // 本次战斗获得将领经验
+	GeneralLevelBefore       int                           `json:"generalLevelBefore,omitempty"`     // 战斗前将领等级
+	GeneralLevelAfter        int                           `json:"generalLevelAfter,omitempty"`      // 战斗后将领等级
+	CapturedUnits            map[string]int                `json:"capturedUnits,omitempty"`          // 美人计俘虏到军队
+	CapturedToGarrison       map[string]int                `json:"capturedToGarrison,omitempty"`     // 美人计俘虏到驻防
+	RevivedUnits             map[string]int                `json:"revivedUnits,omitempty"`           // 仁德复活
+	TraitTriggered           []string                      `json:"traitTriggered,omitempty"`         // 触发了哪些特性（前端展示）
+	TraitOutcomes            map[string]TraitOutcomeReport `json:"traitOutcomes,omitempty"`          // 每个触发特性的具体结果
+	PvpPointsDelta           map[string]int                `json:"pvpPointsDelta,omitempty"`         // PVP 积分变化
+	PvpAttackerGenerals      []PvpGeneralSnapshot          `json:"pvpAttackerGenerals,omitempty"`    // PVP 攻击方参战武将
+	PvpDefenderGenerals      []PvpGeneralSnapshot          `json:"pvpDefenderGenerals,omitempty"`    // PVP 防守方参战武将
+	PvpReinforcements        []DefenseReinforcementUnit    `json:"pvpReinforcements,omitempty"`      // PVP 参战驻防/援军摘要
+	PvpReinforcementLosses   map[string]map[string]int     `json:"pvpReinforcementLosses,omitempty"` // PVP 援军损耗
+	Read                     bool                          `json:"read"`
+	DeletedByPlayer          bool                          `json:"deletedByPlayer,omitempty"`
+	CreatedAt                string                        `json:"createdAt"`
 }
 
 type BattleReportPage struct {
@@ -193,6 +204,234 @@ type BattleReportPage struct {
 	Page     int            `json:"page"`
 	PageSize int            `json:"pageSize"`
 	Total    int            `json:"total"`
+}
+
+// BattleReportCreateInput 是玩法模块接入统一战报服务的标准输入。
+type BattleReportCreateInput struct {
+	EventID                string                 `json:"eventId,omitempty"`
+	SourceType             string                 `json:"sourceType"`
+	SourceID               string                 `json:"sourceId,omitempty"`
+	BattleType             string                 `json:"battleType"`
+	Result                 string                 `json:"result"`
+	RelatedMarchID         string                 `json:"relatedMarchId,omitempty"`
+	RelatedReinforcementID string                 `json:"relatedReinforcementId,omitempty"`
+	OccurredAt             string                 `json:"occurredAt,omitempty"`
+	Reports                []BattleReport         `json:"reports"`
+	Extra                  map[string]interface{} `json:"extra,omitempty"`
+}
+
+// BattleReportCreateResult 是统一战报服务创建事件和多视角战报后的结果。
+type BattleReportCreateResult struct {
+	Event   BattleEvent    `json:"event"`
+	Reports []BattleReport `json:"reports"`
+}
+
+// BattleEvent 记录一次真实发生的战斗或侦查事件，供多份玩家视角战报归档。
+type BattleEvent struct {
+	ID                     string                 `json:"id"`
+	SourceType             string                 `json:"sourceType"`
+	SourceID               string                 `json:"sourceId,omitempty"`
+	Scene                  string                 `json:"scene,omitempty"`
+	BattleType             string                 `json:"battleType"`
+	Result                 string                 `json:"result"`
+	AttackerPlayerID       string                 `json:"attackerPlayerId,omitempty"`
+	DefenderPlayerID       string                 `json:"defenderPlayerId,omitempty"`
+	AttackerName           string                 `json:"attackerName,omitempty"`
+	DefenderName           string                 `json:"defenderName,omitempty"`
+	AttackerFaction        string                 `json:"attackerFaction,omitempty"`
+	DefenderFaction        string                 `json:"defenderFaction,omitempty"`
+	RelatedMarchID         string                 `json:"relatedMarchId,omitempty"`
+	RelatedReinforcementID string                 `json:"relatedReinforcementId,omitempty"`
+	Summary                map[string]interface{} `json:"summary,omitempty"`
+	Snapshot               map[string]interface{} `json:"snapshot,omitempty"`
+	ResultData             map[string]interface{} `json:"resultData,omitempty"`
+	OccurredAt             string                 `json:"occurredAt"`
+	CreatedAt              string                 `json:"createdAt"`
+}
+
+// BattleReportDetail 是玩家端和分享页优先消费的标准战报详情结构。
+type BattleReportDetail struct {
+	ID            string                 `json:"id"`
+	EventID       string                 `json:"eventId,omitempty"`
+	OwnerPlayerID string                 `json:"ownerPlayerId,omitempty"`
+	ViewType      string                 `json:"viewType"`
+	ViewLabel     string                 `json:"viewLabel"`
+	SourceType    string                 `json:"sourceType"`
+	SourceLabel   string                 `json:"sourceLabel"`
+	BattleType    string                 `json:"battleType"`
+	Result        string                 `json:"result"`
+	Title         string                 `json:"title"`
+	Summary       string                 `json:"summary,omitempty"`
+	OccurredAt    string                 `json:"occurredAt"`
+	PrimarySide   BattleReportSide       `json:"primarySide"`
+	SecondarySide *BattleReportSide      `json:"secondarySide,omitempty"`
+	Rewards       BattleReportRewards    `json:"rewards"`
+	Traits        []BattleReportTrait    `json:"traits,omitempty"`
+	Visibility    BattleReportVisibility `json:"visibility"`
+	Extra         map[string]interface{} `json:"extra,omitempty"`
+	Read          bool                   `json:"read"`
+	Share         *BattleReportShare     `json:"share,omitempty"`
+}
+
+// BattleReportSide 保存战斗某一方在战斗发生时的快照。
+type BattleReportSide struct {
+	Role         string                `json:"role"`
+	PlayerID     string                `json:"playerId,omitempty"`
+	PlayerName   string                `json:"playerName,omitempty"`
+	CityID       string                `json:"cityId,omitempty"`
+	CityName     string                `json:"cityName,omitempty"`
+	Faction      string                `json:"faction,omitempty"`
+	FactionLabel string                `json:"factionLabel,omitempty"`
+	TargetType   string                `json:"targetType,omitempty"`
+	TargetID     string                `json:"targetId,omitempty"`
+	TargetName   string                `json:"targetName,omitempty"`
+	Level        int                   `json:"level,omitempty"`
+	Power        int                   `json:"power"`
+	Generals     []BattleReportGeneral `json:"generals,omitempty"`
+	Units        []BattleReportUnit    `json:"units"`
+	Resources    map[string]int        `json:"resources,omitempty"`
+}
+
+// BattleReportUnit 保存单个兵种的出动、损耗和剩余快照。
+type BattleReportUnit struct {
+	UnitType     string `json:"unitType"`
+	UnitName     string `json:"unitName,omitempty"`
+	Faction      string `json:"faction,omitempty"`
+	AmountBefore int    `json:"amountBefore"`
+	Dispatched   int    `json:"dispatched"`
+	Lost         int    `json:"lost"`
+	Survived     int    `json:"survived"`
+}
+
+// BattleReportGeneral 保存参战武将快照，不读取当前玩家武将状态。
+type BattleReportGeneral struct {
+	ID         string                 `json:"id"`
+	Name       string                 `json:"name,omitempty"`
+	Level      int                    `json:"level,omitempty"`
+	Role       string                 `json:"role,omitempty"`
+	Power      int                    `json:"power,omitempty"`
+	Attributes map[string]float64     `json:"attributes,omitempty"`
+	Traits     []GeneralTraitInstance `json:"traits,omitempty"`
+}
+
+// BattleReportTrait 保存战斗中特性触发的标准展示数据。
+type BattleReportTrait struct {
+	TraitID     string                 `json:"traitId"`
+	TraitName   string                 `json:"traitName,omitempty"`
+	OwnerSide   string                 `json:"ownerSide,omitempty"`
+	OwnerRole   string                 `json:"ownerRole,omitempty"`
+	GeneralID   string                 `json:"generalId,omitempty"`
+	GeneralName string                 `json:"generalName,omitempty"`
+	Summary     string                 `json:"summary,omitempty"`
+	Detail      map[string]interface{} `json:"detail,omitempty"`
+}
+
+// BattleReportRewards 保存奖励快照，实际发放仍由奖励系统完成。
+type BattleReportRewards struct {
+	Resources          map[string]int     `json:"resources,omitempty"`
+	Drops              []BattleReportDrop `json:"drops,omitempty"`
+	CityGold           int                `json:"cityGold,omitempty"`
+	GeneralExp         int                `json:"generalExp,omitempty"`
+	GeneralLevelBefore int                `json:"generalLevelBefore,omitempty"`
+	GeneralLevelAfter  int                `json:"generalLevelAfter,omitempty"`
+	Overflow           map[string]int     `json:"overflow,omitempty"`
+	Granted            []Reward           `json:"granted,omitempty"`
+}
+
+// BattleReportDrop 保存道具掉落快照。
+type BattleReportDrop struct {
+	Type    string `json:"type"`
+	ItemID  string `json:"itemId,omitempty"`
+	Name    string `json:"name,omitempty"`
+	Amount  int    `json:"amount"`
+	Quality string `json:"quality,omitempty"`
+}
+
+// BattleReportVisibility 控制当前视角能看到哪些敌方信息。
+type BattleReportVisibility struct {
+	ShowEnemyRemainingUnits bool    `json:"showEnemyRemainingUnits"`
+	ShowEnemyResources      bool    `json:"showEnemyResources"`
+	ShowEnemyGenerals       bool    `json:"showEnemyGenerals"`
+	ShowEnemyCityDefense    bool    `json:"showEnemyCityDefense"`
+	Reason                  string  `json:"reason,omitempty"`
+	Threshold               float64 `json:"threshold,omitempty"`
+	ActualLossRatio         float64 `json:"actualLossRatio,omitempty"`
+}
+
+// BattleReportShare 保存分享 token 信息，避免公开内部战报 ID。
+type BattleReportShare struct {
+	Token      string `json:"token,omitempty"`
+	URL        string `json:"url,omitempty"`
+	Visibility string `json:"visibility,omitempty"`
+	ExpiresAt  string `json:"expiresAt,omitempty"`
+}
+
+// BattleReportQuery 描述玩家战报分页查询条件。
+type BattleReportQuery struct {
+	PlayerID       string
+	ViewType       string
+	SourceType     string
+	BattleType     string
+	Result         string
+	Page           int
+	PageSize       int
+	IncludeDeleted bool
+	TimeFrom       time.Time
+	TimeTo         time.Time
+}
+
+// BattleReportShareLink 是持久化的分享链接记录。
+type BattleReportShareLink struct {
+	ID         string `json:"id"`
+	ReportID   string `json:"reportId"`
+	Token      string `json:"token"`
+	Visibility string `json:"visibility"`
+	ExpiresAt  string `json:"expiresAt,omitempty"`
+	CreatedAt  string `json:"createdAt"`
+}
+
+// BattleReportParticipant 保存一次战斗事件中的某个玩家或守军参与方快照。
+type BattleReportParticipant struct {
+	ID             string                 `json:"id"`
+	EventID        string                 `json:"eventId"`
+	ReportID       string                 `json:"reportId,omitempty"`
+	PlayerID       string                 `json:"playerId,omitempty"`
+	Role           string                 `json:"role"`
+	Faction        string                 `json:"faction,omitempty"`
+	Nickname       string                 `json:"nickname,omitempty"`
+	CityName       string                 `json:"cityName,omitempty"`
+	TroopsBefore   map[string]int         `json:"troopsBefore,omitempty"`
+	TroopsLost     map[string]int         `json:"troopsLost,omitempty"`
+	TroopsSurvived map[string]int         `json:"troopsSurvived,omitempty"`
+	Generals       []BattleReportGeneral  `json:"generals,omitempty"`
+	Rewards        BattleReportRewards    `json:"rewards,omitempty"`
+	PointsDelta    map[string]int         `json:"pointsDelta,omitempty"`
+	Extra          map[string]interface{} `json:"extra,omitempty"`
+	CreatedAt      string                 `json:"createdAt"`
+}
+
+// BattleEventQuery 描述 GM 战斗事件查询条件。
+type BattleEventQuery struct {
+	PlayerID               string
+	EventID                string
+	SourceType             string
+	SourceID               string
+	BattleType             string
+	Result                 string
+	RelatedMarchID         string
+	RelatedReinforcementID string
+	Page                   int
+	PageSize               int
+	TimeFrom               time.Time
+	TimeTo                 time.Time
+}
+
+// BattleEventPage 是 GM 战斗事件分页结果。
+type BattleEventPage struct {
+	Items    []BattleEvent `json:"items"`
+	Page     int           `json:"page"`
+	PageSize int           `json:"pageSize"`
+	Total    int           `json:"total"`
 }
 
 type MailAttachment struct {
@@ -248,9 +487,9 @@ type GameState struct {
 	ResourceSettledAt   string                  `json:"resourceSettledAt"`
 	CityGold            FlexInt                 `json:"cityGold"`
 	LastExchangeAt      string                  `json:"lastExchangeAt,omitempty"`
-	ProductionBoost     int                     `json:"productionBoost,omitempty"`    // 产量加成倍率（1=无，2/4/8/16）
+	ProductionBoost     int                     `json:"productionBoost,omitempty"`    // 当前产量加成总倍率，可由多次购买叠加
 	ProductionBoostEnd  string                  `json:"productionBoostEnd,omitempty"` // 加成到期时间
-	CapacityBoost       int                     `json:"capacityBoost,omitempty"`      // 仓库容量加成倍率（1=无，2/4/8/16）
+	CapacityBoost       int                     `json:"capacityBoost,omitempty"`      // 当前仓库容量加成总倍率，可由多次购买叠加
 	CapacityBoostEnd    string                  `json:"capacityBoostEnd,omitempty"`   // 容量加成到期时间
 	Buildings           []Building              `json:"buildings"`
 	ResourceSlots       []ResourceSlot          `json:"resourceSlots,omitempty"`

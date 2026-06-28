@@ -1,0 +1,395 @@
+/api/v1/reports:
+  get:
+    tags: [News]
+    summary: 分页获取标准战报
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    - name: viewType
+      in: query
+      schema:
+        type: string
+        enum: [attack, defense, reinforcement, scout, system]
+    - name: sourceType
+      in: query
+      schema:
+        type: string
+    - name: battleType
+      in: query
+      schema:
+        type: string
+    - name: result
+      in: query
+      schema:
+        type: string
+    - name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    - name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 10
+    responses:
+      '200':
+        description: 战报分页结果。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BattleReportPage'
+/api/v1/reports/{reportId}:
+  get:
+    tags: [News]
+    summary: 获取单条标准战报
+    parameters:
+    - name: reportId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: playerId
+      in: query
+      required: false
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 战报详情。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BattleReport'
+/api/v1/reports/{reportId}/read:
+  post:
+    tags: [News]
+    summary: 标记单条战报已读
+    parameters:
+    - name: reportId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId]
+            properties:
+              playerId:
+                type: string
+    responses:
+      '200':
+        description: 战报操作后的局部状态。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportActionResult'
+/api/v1/reports/read-all:
+  post:
+    tags: [News]
+    summary: 按视角或全部标记战报已读
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId]
+            properties:
+              playerId:
+                type: string
+              viewType:
+                type: string
+                enum: [attack, defense, reinforcement, scout, system]
+    responses:
+      '200':
+        description: 战报操作后的局部状态。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportActionResult'
+/api/v1/reports/{reportId}/delete:
+  post:
+    tags: [News]
+    summary: 删除单条玩家战报
+    parameters:
+    - name: reportId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId]
+            properties:
+              playerId:
+                type: string
+    responses:
+      '200':
+        description: 战报操作后的局部状态。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportActionResult'
+/api/v1/reports/delete-all:
+  post:
+    tags: [News]
+    summary: 按视角或全部删除玩家战报
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId]
+            properties:
+              playerId:
+                type: string
+              viewType:
+                type: string
+                enum: [attack, defense, reinforcement, scout, system]
+    responses:
+      '200':
+        description: 战报操作后的局部状态。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportActionResult'
+/api/v1/reports/{reportId}/share:
+  post:
+    tags: [News]
+    summary: 创建战报分享 token
+    parameters:
+    - name: reportId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId]
+            properties:
+              playerId:
+                type: string
+    responses:
+      '200':
+        description: 分享链接记录。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BattleReportShareLink'
+/api/v1/reports/shared/{token}:
+  get:
+    tags: [News]
+    summary: 通过分享 token 获取战报
+    parameters:
+    - name: token
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 公开战报详情。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BattleReport'
+/api/v1/admin/reports:
+  get:
+    tags: [Admin]
+    summary: GM 查询战报
+    parameters:
+    - name: playerId
+      in: query
+      schema:
+        type: string
+    - name: reportId
+      in: query
+      schema:
+        type: string
+    - name: viewType
+      in: query
+      schema:
+        type: string
+    - name: sourceType
+      in: query
+      schema:
+        type: string
+    - name: battleType
+      in: query
+      schema:
+        type: string
+    - name: result
+      in: query
+      schema:
+        type: string
+    - name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+    - name: pageSize
+      in: query
+      schema:
+        type: integer
+        default: 20
+    responses:
+      '200':
+        description: 单条战报或分页战报。
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - $ref: '#/components/schemas/BattleReport'
+              - $ref: '#/components/schemas/BattleReportPage'
+/api/v1/admin/reports/{reportId}:
+  get:
+    tags: [Admin]
+    summary: GM 查询单条战报
+    parameters:
+    - name: reportId
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 单条战报。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BattleReport'
+/api/v1/admin/battle-events:
+  get:
+    tags: [Admin]
+    summary: GM 查询战斗事件
+    parameters:
+    - name: playerId
+      in: query
+      schema:
+        type: string
+    - name: eventId
+      in: query
+      schema:
+        type: string
+    - name: sourceType
+      in: query
+      schema:
+        type: string
+    - name: sourceId
+      in: query
+      schema:
+        type: string
+    - name: battleType
+      in: query
+      schema:
+        type: string
+    - name: result
+      in: query
+      schema:
+        type: string
+    - name: relatedMarchId
+      in: query
+      schema:
+        type: string
+    - name: relatedReinforcementId
+      in: query
+      schema:
+        type: string
+    - name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+    - name: pageSize
+      in: query
+      schema:
+        type: integer
+        default: 20
+    responses:
+      '200':
+        description: 战斗事件分页。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BattleEventPage'
+/api/v1/admin/battle-events/{eventId}:
+  get:
+    tags: [Admin]
+    summary: GM 查询单个战斗事件
+    parameters:
+    - name: eventId
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 战斗事件详情。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BattleEvent'
+/api/v1/admin/battle-events/{eventId}/reports:
+  get:
+    tags: [Admin]
+    summary: GM 查询同一事件下全部视角战报
+    parameters:
+    - name: eventId
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 同一战斗事件下的战报列表。
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reports:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/BattleReport'
+/api/v1/admin/battle-events/{eventId}/participants:
+  get:
+    tags: [Admin]
+    summary: GM 查询同一事件下全部参与方快照
+    parameters:
+    - name: eventId
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 同一战斗事件下的参与方快照列表。
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                participants:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/BattleReportParticipant'

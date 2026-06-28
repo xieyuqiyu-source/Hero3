@@ -83,6 +83,7 @@ func ensureCoreBuildings(state *GameState) bool {
 		{ID: "administration-1", Type: "administration", Level: 1},
 		{ID: "relay_station-1", Type: "relay_station", Level: 1},
 		{ID: "city_wall-1", Type: "city_wall", Level: 1},
+		{ID: "beacon_tower-1", Type: "beacon_tower", Level: 1},
 	}
 	changed := false
 	for _, requiredBuilding := range required {

@@ -247,8 +247,19 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 		})
 	}
 
-	if err := s.repo.SaveReport(report); err != nil {
+	createResult, err := s.CreateBattleReports(BattleReportCreateInput{
+		EventID:    report.EventID,
+		SourceType: report.SourceType,
+		SourceID:   report.TargetID,
+		BattleType: report.BattleType,
+		Result:     report.Result,
+		OccurredAt: report.CreatedAt,
+		Reports:    []BattleReport{report},
+	})
+	if err != nil {
 		slog.Warn("battle report save failed", "error", err, "reportId", report.ID)
+	} else if len(createResult.Reports) > 0 {
+		report = createResult.Reports[0]
 	}
 	s.publishBattleRewardEvents(state.Player.ID, report)
 	s.publishBattleFinished(state.Player.ID, report)
@@ -498,8 +509,19 @@ func (s *Service) ScoutNpc(req ScoutNpcRequest) (ScoutNpcResponse, error) {
 		return ScoutNpcResponse{}, err
 	}
 
-	if err := s.repo.SaveReport(report); err != nil {
+	createResult, err := s.CreateBattleReports(BattleReportCreateInput{
+		EventID:    report.EventID,
+		SourceType: report.SourceType,
+		SourceID:   report.TargetID,
+		BattleType: report.BattleType,
+		Result:     report.Result,
+		OccurredAt: report.CreatedAt,
+		Reports:    []BattleReport{report},
+	})
+	if err != nil {
 		slog.Warn("battle report save failed", "error", err, "reportId", report.ID)
+	} else if len(createResult.Reports) > 0 {
+		report = createResult.Reports[0]
 	}
 	s.publishBattleFinished(state.Player.ID, report)
 
@@ -736,7 +758,7 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 		CreatedAt:         nowStr,
 	}
 
-	// 战报已通过 repo.SaveReport 独立存储，不再内嵌到 state
+	// 战报通过统一战报服务独立存储，不再内嵌到 state。
 	return report
 }
 
@@ -861,7 +883,38 @@ func findScoutUnit(faction string) string {
 
 // GetReportByID 公开获取单条战报（用于分享链接）
 func (s *Service) GetReportByID(reportID string) (BattleReport, error) {
-	return s.repo.GetReportByID(reportID)
+	report, err := s.repo.GetReportByID(reportID)
+	if err != nil {
+		return BattleReport{}, err
+	}
+	return NormalizeBattleReport(report), nil
+}
+
+// GetReportForPlayer 获取玩家自己的标准战报详情。
+func (s *Service) GetReportForPlayer(playerID string, reportID string) (BattleReport, error) {
+	playerID = strings.TrimSpace(playerID)
+	reportID = strings.TrimSpace(reportID)
+	if playerID == "" || reportID == "" {
+		return BattleReport{}, ErrPlayerNotFound
+	}
+	report, err := s.repo.GetReportForPlayer(playerID, reportID)
+	if err != nil {
+		return BattleReport{}, err
+	}
+	return NormalizeBattleReport(report), nil
+}
+
+// GetSharedReportByToken 通过分享 token 读取公开战报。
+func (s *Service) GetSharedReportByToken(token string) (BattleReport, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return BattleReport{}, errors.New("token is required")
+	}
+	report, err := s.repo.GetReportByShareToken(token)
+	if err != nil {
+		return BattleReport{}, err
+	}
+	return NormalizeBattleReport(report), nil
 }
 
 // ListReports 分页获取玩家军情战报。
@@ -894,6 +947,153 @@ func (s *Service) ListReports(playerID string, page int, pageSize int) (BattleRe
 	}, nil
 }
 
+// ListReportsByQuery 按标准查询条件分页获取玩家战报。
+func (s *Service) ListReportsByQuery(query BattleReportQuery) (BattleReportPage, error) {
+	query.PlayerID = strings.TrimSpace(query.PlayerID)
+	if query.PlayerID == "" {
+		return BattleReportPage{}, ErrPlayerNotFound
+	}
+	if query.Page < 1 {
+		query.Page = 1
+	}
+	if query.PageSize < 1 {
+		query.PageSize = 10
+	}
+	if query.PageSize > 50 {
+		query.PageSize = 50
+	}
+	reports, total, err := s.repo.ListReportsByQuery(query)
+	if err != nil {
+		return BattleReportPage{}, err
+	}
+	return BattleReportPage{
+		Reports:  reports,
+		Page:     query.Page,
+		PageSize: query.PageSize,
+		Total:    total,
+	}, nil
+}
+
+// ShareBattleReport 为玩家战报创建分享 token。
+func (s *Service) ShareBattleReport(playerID string, reportID string) (BattleReportShareLink, error) {
+	playerID = strings.TrimSpace(playerID)
+	reportID = strings.TrimSpace(reportID)
+	if playerID == "" || reportID == "" {
+		return BattleReportShareLink{}, errors.New("playerId and reportId are required")
+	}
+	return s.repo.CreateBattleReportShareLink(playerID, reportID, "public", time.Time{})
+}
+
+// CreateBattleReports 是玩法模块接入统一战报系统的标准入口。
+func (s *Service) CreateBattleReports(input BattleReportCreateInput) (BattleReportCreateResult, error) {
+	if len(input.Reports) == 0 {
+		return BattleReportCreateResult{}, errors.New("reports are required")
+	}
+	occurredAt := strings.TrimSpace(input.OccurredAt)
+	if occurredAt == "" {
+		occurredAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	eventID := strings.TrimSpace(input.EventID)
+	if eventID == "" {
+		eventID = "event_" + randomID(12)
+	}
+	reports := make([]BattleReport, 0, len(input.Reports))
+	for _, report := range input.Reports {
+		if strings.TrimSpace(report.ID) == "" {
+			return BattleReportCreateResult{}, errors.New("report id is required")
+		}
+		if strings.TrimSpace(report.PlayerID) == "" {
+			return BattleReportCreateResult{}, errors.New("report playerId is required")
+		}
+		report.EventID = valueOrDefault(report.EventID, eventID)
+		report.SourceType = valueOrDefault(report.SourceType, input.SourceType)
+		report.BattleType = valueOrDefault(report.BattleType, input.BattleType)
+		report.Result = valueOrDefault(report.Result, input.Result)
+		report.CreatedAt = valueOrDefault(report.CreatedAt, occurredAt)
+		report = NormalizeBattleReport(report)
+		reports = append(reports, report)
+	}
+	if err := s.repo.SaveReports(reports); err != nil {
+		return BattleReportCreateResult{}, err
+	}
+	event := buildBattleEventFromReports(input, eventID, occurredAt, reports)
+	return BattleReportCreateResult{Event: event, Reports: reports}, nil
+}
+
+// buildBattleEventFromReports 从标准战报创建输入生成事件快照。
+func buildBattleEventFromReports(input BattleReportCreateInput, eventID string, occurredAt string, reports []BattleReport) BattleEvent {
+	first := reports[0]
+	sourceType := valueOrDefault(input.SourceType, first.SourceType)
+	battleType := valueOrDefault(input.BattleType, first.BattleType)
+	result := valueOrDefault(input.Result, first.Result)
+	sourceID := valueOrDefault(input.SourceID, first.TargetID)
+	createdAt := occurredAt
+	return BattleEvent{
+		ID:                     eventID,
+		SourceType:             sourceType,
+		SourceID:               sourceID,
+		Scene:                  first.ViewType,
+		BattleType:             battleType,
+		Result:                 result,
+		AttackerPlayerID:       first.PlayerID,
+		DefenderPlayerID:       first.TargetID,
+		AttackerName:           first.PlayerName,
+		DefenderName:           first.TargetName,
+		AttackerFaction:        first.PlayerFaction,
+		DefenderFaction:        first.DefenderFaction,
+		RelatedMarchID:         input.RelatedMarchID,
+		RelatedReinforcementID: input.RelatedReinforcementID,
+		Summary:                input.Extra,
+		OccurredAt:             occurredAt,
+		CreatedAt:              createdAt,
+	}
+}
+
+// ListBattleEventsForAdmin 返回 GM 战斗事件列表。
+func (s *Service) ListBattleEventsForAdmin(query BattleEventQuery) (BattleEventPage, error) {
+	if query.Page < 1 {
+		query.Page = 1
+	}
+	if query.PageSize < 1 {
+		query.PageSize = 20
+	}
+	if query.PageSize > 100 {
+		query.PageSize = 100
+	}
+	items, total, err := s.repo.ListBattleEventsForAdmin(query)
+	if err != nil {
+		return BattleEventPage{}, err
+	}
+	return BattleEventPage{Items: items, Page: query.Page, PageSize: query.PageSize, Total: total}, nil
+}
+
+// GetBattleEventForAdmin 返回 GM 单个战斗事件详情。
+func (s *Service) GetBattleEventForAdmin(eventID string) (BattleEvent, error) {
+	eventID = strings.TrimSpace(eventID)
+	if eventID == "" {
+		return BattleEvent{}, errors.New("eventId is required")
+	}
+	return s.repo.GetBattleEventForAdmin(eventID)
+}
+
+// ListReportsByEventForAdmin 返回同一事件下所有玩家视角战报。
+func (s *Service) ListReportsByEventForAdmin(eventID string) ([]BattleReport, error) {
+	eventID = strings.TrimSpace(eventID)
+	if eventID == "" {
+		return nil, errors.New("eventId is required")
+	}
+	return s.repo.ListReportsByEventForAdmin(eventID)
+}
+
+// ListParticipantsByEventForAdmin 返回同一事件下所有参与方快照。
+func (s *Service) ListParticipantsByEventForAdmin(eventID string) ([]BattleReportParticipant, error) {
+	eventID = strings.TrimSpace(eventID)
+	if eventID == "" {
+		return nil, errors.New("eventId is required")
+	}
+	return s.repo.ListParticipantsByEventForAdmin(eventID)
+}
+
 // MarkReportsRead 标记所有战报为已读，并返回战报未读数局部结果。
 func (s *Service) MarkReportsRead(playerID string) (ReportActionResult, error) {
 	playerID = strings.TrimSpace(playerID)
@@ -923,6 +1123,19 @@ func (s *Service) MarkSingleReportRead(playerID string, reportID string) (Report
 	return s.buildReportActionResult(playerID)
 }
 
+// MarkReportsReadByView 标记指定视角 Tab 的战报为已读。
+func (s *Service) MarkReportsReadByView(playerID string, viewType string) (ReportActionResult, error) {
+	playerID = strings.TrimSpace(playerID)
+	viewType = strings.TrimSpace(viewType)
+	if playerID == "" {
+		return ReportActionResult{}, ErrPlayerNotFound
+	}
+	if err := s.repo.MarkReportsReadByView(playerID, viewType); err != nil {
+		return ReportActionResult{}, err
+	}
+	return s.buildReportActionResult(playerID)
+}
+
 // DeleteReport 删除单条战报，并返回战报未读数局部结果。
 func (s *Service) DeleteReport(playerID string, reportID string) (ReportActionResult, error) {
 	playerID = strings.TrimSpace(playerID)
@@ -938,6 +1151,19 @@ func (s *Service) DeleteReport(playerID string, reportID string) (ReportActionRe
 		return ReportActionResult{}, err
 	}
 
+	return s.buildReportActionResult(playerID)
+}
+
+// DeleteReportsByView 删除指定视角 Tab 下的战报。
+func (s *Service) DeleteReportsByView(playerID string, viewType string) (ReportActionResult, error) {
+	playerID = strings.TrimSpace(playerID)
+	viewType = strings.TrimSpace(viewType)
+	if playerID == "" {
+		return ReportActionResult{}, ErrPlayerNotFound
+	}
+	if err := s.repo.DeleteReportsByView(playerID, viewType); err != nil {
+		return ReportActionResult{}, err
+	}
 	return s.buildReportActionResult(playerID)
 }
 

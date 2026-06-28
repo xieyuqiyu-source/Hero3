@@ -314,14 +314,33 @@ export const gameApi = {
     return api.get<Record<string, number>>('/city/boost/prices')
   },
 
-  /** 获取单条战报（公开，用于分享） */
-  getReport(reportId: string) {
-    return api.get<BattleReport>(`/reports/${reportId}`)
+  /** 获取单条玩家战报 */
+  getReport(reportId: string, playerId?: string) {
+    const query = playerId ? `?playerId=${encodeURIComponent(playerId)}` : ''
+    return api.get<BattleReport>(`/reports/${reportId}${query}`)
+  },
+
+  /** 通过分享 token 获取公开战报 */
+  getSharedReport(token: string) {
+    return api.get<BattleReport>(`/reports/shared/${encodeURIComponent(token)}`)
+  },
+
+  /** 创建战报分享 token */
+  shareReport(playerId: string, reportId: string) {
+    return api.post<{ id: string; reportId: string; token: string; visibility: string; expiresAt?: string; createdAt: string }>(
+      `/reports/${reportId}/share`,
+      { playerId },
+    )
   },
 
   /** 分页获取军情战报 */
-  listReports(playerId: string, page: number, pageSize: number) {
-    return api.get<BattleReportPage>(`/news/reports?playerId=${playerId}&page=${page}&pageSize=${pageSize}`)
+  listReports(playerId: string, page: number, pageSize: number, params?: { viewType?: string; sourceType?: string; battleType?: string; result?: string }) {
+    const query = new URLSearchParams({ playerId, page: String(page), pageSize: String(pageSize) })
+    if (params?.viewType) query.set('viewType', params.viewType)
+    if (params?.sourceType) query.set('sourceType', params.sourceType)
+    if (params?.battleType) query.set('battleType', params.battleType)
+    if (params?.result) query.set('result', params.result)
+    return api.get<BattleReportPage>(`/reports?${query.toString()}`)
   },
 
   /** 攻击地图目标 */
@@ -433,19 +452,22 @@ export const gameApi = {
     return api.post<BattleSimulationResponse>('/combat/simulate', payload)
   },
 
-  /** 标记军情已读（传 reportId 标记单条，不传标记全部） */
-  markReportsRead(playerId: string, reportId?: string) {
-    return api.post<ReportActionResult>('/news/mark-read', { playerId, reportId })
+  /** 标记军情已读（传 reportId 标记单条，不传则按视角或全部标记） */
+  markReportsRead(playerId: string, reportId?: string, viewType?: string) {
+    if (reportId) {
+      return api.post<ReportActionResult>(`/reports/${reportId}/read`, { playerId })
+    }
+    return api.post<ReportActionResult>('/reports/read-all', { playerId, viewType })
   },
 
   /** 删除单条战报 */
   deleteReport(playerId: string, reportId: string) {
-    return api.post<ReportActionResult>('/news/delete-report', { playerId, reportId })
+    return api.post<ReportActionResult>(`/reports/${reportId}/delete`, { playerId })
   },
 
-  /** 一键删除所有战报 */
-  deleteAllReports(playerId: string) {
-    return api.post<ReportActionResult>('/news/delete-all-reports', { playerId })
+  /** 一键删除指定视角或全部战报 */
+  deleteAllReports(playerId: string, viewType?: string) {
+    return api.post<ReportActionResult>('/reports/delete-all', { playerId, viewType })
   },
 
   /** 分页获取信函 */

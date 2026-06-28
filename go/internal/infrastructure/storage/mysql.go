@@ -536,12 +536,98 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 		`CREATE TABLE IF NOT EXISTS battle_reports (
 			id VARCHAR(64) PRIMARY KEY,
 			player_id VARCHAR(64) NOT NULL,
+			event_id VARCHAR(64) NOT NULL DEFAULT '',
+			owner_player_id VARCHAR(64) NOT NULL DEFAULT '',
+			view_type VARCHAR(32) NOT NULL DEFAULT 'attack',
+			source_type VARCHAR(32) NOT NULL DEFAULT 'npc_city',
+			battle_type VARCHAR(32) NOT NULL DEFAULT 'attack',
+			result VARCHAR(32) NOT NULL DEFAULT '',
+			title VARCHAR(128) NOT NULL DEFAULT '',
+			summary VARCHAR(512) NOT NULL DEFAULT '',
+			target_type VARCHAR(32) NOT NULL DEFAULT '',
+			target_id VARCHAR(64) NOT NULL DEFAULT '',
+			target_name VARCHAR(128) NOT NULL DEFAULT '',
+			detail_json JSON NULL,
 			report_json JSON NOT NULL,
 			type VARCHAR(32) NOT NULL DEFAULT 'attack',
 			is_read TINYINT(1) NOT NULL DEFAULT 0,
 			deleted_by_player TINYINT(1) NOT NULL DEFAULT 0,
 			created_at DATETIME(6) NOT NULL,
-			INDEX idx_reports_player (player_id, deleted_by_player, created_at DESC)
+			INDEX idx_reports_player (player_id, deleted_by_player, created_at DESC),
+			INDEX idx_battle_reports_owner (owner_player_id, view_type, created_at),
+			INDEX idx_battle_reports_event (event_id),
+			INDEX idx_battle_reports_source (source_type, target_id, created_at),
+			INDEX idx_battle_reports_type (source_type, view_type, battle_type, created_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS battle_events (
+			id VARCHAR(64) PRIMARY KEY,
+			source_type VARCHAR(32) NOT NULL,
+			source_id VARCHAR(64) NOT NULL DEFAULT '',
+			scene VARCHAR(32) NOT NULL DEFAULT '',
+			battle_type VARCHAR(32) NOT NULL,
+			result VARCHAR(32) NOT NULL,
+			attacker_player_id VARCHAR(64) NOT NULL DEFAULT '',
+			defender_player_id VARCHAR(64) NOT NULL DEFAULT '',
+			attacker_name VARCHAR(64) NOT NULL DEFAULT '',
+			defender_name VARCHAR(64) NOT NULL DEFAULT '',
+			attacker_faction VARCHAR(32) NOT NULL DEFAULT '',
+			defender_faction VARCHAR(32) NOT NULL DEFAULT '',
+			related_march_id VARCHAR(64) NOT NULL DEFAULT '',
+			related_reinforcement_id VARCHAR(64) NOT NULL DEFAULT '',
+			summary_json JSON NULL,
+			snapshot_json JSON NULL,
+			result_json JSON NULL,
+			occurred_at DATETIME(6) NOT NULL,
+			created_at DATETIME(6) NOT NULL,
+			INDEX idx_battle_events_source (source_type, source_id),
+			INDEX idx_battle_events_players (attacker_player_id, defender_player_id, occurred_at),
+			INDEX idx_battle_events_march (related_march_id),
+			INDEX idx_battle_events_reinforcement (related_reinforcement_id),
+			INDEX idx_battle_events_occurred (occurred_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS battle_report_states (
+			id VARCHAR(64) PRIMARY KEY,
+			report_id VARCHAR(64) NOT NULL,
+			player_id VARCHAR(64) NOT NULL,
+			is_read TINYINT(1) NOT NULL DEFAULT 0,
+			read_at DATETIME(6) NULL,
+			is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+			deleted_at DATETIME(6) NULL,
+			is_pinned TINYINT(1) NOT NULL DEFAULT 0,
+			pinned_at DATETIME(6) NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			UNIQUE KEY uniq_report_state_player (report_id, player_id),
+			INDEX idx_report_states_player (player_id, is_deleted, is_read, updated_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS battle_report_participants (
+			id VARCHAR(64) PRIMARY KEY,
+			event_id VARCHAR(64) NOT NULL,
+			report_id VARCHAR(64) NOT NULL DEFAULT '',
+			player_id VARCHAR(64) NOT NULL DEFAULT '',
+			role VARCHAR(32) NOT NULL,
+			faction VARCHAR(32) NOT NULL DEFAULT '',
+			nickname VARCHAR(64) NOT NULL DEFAULT '',
+			city_name VARCHAR(64) NOT NULL DEFAULT '',
+			troops_before_json JSON NULL,
+			troops_lost_json JSON NULL,
+			troops_survived_json JSON NULL,
+			generals_json JSON NULL,
+			rewards_json JSON NULL,
+			points_delta_json JSON NULL,
+			created_at DATETIME(6) NOT NULL,
+			INDEX idx_battle_report_participants_event (event_id),
+			INDEX idx_battle_report_participants_report (report_id),
+			INDEX idx_battle_report_participants_player (player_id, created_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS battle_report_links (
+			id VARCHAR(64) PRIMARY KEY,
+			report_id VARCHAR(64) NOT NULL,
+			token VARCHAR(96) NOT NULL,
+			visibility VARCHAR(32) NOT NULL,
+			expires_at DATETIME(6) NULL,
+			created_at DATETIME(6) NOT NULL,
+			UNIQUE KEY uniq_battle_report_token (token)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS pvp_marches (
 			id VARCHAR(64) PRIMARY KEY,
@@ -722,6 +808,60 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if err := addColumnIfMissing(ctx, db, `ALTER TABLE minigame_records ADD COLUMN remaining_amount INT NOT NULL DEFAULT -1`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE battle_reports ADD COLUMN event_id VARCHAR(64) NOT NULL DEFAULT '' AFTER player_id`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE battle_reports ADD COLUMN owner_player_id VARCHAR(64) NOT NULL DEFAULT '' AFTER event_id`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE battle_reports ADD COLUMN view_type VARCHAR(32) NOT NULL DEFAULT 'attack' AFTER owner_player_id`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE battle_reports ADD COLUMN source_type VARCHAR(32) NOT NULL DEFAULT 'npc_city' AFTER view_type`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE battle_reports ADD COLUMN battle_type VARCHAR(32) NOT NULL DEFAULT 'attack' AFTER source_type`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE battle_reports ADD COLUMN result VARCHAR(32) NOT NULL DEFAULT '' AFTER battle_type`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE battle_reports ADD COLUMN title VARCHAR(128) NOT NULL DEFAULT '' AFTER result`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE battle_reports ADD COLUMN summary VARCHAR(512) NOT NULL DEFAULT '' AFTER title`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE battle_reports ADD COLUMN target_type VARCHAR(32) NOT NULL DEFAULT '' AFTER summary`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE battle_reports ADD COLUMN target_id VARCHAR(64) NOT NULL DEFAULT '' AFTER target_type`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE battle_reports ADD COLUMN target_name VARCHAR(128) NOT NULL DEFAULT '' AFTER target_id`); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, db, `ALTER TABLE battle_reports ADD COLUMN detail_json JSON NULL AFTER target_name`); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE battle_reports SET owner_player_id = player_id WHERE owner_player_id = ''`); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE battle_reports SET view_type = type WHERE view_type = '' OR view_type = 'attack'`); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX idx_battle_reports_owner ON battle_reports (owner_player_id, view_type, created_at)`); err != nil && !isDuplicateKeyName(err) {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX idx_battle_reports_event ON battle_reports (event_id)`); err != nil && !isDuplicateKeyName(err) {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX idx_battle_reports_source ON battle_reports (source_type, target_id, created_at)`); err != nil && !isDuplicateKeyName(err) {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX idx_battle_reports_type ON battle_reports (source_type, view_type, battle_type, created_at)`); err != nil && !isDuplicateKeyName(err) {
 		return err
 	}
 	if err := addColumnIfMissing(ctx, db, `ALTER TABLE player_reinforcements ADD COLUMN owner_player_id VARCHAR(64) NOT NULL DEFAULT '' AFTER to_player_id`); err != nil {

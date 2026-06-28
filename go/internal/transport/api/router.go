@@ -163,7 +163,14 @@ func registerReportRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("POST /api/v1/news/mark-read", handlers.MarkReportsRead)
 	mux.HandleFunc("POST /api/v1/news/delete-report", handlers.DeleteReport)
 	mux.HandleFunc("POST /api/v1/news/delete-all-reports", handlers.DeleteAllReports)
+	mux.HandleFunc("GET /api/v1/reports", handlers.ListReports)
 	mux.HandleFunc("GET /api/v1/reports/{reportId}", handlers.GetReport)
+	mux.HandleFunc("POST /api/v1/reports/{reportId}/read", handlers.MarkReportReadByPath)
+	mux.HandleFunc("POST /api/v1/reports/read-all", handlers.MarkAllReportsReadByPath)
+	mux.HandleFunc("POST /api/v1/reports/{reportId}/delete", handlers.DeleteReportByPath)
+	mux.HandleFunc("POST /api/v1/reports/delete-all", handlers.DeleteAllReportsByPath)
+	mux.HandleFunc("POST /api/v1/reports/{reportId}/share", handlers.ShareReport)
+	mux.HandleFunc("GET /api/v1/reports/shared/{token}", handlers.GetSharedReport)
 }
 
 // registerMailRoutes 注册信函路由。
@@ -222,6 +229,12 @@ func registerAdminRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("GET /api/v1/admin/pvp/overview", handlers.AdminPvpOverview)
 	mux.HandleFunc("GET /api/v1/admin/pvp/marches", handlers.AdminPvpMarches)
 	mux.HandleFunc("GET /api/v1/admin/pvp/battles", handlers.AdminPvpBattles)
+	mux.HandleFunc("GET /api/v1/admin/reports", handlers.AdminReports)
+	mux.HandleFunc("GET /api/v1/admin/reports/{reportId}", handlers.AdminReport)
+	mux.HandleFunc("GET /api/v1/admin/battle-events", handlers.AdminBattleEvents)
+	mux.HandleFunc("GET /api/v1/admin/battle-events/{eventId}", handlers.AdminBattleEvent)
+	mux.HandleFunc("GET /api/v1/admin/battle-events/{eventId}/reports", handlers.AdminBattleEventReports)
+	mux.HandleFunc("GET /api/v1/admin/battle-events/{eventId}/participants", handlers.AdminBattleEventParticipants)
 	mux.HandleFunc("GET /api/v1/admin/pvp/seasons", handlers.AdminPvpSeasons)
 	mux.HandleFunc("POST /api/v1/admin/pvp/seasons", handlers.AdminCreatePvpSeason)
 	mux.HandleFunc("PUT /api/v1/admin/pvp/seasons/{seasonId}", handlers.AdminUpdatePvpSeason)

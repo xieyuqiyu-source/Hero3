@@ -108,6 +108,22 @@ paths:
     $ref: ./paths/news.yaml#/~1api~1v1~1news~1delete-report
   /api/v1/news/delete-all-reports:
     $ref: ./paths/news.yaml#/~1api~1v1~1news~1delete-all-reports
+  /api/v1/reports:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1reports
+  /api/v1/reports/{reportId}:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1reports~1{reportId}
+  /api/v1/reports/{reportId}/read:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1reports~1{reportId}~1read
+  /api/v1/reports/read-all:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1reports~1read-all
+  /api/v1/reports/{reportId}/delete:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1reports~1{reportId}~1delete
+  /api/v1/reports/delete-all:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1reports~1delete-all
+  /api/v1/reports/{reportId}/share:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1reports~1{reportId}~1share
+  /api/v1/reports/shared/{token}:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1reports~1shared~1{token}
   /api/v1/gold/exchange:
     $ref: ./paths/gold.yaml#/~1api~1v1~1gold~1exchange
   /api/v1/gold/reverse-exchange:
@@ -166,6 +182,18 @@ paths:
     $ref: ./paths/announcement.yaml#/~1api~1v1~1admin~1announcements~1{announcementId}~1archive
   /api/v1/admin/players/{playerId}/mails:
     $ref: ./paths/mail.yaml#/~1api~1v1~1admin~1players~1{playerId}~1mails
+  /api/v1/admin/reports:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1admin~1reports
+  /api/v1/admin/reports/{reportId}:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1admin~1reports~1{reportId}
+  /api/v1/admin/battle-events:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1admin~1battle-events
+  /api/v1/admin/battle-events/{eventId}:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1admin~1battle-events~1{eventId}
+  /api/v1/admin/battle-events/{eventId}/reports:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1admin~1battle-events~1{eventId}~1reports
+  /api/v1/admin/battle-events/{eventId}/participants:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1admin~1battle-events~1{eventId}~1participants
   /api/v1/admin/accounts:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1accounts
   /api/v1/admin/players/{playerId}/state:
@@ -247,9 +275,33 @@ components:
     MapTarget:
       $ref: ./schemas/game-state.yaml#/MapTarget
     BattleReport:
-      $ref: ./schemas/game-state.yaml#/BattleReport
+      $ref: ./schemas/report.yaml#/BattleReport
     BattleReportPage:
-      $ref: ./schemas/game-state.yaml#/BattleReportPage
+      $ref: ./schemas/report.yaml#/BattleReportPage
+    BattleEvent:
+      $ref: ./schemas/report.yaml#/BattleEvent
+    BattleEventPage:
+      $ref: ./schemas/report.yaml#/BattleEventPage
+    BattleReportDetail:
+      $ref: ./schemas/report.yaml#/BattleReportDetail
+    BattleReportSide:
+      $ref: ./schemas/report.yaml#/BattleReportSide
+    BattleReportUnit:
+      $ref: ./schemas/report.yaml#/BattleReportUnit
+    BattleReportGeneral:
+      $ref: ./schemas/report.yaml#/BattleReportGeneral
+    BattleReportTrait:
+      $ref: ./schemas/report.yaml#/BattleReportTrait
+    BattleReportRewards:
+      $ref: ./schemas/report.yaml#/BattleReportRewards
+    BattleReportDrop:
+      $ref: ./schemas/report.yaml#/BattleReportDrop
+    BattleReportVisibility:
+      $ref: ./schemas/report.yaml#/BattleReportVisibility
+    BattleReportShareLink:
+      $ref: ./schemas/report.yaml#/BattleReportShareLink
+    BattleReportParticipant:
+      $ref: ./schemas/report.yaml#/BattleReportParticipant
     Mail:
       $ref: ./schemas/mail.yaml#/Mail
     MailAttachment:

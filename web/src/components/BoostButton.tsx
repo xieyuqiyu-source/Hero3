@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type FC } from 'react'
+import { useState, useRef, useEffect, useMemo, type FC } from 'react'
 import { Zap, Coins, Clock, Circle } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import { useGameStore } from '@/store/gameStore'
@@ -8,13 +8,8 @@ import { toast } from '@/components/ui'
 import { getErrorMessage } from '@/utils/error'
 import ConfirmCityGoldModal from './ConfirmCityGoldModal'
 
-const BOOST_MULTIPLIERS = [2, 4, 8, 16] as const
-const BOOST_DURATIONS = [
-  { label: '1h', hours: 1 },
-  { label: '6h', hours: 6 },
-  { label: '12h', hours: 12 },
-  { label: '24h', hours: 24 },
-] as const
+const DEFAULT_BOOST_MULTIPLIERS = [2, 4, 8, 16]
+const DEFAULT_BOOST_DURATIONS = [1, 6, 12, 24]
 
 interface BoostButtonProps {
   currentBoost?: number
@@ -33,8 +28,22 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
   const balance = useConfigStore((s) => s.balance)
   const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
   const boostEnd = useGameStore((s) => s.state?.productionBoostEnd)
+  const multiplierOptions = useMemo(
+    () => getNumberOptions(balance?.boostMultiplierFactor, DEFAULT_BOOST_MULTIPLIERS),
+    [balance?.boostMultiplierFactor],
+  )
+  const durationOptions = useMemo(
+    () => getNumberOptions(balance?.boostDurationFactor, DEFAULT_BOOST_DURATIONS),
+    [balance?.boostDurationFactor],
+  )
 
   const isActive = currentBoost > 1
+
+  useEffect(() => {
+    if (multiplierOptions.length > 0 && !multiplierOptions.includes(selectedMultiplier)) {
+      setSelectedMultiplier(multiplierOptions[0])
+    }
+  }, [multiplierOptions, selectedMultiplier])
 
   useEffect(() => {
     if (!isActive || !boostEnd) return
@@ -89,13 +98,12 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
     try {
       const result = await gameApi.purchaseBoost(activePlayerId, selectedMultiplier, hours)
       patchResourceAction(result)
-      toast.success(`产量 ×${selectedMultiplier} 加成已激活`)
+      toast.success(isActive ? `产量加成已叠加 ×${selectedMultiplier}` : `产量 ×${selectedMultiplier} 加成已激活`)
       setOpen(false)
       setConfirmOpen(false)
     } catch (e: unknown) {
       const msg = getErrorMessage(e, '购买失败')
-      if (msg.includes('still active')) toast.error('当前加成尚未到期')
-      else if (msg.includes('insufficient')) toast.error('城金不足')
+      if (msg.includes('insufficient')) toast.error('城金不足')
       else toast.error(msg)
     } finally {
       setLoading(false)
@@ -148,12 +156,11 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
         {/* Multiplier dots */}
         <div className="px-3 pb-1.5">
           <div className="flex items-center justify-between">
-            {BOOST_MULTIPLIERS.map((m) => (
+            {multiplierOptions.map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => setSelectedMultiplier(m)}
-                disabled={isActive}
                 className={`
                   flex items-center gap-0.5 px-1.5 py-1 rounded-md cursor-pointer
                   transition-all duration-150
@@ -161,7 +168,6 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
                     ? 'text-amber-400'
                     : 'text-white/40 hover:text-amber-300'
                   }
-                  disabled:opacity-40 disabled:cursor-not-allowed
                 `}
               >
                 <Circle size={6} className={selectedMultiplier === m ? 'fill-amber-400' : ''} />
@@ -174,12 +180,12 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
         {/* Duration grid 2x2 */}
         <div className="px-3 pb-2.5">
           <div className="grid grid-cols-2 gap-1">
-            {BOOST_DURATIONS.map((d) => (
+            {durationOptions.map((hours) => (
               <button
-                key={d.hours}
+                key={hours}
                 type="button"
-                onClick={() => handleSelectDuration(d.hours)}
-                disabled={isActive || loading}
+                onClick={() => handleSelectDuration(hours)}
+                disabled={loading}
                 className="
                   flex items-center justify-between px-2 py-1.5 rounded-lg
                   bg-white/5 border border-white/10
@@ -188,10 +194,10 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
                   disabled:opacity-40 disabled:cursor-not-allowed
                 "
               >
-                <span className="text-[10px] text-white/70 font-medium">{d.label}</span>
+                <span className="text-[10px] text-white/70 font-medium">{formatHoursLabel(hours)}</span>
                 <span className="flex items-center gap-0.5 text-[9px] text-amber-400 font-bold">
                   <Coins size={8} />
-                  {calcPrice(selectedMultiplier, d.hours)}
+                  {calcPrice(selectedMultiplier, hours)}
                 </span>
               </button>
             ))}
@@ -203,13 +209,24 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => handleConfirmPurchase()}
-        title="购买产量加成"
-        description={`全资源产量 ×${selectedMultiplier}，持续 ${pendingHours} 小时`}
+        title={isActive ? '叠加产量加成' : '购买产量加成'}
+        description={`全资源产量追加 ×${selectedMultiplier}，时间延长 ${pendingHours} 小时`}
         cost={calcPrice(selectedMultiplier, pendingHours)}
         loading={loading}
       />
     </div>
   )
+}
+
+function getNumberOptions(source: Record<string, number> | undefined, fallback: number[]) {
+  const values = source
+    ? Object.keys(source).map((key) => Number(key)).filter((value) => Number.isFinite(value) && value > 0)
+    : []
+  return [...(values.length > 0 ? values : fallback)].sort((a, b) => a - b)
+}
+
+function formatHoursLabel(hours: number) {
+  return `${hours}h`
 }
 
 export default BoostButton

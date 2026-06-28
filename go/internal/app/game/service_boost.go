@@ -2,6 +2,7 @@ package game
 
 import (
 	"errors"
+	"sort"
 	"strings"
 	"time"
 )
@@ -12,11 +13,11 @@ var (
 	ErrInvalidDuration = errors.New("invalid boost duration")
 )
 
-// 允许的加成倍率
-var validBoostMultipliers = map[int]bool{2: true, 4: true, 8: true, 16: true}
+// 默认加成倍率，用于旧配置缺少倍率表时兜底。
+var defaultBoostMultipliers = map[int]int{2: 1, 4: 3, 8: 8, 16: 20}
 
-// 允许的持续时间（小时）
-var validBoostHours = map[int]bool{1: true, 6: true, 12: true, 24: true}
+// 默认持续时间，用于旧配置缺少时长表时兜底。
+var defaultBoostDurationFactors = map[int]int{1: 1, 6: 5, 12: 9, 24: 16}
 
 // boostCost 计算产量加成的城金花费（从 balance 配置读取）
 func boostCost(multiplier int, hours int) int {
@@ -31,6 +32,8 @@ func boostCost(multiplier int, hours int) int {
 		if v, ok := cfg.BoostMultiplierFactor[multiplier]; ok {
 			mf = v
 		}
+	} else if v, ok := defaultBoostMultipliers[multiplier]; ok {
+		mf = v
 	}
 
 	df := 1
@@ -38,6 +41,8 @@ func boostCost(multiplier int, hours int) int {
 		if v, ok := cfg.BoostDurationFactor[hours]; ok {
 			df = v
 		}
+	} else if v, ok := defaultBoostDurationFactors[hours]; ok {
+		df = v
 	}
 
 	return baseCost * mf * df
@@ -49,10 +54,10 @@ func (s *Service) PurchaseBoost(playerID string, multiplier int, hours int) (Gam
 	if playerID == "" {
 		return GameState{}, ErrPlayerNotFound
 	}
-	if !validBoostMultipliers[multiplier] {
+	if !validBoostMultiplier(multiplier) {
 		return GameState{}, ErrInvalidBoost
 	}
-	if !validBoostHours[hours] {
+	if !validBoostHours(hours) {
 		return GameState{}, ErrInvalidDuration
 	}
 
@@ -62,22 +67,14 @@ func (s *Service) PurchaseBoost(playerID string, multiplier int, hours int) (Gam
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 
-		// 检查是否已有活跃加成
-		if state.ProductionBoost > 1 && state.ProductionBoostEnd != "" {
-			expiresAt, parseErr := time.Parse(resourceDateLayout, state.ProductionBoostEnd)
-			if parseErr == nil && now.Before(expiresAt) {
-				return ErrBoostActive
-			}
-		}
-
 		if int(state.CityGold) < cost {
 			return ErrInsufficientCityGold
 		}
 		state.CityGold -= FlexInt(cost)
 
-		// 设置加成
-		state.ProductionBoost = multiplier
-		state.ProductionBoostEnd = now.Add(time.Duration(hours) * time.Hour).UTC().Format(resourceDateLayout)
+		// 支持重复购买叠加：倍率累乘，时长接在当前未过期时间之后。
+		state.ProductionBoost = stackBoostMultiplier(state.ProductionBoost, state.ProductionBoostEnd, multiplier, now)
+		state.ProductionBoostEnd = extendBoostEnd(state.ProductionBoostEnd, hours, now)
 		state.ServerTime = now.UTC().Format(resourceDateLayout)
 
 		// 通过 Modifier 管线重新计算产量（含加成）
@@ -110,16 +107,34 @@ func GetBoostCost(multiplier int, hours int) int {
 	return boostCost(multiplier, hours)
 }
 
+// GetBoostMultipliers 返回当前配置开放的购买加成倍率。
+func GetBoostMultipliers() []int {
+	cfg := currentBalance()
+	if len(cfg.BoostMultiplierFactor) > 0 {
+		return sortedIntKeys(cfg.BoostMultiplierFactor)
+	}
+	return sortedIntKeys(defaultBoostMultipliers)
+}
+
+// GetBoostHours 返回当前配置开放的购买加成时长。
+func GetBoostHours() []int {
+	cfg := currentBalance()
+	if len(cfg.BoostDurationFactor) > 0 {
+		return sortedIntKeys(cfg.BoostDurationFactor)
+	}
+	return sortedIntKeys(defaultBoostDurationFactors)
+}
+
 // PurchaseCapacityBoost 购买仓库容量加成（消耗城金，价格同产量加成）
 func (s *Service) PurchaseCapacityBoost(playerID string, multiplier int, hours int) (GameState, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
 		return GameState{}, ErrPlayerNotFound
 	}
-	if !validBoostMultipliers[multiplier] {
+	if !validBoostMultiplier(multiplier) {
 		return GameState{}, ErrInvalidBoost
 	}
-	if !validBoostHours[hours] {
+	if !validBoostHours(hours) {
 		return GameState{}, ErrInvalidDuration
 	}
 
@@ -129,22 +144,14 @@ func (s *Service) PurchaseCapacityBoost(playerID string, multiplier int, hours i
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 
-		// 检查是否已有活跃容量加成
-		if state.CapacityBoost > 1 && state.CapacityBoostEnd != "" {
-			expiresAt, parseErr := time.Parse(resourceDateLayout, state.CapacityBoostEnd)
-			if parseErr == nil && now.Before(expiresAt) {
-				return ErrBoostActive
-			}
-		}
-
 		if int(state.CityGold) < cost {
 			return ErrInsufficientCityGold
 		}
 		state.CityGold -= FlexInt(cost)
 
-		// 设置容量加成
-		state.CapacityBoost = multiplier
-		state.CapacityBoostEnd = now.Add(time.Duration(hours) * time.Hour).UTC().Format(resourceDateLayout)
+		// 支持重复购买叠加：倍率累乘，时长接在当前未过期时间之后。
+		state.CapacityBoost = stackBoostMultiplier(state.CapacityBoost, state.CapacityBoostEnd, multiplier, now)
+		state.CapacityBoostEnd = extendBoostEnd(state.CapacityBoostEnd, hours, now)
 		state.ServerTime = now.UTC().Format(resourceDateLayout)
 
 		// 通过 Modifier 管线重新计算容量（含加成）
@@ -172,4 +179,59 @@ func (s *Service) PurchaseCapacityBoost(playerID string, multiplier int, hours i
 	s.publishCurrencyChanged(playerID, "", "", LedgerRefBoostPurchase)
 
 	return state, nil
+}
+
+// validBoostMultiplier 判断倍率是否在当前配置中开放。
+func validBoostMultiplier(multiplier int) bool {
+	cfg := currentBalance()
+	if len(cfg.BoostMultiplierFactor) > 0 {
+		_, ok := cfg.BoostMultiplierFactor[multiplier]
+		return ok
+	}
+	_, ok := defaultBoostMultipliers[multiplier]
+	return ok
+}
+
+// validBoostHours 判断购买时长是否在当前配置中开放。
+func validBoostHours(hours int) bool {
+	cfg := currentBalance()
+	if len(cfg.BoostDurationFactor) > 0 {
+		_, ok := cfg.BoostDurationFactor[hours]
+		return ok
+	}
+	_, ok := defaultBoostDurationFactors[hours]
+	return ok
+}
+
+// stackBoostMultiplier 叠加当前仍生效的购买加成倍率。
+func stackBoostMultiplier(current int, currentEnd string, added int, now time.Time) int {
+	if current <= 1 || currentEnd == "" {
+		return added
+	}
+	expiresAt, err := time.Parse(resourceDateLayout, currentEnd)
+	if err != nil || !now.Before(expiresAt) {
+		return added
+	}
+	return current * added
+}
+
+// extendBoostEnd 把新增时长接到当前未过期结束时间之后。
+func extendBoostEnd(currentEnd string, addedHours int, now time.Time) string {
+	base := now
+	if currentEnd != "" {
+		if expiresAt, err := time.Parse(resourceDateLayout, currentEnd); err == nil && now.Before(expiresAt) {
+			base = expiresAt
+		}
+	}
+	return base.Add(time.Duration(addedHours) * time.Hour).UTC().Format(resourceDateLayout)
+}
+
+// sortedIntKeys 返回按升序排列的 int map key。
+func sortedIntKeys(values map[int]int) []int {
+	keys := make([]int, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Ints(keys)
+	return keys
 }

@@ -60,6 +60,36 @@ func (r *MySQLRepository) CreatePvpMarchWithState(attackerPlayerID string, defen
 	return attacker, defender, march, nil
 }
 
+// UpdatePvpScoutStates 在同一事务内更新 PVP 侦查双方状态。
+func (r *MySQLRepository) UpdatePvpScoutStates(scoutPlayerID string, targetPlayerID string, updatedAt time.Time, update func(scout *game.GameState, target *game.GameState) error) (game.GameState, game.GameState, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return game.GameState{}, game.GameState{}, err
+	}
+	defer tx.Rollback()
+	scout, scoutJSON, target, targetJSON, err := loadPvpPlayerPairOrderedTx(tx, scoutPlayerID, targetPlayerID)
+	if err != nil {
+		return game.GameState{}, game.GameState{}, err
+	}
+	scoutArmy := armySnapshotsFromStorageState(scout.Army)
+	scoutAssignments := generalAssignmentSnapshotsFromStorageState(scout.GeneralAssignments)
+	targetArmy := armySnapshotsFromStorageState(target.Army)
+	targetAssignments := generalAssignmentSnapshotsFromStorageState(target.GeneralAssignments)
+	if err := update(&scout, &target); err != nil {
+		return game.GameState{}, game.GameState{}, err
+	}
+	if err := savePvpPlayerStateTx(tx, scout.Player.ID, scout, scoutJSON, updatedAt, scoutArmy, scoutAssignments); err != nil {
+		return game.GameState{}, game.GameState{}, err
+	}
+	if err := savePvpPlayerStateTx(tx, target.Player.ID, target, targetJSON, updatedAt, targetArmy, targetAssignments); err != nil {
+		return game.GameState{}, game.GameState{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return game.GameState{}, game.GameState{}, err
+	}
+	return scout, target, nil
+}
+
 // GetPvpMarch 读取单条 PVP 行军。
 func (r *MySQLRepository) GetPvpMarch(marchID string) (game.PvpMarch, error) {
 	return getPvpMarchTx(r.db, marchID, "")
@@ -159,7 +189,7 @@ func (r *MySQLRepository) ListDuePvpMarches(playerID string, now time.Time) ([]g
 }
 
 // ResolvePvpBattleTransaction 在事务内抢占行军并完成 PVP 战斗结算。
-func (r *MySQLRepository) ResolvePvpBattleTransaction(marchID string, updatedAt time.Time, update func(attacker *game.GameState, defender *game.GameState, reinforcements []game.Reinforcement, march *game.PvpMarch) (game.PvpBattle, game.BattleReport, game.BattleReport, []game.Reinforcement, error)) (game.GameState, game.GameState, game.PvpMarch, game.PvpBattle, game.BattleReport, game.BattleReport, error) {
+func (r *MySQLRepository) ResolvePvpBattleTransaction(marchID string, updatedAt time.Time, update func(attacker *game.GameState, defender *game.GameState, reinforcements []game.Reinforcement, march *game.PvpMarch) (game.PvpBattle, game.BattleReport, game.BattleReport, []game.BattleReport, []game.Reinforcement, error)) (game.GameState, game.GameState, game.PvpMarch, game.PvpBattle, game.BattleReport, game.BattleReport, error) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
@@ -189,7 +219,7 @@ func (r *MySQLRepository) ResolvePvpBattleTransaction(marchID string, updatedAt 
 	if err != nil {
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
 	}
-	battle, attackerReport, defenderReport, changedReinforcements, err := update(&attacker, &defender, reinforcements, &march)
+	battle, attackerReport, defenderReport, reinforcementReports, changedReinforcements, err := update(&attacker, &defender, reinforcements, &march)
 	if err != nil {
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
 	}
@@ -217,6 +247,14 @@ func (r *MySQLRepository) ResolvePvpBattleTransaction(marchID string, updatedAt 
 	}
 	if defenderReport.ID != "" {
 		if err := insertBattleReportTx(tx, defenderReport); err != nil && !isDuplicateEntry(err) {
+			return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
+		}
+	}
+	for _, report := range reinforcementReports {
+		if report.ID == "" {
+			continue
+		}
+		if err := insertBattleReportTx(tx, report); err != nil && !isDuplicateEntry(err) {
 			return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
 		}
 	}
@@ -677,7 +715,12 @@ func scanPvpPlayerState(scanner reinforcementScanner) (game.PvpPlayerState, erro
 }
 
 func insertBattleReportTx(tx *sql.Tx, report game.BattleReport) error {
+	report = game.NormalizeBattleReport(report)
 	reportJSON, err := json.Marshal(report)
+	if err != nil {
+		return err
+	}
+	detailJSON, err := json.Marshal(report.Detail)
 	if err != nil {
 		return err
 	}
@@ -686,9 +729,29 @@ func insertBattleReportTx(tx *sql.Tx, report game.BattleReport) error {
 		createdAt = time.Now().UTC()
 	}
 	_, err = tx.Exec(
-		`INSERT INTO battle_reports (id, player_id, report_json, type, is_read, deleted_by_player, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		report.ID, report.PlayerID, reportJSON, report.Type, report.Read, false, createdAt.UTC(),
+		`INSERT INTO battle_reports (
+			id, player_id, event_id, owner_player_id, view_type, source_type, battle_type, result,
+			title, summary, target_type, target_id, target_name, detail_json,
+			report_json, type, is_read, deleted_by_player, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		report.ID, report.PlayerID, report.EventID, report.OwnerPlayerID, report.ViewType, report.SourceType, report.BattleType, report.Result,
+		report.Title, report.Summary, report.SourceType, report.TargetID, report.TargetName, detailJSON,
+		reportJSON, report.Type, report.Read, false, createdAt.UTC(),
+	)
+	if err != nil {
+		return err
+	}
+	if err := insertBattleEventForReportTx(tx, report, createdAt.UTC()); err != nil {
+		return err
+	}
+	if err := insertBattleReportParticipantsForReportTx(tx, report, createdAt.UTC()); err != nil {
+		return err
+	}
+	_, err = tx.Exec(
+		`INSERT INTO battle_report_states (id, report_id, player_id, is_read, is_deleted, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, 0, ?, ?)
+		 ON DUPLICATE KEY UPDATE is_read = VALUES(is_read), updated_at = VALUES(updated_at)`,
+		"state_"+report.ID+"_"+report.PlayerID, report.ID, report.PlayerID, report.Read, createdAt.UTC(), createdAt.UTC(),
 	)
 	return err
 }

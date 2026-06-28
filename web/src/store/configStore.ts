@@ -20,6 +20,7 @@ const MODIFIER_LABELS: Record<string, string> = {
   productionBonus: '产量',
   buildSpeedBonus: '建造速度',
   marchSpeedBonus: '行军速度',
+  enemyLossRevealThresholdBonus: '情报隐蔽',
   recruitSpeedBonus: '征兵速度',
   infantryRecruitSpeedBonus: '步兵征兵',
   cavalryRecruitSpeedBonus: '骑兵征兵',

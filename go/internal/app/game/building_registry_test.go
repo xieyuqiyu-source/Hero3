@@ -36,8 +36,8 @@ func TestEnsureCoreBuildingsAppendsMissingBuildings(t *testing.T) {
 	if !ensureCoreBuildings(&state) {
 		t.Fatal("expected missing core buildings to be appended")
 	}
-	if len(state.Buildings) != 8 {
-		t.Fatalf("expected 8 core buildings, got %d", len(state.Buildings))
+	if len(state.Buildings) != 9 {
+		t.Fatalf("expected 9 core buildings, got %d", len(state.Buildings))
 	}
 	if findBuildingByID(&state, "administration-1") == nil {
 		t.Fatalf("expected administration core building, got %+v", state.Buildings)
@@ -47,6 +47,9 @@ func TestEnsureCoreBuildingsAppendsMissingBuildings(t *testing.T) {
 	}
 	if findBuildingByID(&state, "city_wall-1") == nil {
 		t.Fatalf("expected city wall core building, got %+v", state.Buildings)
+	}
+	if findBuildingByID(&state, "beacon_tower-1") == nil {
+		t.Fatalf("expected beacon tower core building, got %+v", state.Buildings)
 	}
 	if ensureCoreBuildings(&state) {
 		t.Fatal("expected second ensure not to append duplicate buildings")
