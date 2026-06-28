@@ -141,6 +141,7 @@ jobs:
           rsync -a --delete "$SOURCE_DIR/go/config/" /opt/hero3/go/config/
           rsync -a --delete "$SOURCE_DIR/web/dist/" /var/www/hero3/web/
           rsync -a --delete "$SOURCE_DIR/admin/dist/" /var/www/hero3/admin/
+          git -C "$SOURCE_DIR" log -1 --pretty='%h %s' > /opt/hero3/RELEASE
 
           log "Restarting services"
           systemctl restart hero3
