@@ -35,21 +35,44 @@ const (
 	PvpSeasonStatusSettled = "settled"
 
 	PvpSeasonRewardMailType = "pvp_season_reward"
+
+	defaultPvpWorldID      = "world_1"
+	defaultPvpWorldSize    = 2000
+	defaultPvpTargetRadius = 420
+	defaultPvpTargetLimit  = 80
 )
+
+// PvpWorldPosition 是玩家在 PVP 世界地图中的稳定坐标。
+type PvpWorldPosition struct {
+	WorldID  string `json:"worldId"`
+	X        int    `json:"x"`
+	Y        int    `json:"y"`
+	RegionID int    `json:"regionId"`
+}
+
+// PvpTargetFilter 控制 PVP 目标的地图视野筛选。
+type PvpTargetFilter struct {
+	CenterX int
+	CenterY int
+	Radius  int
+	Limit   int
+}
 
 // PvpTargetSummary 是 PVP 目标列表中的玩家摘要。
 type PvpTargetSummary struct {
-	PlayerID       string `json:"playerId"`
-	Nickname       string `json:"nickname"`
-	Faction        string `json:"faction"`
-	TotalArmy      int    `json:"totalArmy"`
-	BuildingLevel  int    `json:"buildingLevel"`
-	CanAttack      bool   `json:"canAttack"`
-	CanReinforce   bool   `json:"canReinforce"`
-	Protected      bool   `json:"protected"`
-	ProtectedUntil string `json:"protectedUntil,omitempty"`
-	CooldownUntil  string `json:"cooldownUntil,omitempty"`
-	Reason         string `json:"reason,omitempty"`
+	PlayerID       string           `json:"playerId"`
+	Nickname       string           `json:"nickname"`
+	Faction        string           `json:"faction"`
+	Position       PvpWorldPosition `json:"position"`
+	Distance       int              `json:"distance"`
+	TotalArmy      int              `json:"totalArmy"`
+	BuildingLevel  int              `json:"buildingLevel"`
+	CanAttack      bool             `json:"canAttack"`
+	CanReinforce   bool             `json:"canReinforce"`
+	Protected      bool             `json:"protected"`
+	ProtectedUntil string           `json:"protectedUntil,omitempty"`
+	CooldownUntil  string           `json:"cooldownUntil,omitempty"`
+	Reason         string           `json:"reason,omitempty"`
 }
 
 // PvpPlayerState 保存玩家 PVP 保护、冷却和每日次数状态。
@@ -70,7 +93,12 @@ type PvpPlayerState struct {
 
 // PvpTargetsResponse 是 PVP 目标列表响应。
 type PvpTargetsResponse struct {
-	Items []PvpTargetSummary `json:"items"`
+	Items     []PvpTargetSummary `json:"items"`
+	Self      PvpWorldPosition   `json:"self"`
+	WorldSize int                `json:"worldSize"`
+	CenterX   int                `json:"centerX"`
+	CenterY   int                `json:"centerY"`
+	Radius    int                `json:"radius"`
 }
 
 // PvpMarch 记录一次 PVP 行军生命周期。

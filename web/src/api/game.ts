@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetSummary, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse } from '@/types/game'
 import type { BalanceConfig, FactionConfig, FishingConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -355,8 +355,13 @@ export const gameApi = {
   },
 
   /** 获取 PVP 玩家目标 */
-  listPvpTargets(playerId: string) {
-    return api.get<{ items: PvpTargetSummary[] }>(`/pvp/targets?playerId=${playerId}`)
+  listPvpTargets(playerId: string, params?: { centerX?: number; centerY?: number; radius?: number; limit?: number }) {
+    const query = new URLSearchParams({ playerId })
+    if (params?.centerX) query.set('centerX', String(params.centerX))
+    if (params?.centerY) query.set('centerY', String(params.centerY))
+    if (params?.radius) query.set('radius', String(params.radius))
+    if (params?.limit) query.set('limit', String(params.limit))
+    return api.get<PvpTargetsResponse>(`/pvp/targets?${query.toString()}`)
   },
 
   /** 侦查 PVP 玩家 */

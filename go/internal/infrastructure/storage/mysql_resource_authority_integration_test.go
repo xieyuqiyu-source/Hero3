@@ -1084,8 +1084,8 @@ func TestMySQLRepairPlayerCoreAssetsPersistsAuthorityRows(t *testing.T) {
 	if _, ok := readBuildingRow(t, db, state.Player.ID, "construction_bureau-1"); !ok {
 		t.Fatalf("expected repair to persist construction bureau")
 	}
-	if _, ok := readResourceSlotRow(t, db, state.Player.ID, "construction_resource_slot-1"); !ok {
-		t.Fatalf("expected repair to persist construction resource slot")
+	if _, ok := readResourceSlotRow(t, db, state.Player.ID, "construction_resource_slot-1"); ok {
+		t.Fatalf("expected level 1 construction bureau not to persist construction resource slot")
 	}
 	if _, _, ok := readGeneralRow(t, db, state.Player.ID, "caocao"); !ok {
 		t.Fatalf("expected repair to persist default general")

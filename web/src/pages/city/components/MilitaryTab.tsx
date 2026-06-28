@@ -1,4 +1,5 @@
-import { type FC } from 'react'
+// 城池军事建筑页签，按防御、军事、内政展示建筑卡片。
+import { useEffect, useState, type FC } from 'react'
 import {
   Hammer,
   Swords,
@@ -6,13 +7,13 @@ import {
   Crosshair,
   HardHat,
   Landmark,
-  Wheat,
   Castle,
   Route,
   Eye,
   Store,
 } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
+import { getBuildingModifierProgressText, useConfigStore } from '@/store/configStore'
 import BuildingCard from './BuildingCard'
 import type { Building } from '@/types/game'
 
@@ -82,13 +83,22 @@ const CIVIL_BUILDINGS: BuildingConfig[] = [
     bgColor: 'bg-purple-50 dark:bg-purple-950/20',
   },
   {
-    type: 'granary',
-    name: '粮仓',
-    description: '提高口粮上限',
-    icon: Wheat,
-    color: 'text-amber-600',
-    bgColor: 'bg-amber-50 dark:bg-amber-950/20',
+    type: 'market',
+    name: '集市',
+    description: '玩家间资源交易',
+    icon: Store,
+    color: 'text-emerald-600',
+    bgColor: 'bg-emerald-50 dark:bg-emerald-950/20',
   },
+  // 预留功能：粮仓暂时隐藏，后续接入口粮上限玩法后再恢复。
+  // {
+  //   type: 'granary',
+  //   name: '粮仓',
+  //   description: '提高口粮上限',
+  //   icon: Wheat,
+  //   color: 'text-amber-600',
+  //   bgColor: 'bg-amber-50 dark:bg-amber-950/20',
+  // },
   {
     type: 'relay_station',
     name: '驿站',
@@ -117,14 +127,6 @@ const DEFENSE_BUILDINGS: BuildingConfig[] = [
     color: 'text-rose-600',
     bgColor: 'bg-rose-50 dark:bg-rose-950/20',
   },
-  {
-    type: 'market',
-    name: '集市',
-    description: '玩家间资源交易',
-    icon: Store,
-    color: 'text-emerald-600',
-    bgColor: 'bg-emerald-50 dark:bg-emerald-950/20',
-  },
 ]
 
 interface BuildingGroupProps {
@@ -132,9 +134,11 @@ interface BuildingGroupProps {
   icon: FC<{ size?: number; className?: string }>
   configs: BuildingConfig[]
   buildings: Building[]
+  highlightedType?: string | null
 }
 
-const BuildingGroup: FC<BuildingGroupProps> = ({ title, icon: GroupIcon, configs, buildings }) => (
+/** 渲染单个建筑分组 */
+const BuildingGroup: FC<BuildingGroupProps> = ({ title, icon: GroupIcon, configs, buildings, highlightedType }) => (
   <section>
     <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3 flex items-center gap-2">
       <GroupIcon size={16} className="text-[var(--color-accent)]" />
@@ -145,33 +149,68 @@ const BuildingGroup: FC<BuildingGroupProps> = ({ title, icon: GroupIcon, configs
         const building = buildings.find((b) => b.type === config.type)
         const Icon = config.icon
         return (
-          <BuildingCard
+          <div
             key={config.type}
-            buildingId={building?.id}
-            icon={<Icon size={20} />}
-            name={config.name}
-            description={config.description}
-            level={building?.level ?? 0}
-            production={building ? `Lv.${building.level}` : '未建造'}
-            upgradeEndsAt={building?.upgradeEndsAt}
-            color={config.color}
-            bgColor={config.bgColor}
-            locked={!building}
-          />
+            id={`city-building-${config.type}`}
+            className={`
+              rounded-2xl transition-all duration-300
+              ${highlightedType === config.type
+                ? 'ring-2 ring-sky-400 ring-offset-2 ring-offset-[var(--color-bg)] animate-pulse'
+                : ''
+              }
+            `}
+          >
+            <BuildingCard
+              buildingId={building?.id}
+              buildingType={config.type}
+              icon={<Icon size={20} />}
+              name={config.name}
+              description={config.description}
+              level={building?.level ?? 0}
+              production={building ? `Lv.${building.level}` : '未建造'}
+              effectText={building ? getBuildingModifierProgressText(config.type, building.level) : undefined}
+              upgradeEndsAt={building?.upgradeEndsAt}
+              color={config.color}
+              bgColor={config.bgColor}
+              locked={!building}
+            />
+          </div>
         )
       })}
     </div>
   </section>
 )
 
-const MilitaryTab: FC = () => {
+interface MilitaryTabProps {
+  focusConstructionNonce?: number
+}
+
+/** 渲染军事建筑页签 */
+const MilitaryTab: FC<MilitaryTabProps> = ({ focusConstructionNonce = 0 }) => {
   const buildings = useGameStore((s) => s.state?.buildings ?? EMPTY_BUILDINGS)
+  const [highlightedType, setHighlightedType] = useState<string | null>(null)
+  useConfigStore((s) => s.balance)
+
+  useEffect(() => {
+    if (focusConstructionNonce <= 0) return
+
+    const targetType = 'construction_bureau'
+    setHighlightedType(targetType)
+    window.setTimeout(() => {
+      document.getElementById(`city-building-${targetType}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    }, 80)
+    const timer = window.setTimeout(() => setHighlightedType(null), 1800)
+    return () => window.clearTimeout(timer)
+  }, [focusConstructionNonce])
 
   return (
     <div className="space-y-6">
-      <BuildingGroup title="军事" icon={Swords} configs={MILITARY_BUILDINGS} buildings={buildings} />
-      <BuildingGroup title="内政" icon={Landmark} configs={CIVIL_BUILDINGS} buildings={buildings} />
-      <BuildingGroup title="防御" icon={Shield} configs={DEFENSE_BUILDINGS} buildings={buildings} />
+      <BuildingGroup title="防御" icon={Shield} configs={DEFENSE_BUILDINGS} buildings={buildings} highlightedType={highlightedType} />
+      <BuildingGroup title="军事" icon={Swords} configs={MILITARY_BUILDINGS} buildings={buildings} highlightedType={highlightedType} />
+      <BuildingGroup title="内政" icon={Landmark} configs={CIVIL_BUILDINGS} buildings={buildings} highlightedType={highlightedType} />
     </div>
   )
 }

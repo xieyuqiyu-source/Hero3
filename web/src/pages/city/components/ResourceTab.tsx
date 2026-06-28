@@ -1,3 +1,4 @@
+// 城池资源建筑页签，展示资源田、批量升级和新增资源田引导。
 import { useState, type FC } from 'react'
 import {
   TreePine,
@@ -64,12 +65,18 @@ function filterBuildings(buildings: Building[], type: string): Building[] {
   return buildings.filter((b) => b.type === type)
 }
 
+/** 返回下一批资源田需要的建造司等级 */
+function getNextConstructionUnlockLevel(level: number): number | null {
+  return [5, 10, 15, 20, 25].find((requiredLevel) => level < requiredLevel) ?? null
+}
+
 interface ResourceTabProps {
   expanded: boolean
   onToggle: () => void
+  onRequestNewResourceSlot: () => void
 }
 
-const ResourceTab: FC<ResourceTabProps> = ({ expanded, onToggle }) => {
+const ResourceTab: FC<ResourceTabProps> = ({ expanded, onToggle, onRequestNewResourceSlot }) => {
   const buildings = useGameStore((s) => s.state?.buildings ?? EMPTY_BUILDINGS)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const patchCityAction = useGameStore((s) => s.patchCityAction)
@@ -78,9 +85,15 @@ const ResourceTab: FC<ResourceTabProps> = ({ expanded, onToggle }) => {
 
   // 找仓库建筑
   const warehouse = buildings.find((b) => b.type === 'warehouse')
+  const constructionBureau = buildings.find((b) => b.type === 'construction_bureau')
+  const nextUnlockLevel = getNextConstructionUnlockLevel(constructionBureau?.level ?? 0)
+  const newSlotTip = nextUnlockLevel
+    ? `建造司 Lv.${nextUnlockLevel} 可解锁下一批新田地：木、石、铁、粮各 1 格。`
+    : '建造司已解锁全部新田地。'
   const warehouseLevel = warehouse?.level ?? 0
   const warehouseCapacity = resources?.capacity.wood ?? 5000
 
+  /** 执行资源田批量升级 */
   const handleBatchUpgrade = async () => {
     if (!activePlayerId || batchLoading) return
     setBatchLoading(true)
@@ -93,6 +106,12 @@ const ResourceTab: FC<ResourceTabProps> = ({ expanded, onToggle }) => {
     } finally {
       setBatchLoading(false)
     }
+  }
+
+  /** 引导玩家前往建造司查看解锁条件 */
+  const handleRequestNewResourceSlot = () => {
+    toast.info(newSlotTip)
+    onRequestNewResourceSlot()
   }
 
   return (
@@ -170,6 +189,7 @@ const ResourceTab: FC<ResourceTabProps> = ({ expanded, onToggle }) => {
                   {/* Add more slot button */}
                   <button
                     type="button"
+                    onClick={handleRequestNewResourceSlot}
                     className="
                       w-full flex items-center justify-center gap-1 px-3 py-2 rounded-xl
                       border border-dashed border-[var(--color-border)]
@@ -197,6 +217,7 @@ const ResourceTab: FC<ResourceTabProps> = ({ expanded, onToggle }) => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <BuildingCard
             buildingId={warehouse?.id}
+            buildingType="warehouse"
             icon={<Warehouse size={20} />}
             name="仓库"
             description="提升资源容量上限"
@@ -207,6 +228,7 @@ const ResourceTab: FC<ResourceTabProps> = ({ expanded, onToggle }) => {
             bgColor="bg-indigo-50 dark:bg-indigo-950/20"
           />
           <BuildingCard
+            buildingType="market"
             icon={<TrendingUp size={20} />}
             name="市集"
             description="提升全资源产出加成"

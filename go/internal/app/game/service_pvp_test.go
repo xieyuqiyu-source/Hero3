@@ -42,6 +42,69 @@ func TestPvpAttackRejectsSelfAndSameAccount(t *testing.T) {
 	}
 }
 
+func TestPvpTargetsExposeStableWorldPositions(t *testing.T) {
+	svc, _, attacker, _ := newPvpTestService(t)
+
+	first, err := svc.ListPvpTargets(attacker.Player.ID)
+	if err != nil {
+		t.Fatalf("ListPvpTargets first failed: %v", err)
+	}
+	second, err := svc.ListPvpTargets(attacker.Player.ID)
+	if err != nil {
+		t.Fatalf("ListPvpTargets second failed: %v", err)
+	}
+	if first.Self != second.Self {
+		t.Fatalf("expected stable self position, first=%+v second=%+v", first.Self, second.Self)
+	}
+	if first.Self.X <= 0 || first.Self.Y <= 0 || first.WorldSize != defaultPvpWorldSize {
+		t.Fatalf("unexpected self world position: %+v world=%d", first.Self, first.WorldSize)
+	}
+	if len(first.Items) == 0 || first.Items[0].Position.X <= 0 || first.Items[0].Distance <= 0 {
+		t.Fatalf("expected target positions and distance, got %+v", first.Items)
+	}
+}
+
+func TestPvpTargetsFilterByMapViewport(t *testing.T) {
+	svc, _, attacker, defender := newPvpTestService(t)
+	defenderPosition := pvpWorldPositionForPlayer(defender.Player.ID)
+
+	near, err := svc.ListPvpTargetsInArea(attacker.Player.ID, PvpTargetFilter{
+		CenterX: defenderPosition.X,
+		CenterY: defenderPosition.Y,
+		Radius:  1,
+		Limit:   10,
+	})
+	if err != nil {
+		t.Fatalf("ListPvpTargetsInArea near failed: %v", err)
+	}
+	if len(near.Items) != 1 || near.Items[0].PlayerID != defender.Player.ID {
+		t.Fatalf("expected defender in near viewport, got %+v", near.Items)
+	}
+
+	farX := 1
+	if defenderPosition.X < defaultPvpWorldSize/2 {
+		farX = defaultPvpWorldSize
+	}
+	farY := 1
+	if defenderPosition.Y < defaultPvpWorldSize/2 {
+		farY = defaultPvpWorldSize
+	}
+	far, err := svc.ListPvpTargetsInArea(attacker.Player.ID, PvpTargetFilter{
+		CenterX: farX,
+		CenterY: farY,
+		Radius:  1,
+		Limit:   10,
+	})
+	if err != nil {
+		t.Fatalf("ListPvpTargetsInArea far failed: %v", err)
+	}
+	for _, target := range far.Items {
+		if target.PlayerID == defender.Player.ID {
+			t.Fatalf("expected defender outside far viewport, got %+v", far.Items)
+		}
+	}
+}
+
 func TestPvpMarchResolvesBattleAndReturnsSurvivors(t *testing.T) {
 	svc, repo, attacker, defender := newPvpTestService(t)
 	attacker.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}

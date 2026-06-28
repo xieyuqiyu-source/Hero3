@@ -200,10 +200,10 @@ func (s *Service) GetBalance() BalanceConfig {
 }
 
 func (s *Service) UpdateBalance(config BalanceConfig) error {
-	if err := SaveBalanceConfig(s.balancePath, config); err != nil {
+	if err := SetBalanceConfig(config); err != nil {
 		return err
 	}
-	return SetBalanceConfig(config)
+	return SaveBalanceConfig(s.balancePath, GetBalanceConfig())
 }
 
 func (s *Service) GetNpcConfig() NpcConfig {

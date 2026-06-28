@@ -1,8 +1,10 @@
+/* 本文件实现地图页入口和地图玩法页签切换。 */
 import { useState, useRef, type FC } from 'react'
 import { Castle, Users, Flag, Scroll, Sparkles } from 'lucide-react'
 import NpcCityTab from './components/NpcCityTab'
 import MiniGamesTab from './components/MiniGamesTab'
 import PlayerTargetsTab from './components/PlayerTargetsTab'
+import DungeonTab from './components/DungeonTab'
 
 type MapTab = 'npc' | 'players' | 'stronghold' | 'dungeon' | 'minigames'
 
@@ -149,11 +151,7 @@ const MapPage: FC = () => {
           <span className="text-sm text-[var(--color-text-muted)]">据点系统开发中，敬请期待</span>
         </div>
       )}
-      {activeTab === 'dungeon' && (
-        <div className="flex items-center justify-center py-16">
-          <span className="text-sm text-[var(--color-text-muted)]">副本系统开发中，敬请期待</span>
-        </div>
-      )}
+      {activeTab === 'dungeon' && <DungeonTab />}
       {activeTab === 'minigames' && <MiniGamesTab />}
     </div>
   )

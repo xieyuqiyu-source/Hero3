@@ -237,12 +237,26 @@ var defaultBalance = BalanceConfig{
 			GoldUpgradeCostByLevel: goldUpgradeCostTable(10, 25),
 			UpgradeSecondsByLevel:  militaryUpgradeSecondsTable(60, 25),
 		},
+		"administration": {
+			Type:                  "administration",
+			Name:                  "内政厅",
+			ModifiersByLevel:      militaryModifierTable([]string{StatProductionBonus}, 0.01, "percentAdd", 20),
+			UpgradeCostByLevel:    militaryUpgradeCostTable(180, 180, 140, 220, 20),
+			UpgradeSecondsByLevel: militaryUpgradeSecondsTable(70, 20),
+		},
 		"relay_station": {
 			Type:                  "relay_station",
 			Name:                  "驿站",
 			ModifiersByLevel:      militaryModifierTable([]string{StatMarchSpeedBonus}, 0.01, "percentAdd", 20),
 			UpgradeCostByLevel:    militaryUpgradeCostTable(160, 120, 180, 220, 20),
 			UpgradeSecondsByLevel: militaryUpgradeSecondsTable(60, 20),
+		},
+		"city_wall": {
+			Type:                  "city_wall",
+			Name:                  "城墙",
+			ModifiersByLevel:      militaryModifierTable([]string{StatDefenseBonus}, 0.01, "percentAdd", 20),
+			UpgradeCostByLevel:    militaryUpgradeCostTable(120, 260, 180, 100, 20),
+			UpgradeSecondsByLevel: militaryUpgradeSecondsTable(90, 20),
 		},
 	},
 }
@@ -252,12 +266,14 @@ func GetBalanceConfig() BalanceConfig {
 }
 
 func SetBalanceConfig(config BalanceConfig) error {
+	config = cloneBalance(config)
+	fillMissingDefaultBuildingConfigs(&config)
 	if err := validateBalance(config); err != nil {
 		return err
 	}
 
 	balanceMu.Lock()
-	activeBalance = cloneBalance(config)
+	activeBalance = config
 	balanceMu.Unlock()
 	return nil
 }
@@ -283,6 +299,8 @@ func LoadBalanceConfig(path string) error {
 }
 
 func SaveBalanceConfig(path string, config BalanceConfig) error {
+	config = cloneBalance(config)
+	fillMissingDefaultBuildingConfigs(&config)
 	if err := validateBalance(config); err != nil {
 		return err
 	}
@@ -304,6 +322,60 @@ func currentBalance() BalanceConfig {
 	balanceMu.RLock()
 	defer balanceMu.RUnlock()
 	return cloneBalance(activeBalance)
+}
+
+// fillMissingDefaultBuildingConfigs 补齐旧配置缺失的核心建筑配置和能力字段，避免版本升级后建筑存在但无加成。
+func fillMissingDefaultBuildingConfigs(config *BalanceConfig) {
+	if config.Buildings == nil {
+		config.Buildings = map[string]BuildingConfig{}
+	}
+	for key, building := range defaultBalance.Buildings {
+		current, exists := config.Buildings[key]
+		if !exists {
+			config.Buildings[key] = cloneBuildingConfig(building)
+			continue
+		}
+		config.Buildings[key] = mergeMissingBuildingConfig(current, building)
+	}
+}
+
+// mergeMissingBuildingConfig 只补旧配置缺失的字段，不覆盖 GM 已经调整过的配置。
+func mergeMissingBuildingConfig(current BuildingConfig, fallback BuildingConfig) BuildingConfig {
+	next := cloneBuildingConfig(current)
+	if next.Type == "" {
+		next.Type = fallback.Type
+	}
+	if next.Name == "" {
+		next.Name = fallback.Name
+	}
+	if next.ResourceType == "" {
+		next.ResourceType = fallback.ResourceType
+	}
+	if len(next.ProductionByLevel) == 0 {
+		next.ProductionByLevel = append([]int(nil), fallback.ProductionByLevel...)
+	}
+	if len(next.CapacityByLevel) == 0 {
+		next.CapacityByLevel = append([]int(nil), fallback.CapacityByLevel...)
+	}
+	if len(next.ModifiersByLevel) == 0 {
+		next.ModifiersByLevel = cloneModifierLevelMap(fallback.ModifiersByLevel)
+	}
+	if len(next.UpgradeCostByLevel) == 0 {
+		next.UpgradeCostByLevel = make(map[int]ResourceMap, len(fallback.UpgradeCostByLevel))
+		for level, cost := range fallback.UpgradeCostByLevel {
+			next.UpgradeCostByLevel[level] = cloneResourceMap(cost)
+		}
+	}
+	if len(next.GoldUpgradeCostByLevel) == 0 {
+		next.GoldUpgradeCostByLevel = cloneIntMap(fallback.GoldUpgradeCostByLevel)
+	}
+	if len(next.UpgradeSecondsByLevel) == 0 {
+		next.UpgradeSecondsByLevel = make(map[int]int, len(fallback.UpgradeSecondsByLevel))
+		for level, seconds := range fallback.UpgradeSecondsByLevel {
+			next.UpgradeSecondsByLevel[level] = seconds
+		}
+	}
+	return next
 }
 
 func validateBalance(config BalanceConfig) error {

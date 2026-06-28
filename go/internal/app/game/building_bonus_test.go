@@ -49,6 +49,69 @@ func TestBalanceConfigLoadsMilitaryBuildingModifiers(t *testing.T) {
 	if relayLevelTwenty[0].Key != StatMarchSpeedBonus || math.Abs(relayLevelTwenty[0].Value-0.2) > 1e-6 {
 		t.Fatalf("expected relay station level 20 march speed bonus 0.2, got %+v", relayLevelTwenty[0])
 	}
+	constructionBureau, exists := cfg.Buildings["construction_bureau"]
+	if !exists {
+		t.Fatal("expected construction_bureau config to exist")
+	}
+	constructionLevelTwenty := constructionBureau.ModifiersByLevel[20]
+	if len(constructionLevelTwenty) != 1 {
+		t.Fatalf("expected 1 construction bureau level 20 modifier, got %d", len(constructionLevelTwenty))
+	}
+	if constructionLevelTwenty[0].Key != StatBuildSpeedBonus || math.Abs(constructionLevelTwenty[0].Value-0.2) > 1e-6 {
+		t.Fatalf("expected construction bureau level 20 build speed bonus 0.2, got %+v", constructionLevelTwenty[0])
+	}
+	administration, exists := cfg.Buildings["administration"]
+	if !exists {
+		t.Fatal("expected administration config to exist")
+	}
+	administrationLevelTwenty := administration.ModifiersByLevel[20]
+	if len(administrationLevelTwenty) != 1 {
+		t.Fatalf("expected 1 administration level 20 modifier, got %d", len(administrationLevelTwenty))
+	}
+	if administrationLevelTwenty[0].Key != StatProductionBonus || math.Abs(administrationLevelTwenty[0].Value-0.2) > 1e-6 {
+		t.Fatalf("expected administration level 20 production bonus 0.2, got %+v", administrationLevelTwenty[0])
+	}
+	cityWall, exists := cfg.Buildings["city_wall"]
+	if !exists {
+		t.Fatal("expected city_wall config to exist")
+	}
+	cityWallLevelTwenty := cityWall.ModifiersByLevel[20]
+	if len(cityWallLevelTwenty) != 1 {
+		t.Fatalf("expected 1 city wall level 20 modifier, got %d", len(cityWallLevelTwenty))
+	}
+	if cityWallLevelTwenty[0].Key != StatDefenseBonus || math.Abs(cityWallLevelTwenty[0].Value-0.2) > 1e-6 {
+		t.Fatalf("expected city wall level 20 defense bonus 0.2, got %+v", cityWallLevelTwenty[0])
+	}
+}
+
+func TestSetBalanceConfigFillsMissingCoreBuildingConfigs(t *testing.T) {
+	original := GetBalanceConfig()
+	defer func() {
+		if err := SetBalanceConfig(original); err != nil {
+			t.Fatalf("restore balance config failed: %v", err)
+		}
+	}()
+
+	config := GetBalanceConfig()
+	delete(config.Buildings, "administration")
+	delete(config.Buildings, "relay_station")
+	delete(config.Buildings, "city_wall")
+	construction := config.Buildings["construction_bureau"]
+	construction.ModifiersByLevel = nil
+	config.Buildings["construction_bureau"] = construction
+
+	if err := SetBalanceConfig(config); err != nil {
+		t.Fatalf("SetBalanceConfig failed: %v", err)
+	}
+	next := GetBalanceConfig()
+	for _, buildingType := range []string{"administration", "relay_station", "city_wall"} {
+		if _, exists := next.Buildings[buildingType]; !exists {
+			t.Fatalf("expected missing %s config to be filled", buildingType)
+		}
+	}
+	if len(next.Buildings["construction_bureau"].ModifiersByLevel[20]) != 1 {
+		t.Fatalf("expected missing construction bureau modifiers to be filled")
+	}
 }
 
 func TestMilitaryBuildingsApplyCombatModifiers(t *testing.T) {

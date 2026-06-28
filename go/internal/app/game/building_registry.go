@@ -80,7 +80,9 @@ func ensureCoreBuildings(state *GameState) bool {
 		{ID: "weapon_bureau-1", Type: "weapon_bureau", Level: 1},
 		{ID: "armor_bureau-1", Type: "armor_bureau", Level: 1},
 		{ID: "construction_bureau-1", Type: "construction_bureau", Level: 1},
+		{ID: "administration-1", Type: "administration", Level: 1},
 		{ID: "relay_station-1", Type: "relay_station", Level: 1},
+		{ID: "city_wall-1", Type: "city_wall", Level: 1},
 	}
 	changed := false
 	for _, requiredBuilding := range required {
@@ -104,13 +106,10 @@ func ApplyConstructionBureauResourceSlots(state *GameState, now time.Time) bool 
 	if state == nil {
 		return false
 	}
-	targetSlots := constructionBureauUnlockedSlotCount(state.Buildings)
-	if targetSlots <= 0 {
-		return false
-	}
-	types := []string{"wood_camp", "stone_quarry", "iron_mine", "farm", "wood_camp"}
-	changed := false
-	for i := 0; i < targetSlots && i < len(types); i++ {
+	unlockedRounds := constructionBureauUnlockedSlotRoundCount(state.Buildings)
+	types := constructionBureauResourceSlotTypes(unlockedRounds)
+	changed := pruneConstructionBureauResourceSlots(state, len(types))
+	for i := 0; i < len(types); i++ {
 		buildingID := constructionBureauResourceSlotID(i + 1)
 		if findBuildingByID(state, buildingID) != nil {
 			continue
@@ -175,15 +174,15 @@ func EnsureResourceSlotsForBuildings(state *GameState, now time.Time) bool {
 	return changed
 }
 
-// constructionBureauUnlockedSlotCount 返回建造司等级已解锁的额外资源田数量。
-func constructionBureauUnlockedSlotCount(buildings []Building) int {
+// constructionBureauUnlockedSlotRoundCount 返回建造司等级已解锁的资源田批次数。
+func constructionBureauUnlockedSlotRoundCount(buildings []Building) int {
 	level := 0
 	for _, building := range buildings {
 		if building.Type == "construction_bureau" && building.Level > level {
 			level = building.Level
 		}
 	}
-	thresholds := []int{1, 5, 10, 15, 20}
+	thresholds := []int{5, 10, 15, 20, 25}
 	count := 0
 	for _, threshold := range thresholds {
 		if level >= threshold {
@@ -193,7 +192,62 @@ func constructionBureauUnlockedSlotCount(buildings []Building) int {
 	return count
 }
 
+// constructionBureauResourceSlotTypes 返回建造司按批次解锁的资源田类型。
+func constructionBureauResourceSlotTypes(rounds int) []string {
+	if rounds <= 0 {
+		return nil
+	}
+	resourceTypes := []string{"wood_camp", "stone_quarry", "iron_mine", "farm"}
+	types := make([]string, 0, rounds*len(resourceTypes))
+	for i := 0; i < rounds; i++ {
+		types = append(types, resourceTypes...)
+	}
+	return types
+}
+
+// pruneConstructionBureauResourceSlots 移除当前建造司等级尚未解锁的额外资源田。
+func pruneConstructionBureauResourceSlots(state *GameState, allowedCount int) bool {
+	changed := false
+	nextBuildings := state.Buildings[:0]
+	for _, building := range state.Buildings {
+		index := constructionBureauResourceSlotIndex(building.ID)
+		if index > 0 && index > allowedCount {
+			changed = true
+			continue
+		}
+		nextBuildings = append(nextBuildings, building)
+	}
+	state.Buildings = nextBuildings
+
+	nextSlots := state.ResourceSlots[:0]
+	for _, slot := range state.ResourceSlots {
+		slotIndex := constructionBureauResourceSlotIndex(slot.ID)
+		buildingIndex := constructionBureauResourceSlotIndex(slot.BuildingID)
+		if (slotIndex > 0 && slotIndex > allowedCount) || (buildingIndex > 0 && buildingIndex > allowedCount) {
+			changed = true
+			continue
+		}
+		nextSlots = append(nextSlots, slot)
+	}
+	state.ResourceSlots = nextSlots
+	return changed
+}
+
 // constructionBureauResourceSlotID 返回建造司解锁资源田对应的稳定建筑 ID。
 func constructionBureauResourceSlotID(index int) string {
 	return "construction_resource_slot-" + strconv.Itoa(index)
+}
+
+// constructionBureauResourceSlotIndex 解析建造司资源田稳定 ID 对应的序号。
+func constructionBureauResourceSlotIndex(id string) int {
+	id = strings.TrimSpace(id)
+	const prefix = "construction_resource_slot-"
+	if !strings.HasPrefix(id, prefix) {
+		return 0
+	}
+	index, err := strconv.Atoi(strings.TrimPrefix(id, prefix))
+	if err != nil || index <= 0 {
+		return 0
+	}
+	return index
 }

@@ -4,6 +4,7 @@ package game
 import (
 	"encoding/json"
 	"errors"
+	"hash/fnv"
 	"math"
 	"sort"
 	"strconv"
@@ -27,6 +28,11 @@ var (
 
 // ListPvpTargets 返回可展示的玩家目标列表。
 func (s *Service) ListPvpTargets(playerID string) (PvpTargetsResponse, error) {
+	return s.ListPvpTargetsInArea(playerID, PvpTargetFilter{})
+}
+
+// ListPvpTargetsInArea 返回指定地图视野内的玩家目标列表。
+func (s *Service) ListPvpTargetsInArea(playerID string, filter PvpTargetFilter) (PvpTargetsResponse, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
 		return PvpTargetsResponse{}, ErrPlayerNotFound
@@ -42,10 +48,20 @@ func (s *Service) ListPvpTargets(playerID string) (PvpTargetsResponse, error) {
 	items := []PvpTargetSummary{}
 	now := time.Now().UTC()
 	requestPvpState, _ := s.repo.GetPvpPlayerState(playerID, now)
+	selfPosition := pvpWorldPositionForPlayer(playerID)
+	filter = normalizePvpTargetFilter(filter, selfPosition)
 	for _, account := range accounts {
 		for _, player := range account.Players {
 			if player.ID == playerID {
 				continue
+			}
+			position := pvpWorldPositionForPlayer(player.ID)
+			distance := pvpCoordinateDistance(selfPosition, position)
+			if filter.Radius > 0 {
+				centerDistance := pvpCoordinateDistance(PvpWorldPosition{X: filter.CenterX, Y: filter.CenterY}, position)
+				if centerDistance > filter.Radius {
+					continue
+				}
 			}
 			canAttack := account.ID != requestAccountID
 			reason := ""
@@ -73,6 +89,8 @@ func (s *Service) ListPvpTargets(playerID string) (PvpTargetsResponse, error) {
 				PlayerID:       player.ID,
 				Nickname:       player.Nickname,
 				Faction:        player.Faction,
+				Position:       position,
+				Distance:       distance,
 				TotalArmy:      player.TotalArmy,
 				BuildingLevel:  player.BuildingLevel,
 				CanAttack:      canAttack,
@@ -85,17 +103,30 @@ func (s *Service) ListPvpTargets(playerID string) (PvpTargetsResponse, error) {
 		}
 	}
 	sort.Slice(items, func(i, j int) bool {
+		if items[i].Distance != items[j].Distance {
+			return items[i].Distance < items[j].Distance
+		}
 		if items[i].TotalArmy == items[j].TotalArmy {
 			return items[i].PlayerID < items[j].PlayerID
 		}
 		return items[i].TotalArmy > items[j].TotalArmy
 	})
-	return PvpTargetsResponse{Items: items}, nil
+	if filter.Limit > 0 && len(items) > filter.Limit {
+		items = items[:filter.Limit]
+	}
+	return PvpTargetsResponse{
+		Items:     items,
+		Self:      selfPosition,
+		WorldSize: defaultPvpWorldSize,
+		CenterX:   filter.CenterX,
+		CenterY:   filter.CenterY,
+		Radius:    filter.Radius,
+	}, nil
 }
 
 // GetPvpTarget 返回单个玩家 PVP 目标摘要。
 func (s *Service) GetPvpTarget(playerID string, targetPlayerID string) (PvpTargetSummary, error) {
-	targets, err := s.ListPvpTargets(playerID)
+	targets, err := s.ListPvpTargetsInArea(playerID, PvpTargetFilter{Radius: defaultPvpWorldSize, Limit: 200})
 	if err != nil {
 		return PvpTargetSummary{}, err
 	}
@@ -105,6 +136,75 @@ func (s *Service) GetPvpTarget(playerID string, targetPlayerID string) (PvpTarge
 		}
 	}
 	return PvpTargetSummary{}, ErrPlayerNotFound
+}
+
+// normalizePvpTargetFilter 规范化 PVP 地图视野筛选参数。
+func normalizePvpTargetFilter(filter PvpTargetFilter, self PvpWorldPosition) PvpTargetFilter {
+	if filter.CenterX <= 0 {
+		filter.CenterX = self.X
+	}
+	if filter.CenterY <= 0 {
+		filter.CenterY = self.Y
+	}
+	filter.CenterX = clampInt(filter.CenterX, 1, defaultPvpWorldSize)
+	filter.CenterY = clampInt(filter.CenterY, 1, defaultPvpWorldSize)
+	if filter.Radius < 0 {
+		filter.Radius = 0
+	}
+	if filter.Radius == 0 {
+		filter.Radius = defaultPvpTargetRadius
+	}
+	if filter.Radius > defaultPvpWorldSize {
+		filter.Radius = defaultPvpWorldSize
+	}
+	if filter.Limit <= 0 {
+		filter.Limit = defaultPvpTargetLimit
+	}
+	if filter.Limit > 200 {
+		filter.Limit = 200
+	}
+	return filter
+}
+
+// pvpWorldPositionForPlayer 根据玩家 ID 生成稳定伪随机世界坐标。
+func pvpWorldPositionForPlayer(playerID string) PvpWorldPosition {
+	hash := fnv.New64a()
+	_, _ = hash.Write([]byte(strings.TrimSpace(playerID)))
+	value := hash.Sum64()
+	x := int(value%uint64(defaultPvpWorldSize)) + 1
+	y := int((value/uint64(defaultPvpWorldSize))%uint64(defaultPvpWorldSize)) + 1
+	return PvpWorldPosition{
+		WorldID:  defaultPvpWorldID,
+		X:        x,
+		Y:        y,
+		RegionID: pvpRegionID(x, y),
+	}
+}
+
+// pvpRegionID 把世界地图按 200x200 切块，生成区域编号。
+func pvpRegionID(x int, y int) int {
+	regionSize := 200
+	col := (clampInt(x, 1, defaultPvpWorldSize) - 1) / regionSize
+	row := (clampInt(y, 1, defaultPvpWorldSize) - 1) / regionSize
+	return row*10 + col + 1
+}
+
+// pvpCoordinateDistance 返回两个地图坐标之间的直线距离。
+func pvpCoordinateDistance(a PvpWorldPosition, b PvpWorldPosition) int {
+	dx := float64(a.X - b.X)
+	dy := float64(a.Y - b.Y)
+	return int(math.Round(math.Sqrt(dx*dx + dy*dy)))
+}
+
+// clampInt 限制整数范围。
+func clampInt(value int, min int, max int) int {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
 }
 
 // ScoutPvpTarget 侦查玩家目标并生成侦查战报。

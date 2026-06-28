@@ -2749,8 +2749,8 @@ func TestGetStateProjectsCompletedConstructionBureauUpgradeWithoutPersisting(t *
 	if building == nil || building.Level != 5 || building.UpgradeEndsAt != nil {
 		t.Fatalf("expected construction bureau completed at level 5, got %+v", building)
 	}
-	if countConstructionResourceSlots(next.Buildings) != 2 {
-		t.Fatalf("expected two construction resource slots after level 5, got %+v", next.Buildings)
+	if countConstructionResourceSlots(next.Buildings) != 4 {
+		t.Fatalf("expected four construction resource slots after level 5, got %+v", next.Buildings)
 	}
 	storedAfter := repo.players[state.Player.ID]
 	buildingAfter := findBuildingByID(&storedAfter, "construction_bureau-1")
@@ -2797,8 +2797,8 @@ func TestRepairPlayerCoreAssetsRepairsLegacyStateExplicitly(t *testing.T) {
 	if findBuildingByID(&repaired.State, "construction_bureau-1") == nil {
 		t.Fatalf("expected repair to add construction bureau")
 	}
-	if findBuildingByID(&repaired.State, "construction_resource_slot-1") == nil {
-		t.Fatalf("expected repair to add construction resource slot")
+	if findBuildingByID(&repaired.State, "construction_resource_slot-1") != nil {
+		t.Fatalf("expected level 1 construction bureau not to add construction resource slot")
 	}
 	if repaired.State.General == nil || repaired.State.General.ID == "" {
 		t.Fatalf("expected repair to add default general")

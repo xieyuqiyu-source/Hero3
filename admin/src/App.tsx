@@ -23,6 +23,7 @@ import GoldLedgerPanel from '@/components/GoldLedgerPanel'
 import MailAdminPanel from '@/components/MailAdminPanel'
 import AnnouncementAdminPanel from '@/components/AnnouncementAdminPanel'
 import PvpAdminPanel from '@/components/PvpAdminPanel'
+import DungeonAssetConfigPanel from '@/components/DungeonAssetConfigPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
 import { Sliders, MapPin, Swords, Flag, Shield, Users, Fish } from 'lucide-react'
@@ -95,6 +96,8 @@ function App() {
         return <AnnouncementAdminPanel />
       case 'pvp':
         return <PvpAdminPanel accounts={accounts} />
+      case 'dungeons':
+        return <DungeonAssetConfigPanel />
       case 'balance':
         return (
           <div className="grid gap-4">

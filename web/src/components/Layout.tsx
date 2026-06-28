@@ -29,6 +29,7 @@ import type { AnnouncementSummary } from '@/types/game'
 import { useProjectedResources } from '@/hooks/useProjectedResources'
 import { useConfigStore } from '@/store/configStore'
 import { FACTION_LABELS, FACTION_COLORS } from '@/utils/faction'
+import { sortArmyForDisplay } from '@/utils/armySort'
 import type { GameState } from '@/types/game'
 
 interface LayoutProps {
@@ -265,6 +266,9 @@ const MobileSidebarContent: FC<{
     { key: 'help', label: '帮助', hasNotify: false },
   ]
   const resources = useProjectedResources()
+  const units = useConfigStore((s) => s.units)
+  const factionUnits = units?.[gameState?.player.faction ?? '']
+  const visibleArmy = sortArmyForDisplay(gameState?.army, factionUnits)
   const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
 
   return (
@@ -339,14 +343,12 @@ const MobileSidebarContent: FC<{
                 </div>
               </ProductionTooltip>
             ))}
-            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
-              <span className="text-xs">口粮</span>
-              <span className="text-xs font-semibold text-[var(--color-text-muted)] ml-auto">--</span>
-            </div>
+            {/* 预留功能：口粮产出入口暂时隐藏 */}
           </div>
         </div>
 
-        {/* Warehouse */}
+        {/* 预留功能：仓库卡片暂时隐藏 */}
+        {false && (
         <div className="mb-2.5 rounded-2xl p-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
           <div className="flex items-center gap-2 mb-2">
             <Warehouse size={14} className="text-[var(--color-accent)]" />
@@ -357,6 +359,7 @@ const MobileSidebarContent: FC<{
           </div>
           <p className="text-xs text-[var(--color-text-secondary)] opacity-50">仓库容量预留</p>
         </div>
+        )}
 
         {/* Army */}
         <div className="mb-2.5 rounded-2xl p-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
@@ -365,10 +368,9 @@ const MobileSidebarContent: FC<{
             <span className="text-sm font-semibold text-[var(--color-text-primary)]">军队</span>
             <span className="text-xs font-semibold text-[var(--color-accent)] ml-auto">{totalArmy}</span>
           </div>
-          {gameState?.army && gameState.army.filter(u => u.amount > 0).length > 0 ? (
+          {visibleArmy.length > 0 ? (
             <div className="space-y-1">
-              {gameState.army.filter(u => u.amount > 0).map((unit) => {
-                const factionUnits = useConfigStore.getState().units?.[gameState.player.faction]
+              {visibleArmy.map((unit) => {
                 const unitName = factionUnits?.[unit.unitType]?.name ?? unit.unitType
                 return (
                   <div key={unit.unitType} className="flex items-center justify-between px-2 py-1 rounded-lg bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">

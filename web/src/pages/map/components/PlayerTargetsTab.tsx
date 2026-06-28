@@ -1,12 +1,12 @@
 // 本文件实现地图页的 PVP 玩家目标列表和快捷操作。
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react'
-import { LoaderCircle, RefreshCw, RotateCcw, Search, ShieldAlert, ShieldPlus, Swords, Zap } from 'lucide-react'
+import { LoaderCircle, LocateFixed, MapPin, Minus, Plus, RefreshCw, RotateCcw, Search, ShieldAlert, ShieldPlus, Swords, Zap } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
 import { FACTION_COLORS, FACTION_LABELS } from '@/utils/faction'
-import type { BattleReport, PvpMarch, PvpRankingResponse, PvpStateResponse, PvpTargetSummary } from '@/types/game'
+import type { BattleReport, PvpMarch, PvpRankingResponse, PvpStateResponse, PvpTargetSummary, PvpTargetsResponse, PvpWorldPosition } from '@/types/game'
 import ScoutResultModal from './ScoutResultModal'
 
 const PVP_STATUS_LABELS: Record<PvpMarch['status'], string> = {
@@ -26,9 +26,12 @@ const PlayerTargetsTab: FC = () => {
   const faction = useGameStore((s) => s.state?.player.faction ?? 'wei')
   const units = useConfigStore((s) => s.units)
   const [targets, setTargets] = useState<PvpTargetSummary[]>([])
+  const [targetView, setTargetView] = useState<PvpTargetsResponse | null>(null)
   const [marches, setMarches] = useState<PvpMarch[]>([])
   const [pvpState, setPvpState] = useState<PvpStateResponse | null>(null)
   const [rankings, setRankings] = useState<PvpRankingResponse | null>(null)
+  const [viewport, setViewport] = useState<{ centerX?: number; centerY?: number; radius: number }>({ radius: 420 })
+  const [focusedTargetId, setFocusedTargetId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyTarget, setBusyTarget] = useState<string | null>(null)
   const [busyMarch, setBusyMarch] = useState<string | null>(null)
@@ -44,19 +47,20 @@ const PlayerTargetsTab: FC = () => {
     if (!silent) setLoading(true)
     try {
       const [targetResult, marchResult, stateResult, rankingResult] = await Promise.all([
-        gameApi.listPvpTargets(activePlayerId),
+        gameApi.listPvpTargets(activePlayerId, { ...viewport, limit: 80 }),
         gameApi.listPvpMarches(activePlayerId),
         gameApi.getPvpState(activePlayerId),
         gameApi.listPvpRankings(activePlayerId, 10),
       ])
       setTargets(targetResult.items ?? [])
+      setTargetView(targetResult)
       setMarches(marchResult.items ?? [])
       setPvpState(stateResult)
       setRankings(rankingResult)
     } finally {
       if (!silent) setLoading(false)
     }
-  }, [activePlayerId])
+  }, [activePlayerId, viewport])
 
   useEffect(() => {
     void load()
@@ -90,6 +94,7 @@ const PlayerTargetsTab: FC = () => {
     return Object.fromEntries(army.map((unit) => [unit.unitType, unit.amount])) as Record<string, number>
   }, [army])
   const totalSelected = Object.values(selections).reduce((sum, amount) => sum + amount, 0)
+  const focusedTarget = useMemo(() => targets.find((target) => target.playerId === focusedTargetId) ?? null, [focusedTargetId, targets])
 
   // getUnitName 获取当前阵营兵种名。
   const getUnitName = (unitType: string) => factionUnits[unitType]?.name ?? unitType
@@ -166,6 +171,30 @@ const PlayerTargetsTab: FC = () => {
     toast.info(`已复制目标 ID：${target.playerId}，可到增援页派出队伍。`)
   }, [])
 
+  // panViewport 移动 PVP 地图视野。
+  const panViewport = useCallback((dx: number, dy: number) => {
+    setViewport((prev) => ({
+      radius: prev.radius,
+      centerX: (targetView?.centerX ?? targetView?.self.x ?? prev.centerX ?? 1000) + dx,
+      centerY: (targetView?.centerY ?? targetView?.self.y ?? prev.centerY ?? 1000) + dy,
+    }))
+  }, [targetView])
+
+  // zoomViewport 缩放 PVP 地图视野。
+  const zoomViewport = useCallback((delta: number) => {
+    setViewport((prev) => ({
+      centerX: targetView?.centerX ?? prev.centerX,
+      centerY: targetView?.centerY ?? prev.centerY,
+      radius: Math.max(160, Math.min(1000, prev.radius + delta)),
+    }))
+  }, [targetView])
+
+  // focusSelf 将视野定位回自己的城池。
+  const focusSelf = useCallback(() => {
+    if (!targetView?.self) return
+    setViewport((prev) => ({ ...prev, centerX: targetView.self.x, centerY: targetView.self.y }))
+  }, [targetView])
+
   // handleRecallMarch 召回一条自己的 PVP 行军。
   const handleRecallMarch = async (march: PvpMarch) => {
     if (!activePlayerId || busyMarch) return
@@ -219,7 +248,8 @@ const PlayerTargetsTab: FC = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-[var(--color-text-muted)]">
-          <span>共 {targets.length} 个玩家目标</span>
+          <span>当前视野 {targets.length} 个玩家目标</span>
+          {targetView && <span>我的坐标 ({targetView.self.x}, {targetView.self.y})</span>}
           {pvpState && (
             <>
               <span className="rounded bg-[var(--color-surface-dim)] px-2 py-1 font-semibold text-[var(--color-text-secondary)]">积分 {pvpState.seasonPoints}</span>
@@ -238,6 +268,26 @@ const PlayerTargetsTab: FC = () => {
           刷新
         </button>
       </div>
+
+      {targetView && (
+        <PvpWorldMap
+          view={targetView}
+          targets={targets}
+          focusedTargetId={focusedTargetId}
+          onFocusTarget={setFocusedTargetId}
+          onFocusSelf={focusSelf}
+          onPan={panViewport}
+          onZoom={zoomViewport}
+        />
+      )}
+
+      {focusedTarget && (
+        <div className="rounded-xl border border-[var(--color-accent-border)] bg-[var(--color-accent-light)] px-3 py-2 text-xs text-[var(--color-text-secondary)]">
+          已定位：<b className="text-[var(--color-text-primary)]">{focusedTarget.nickname}</b>
+          <span className="ml-2">坐标 ({focusedTarget.position.x}, {focusedTarget.position.y})</span>
+          <span className="ml-2">距离 {focusedTarget.distance}</span>
+        </div>
+      )}
 
       {activeMarches.length > 0 && (
         <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
@@ -287,6 +337,7 @@ const PlayerTargetsTab: FC = () => {
           <PlayerTargetCard
             key={target.playerId}
             target={target}
+            focused={target.playerId === focusedTargetId}
             busyTarget={busyTarget}
             onScout={handleScout}
             onReinforce={handleReinforce}
@@ -368,14 +419,120 @@ const PlayerTargetsTab: FC = () => {
   )
 }
 
+const PvpWorldMap: FC<{
+  view: PvpTargetsResponse
+  targets: PvpTargetSummary[]
+  focusedTargetId: string | null
+  onFocusTarget: (playerId: string) => void
+  onFocusSelf: () => void
+  onPan: (dx: number, dy: number) => void
+  onZoom: (delta: number) => void
+}> = ({ view, targets, focusedTargetId, onFocusTarget, onFocusSelf, onPan, onZoom }) => {
+  const radius = Math.max(1, view.radius)
+  const step = Math.round(radius * 0.55)
+  const toPercent = (position: PvpWorldPosition) => ({
+    left: `${Math.max(3, Math.min(97, ((position.x - (view.centerX - radius)) / (radius * 2)) * 100))}%`,
+    top: `${Math.max(5, Math.min(95, ((position.y - (view.centerY - radius)) / (radius * 2)) * 100))}%`,
+  })
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-3 py-2">
+        <div className="text-xs font-bold text-[var(--color-text-primary)]">
+          世界地图
+          <span className="ml-2 font-normal text-[var(--color-text-muted)]">
+            中心 ({view.centerX}, {view.centerY}) · 半径 {view.radius}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <MapControlButton label="左移" onClick={() => onPan(-step, 0)}>←</MapControlButton>
+          <MapControlButton label="上移" onClick={() => onPan(0, -step)}>↑</MapControlButton>
+          <MapControlButton label="下移" onClick={() => onPan(0, step)}>↓</MapControlButton>
+          <MapControlButton label="右移" onClick={() => onPan(step, 0)}>→</MapControlButton>
+          <button
+            type="button"
+            onClick={() => onZoom(-120)}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]"
+            title="放大视野"
+          >
+            <Plus size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onZoom(120)}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]"
+            title="缩小视野"
+          >
+            <Minus size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={onFocusSelf}
+            className="inline-flex h-7 items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 text-[10px] font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]"
+          >
+            <LocateFixed size={12} />
+            我的城
+          </button>
+        </div>
+      </div>
+
+      <div className="relative h-[320px] bg-[linear-gradient(var(--color-border)_1px,transparent_1px),linear-gradient(90deg,var(--color-border)_1px,transparent_1px)] bg-[size:40px_40px]">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(14,165,233,0.08),transparent_55%)]" />
+        <div
+          className="absolute z-20 -translate-x-1/2 -translate-y-1/2"
+          style={toPercent(view.self)}
+          title={`我的城池 (${view.self.x}, ${view.self.y})`}
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-sky-500 bg-sky-500 text-[10px] font-black text-white shadow-lg shadow-sky-500/25">
+            我
+          </div>
+        </div>
+        {targets.map((target) => {
+          const focused = target.playerId === focusedTargetId
+          return (
+            <button
+              key={target.playerId}
+              type="button"
+              onClick={() => onFocusTarget(target.playerId)}
+              className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border bg-[var(--color-surface)] p-1 shadow-sm transition-all hover:scale-110 ${focused ? 'border-[var(--color-accent)] ring-4 ring-[var(--color-accent-light)]' : 'border-[var(--color-border)]'}`}
+              style={toPercent(target.position)}
+              title={`${target.nickname} (${target.position.x}, ${target.position.y}) 距离 ${target.distance}`}
+            >
+              <MapPin size={focused ? 22 : 18} className={FACTION_COLORS[target.faction] ?? 'text-[var(--color-text-muted)]'} />
+            </button>
+          )
+        })}
+        {targets.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center text-xs text-[var(--color-text-muted)]">
+            当前视野没有其他玩家，可以缩小比例或移动地图。
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+const MapControlButton: FC<{ label: string; onClick: () => void; children: ReactNode }> = ({ label, onClick, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title={label}
+    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--color-border)] text-xs font-black text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]"
+  >
+    {children}
+  </button>
+)
+
 const PlayerTargetCard = memo(function PlayerTargetCard({
   target,
+  focused,
   busyTarget,
   onScout,
   onReinforce,
   onMarch,
 }: {
   target: PvpTargetSummary
+  focused: boolean
   busyTarget: string | null
   onScout: (target: PvpTargetSummary) => Promise<void>
   onReinforce: (target: PvpTargetSummary) => void
@@ -386,13 +543,15 @@ const PlayerTargetCard = memo(function PlayerTargetCard({
   const busyPrefix = `${target.playerId}:`
 
   return (
-    <article className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 shadow-[0_2px_8px_rgba(15,23,42,0.03)]">
+    <article className={`rounded-xl border bg-[var(--color-surface)] px-3 py-2.5 shadow-[0_2px_8px_rgba(15,23,42,0.03)] ${focused ? 'border-[var(--color-accent)] ring-2 ring-[var(--color-accent-light)]' : 'border-[var(--color-border)]'}`}>
       <div className="flex items-center gap-2">
         <div className="min-w-0">
           <div className="truncate text-xs font-black text-[var(--color-text-primary)]">{target.nickname}</div>
           <div className="mt-0.5 flex items-center gap-1.5 text-[10px]">
             <span className={`font-bold ${FACTION_COLORS[target.faction] ?? 'text-[var(--color-text-muted)]'}`}>{FACTION_LABELS[target.faction] ?? target.faction}</span>
             <span className="text-[var(--color-text-muted)]">兵力 {target.totalArmy.toLocaleString()}</span>
+            <span className="text-[var(--color-text-muted)]">({target.position.x}, {target.position.y})</span>
+            <span className="text-[var(--color-text-muted)]">距 {target.distance}</span>
           </div>
         </div>
         <span className="ml-auto shrink-0 rounded bg-[var(--color-surface-dim)] px-1.5 py-0.5 text-[9px] font-bold text-[var(--color-text-muted)]">

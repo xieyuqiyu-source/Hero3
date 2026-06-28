@@ -25,6 +25,7 @@ import { useConfigStore } from '@/store/configStore'
 import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
 import { useAnnouncementUnread } from '@/hooks/useAnnouncementUnread'
+import { sortArmyForDisplay } from '@/utils/armySort'
 
 export interface NavItem {
   key: string
@@ -52,6 +53,9 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
   const navigate = useNavigate()
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
   const resources = useProjectedResources()
+  const units = useConfigStore((s) => s.units)
+  const factionUnits = units?.[gameState?.player.faction ?? '']
+  const visibleArmy = sortArmyForDisplay(gameState?.army, factionUnits)
   const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
   const unreadMessageCount = gameState?.unreadMessageCount ?? 0
   const unreadMailCount = gameState?.unreadMailCount ?? 0
@@ -240,16 +244,14 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
                     </div>
                   </ProductionTooltip>
                 ))}
-                <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">
-                  <span className="text-xs">口粮</span>
-                  <span className="text-xs font-semibold text-[var(--color-text-muted)] ml-auto">--</span>
-                </div>
+                {/* 预留功能：口粮产出入口暂时隐藏 */}
               </div>
             </>
           )}
         </div>
 
-        {/* Warehouse Placeholder */}
+        {/* 预留功能：仓库卡片暂时隐藏 */}
+        {false && (
         <div className={`
           mb-2.5 rounded-2xl p-3
           bg-[var(--color-surface-dim)] border border-[var(--color-border)]
@@ -278,6 +280,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
             </>
           )}
         </div>
+        )}
 
         {/* General */}
         {!collapsed && gameState?.general && (
@@ -323,10 +326,9 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
                 </span>
                 <span className="text-xs font-semibold text-[var(--color-accent)]">{totalArmy}</span>
               </div>
-              {gameState?.army && gameState.army.length > 0 ? (
+              {visibleArmy.length > 0 ? (
                 <div className="space-y-1">
-                  {gameState.army.filter(u => u.amount > 0).map((unit) => {
-                    const factionUnits = useConfigStore.getState().units?.[gameState.player.faction]
+                  {visibleArmy.map((unit) => {
                     const unitName = factionUnits?.[unit.unitType]?.name ?? unit.unitType
                     return (
                       <div key={unit.unitType} className="flex items-center justify-between px-2 py-1 rounded-lg bg-white/60 dark:bg-white/5 border border-[var(--color-border)]">

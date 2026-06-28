@@ -139,6 +139,10 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 	now = now.UTC()
 	changed := false
 
+	if ApplyConstructionBureauResourceSlots(&state, now) {
+		changed = true
+	}
+
 	if state.Resources.Items == nil || state.Resources.Capacity == nil {
 		_ = ensureResourceState(&state)
 		changed = true

@@ -435,10 +435,19 @@ export interface DefenseReinforcementUnit {
   sourceTags?: Record<string, string>
 }
 
+export interface PvpWorldPosition {
+  worldId: string
+  x: number
+  y: number
+  regionId: number
+}
+
 export interface PvpTargetSummary {
   playerId: string
   nickname: string
   faction: string
+  position: PvpWorldPosition
+  distance: number
   totalArmy: number
   buildingLevel: number
   canAttack: boolean
@@ -447,6 +456,15 @@ export interface PvpTargetSummary {
   protectedUntil?: string
   cooldownUntil?: string
   reason?: string
+}
+
+export interface PvpTargetsResponse {
+  items: PvpTargetSummary[]
+  self: PvpWorldPosition
+  worldSize: number
+  centerX: number
+  centerY: number
+  radius: number
 }
 
 export interface PvpMarch {

@@ -2109,6 +2109,190 @@
         "22": 8129,
         "23": 10161,
         "24": 12701
+      },
+      "modifiersByLevel": {
+        "0": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0,
+            "mode": "percentAdd"
+          }
+        ],
+        "1": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.01,
+            "mode": "percentAdd"
+          }
+        ],
+        "2": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.02,
+            "mode": "percentAdd"
+          }
+        ],
+        "3": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.03,
+            "mode": "percentAdd"
+          }
+        ],
+        "4": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.04,
+            "mode": "percentAdd"
+          }
+        ],
+        "5": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.05,
+            "mode": "percentAdd"
+          }
+        ],
+        "6": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.06,
+            "mode": "percentAdd"
+          }
+        ],
+        "7": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.07,
+            "mode": "percentAdd"
+          }
+        ],
+        "8": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.08,
+            "mode": "percentAdd"
+          }
+        ],
+        "9": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.09,
+            "mode": "percentAdd"
+          }
+        ],
+        "10": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.1,
+            "mode": "percentAdd"
+          }
+        ],
+        "11": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.11,
+            "mode": "percentAdd"
+          }
+        ],
+        "12": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.12,
+            "mode": "percentAdd"
+          }
+        ],
+        "13": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.13,
+            "mode": "percentAdd"
+          }
+        ],
+        "14": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.14,
+            "mode": "percentAdd"
+          }
+        ],
+        "15": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.15,
+            "mode": "percentAdd"
+          }
+        ],
+        "16": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.16,
+            "mode": "percentAdd"
+          }
+        ],
+        "17": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.17,
+            "mode": "percentAdd"
+          }
+        ],
+        "18": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.18,
+            "mode": "percentAdd"
+          }
+        ],
+        "19": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.19,
+            "mode": "percentAdd"
+          }
+        ],
+        "20": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.2,
+            "mode": "percentAdd"
+          }
+        ],
+        "21": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.21,
+            "mode": "percentAdd"
+          }
+        ],
+        "22": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.22,
+            "mode": "percentAdd"
+          }
+        ],
+        "23": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.23,
+            "mode": "percentAdd"
+          }
+        ],
+        "24": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.24,
+            "mode": "percentAdd"
+          }
+        ],
+        "25": [
+          {
+            "key": "buildSpeedBonus",
+            "value": 0.25,
+            "mode": "percentAdd"
+          }
+        ]
       }
     },
     "relay_station": {
@@ -2406,6 +2590,600 @@
         "17": 2664,
         "18": 3330,
         "19": 4163
+      }
+    },
+    "administration": {
+      "type": "administration",
+      "name": "内政厅",
+      "modifiersByLevel": {
+        "0": [
+          {
+            "key": "productionBonus",
+            "value": 0,
+            "mode": "percentAdd"
+          }
+        ],
+        "1": [
+          {
+            "key": "productionBonus",
+            "value": 0.01,
+            "mode": "percentAdd"
+          }
+        ],
+        "2": [
+          {
+            "key": "productionBonus",
+            "value": 0.02,
+            "mode": "percentAdd"
+          }
+        ],
+        "3": [
+          {
+            "key": "productionBonus",
+            "value": 0.03,
+            "mode": "percentAdd"
+          }
+        ],
+        "4": [
+          {
+            "key": "productionBonus",
+            "value": 0.04,
+            "mode": "percentAdd"
+          }
+        ],
+        "5": [
+          {
+            "key": "productionBonus",
+            "value": 0.05,
+            "mode": "percentAdd"
+          }
+        ],
+        "6": [
+          {
+            "key": "productionBonus",
+            "value": 0.06,
+            "mode": "percentAdd"
+          }
+        ],
+        "7": [
+          {
+            "key": "productionBonus",
+            "value": 0.07,
+            "mode": "percentAdd"
+          }
+        ],
+        "8": [
+          {
+            "key": "productionBonus",
+            "value": 0.08,
+            "mode": "percentAdd"
+          }
+        ],
+        "9": [
+          {
+            "key": "productionBonus",
+            "value": 0.09,
+            "mode": "percentAdd"
+          }
+        ],
+        "10": [
+          {
+            "key": "productionBonus",
+            "value": 0.1,
+            "mode": "percentAdd"
+          }
+        ],
+        "11": [
+          {
+            "key": "productionBonus",
+            "value": 0.11,
+            "mode": "percentAdd"
+          }
+        ],
+        "12": [
+          {
+            "key": "productionBonus",
+            "value": 0.12,
+            "mode": "percentAdd"
+          }
+        ],
+        "13": [
+          {
+            "key": "productionBonus",
+            "value": 0.13,
+            "mode": "percentAdd"
+          }
+        ],
+        "14": [
+          {
+            "key": "productionBonus",
+            "value": 0.14,
+            "mode": "percentAdd"
+          }
+        ],
+        "15": [
+          {
+            "key": "productionBonus",
+            "value": 0.15,
+            "mode": "percentAdd"
+          }
+        ],
+        "16": [
+          {
+            "key": "productionBonus",
+            "value": 0.16,
+            "mode": "percentAdd"
+          }
+        ],
+        "17": [
+          {
+            "key": "productionBonus",
+            "value": 0.17,
+            "mode": "percentAdd"
+          }
+        ],
+        "18": [
+          {
+            "key": "productionBonus",
+            "value": 0.18,
+            "mode": "percentAdd"
+          }
+        ],
+        "19": [
+          {
+            "key": "productionBonus",
+            "value": 0.19,
+            "mode": "percentAdd"
+          }
+        ],
+        "20": [
+          {
+            "key": "productionBonus",
+            "value": 0.2,
+            "mode": "percentAdd"
+          }
+        ]
+      },
+      "upgradeCostByLevel": {
+        "0": {
+          "wood": 180,
+          "stone": 180,
+          "iron": 140,
+          "food": 220
+        },
+        "1": {
+          "wood": 230,
+          "stone": 230,
+          "iron": 179,
+          "food": 281
+        },
+        "2": {
+          "wood": 294,
+          "stone": 294,
+          "iron": 229,
+          "food": 360
+        },
+        "3": {
+          "wood": 377,
+          "stone": 377,
+          "iron": 293,
+          "food": 461
+        },
+        "4": {
+          "wood": 483,
+          "stone": 483,
+          "iron": 375,
+          "food": 590
+        },
+        "5": {
+          "wood": 618,
+          "stone": 618,
+          "iron": 481,
+          "food": 755
+        },
+        "6": {
+          "wood": 791,
+          "stone": 791,
+          "iron": 615,
+          "food": 967
+        },
+        "7": {
+          "wood": 1013,
+          "stone": 1013,
+          "iron": 788,
+          "food": 1238
+        },
+        "8": {
+          "wood": 1297,
+          "stone": 1297,
+          "iron": 1008,
+          "food": 1585
+        },
+        "9": {
+          "wood": 1660,
+          "stone": 1660,
+          "iron": 1291,
+          "food": 2029
+        },
+        "10": {
+          "wood": 2125,
+          "stone": 2125,
+          "iron": 1652,
+          "food": 2597
+        },
+        "11": {
+          "wood": 2720,
+          "stone": 2720,
+          "iron": 2115,
+          "food": 3324
+        },
+        "12": {
+          "wood": 3481,
+          "stone": 3481,
+          "iron": 2707,
+          "food": 4255
+        },
+        "13": {
+          "wood": 4456,
+          "stone": 4456,
+          "iron": 3466,
+          "food": 5446
+        },
+        "14": {
+          "wood": 5704,
+          "stone": 5704,
+          "iron": 4436,
+          "food": 6972
+        },
+        "15": {
+          "wood": 7301,
+          "stone": 7301,
+          "iron": 5679,
+          "food": 8924
+        },
+        "16": {
+          "wood": 9346,
+          "stone": 9346,
+          "iron": 7269,
+          "food": 11423
+        },
+        "17": {
+          "wood": 11963,
+          "stone": 11963,
+          "iron": 9304,
+          "food": 14621
+        },
+        "18": {
+          "wood": 15312,
+          "stone": 15312,
+          "iron": 11909,
+          "food": 18715
+        },
+        "19": {
+          "wood": 19600,
+          "stone": 19600,
+          "iron": 15244,
+          "food": 23955
+        }
+      },
+      "upgradeSecondsByLevel": {
+        "0": 70,
+        "1": 87,
+        "2": 109,
+        "3": 136,
+        "4": 170,
+        "5": 213,
+        "6": 267,
+        "7": 333,
+        "8": 417,
+        "9": 521,
+        "10": 651,
+        "11": 814,
+        "12": 1018,
+        "13": 1273,
+        "14": 1591,
+        "15": 1989,
+        "16": 2486,
+        "17": 3108,
+        "18": 3885,
+        "19": 4857
+      }
+    },
+    "city_wall": {
+      "type": "city_wall",
+      "name": "城墙",
+      "modifiersByLevel": {
+        "0": [
+          {
+            "key": "defenseBonus",
+            "value": 0,
+            "mode": "percentAdd"
+          }
+        ],
+        "1": [
+          {
+            "key": "defenseBonus",
+            "value": 0.01,
+            "mode": "percentAdd"
+          }
+        ],
+        "2": [
+          {
+            "key": "defenseBonus",
+            "value": 0.02,
+            "mode": "percentAdd"
+          }
+        ],
+        "3": [
+          {
+            "key": "defenseBonus",
+            "value": 0.03,
+            "mode": "percentAdd"
+          }
+        ],
+        "4": [
+          {
+            "key": "defenseBonus",
+            "value": 0.04,
+            "mode": "percentAdd"
+          }
+        ],
+        "5": [
+          {
+            "key": "defenseBonus",
+            "value": 0.05,
+            "mode": "percentAdd"
+          }
+        ],
+        "6": [
+          {
+            "key": "defenseBonus",
+            "value": 0.06,
+            "mode": "percentAdd"
+          }
+        ],
+        "7": [
+          {
+            "key": "defenseBonus",
+            "value": 0.07,
+            "mode": "percentAdd"
+          }
+        ],
+        "8": [
+          {
+            "key": "defenseBonus",
+            "value": 0.08,
+            "mode": "percentAdd"
+          }
+        ],
+        "9": [
+          {
+            "key": "defenseBonus",
+            "value": 0.09,
+            "mode": "percentAdd"
+          }
+        ],
+        "10": [
+          {
+            "key": "defenseBonus",
+            "value": 0.1,
+            "mode": "percentAdd"
+          }
+        ],
+        "11": [
+          {
+            "key": "defenseBonus",
+            "value": 0.11,
+            "mode": "percentAdd"
+          }
+        ],
+        "12": [
+          {
+            "key": "defenseBonus",
+            "value": 0.12,
+            "mode": "percentAdd"
+          }
+        ],
+        "13": [
+          {
+            "key": "defenseBonus",
+            "value": 0.13,
+            "mode": "percentAdd"
+          }
+        ],
+        "14": [
+          {
+            "key": "defenseBonus",
+            "value": 0.14,
+            "mode": "percentAdd"
+          }
+        ],
+        "15": [
+          {
+            "key": "defenseBonus",
+            "value": 0.15,
+            "mode": "percentAdd"
+          }
+        ],
+        "16": [
+          {
+            "key": "defenseBonus",
+            "value": 0.16,
+            "mode": "percentAdd"
+          }
+        ],
+        "17": [
+          {
+            "key": "defenseBonus",
+            "value": 0.17,
+            "mode": "percentAdd"
+          }
+        ],
+        "18": [
+          {
+            "key": "defenseBonus",
+            "value": 0.18,
+            "mode": "percentAdd"
+          }
+        ],
+        "19": [
+          {
+            "key": "defenseBonus",
+            "value": 0.19,
+            "mode": "percentAdd"
+          }
+        ],
+        "20": [
+          {
+            "key": "defenseBonus",
+            "value": 0.2,
+            "mode": "percentAdd"
+          }
+        ]
+      },
+      "upgradeCostByLevel": {
+        "0": {
+          "wood": 120,
+          "stone": 260,
+          "iron": 180,
+          "food": 100
+        },
+        "1": {
+          "wood": 153,
+          "stone": 332,
+          "iron": 230,
+          "food": 128
+        },
+        "2": {
+          "wood": 196,
+          "stone": 425,
+          "iron": 294,
+          "food": 163
+        },
+        "3": {
+          "wood": 251,
+          "stone": 545,
+          "iron": 377,
+          "food": 209
+        },
+        "4": {
+          "wood": 322,
+          "stone": 697,
+          "iron": 483,
+          "food": 268
+        },
+        "5": {
+          "wood": 412,
+          "stone": 893,
+          "iron": 618,
+          "food": 343
+        },
+        "6": {
+          "wood": 527,
+          "stone": 1143,
+          "iron": 791,
+          "food": 439
+        },
+        "7": {
+          "wood": 675,
+          "stone": 1463,
+          "iron": 1013,
+          "food": 562
+        },
+        "8": {
+          "wood": 864,
+          "stone": 1873,
+          "iron": 1297,
+          "food": 720
+        },
+        "9": {
+          "wood": 1106,
+          "stone": 2398,
+          "iron": 1660,
+          "food": 922
+        },
+        "10": {
+          "wood": 1416,
+          "stone": 3069,
+          "iron": 2125,
+          "food": 1180
+        },
+        "11": {
+          "wood": 1813,
+          "stone": 3929,
+          "iron": 2720,
+          "food": 1511
+        },
+        "12": {
+          "wood": 2321,
+          "stone": 5029,
+          "iron": 3481,
+          "food": 1934
+        },
+        "13": {
+          "wood": 2971,
+          "stone": 6437,
+          "iron": 4456,
+          "food": 2475
+        },
+        "14": {
+          "wood": 3802,
+          "stone": 8239,
+          "iron": 5704,
+          "food": 3169
+        },
+        "15": {
+          "wood": 4867,
+          "stone": 10546,
+          "iron": 7301,
+          "food": 4056
+        },
+        "16": {
+          "wood": 6230,
+          "stone": 13499,
+          "iron": 9346,
+          "food": 5192
+        },
+        "17": {
+          "wood": 7975,
+          "stone": 17279,
+          "iron": 11963,
+          "food": 6646
+        },
+        "18": {
+          "wood": 10208,
+          "stone": 22118,
+          "iron": 15312,
+          "food": 8507
+        },
+        "19": {
+          "wood": 13066,
+          "stone": 28311,
+          "iron": 19600,
+          "food": 10889
+        }
+      },
+      "upgradeSecondsByLevel": {
+        "0": 90,
+        "1": 112,
+        "2": 140,
+        "3": 175,
+        "4": 219,
+        "5": 274,
+        "6": 343,
+        "7": 429,
+        "8": 536,
+        "9": 670,
+        "10": 838,
+        "11": 1047,
+        "12": 1309,
+        "13": 1637,
+        "14": 2046,
+        "15": 2557,
+        "16": 3197,
+        "17": 3996,
+        "18": 4996,
+        "19": 6245
       }
     }
   },

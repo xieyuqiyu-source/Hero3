@@ -14,6 +14,17 @@ export interface BuildingConfig {
   upgradeSecondsByLevel?: Record<number, number>
 }
 
+const MODIFIER_LABELS: Record<string, string> = {
+  attackBonus: '攻击',
+  defenseBonus: '防御',
+  productionBonus: '产量',
+  buildSpeedBonus: '建造速度',
+  marchSpeedBonus: '行军速度',
+  recruitSpeedBonus: '征兵速度',
+  infantryRecruitSpeedBonus: '步兵征兵',
+  cavalryRecruitSpeedBonus: '骑兵征兵',
+}
+
 export interface BalanceConfig {
   baseProduction: Record<string, number>
   buildings: Record<string, BuildingConfig>
@@ -147,6 +158,15 @@ export function getUpgradeCost(buildingType: string, level: number): Record<stri
   return config.upgradeCostByLevel[level] ?? null
 }
 
+/** 获取金币升级费用，返回 null 表示不是金币建筑或已满级 */
+export function getGoldUpgradeCost(buildingType: string, level: number): number | null {
+  const balance = useConfigStore.getState().balance
+  if (!balance) return null
+  const config = balance.buildings[buildingType]
+  if (!config?.goldUpgradeCostByLevel) return null
+  return config.goldUpgradeCostByLevel[level] ?? null
+}
+
 /** 获取升级时间（秒） */
 export function getUpgradeSeconds(buildingType: string, level: number): number {
   const balance = useConfigStore.getState().balance
@@ -154,6 +174,42 @@ export function getUpgradeSeconds(buildingType: string, level: number): number {
   const config = balance.buildings[buildingType]
   if (!config?.upgradeSecondsByLevel) return 60
   return config.upgradeSecondsByLevel[level] ?? 60
+}
+
+/** 获取建筑指定等级的加成说明 */
+export function getBuildingModifierText(buildingType: string, level: number): string {
+  const balance = useConfigStore.getState().balance
+  if (!balance || level < 0) return ''
+  const config = balance.buildings[buildingType]
+  const modifiers = config?.modifiersByLevel?.[level]
+  if (!modifiers || modifiers.length === 0) return ''
+  return modifiers
+    .filter((modifier) => modifier.value !== 0)
+    .map((modifier) => `${MODIFIER_LABELS[modifier.key] ?? modifier.key} ${formatModifierAmount(modifier.value, modifier.mode)}`)
+    .join('  ')
+}
+
+/** 获取建筑当前等级和下一级的加成说明 */
+export function getBuildingModifierProgressText(buildingType: string, level: number): string {
+  const current = getBuildingModifierText(buildingType, level)
+  const next = getBuildingModifierText(buildingType, level + 1)
+  if (current && next) return `${current} -> ${next}`
+  return current || next
+}
+
+/** 格式化建筑加成数值 */
+function formatModifierAmount(value: number, mode: string): string {
+  if (mode === 'percentAdd' || mode === 'percentMultiply') {
+    return `+${Math.round(value * 100)}%`
+  }
+  if (value > 0) return `+${formatCompactNumber(value)}`
+  return formatCompactNumber(value)
+}
+
+/** 格式化紧凑数值 */
+function formatCompactNumber(value: number): string {
+  if (Math.abs(value - Math.round(value)) < 0.000001) return String(Math.round(value))
+  return value.toFixed(2).replace(/\.?0+$/, '')
 }
 
 const RESOURCE_LABELS: Record<string, string> = {

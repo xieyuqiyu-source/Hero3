@@ -11,9 +11,10 @@ import {
   Megaphone,
   Shield,
   Swords,
+  Image,
 } from 'lucide-react'
 
-export type AdminPage = 'overview' | 'accounts' | 'operations' | 'mails' | 'announcements' | 'pvp' | 'ledger' | 'balance' | 'api' | 'audit'
+export type AdminPage = 'overview' | 'accounts' | 'operations' | 'mails' | 'announcements' | 'pvp' | 'dungeons' | 'ledger' | 'balance' | 'api' | 'audit'
 
 const navItems: Array<{ key: AdminPage; label: string; icon: typeof LayoutDashboard }> = [
   { key: 'overview', label: '总览', icon: LayoutDashboard },
@@ -22,6 +23,7 @@ const navItems: Array<{ key: AdminPage; label: string; icon: typeof LayoutDashbo
   { key: 'mails', label: '信函', icon: Mail },
   { key: 'announcements', label: '公告', icon: Megaphone },
   { key: 'pvp', label: 'PVP', icon: Swords },
+  { key: 'dungeons', label: '副本', icon: Image },
   { key: 'ledger', label: '流水', icon: Coins },
   { key: 'balance', label: '配置', icon: Sliders },
   { key: 'api', label: '接口', icon: FileText },

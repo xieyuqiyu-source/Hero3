@@ -15,12 +15,31 @@ func (h *Handlers) PvpTargets(w http.ResponseWriter, r *http.Request) {
 	if !h.requireOwnership(w, r, playerID) {
 		return
 	}
-	result, err := h.gameService.ListPvpTargets(playerID)
+	filter := game.PvpTargetFilter{
+		CenterX: queryInt(r, "centerX", 0),
+		CenterY: queryInt(r, "centerY", 0),
+		Radius:  queryInt(r, "radius", 0),
+		Limit:   queryInt(r, "limit", 0),
+	}
+	result, err := h.gameService.ListPvpTargetsInArea(playerID, filter)
 	if err != nil {
 		writePvpError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// queryInt 读取整数查询参数，失败时返回默认值。
+func queryInt(r *http.Request, key string, fallback int) int {
+	raw := r.URL.Query().Get(key)
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return fallback
+	}
+	return value
 }
 
 // PvpTarget 返回单个 PVP 目标摘要。

@@ -1,3 +1,4 @@
+// 城池页面，管理资源建筑和军事建筑两个页签的联动。
 import { useEffect, useState, type FC } from 'react'
 import ResourceTab from './components/ResourceTab'
 import MilitaryTab from './components/MilitaryTab'
@@ -8,11 +9,18 @@ type Tab = 'resource' | 'military'
 const CityPage: FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('resource')
   const [resourceExpanded, setResourceExpanded] = useState(true)
+  const [constructionFocusNonce, setConstructionFocusNonce] = useState(0)
   const loadCityView = useGameStore((s) => s.loadCityView)
 
   useEffect(() => {
     void loadCityView()
   }, [loadCityView])
+
+  /** 跳转到军事建筑并定位建造司 */
+  const handleFocusConstructionBureau = () => {
+    setActiveTab('military')
+    setConstructionFocusNonce((value) => value + 1)
+  }
 
   return (
     <div>
@@ -51,9 +59,13 @@ const CityPage: FC = () => {
 
       {/* Tab Content */}
       {activeTab === 'resource' ? (
-        <ResourceTab expanded={resourceExpanded} onToggle={() => setResourceExpanded(!resourceExpanded)} />
+        <ResourceTab
+          expanded={resourceExpanded}
+          onToggle={() => setResourceExpanded(!resourceExpanded)}
+          onRequestNewResourceSlot={handleFocusConstructionBureau}
+        />
       ) : (
-        <MilitaryTab />
+        <MilitaryTab focusConstructionNonce={constructionFocusNonce} />
       )}
     </div>
   )
