@@ -362,6 +362,82 @@ func TestPvpMarchResolvesBattleAndReturnsSurvivors(t *testing.T) {
 	}
 }
 
+func TestPvpAttackRejectsMultipleGenerals(t *testing.T) {
+	svc, _, attacker, defender := newPvpTestService(t)
+	attacker.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	attacker.Generals = append(attacker.Generals, *newGeneral("wei", "xiahoudun"))
+	repo := svc.repo.(*MemoryRepository)
+	repo.players[attacker.Player.ID] = attacker
+
+	if _, err := svc.StartPvpAttack(PvpAttackRequest{
+		PlayerID:       attacker.Player.ID,
+		TargetPlayerID: defender.Player.ID,
+		MarchMode:      PvpMarchTypeAttack,
+		Troops:         map[string]int{"weiInfantry": 10},
+		GeneralIDs:     []string{"caocao", "xiahoudun"},
+	}); !errors.Is(err, ErrInvalidGeneral) {
+		t.Fatalf("expected multiple generals to be rejected, got %v", err)
+	}
+}
+
+func TestPvpCarriedGeneralTriggersTrait(t *testing.T) {
+	setTestFactionsAndGenerals(t, FactionsConfig{
+		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "caocao", Name: "曹操"}}},
+		"shu": {Name: "蜀国", Generals: []GeneralInfo{{ID: "liubei", Name: "刘备"}}},
+	}, GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"caocao": {
+				ID:      "caocao",
+				Name:    "曹操",
+				Faction: "wei",
+				Enabled: true,
+				Traits: []GeneralTraitConfig{{
+					TraitID: "huogong",
+					Enabled: true,
+					Params:  map[string]float64{"damagePercent": 0.5, "triggerChance": 1},
+				}},
+			},
+			"liubei": {ID: "liubei", Name: "刘备", Faction: "shu", Enabled: true},
+		},
+	})
+	svc, repo, attacker, defender := newPvpTestService(t)
+	attacker.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	defender.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	repo.players[attacker.Player.ID] = attacker
+	repo.players[defender.Player.ID] = defender
+
+	started, err := svc.StartPvpAttack(PvpAttackRequest{
+		PlayerID:       attacker.Player.ID,
+		TargetPlayerID: defender.Player.ID,
+		MarchMode:      PvpMarchTypeAttack,
+		Troops:         map[string]int{"weiInfantry": 1},
+		GeneralIDs:     []string{"caocao"},
+	})
+	if err != nil {
+		t.Fatalf("StartPvpAttack failed: %v", err)
+	}
+	forcePvpMarchDue(t, repo, started.March.ID)
+	battle, err := svc.ResolvePvpMarch(started.March.ID)
+	if err != nil {
+		t.Fatalf("ResolvePvpMarch failed: %v", err)
+	}
+	reports, _, err := repo.ListReports(attacker.Player.ID, 10, 0)
+	if err != nil || len(reports) == 0 {
+		t.Fatalf("expected attacker report, reports=%+v err=%v", reports, err)
+	}
+	report := reports[0]
+	if report.ID != battle.AttackerReportID {
+		t.Fatalf("expected latest attacker report %s, got %s", battle.AttackerReportID, report.ID)
+	}
+	if len(report.TraitTriggered) == 0 || report.TraitOutcomes["huogong"].TraitID != "huogong" {
+		t.Fatalf("expected huogong trait in pvp report, got triggered=%+v outcomes=%+v", report.TraitTriggered, report.TraitOutcomes)
+	}
+	if report.DefenderLostUnits["weiInfantry"] <= 0 {
+		t.Fatalf("expected huogong to add defender losses, got %+v", report.DefenderLostUnits)
+	}
+}
+
 // TestPvpPlunderReportUsesAttackView 验证 PVP 掠夺仍使用进攻视角标准详情。
 func TestPvpPlunderReportUsesAttackView(t *testing.T) {
 	_, _, attacker, defender := newPvpTestService(t)

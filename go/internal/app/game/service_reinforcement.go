@@ -665,6 +665,9 @@ func reserveReinforcementGenerals(state *GameState, generalIDs []string, reinfor
 			Buffs:      cloneFloatMap(general.Buffs),
 			Assignment: assignmentID,
 		})
+		if len(result) > 1 {
+			return nil, ErrInvalidGeneral
+		}
 	}
 	return result, nil
 }

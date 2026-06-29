@@ -180,6 +180,7 @@ type BattleReport struct {
 	EnemyLossRatio           float64                       `json:"enemyLossRatio,omitempty"`
 	Rewards                  map[string]int                `json:"rewards"`
 	GrantedRewards           []Reward                      `json:"grantedRewards,omitempty"`
+	Drops                    []BattleReportDrop            `json:"drops,omitempty"`                  // 本场战斗掉落物品
 	Overflow                 map[string]int                `json:"overflow,omitempty"`               // 各资源溢出量
 	OverflowCityGold         int                           `json:"overflowCityGold"`                 // 溢出转换获得的城金
 	GeneralExpGained         int                           `json:"generalExpGained,omitempty"`       // 本次战斗获得将领经验

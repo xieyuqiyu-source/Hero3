@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"hero3/internal/core/combat"
 )
 
 // TestReincarnationStartAndAttack 验证轮回绝境可以开启并结算进攻波。
@@ -144,6 +146,55 @@ func TestReincarnationSelectedGeneralGainsExp(t *testing.T) {
 	}
 	if got := pvpTestGeneralExp(stored, "caocao"); got != result.BattleReport.GeneralExpGained {
 		t.Fatalf("expected stored general exp %d, got %d", result.BattleReport.GeneralExpGained, got)
+	}
+}
+
+// TestReincarnationDefenseReportMapsPlayerAsDefender 验证防守波战报按玩家防守视角展示双方战力和武将。
+func TestReincarnationDefenseReportMapsPlayerAsDefender(t *testing.T) {
+	now := time.Date(2026, 6, 29, 13, 0, 0, 0, time.UTC)
+	state := newPlayerState("player_reincarnation_defense_report", "防守战报", "wei", "caocao", now)
+	run := ReincarnationRun{
+		ID:     "run_defense_report",
+		Level:  1,
+		Status: ReincarnationRunRunning,
+	}
+	wave := ReincarnationWave{
+		WaveIndex:      2,
+		WaveType:       ReincarnationWaveDefense,
+		EnemyFaction:   "shu",
+		EnemyRemaining: map[string]int{"shuInfantry": 80},
+		AllyBonus:      ReincarnationBonus{Label: "己方防守加成"},
+		EnemyBonus:     ReincarnationBonus{Label: "敌方进攻加成"},
+		RewardPreview:  []Reward{{Type: RewardTypeItem, ID: "training_token_small", Amount: 1}},
+	}
+	result := combat.CombatResult{
+		Winner:       "defender",
+		AttackPower:  900,
+		DefensePower: 1200,
+	}
+
+	report := buildReincarnationReport(run, wave, &state, map[string]int{"qingZhouArmy": 100}, map[string]int{"qingZhouArmy": 5}, map[string]int{"shuInfantry": 20}, result, ReportViewDefense, true, now)
+	report.PvpDefenderGenerals = buildPvpGeneralSnapshots(&state, []string{"caocao"})
+	report.Detail = nil
+	report = NormalizeBattleReport(report)
+
+	if report.PlayerPower != 1200 || report.EnemyPower != 900 {
+		t.Fatalf("expected player defense power 1200 and enemy attack power 900, got player=%d enemy=%d", report.PlayerPower, report.EnemyPower)
+	}
+	if report.Detail == nil || report.Detail.SecondarySide == nil {
+		t.Fatalf("expected normalized defense detail, got %+v", report.Detail)
+	}
+	if report.Detail.PrimarySide.Role != "attacker" || report.Detail.PrimarySide.Power != 900 {
+		t.Fatalf("expected enemy attacker side power 900, got %+v", report.Detail.PrimarySide)
+	}
+	if report.Detail.SecondarySide.Role != "defender" || report.Detail.SecondarySide.Power != 1200 {
+		t.Fatalf("expected player defender side power 1200, got %+v", report.Detail.SecondarySide)
+	}
+	if len(report.Detail.PrimarySide.Generals) != 0 {
+		t.Fatalf("dungeon attacker should not show player general, got %+v", report.Detail.PrimarySide.Generals)
+	}
+	if len(report.Detail.SecondarySide.Generals) != 1 || report.Detail.SecondarySide.Generals[0].ID != "caocao" {
+		t.Fatalf("expected player general on defender side, got %+v", report.Detail.SecondarySide.Generals)
 	}
 }
 

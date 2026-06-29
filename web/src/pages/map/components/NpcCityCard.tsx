@@ -1,3 +1,4 @@
+/* 本文件实现 NPC 城池卡片和一键侦查、攻击、掠夺入口。 */
 import { useState, type FC } from 'react'
 import { createPortal } from 'react-dom'
 import { LoaderCircle, CircleCheck, Swords, ShieldAlert, Search, AlertTriangle } from 'lucide-react'
@@ -6,6 +7,7 @@ import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import { gameApi } from '@/api/game'
 import { FACTION_LABELS, FACTION_COLORS } from '@/utils/faction'
 import type { NpcCity, BattleReport } from '@/types/game'
+import { getNpcQuickBattleGeneralIds } from './npcQuickGeneral'
 
 interface NpcCityCardProps {
   city: NpcCity
@@ -63,8 +65,10 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
   }
 
   const executeAction = async (mode: 'attack' | 'plunder' | 'scout') => {
-    const playerId = useGameStore.getState().activePlayerId
-    const army = useGameStore.getState().state?.army ?? []
+    const storeState = useGameStore.getState()
+    const playerId = storeState.activePlayerId
+    const state = storeState.state
+    const army = state?.army ?? []
     if (!playerId) return
 
     if (mode === 'scout') {
@@ -90,7 +94,7 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
 
     setBusy(mode)
     try {
-      const result = await gameApi.attackNpc(playerId, city.id, mode, units)
+      const result = await gameApi.attackNpc(playerId, city.id, mode, units, getNpcQuickBattleGeneralIds(state))
       useGameStore.getState().patchState({
         resources: result.resources,
         army: result.army,

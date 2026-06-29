@@ -1,11 +1,147 @@
 {
+  "npc_small_exp_pack": {
+    "id": "npc_small_exp_pack",
+    "slots": [
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_small", "amount": 1, "weight": 10000 }
+        ]
+      },
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_small", "amount": 1, "weight": 5000 },
+          { "type": "none", "id": "none", "weight": 5000 }
+        ]
+      }
+    ]
+  },
+  "npc_medium_exp_pack": {
+    "id": "npc_medium_exp_pack",
+    "slots": [
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_small", "amount": 1, "weight": 10000 }
+        ]
+      },
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_small", "amount": 1, "weight": 5000 },
+          { "type": "none", "id": "none", "weight": 5000 }
+        ]
+      },
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_small", "amount": 1, "weight": 5000 },
+          { "type": "none", "id": "none", "weight": 5000 }
+        ]
+      },
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_small", "amount": 1, "weight": 5000 },
+          { "type": "none", "id": "none", "weight": 5000 }
+        ]
+      },
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_medium", "amount": 1, "weight": 500 },
+          { "type": "none", "id": "none", "weight": 9500 }
+        ]
+      }
+    ]
+  },
+  "npc_large_exp_pack": {
+    "id": "npc_large_exp_pack",
+    "slots": [
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_medium", "amount": 1, "weight": 10000 }
+        ]
+      },
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_medium", "amount": 1, "weight": 10000 }
+        ]
+      },
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_medium", "amount": 1, "weight": 5000 },
+          { "type": "none", "id": "none", "weight": 5000 }
+        ]
+      },
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_medium", "amount": 1, "weight": 5000 },
+          { "type": "none", "id": "none", "weight": 5000 }
+        ]
+      },
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_large", "amount": 1, "weight": 500 },
+          { "type": "none", "id": "none", "weight": 9500 }
+        ]
+      }
+    ]
+  },
+  "npc_golden_large_bonus_pack": {
+    "id": "npc_golden_large_bonus_pack",
+    "slots": [
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_large", "amount": 1, "weight": 10000 }
+        ]
+      },
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_large", "amount": 1, "weight": 5000 },
+          { "type": "none", "id": "none", "weight": 5000 }
+        ]
+      }
+    ]
+  },
+  "npc_golden_exp_pack": {
+    "id": "npc_golden_exp_pack",
+    "slots": [
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_medium", "amount": 1, "weight": 10000 }
+        ]
+      },
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_medium", "amount": 1, "weight": 10000 }
+        ]
+      },
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_medium", "amount": 1, "weight": 5000 },
+          { "type": "none", "id": "none", "weight": 5000 }
+        ]
+      },
+      {
+        "items": [
+          { "type": "item", "id": "general_exp_medium", "amount": 1, "weight": 5000 },
+          { "type": "none", "id": "none", "weight": 5000 }
+        ]
+      },
+      {
+        "items": [
+          { "type": "drop_pool", "dropPoolId": "npc_golden_large_bonus_pack", "amount": 1, "weight": 3000 },
+          { "type": "none", "id": "none", "weight": 7000 }
+        ]
+      }
+    ]
+  },
   "starter_item_pool": {
     "id": "starter_item_pool",
-    "rolls": 1,
-    "items": [
-      { "type": "item", "id": "resource_pack_small", "amount": 1, "weight": 6000 },
-      { "type": "item", "id": "general_exp_small", "amount": 1, "weight": 3000 },
-      { "type": "item", "id": "recruit_ticket_small", "amount": 1, "weight": 1000 }
+    "slots": [
+      {
+        "rolls": 1,
+        "items": [
+          { "type": "item", "id": "resource_pack_small", "amount": 2, "weight": 6000 },
+          { "type": "item", "id": "general_exp_small", "amount": 2, "weight": 3000 },
+          { "type": "item", "id": "recruit_ticket_small", "amount": 1, "weight": 1000 }
+        ]
+      }
     ]
   }
 }

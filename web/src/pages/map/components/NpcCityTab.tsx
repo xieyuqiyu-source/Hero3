@@ -8,6 +8,7 @@ import NpcCityCard from './NpcCityCard'
 import AttackPanel from './AttackPanel'
 import BattleResultModal from './BattleResultModal'
 import ScoutResultModal from './ScoutResultModal'
+import { getNpcQuickBattleGeneralIds } from './npcQuickGeneral'
 
 type NpcTier = NpcCity['tier']
 
@@ -95,6 +96,7 @@ const NpcCityTab: FC = () => {
 
     for (const city of selectedSweepTargets) {
       const units = buildAllArmyUnits()
+      const generalIds = getNpcQuickBattleGeneralIds(useGameStore.getState().state)
       if (Object.keys(units).length === 0) {
         toast.info('当前没有可出征兵力，扫荡已停止')
         break
@@ -102,7 +104,7 @@ const NpcCityTab: FC = () => {
 
       setSweepProgress({ done, total: selectedSweepTargets.length, failed, current: city.name, cityGold: totalCityGold })
       try {
-        const result = await gameApi.attackNpc(activePlayerId, city.id, 'attack', units)
+        const result = await gameApi.attackNpc(activePlayerId, city.id, 'attack', units, generalIds)
         useGameStore.getState().patchState({
           resources: result.resources,
           army: result.army,
@@ -167,7 +169,7 @@ const NpcCityTab: FC = () => {
       {/* Info Banner */}
       <div className="px-3 py-2 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)] text-[10px] text-[var(--color-text-muted)] leading-relaxed">
         <span className="font-medium text-[var(--color-text-secondary)]">说明：</span>
-        一键操作将派出全部兵力。城池等级：<span className="text-slate-500">小型</span> &lt; <span className="text-blue-500">中型</span> &lt; <span className="text-purple-500">大型</span> &lt; <span className="text-amber-500">金色</span>，等级越高资源越多、守军越强。每24小时自动刷新。
+        一键操作将派出全部兵力，并自动携带 1 名可用武将。城池等级：<span className="text-slate-500">小型</span> &lt; <span className="text-blue-500">中型</span> &lt; <span className="text-purple-500">大型</span> &lt; <span className="text-amber-500">金色</span>，等级越高资源越多、守军越强。每24小时自动刷新。
       </div>
 
       {/* Header */}

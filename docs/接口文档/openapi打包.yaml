@@ -1745,6 +1745,73 @@ paths:
                     type: boolean
                   error:
                     type: string
+  /api/v1/admin/items/drop-pools:
+    get:
+      tags:
+      - Admin
+      summary: GM 查询掉落池配置
+      responses:
+        '200':
+          description: 掉落池配置
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+    put:
+      tags:
+      - Admin
+      summary: GM 保存掉落池配置
+      description: 保存后立即影响后续 NPC、副本、宝箱等引用掉落池的奖励结算。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: object
+      responses:
+        '200':
+          description: 保存后的掉落池配置
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+        '400':
+          description: 配置格式或内容不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/items/drop-pools/validate:
+    post:
+      tags:
+      - Admin
+      summary: GM 校验掉落池配置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: object
+      responses:
+        '200':
+          description: 校验结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  error:
+                    type: string
   /api/v1/admin/items/inventory:
     get:
       tags:
@@ -3997,6 +4064,11 @@ components:
           type: string
         detail:
           $ref: '#/components/schemas/BattleReportDetail'
+        drops:
+          type: array
+          description: 本场战斗直接掉落的物品快照，名称和品质用于战报高亮展示。
+          items:
+            $ref: '#/components/schemas/BattleReportDrop'
         share:
           $ref: '#/components/schemas/BattleReportShareLink'
         read:
@@ -5549,6 +5621,8 @@ components:
             type: integer
         generalIds:
           type: array
+          maxItems: 1
+          description: 本次增援携带的武将 ID，最多 1 个；为空表示不携带武将。
           items:
             type: string
         speedMultiplier:
@@ -6082,7 +6156,8 @@ components:
             cavalry: 20
         generalIds:
           type: array
-          description: 本次出征携带的参战武将 ID；为空表示不带武将，不享受武将加成也不获得武将经验。
+          maxItems: 1
+          description: 本次出征携带的参战武将 ID，最多 1 个；为空表示不带武将，不享受武将加成也不获得武将经验。
           items:
             type: string
     AttackNpcResponse:
@@ -6564,7 +6639,8 @@ components:
             type: integer
         generalIds:
           type: array
-          description: 本次波次携带的参战武将 ID；为空表示不带武将，不享受武将加成也不获得武将经验。
+          maxItems: 1
+          description: 本次波次携带的参战武将 ID，最多 1 个；为空表示不带武将，不享受武将加成也不获得武将经验。
           items:
             type: string
         clientActionId:

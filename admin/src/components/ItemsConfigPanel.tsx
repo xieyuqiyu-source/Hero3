@@ -1,6 +1,6 @@
 /* 本文件实现 GM 后台物品配置、背包和流水管理面板。 */
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Database, Package, Plus, RefreshCcw, Save } from 'lucide-react'
+import { CheckCircle2, Database, Package, Plus, RefreshCcw, Save, Trash2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import type { InventoryView, ItemDefinition, ItemLedgerEntry } from '@/types'
 
@@ -60,9 +60,38 @@ const emptyForm = {
   effectsText: '[]',
 }
 
+type DropPoolReward = {
+  type: string
+  id?: string
+  amount?: number
+  weight: number
+  dropPoolId?: string
+}
+
+type DropPoolSlot = {
+  rolls?: number
+  items: DropPoolReward[]
+}
+
+type DropPoolDefinition = {
+  id?: string
+  rolls?: number
+  items?: DropPoolReward[]
+  slots?: DropPoolSlot[]
+}
+
+type DropPoolsDraft = Record<string, DropPoolDefinition>
+
+const emptyDropReward = (): DropPoolReward => ({ type: 'item', id: '', amount: 1, weight: 10000 })
+
 export default function ItemsConfigPanel() {
   const [config, setConfig] = useState<Record<string, ItemDefinition>>({})
   const [configText, setConfigText] = useState('{}')
+  const [dropPools, setDropPools] = useState<Record<string, unknown>>({})
+  const [dropPoolsText, setDropPoolsText] = useState('{}')
+  const [selectedDropPoolId, setSelectedDropPoolId] = useState('')
+  const [newDropPoolId, setNewDropPoolId] = useState('')
+  const [showDropPoolJson, setShowDropPoolJson] = useState(false)
   const [playerId, setPlayerId] = useState('')
   const [itemId, setItemId] = useState('')
   const [refType, setRefType] = useState('')
@@ -73,15 +102,25 @@ export default function ItemsConfigPanel() {
   const [loading, setLoading] = useState(false)
 
   const itemOptions = useMemo(() => Object.entries(config).sort((a, b) => a[0].localeCompare(b[0])), [config])
+  const dropPoolDraft = dropPools as DropPoolsDraft
+  const dropPoolIds = useMemo(() => Object.keys(dropPoolDraft).sort((a, b) => a.localeCompare(b)), [dropPoolDraft])
+  const selectedDropPool = selectedDropPoolId ? dropPoolDraft[selectedDropPoolId] : undefined
   const formItemId = form.editingId || `${CATEGORY_PREFIX[form.category] ?? ''}${form.suffix.trim()}`
 
   const loadConfig = async () => {
     setLoading(true)
     try {
-      const next = await adminApi.getAdminItemsConfig()
+      const [next, nextDropPools] = await Promise.all([
+        adminApi.getAdminItemsConfig(),
+        adminApi.getDropPoolsConfig(),
+      ])
       setConfig(next)
       setConfigText(JSON.stringify(next, null, 2))
-      setMessage('物品配置已刷新')
+      setDropPools(nextDropPools)
+      setDropPoolsText(JSON.stringify(nextDropPools, null, 2))
+      const nextPoolIds = Object.keys(nextDropPools).sort((a, b) => a.localeCompare(b))
+      setSelectedDropPoolId((current) => current && nextDropPools[current] ? current : (nextPoolIds[0] ?? ''))
+      setMessage('物品和掉落池配置已刷新')
     } catch (error) {
       setMessage(`失败: ${errorMessage(error)}`)
     } finally {
@@ -94,6 +133,100 @@ export default function ItemsConfigPanel() {
   }, [])
 
   const parseConfig = () => JSON.parse(configText) as Record<string, ItemDefinition>
+  const parseDropPools = () => JSON.parse(dropPoolsText) as DropPoolsDraft
+
+  const syncDropPoolsDraft = (next: DropPoolsDraft, nextSelectedId = selectedDropPoolId) => {
+    setDropPools(next)
+    setDropPoolsText(JSON.stringify(next, null, 2))
+    const ids = Object.keys(next).sort((a, b) => a.localeCompare(b))
+    setSelectedDropPoolId(nextSelectedId && next[nextSelectedId] ? nextSelectedId : (ids[0] ?? ''))
+  }
+
+  const applyDropPoolsJson = () => {
+    try {
+      const next = parseDropPools()
+      syncDropPoolsDraft(next)
+      setMessage('已从 JSON 同步到表单')
+    } catch (error) {
+      setMessage(`JSON 解析失败: ${errorMessage(error)}`)
+    }
+  }
+
+  const createDropPool = () => {
+    const id = newDropPoolId.trim()
+    if (!/^[a-z0-9_]+$/.test(id)) {
+      setMessage('掉落池 ID 只能包含小写英文、数字和下划线')
+      return
+    }
+    if (dropPoolDraft[id]) {
+      setMessage('掉落池 ID 已存在')
+      return
+    }
+    const next = {
+      ...dropPoolDraft,
+      [id]: { id, slots: [{ items: [emptyDropReward()] }] },
+    }
+    syncDropPoolsDraft(next, id)
+    setNewDropPoolId('')
+    setMessage(`已创建掉落池草稿：${id}`)
+  }
+
+  const removeDropPool = (poolId: string) => {
+    if (!window.confirm(`确认删除掉落池 ${poolId}？已绑定该 ID 的玩法保存时会校验失败。`)) return
+    const next = { ...dropPoolDraft }
+    delete next[poolId]
+    syncDropPoolsDraft(next)
+    setMessage(`已删除掉落池草稿：${poolId}`)
+  }
+
+  const updateDropPool = (poolId: string, updater: (pool: DropPoolDefinition) => DropPoolDefinition) => {
+    const current = dropPoolDraft[poolId]
+    if (!current) return
+    syncDropPoolsDraft({ ...dropPoolDraft, [poolId]: updater(current) }, poolId)
+  }
+
+  const updateDropPoolSlot = (poolId: string, slotIndex: number, updater: (slot: DropPoolSlot) => DropPoolSlot) => {
+    updateDropPool(poolId, (pool) => {
+      const slots = pool.slots?.length ? [...pool.slots] : [{ rolls: pool.rolls, items: pool.items ?? [] }]
+      slots[slotIndex] = updater(slots[slotIndex])
+      return { ...pool, rolls: undefined, items: undefined, slots }
+    })
+  }
+
+  const addDropPoolSlot = (poolId: string) => {
+    updateDropPool(poolId, (pool) => ({
+      ...pool,
+      rolls: undefined,
+      items: undefined,
+      slots: [...(pool.slots?.length ? pool.slots : [{ rolls: pool.rolls, items: pool.items ?? [] }]), { items: [emptyDropReward()] }],
+    }))
+  }
+
+  const removeDropPoolSlot = (poolId: string, slotIndex: number) => {
+    updateDropPool(poolId, (pool) => {
+      const slots = (pool.slots?.length ? pool.slots : [{ rolls: pool.rolls, items: pool.items ?? [] }]).filter((_, index) => index !== slotIndex)
+      return { ...pool, rolls: undefined, items: undefined, slots: slots.length ? slots : [{ items: [emptyDropReward()] }] }
+    })
+  }
+
+  const updateDropPoolReward = (poolId: string, slotIndex: number, rewardIndex: number, updater: (reward: DropPoolReward) => DropPoolReward) => {
+    updateDropPoolSlot(poolId, slotIndex, (slot) => {
+      const items = [...slot.items]
+      items[rewardIndex] = updater(items[rewardIndex])
+      return { ...slot, items }
+    })
+  }
+
+  const addDropPoolReward = (poolId: string, slotIndex: number) => {
+    updateDropPoolSlot(poolId, slotIndex, (slot) => ({ ...slot, items: [...slot.items, emptyDropReward()] }))
+  }
+
+  const removeDropPoolReward = (poolId: string, slotIndex: number, rewardIndex: number) => {
+    updateDropPoolSlot(poolId, slotIndex, (slot) => {
+      const items = slot.items.filter((_, index) => index !== rewardIndex)
+      return { ...slot, items: items.length ? items : [emptyDropReward()] }
+    })
+  }
 
   const validateConfig = async () => {
     setLoading(true)
@@ -118,6 +251,33 @@ export default function ItemsConfigPanel() {
       setMessage('物品配置已保存')
     } catch (error) {
       setMessage(`保存失败: ${errorMessage(error)}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const validateDropPools = async () => {
+    setLoading(true)
+    try {
+      const result = await adminApi.validateDropPoolsConfig(parseDropPools())
+      setMessage(result.ok ? '掉落池校验通过' : `掉落池校验失败: ${result.error ?? '未知错误'}`)
+    } catch (error) {
+      setMessage(`掉落池校验失败: ${errorMessage(error)}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const saveDropPools = async () => {
+    if (!window.confirm('确认保存掉落池配置？保存后会立即影响后续掉落结算。')) return
+    setLoading(true)
+    try {
+      const saved = await adminApi.updateDropPoolsConfig(parseDropPools())
+      setDropPools(saved)
+      setDropPoolsText(JSON.stringify(saved, null, 2))
+      setMessage('掉落池配置已保存')
+    } catch (error) {
+      setMessage(`掉落池保存失败: ${errorMessage(error)}`)
     } finally {
       setLoading(false)
     }
@@ -259,6 +419,204 @@ export default function ItemsConfigPanel() {
             </div>
           </div>
           {message && <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3 text-xs text-[var(--color-text-secondary)]">{message}</div>}
+        </div>
+      </div>
+      <div className="grid gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3 xl:grid-cols-[260px_minmax(0,1fr)_260px]">
+        <div className="grid content-start gap-3">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-sm font-bold text-[var(--color-text-primary)]">
+              <Package size={15} className="text-[var(--color-accent)]" />
+              掉落池配置
+            </div>
+            <div className="text-xs text-[var(--color-text-muted)]">当前 {dropPoolIds.length} 个掉落池</div>
+          </div>
+          <div className="grid gap-2">
+            <input
+              value={newDropPoolId}
+              onChange={(event) => setNewDropPoolId(event.target.value)}
+              placeholder="新掉落池 ID"
+              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs outline-none"
+            />
+            <button type="button" onClick={createDropPool} className="inline-flex items-center justify-center gap-1 rounded-lg border border-[var(--color-accent-border)] bg-[var(--color-accent-light)] px-2 py-2 text-xs font-bold text-[var(--color-accent)]">
+              <Plus size={13} />新建掉落池
+            </button>
+          </div>
+          <div className="grid max-h-[360px] gap-1.5 overflow-y-auto pr-1">
+            {dropPoolIds.map((poolId) => (
+              <button
+                key={poolId}
+                type="button"
+                onClick={() => setSelectedDropPoolId(poolId)}
+                className={`rounded-lg border px-3 py-2 text-left text-xs transition ${selectedDropPoolId === poolId ? 'border-[var(--color-accent-border)] bg-[var(--color-accent-light)] text-[var(--color-accent)]' : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]'}`}
+              >
+                <span className="block truncate font-bold">{poolId}</span>
+                <span className="mt-0.5 block text-[10px] opacity-70">{(dropPoolDraft[poolId]?.slots?.length ?? 0) || 1} 个槽位</span>
+              </button>
+            ))}
+            {dropPoolIds.length === 0 && <div className="rounded-lg border border-dashed border-[var(--color-border)] px-3 py-8 text-center text-xs text-[var(--color-text-muted)]">暂无掉落池</div>}
+          </div>
+        </div>
+
+        <div className="min-w-0">
+          {selectedDropPool ? (() => {
+            const slots = selectedDropPool.slots?.length ? selectedDropPool.slots : [{ rolls: selectedDropPool.rolls, items: selectedDropPool.items ?? [] }]
+            return (
+              <div className="grid gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-bold text-[var(--color-text-primary)]">{selectedDropPoolId}</div>
+                    <div className="text-[11px] text-[var(--color-text-muted)]">每个槽位独立抽取；权重按同槽位内相对比例计算。</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => addDropPoolSlot(selectedDropPoolId)} className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-bold text-emerald-600">
+                      <Plus size={12} />槽位
+                    </button>
+                    <button type="button" onClick={() => removeDropPool(selectedDropPoolId)} className="inline-flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-bold text-red-600">
+                      <Trash2 size={12} />删除池
+                    </button>
+                  </div>
+                </div>
+                {slots.map((slot, slotIndex) => {
+                  const totalWeight = slot.items.reduce((sum, reward) => sum + (Number(reward.weight) || 0), 0)
+                  return (
+                    <div key={`${selectedDropPoolId}-slot-${slotIndex}`} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <div className="text-xs font-bold text-[var(--color-text-primary)]">槽位 {slotIndex + 1}</div>
+                          <div className="text-[10px] text-[var(--color-text-muted)]">总权重 {totalWeight.toLocaleString()}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="grid grid-cols-[auto_64px] items-center gap-1 text-[10px] text-[var(--color-text-muted)]">
+                            抽取
+                            <input
+                              type="number"
+                              min={1}
+                              value={slot.rolls ?? 1}
+                              onChange={(event) => updateDropPoolSlot(selectedDropPoolId, slotIndex, (current) => ({ ...current, rolls: Math.max(1, Number(event.target.value) || 1) }))}
+                              className="h-7 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-2 text-xs text-[var(--color-text-primary)] outline-none"
+                            />
+                          </label>
+                          <button type="button" onClick={() => addDropPoolReward(selectedDropPoolId, slotIndex)} className="inline-flex h-7 items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 text-[10px] font-bold text-[var(--color-text-secondary)]">
+                            <Plus size={11} />掉落项
+                          </button>
+                          <button type="button" onClick={() => removeDropPoolSlot(selectedDropPoolId, slotIndex)} className="grid h-7 w-7 place-items-center rounded-lg text-red-500 hover:bg-red-500/10">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        {slot.items.map((reward, rewardIndex) => {
+                          const chance = totalWeight > 0 ? ((Number(reward.weight) || 0) / totalWeight) * 100 : 0
+                          return (
+                            <div key={`${selectedDropPoolId}-slot-${slotIndex}-reward-${rewardIndex}`} className="grid gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-2 lg:grid-cols-[96px_minmax(150px,1fr)_80px_90px_72px_28px] lg:items-end">
+                              <label className="grid gap-1">
+                                <span className="text-[10px] text-[var(--color-text-muted)]">类型</span>
+                                <select
+                                  value={reward.type}
+                                  onChange={(event) => updateDropPoolReward(selectedDropPoolId, slotIndex, rewardIndex, (current) => ({ ...current, type: event.target.value, id: event.target.value === 'none' ? 'none' : current.id, amount: event.target.value === 'none' ? undefined : (current.amount ?? 1) }))}
+                                  className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs outline-none"
+                                >
+                                  <option value="item">物品</option>
+                                  <option value="none">空掉落</option>
+                                  <option value="drop_pool">子掉落池</option>
+                                </select>
+                              </label>
+                              <label className="grid gap-1">
+                                <span className="text-[10px] text-[var(--color-text-muted)]">{reward.type === 'drop_pool' ? '子掉落池' : '物品'}</span>
+                                {reward.type === 'none' ? (
+                                  <input value="none" disabled className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-muted)]" />
+                                ) : reward.type === 'drop_pool' ? (
+                                  <select
+                                    value={reward.dropPoolId ?? ''}
+                                    onChange={(event) => updateDropPoolReward(selectedDropPoolId, slotIndex, rewardIndex, (current) => ({ ...current, dropPoolId: event.target.value }))}
+                                    className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs outline-none"
+                                  >
+                                    <option value="">选择掉落池</option>
+                                    {dropPoolIds.filter((poolId) => poolId !== selectedDropPoolId).map((poolId) => <option key={poolId} value={poolId}>{poolId}</option>)}
+                                  </select>
+                                ) : (
+                                  <select
+                                    value={reward.id ?? ''}
+                                    onChange={(event) => updateDropPoolReward(selectedDropPoolId, slotIndex, rewardIndex, (current) => ({ ...current, id: event.target.value }))}
+                                    className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs outline-none"
+                                  >
+                                    <option value="">选择物品</option>
+                                    {itemOptions.map(([id, item]) => <option key={id} value={id}>{item.name} · {id}</option>)}
+                                  </select>
+                                )}
+                              </label>
+                              <label className="grid gap-1">
+                                <span className="text-[10px] text-[var(--color-text-muted)]">数量</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  disabled={reward.type === 'none'}
+                                  value={reward.amount ?? 1}
+                                  onChange={(event) => updateDropPoolReward(selectedDropPoolId, slotIndex, rewardIndex, (current) => ({ ...current, amount: Math.max(1, Number(event.target.value) || 1) }))}
+                                  className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs outline-none disabled:opacity-50"
+                                />
+                              </label>
+                              <label className="grid gap-1">
+                                <span className="text-[10px] text-[var(--color-text-muted)]">权重</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={reward.weight}
+                                  onChange={(event) => updateDropPoolReward(selectedDropPoolId, slotIndex, rewardIndex, (current) => ({ ...current, weight: Math.max(1, Number(event.target.value) || 1) }))}
+                                  className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs outline-none"
+                                />
+                              </label>
+                              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-center text-[11px] font-bold text-[var(--color-accent)]">
+                                {chance.toFixed(2)}%
+                              </div>
+                              <button type="button" onClick={() => removeDropPoolReward(selectedDropPoolId, slotIndex, rewardIndex)} className="grid h-8 w-8 place-items-center rounded-lg text-red-500 hover:bg-red-500/10">
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })() : (
+            <div className="flex min-h-[260px] items-center justify-center rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-text-muted)]">选择或新建一个掉落池</div>
+          )}
+        </div>
+
+        <div className="grid content-start gap-3">
+          <div className="grid grid-cols-3 gap-2">
+            <button type="button" onClick={() => void loadConfig()} disabled={loading} className="inline-flex items-center justify-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-2 text-xs font-bold text-[var(--color-text-secondary)] disabled:opacity-50">
+              <RefreshCcw size={13} />刷新
+            </button>
+            <button type="button" onClick={() => void validateDropPools()} disabled={loading} className="inline-flex items-center justify-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-2 text-xs font-bold text-emerald-600 disabled:opacity-50">
+              <CheckCircle2 size={13} />校验
+            </button>
+            <button type="button" onClick={() => void saveDropPools()} disabled={loading} className="inline-flex items-center justify-center gap-1 rounded-lg border border-[var(--color-accent-border)] bg-[var(--color-accent-light)] px-2 py-2 text-xs font-bold text-[var(--color-accent)] disabled:opacity-50">
+              <Save size={13} />保存
+            </button>
+          </div>
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-700">
+            NPC 层级只绑定掉落池 ID；具体掉什么、概率多少，在这里维护。
+          </div>
+          <button type="button" onClick={() => setShowDropPoolJson((value) => !value)} className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-bold text-[var(--color-text-secondary)]">
+            {showDropPoolJson ? '收起高级 JSON' : '高级 JSON'}
+          </button>
+          {showDropPoolJson && (
+            <div className="grid gap-2">
+              <textarea
+                value={dropPoolsText}
+                onChange={(event) => setDropPoolsText(event.target.value)}
+                spellCheck={false}
+                className="min-h-[260px] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 font-mono text-xs text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent-border)]"
+              />
+              <button type="button" onClick={applyDropPoolsJson} className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-bold text-[var(--color-text-secondary)]">
+                套用 JSON 到表单
+              </button>
+            </div>
+          )}
         </div>
       </div>
       <div className="grid gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3 lg:grid-cols-[320px_minmax(0,1fr)]">

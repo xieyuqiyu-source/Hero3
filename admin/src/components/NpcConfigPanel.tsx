@@ -69,28 +69,30 @@ export default function NpcConfigPanel() {
     setConfig({ ...config, [key]: value })
   }
 
-  const updateTier = (tierId: string, field: string, value: number) => {
+  const updateTier = (tierId: string, field: string, value: number | string) => {
     if (!config) return
     const tier = config.tiers[tierId]
     if (!tier) return
     if (field === 'multiplier') {
-      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, multiplier: value } } })
+      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, multiplier: Number(value) } } })
+    } else if (field === 'dropPoolId') {
+      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, dropPoolId: String(value).trim() } } })
     } else if (field === 'armyMin') {
-      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, armyRange: { ...tier.armyRange, min: value } } } })
+      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, armyRange: { ...tier.armyRange, min: Number(value) } } } })
     } else if (field === 'armyMax') {
-      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, armyRange: { ...tier.armyRange, max: value } } } })
+      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, armyRange: { ...tier.armyRange, max: Number(value) } } } })
     } else if (field === 'guaranteed') {
-      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, count: { ...tier.count, guaranteed: value } } } })
+      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, count: { ...tier.count, guaranteed: Number(value) } } } })
     } else if (field === 'weight') {
-      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, count: { ...tier.count, weight: value } } } })
+      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, count: { ...tier.count, weight: Number(value) } } } })
     } else if (field === 'armyTypesMin') {
-      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, armyTypes: { ...tier.armyTypes, min: value } } } })
+      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, armyTypes: { ...tier.armyTypes, min: Number(value) } } } })
     } else if (field === 'armyTypesMax') {
-      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, armyTypes: { ...tier.armyTypes, max: value } } } })
+      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, armyTypes: { ...tier.armyTypes, max: Number(value) } } } })
     } else if (field === 'traitMin') {
-      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, traitCount: { ...tier.traitCount, min: value } } } })
+      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, traitCount: { ...tier.traitCount, min: Number(value) } } } })
     } else if (field === 'traitMax') {
-      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, traitCount: { ...tier.traitCount, max: value } } } })
+      setConfig({ ...config, tiers: { ...config.tiers, [tierId]: { ...tier, traitCount: { ...tier.traitCount, max: Number(value) } } } })
     }
   }
 
@@ -228,6 +230,16 @@ export default function NpcConfigPanel() {
                 <label className="grid gap-0.5">
                   <span className="text-[9px] text-[var(--color-text-muted)]">资源倍率</span>
                   <input type="number" step="0.1" value={tier.multiplier} onChange={(e) => updateTier(tierId, 'multiplier', parseFloat(e.target.value) || 1)} className="h-6 px-1.5 rounded text-[11px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]" />
+                </label>
+                <label className="grid gap-0.5 sm:col-span-2">
+                  <span className="text-[9px] text-[var(--color-text-muted)]">掉落池 ID</span>
+                  <input
+                    type="text"
+                    value={tier.dropPoolId ?? ''}
+                    onChange={(e) => updateTier(tierId, 'dropPoolId', e.target.value)}
+                    placeholder="例如 npc_small_exp_pack"
+                    className="h-6 px-1.5 rounded text-[11px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                  />
                 </label>
                 <label className="grid gap-0.5">
                   <span className="text-[9px] text-[var(--color-text-muted)]">保底数量</span>

@@ -1607,6 +1607,112 @@ func TestAttackNpcUsesStateTransactionAndPublishesBattleEvent(t *testing.T) {
 	}
 }
 
+func TestAttackNpcGrantsConfiguredItemDrops(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	root := filepath.Join("..", "..", "..", "config")
+	if err := LoadItemsConfig(filepath.Join(root, "items.json")); err != nil {
+		t.Fatalf("LoadItemsConfig failed: %v", err)
+	}
+	defer func() { _ = LoadItemsConfig(filepath.Join(root, "items.json")) }()
+	if err := LoadDropPoolsConfig(filepath.Join(root, "drop_pools.json")); err != nil {
+		t.Fatalf("LoadDropPoolsConfig root failed: %v", err)
+	}
+	defer func() { _ = LoadDropPoolsConfig(filepath.Join(root, "drop_pools.json")) }()
+	if err := LoadNpcConfig(filepath.Join(root, "npc.json")); err != nil {
+		t.Fatalf("LoadNpcConfig root failed: %v", err)
+	}
+	defer func() { _ = LoadNpcConfig(filepath.Join(root, "npc.json")) }()
+	npcCfg := GetNpcConfig()
+
+	poolPath := filepath.Join(t.TempDir(), "drop_pools.json")
+	pools := DropPoolsConfig{
+		"test_npc_exp_pack": {
+			ID: "test_npc_exp_pack",
+			Slots: []DropPoolSlot{{
+				Items: []DropPoolReward{{Type: RewardTypeItem, ID: "general_exp_small", Amount: 1, Weight: 10000}},
+			}},
+		},
+	}
+	poolData, err := json.Marshal(pools)
+	if err != nil {
+		t.Fatalf("marshal pools: %v", err)
+	}
+	if err := os.WriteFile(poolPath, poolData, 0o644); err != nil {
+		t.Fatalf("write pools: %v", err)
+	}
+	if err := LoadDropPoolsConfig(poolPath); err != nil {
+		t.Fatalf("LoadDropPoolsConfig failed: %v", err)
+	}
+
+	for tier, tierCfg := range npcCfg.Tiers {
+		tierCfg.DropPoolID = "test_npc_exp_pack"
+		npcCfg.Tiers[tier] = tierCfg
+	}
+	npcPath := filepath.Join(t.TempDir(), "npc.json")
+	npcData, err := json.Marshal(npcCfg)
+	if err != nil {
+		t.Fatalf("marshal npc config: %v", err)
+	}
+	if err := os.WriteFile(npcPath, npcData, 0o644); err != nil {
+		t.Fatalf("write npc config: %v", err)
+	}
+	if err := LoadNpcConfig(npcPath); err != nil {
+		t.Fatalf("LoadNpcConfig custom failed: %v", err)
+	}
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_attack_npc_drop", Username: "attack_npc_drop", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_attack_npc_drop", "NpcDrop", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 10}}
+	state.NpcState = &NpcState{
+		Cities: []NpcCity{{
+			ID:                "npc_drop_1",
+			Name:              "掉落城",
+			Faction:           "wei",
+			Tier:              "small",
+			Resources:         map[string]int{"wood": 0},
+			StorageCapacity:   map[string]int{},
+			ProductionPerHour: map[string]int{},
+			Army:              []ArmyUnit{},
+			ResourceSettledAt: now.UTC().Format(resourceDateLayout),
+			ArmySettledAt:     now.UTC().Format(resourceDateLayout),
+			GeneratedAt:       now.UTC().Format(resourceDateLayout),
+		}},
+		LastRefreshedAt: now.UTC().Format(resourceDateLayout),
+	}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.AttackNpc(AttackNpcRequest{
+		PlayerID: state.Player.ID,
+		NpcID:    "npc_drop_1",
+		Mode:     "attack",
+		Units:    map[string]int{"weiInfantry": 5},
+	})
+	if err != nil {
+		t.Fatalf("AttackNpc failed: %v", err)
+	}
+	if len(result.BattleReport.Drops) != 1 || result.BattleReport.Drops[0].ItemID != "general_exp_small" {
+		t.Fatalf("expected general exp pack drop in report, got %+v", result.BattleReport.Drops)
+	}
+	if len(result.BattleReport.GrantedRewards) == 0 {
+		t.Fatalf("expected granted rewards to include item drop, got %+v", result.BattleReport.GrantedRewards)
+	}
+	stored, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("get state: %v", err)
+	}
+	if got := inventoryItemAmount(&stored, "general_exp_small"); got != 1 {
+		t.Fatalf("expected dropped item in inventory, got %d", got)
+	}
+}
+
 func TestAttackNpcOnlyAppliesSelectedGeneral(t *testing.T) {
 	setTestCombatUnitsConfig(t)
 	setTestGeneralsConfig(t, GeneralsConfig{

@@ -97,6 +97,37 @@ func (h *Handlers) ValidateAdminItemsConfig(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// AdminDropPoolsConfig 返回 GM 后台掉落池配置。
+func (h *Handlers) AdminDropPoolsConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.gameService.ListDropPoolsConfig())
+}
+
+// UpdateAdminDropPoolsConfig 保存 GM 后台掉落池配置。
+func (h *Handlers) UpdateAdminDropPoolsConfig(w http.ResponseWriter, r *http.Request) {
+	var payload game.DropPoolsConfig
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if err := h.gameService.UpdateDropPoolsConfig(payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, h.gameService.ListDropPoolsConfig())
+}
+
+// ValidateAdminDropPoolsConfig 校验 GM 后台掉落池配置但不保存。
+func (h *Handlers) ValidateAdminDropPoolsConfig(w http.ResponseWriter, r *http.Request) {
+	var payload game.DropPoolsConfig
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if err := h.gameService.ValidateDropPoolsConfigForAdmin(payload); err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // AdminInventoryView 查看指定玩家背包格子。
 func (h *Handlers) AdminInventoryView(w http.ResponseWriter, r *http.Request) {
 	playerID := r.URL.Query().Get("playerId")

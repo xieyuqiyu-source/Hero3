@@ -135,6 +135,23 @@ export const adminApi = {
       body: JSON.stringify(config),
     })
   },
+  getDropPoolsConfig() {
+    return request<Record<string, unknown>>(`${API_BASE}/admin/items/drop-pools`)
+  },
+  updateDropPoolsConfig(config: Record<string, unknown>) {
+    return request<Record<string, unknown>>(`${API_BASE}/admin/items/drop-pools`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+  },
+  validateDropPoolsConfig(config: Record<string, unknown>) {
+    return request<{ ok: boolean; error?: string }>(`${API_BASE}/admin/items/drop-pools/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+  },
   getPlayerInventory(playerId: string) {
     return request<InventoryView>(`${API_BASE}/admin/items/inventory?playerId=${encodeURIComponent(playerId)}`)
   },

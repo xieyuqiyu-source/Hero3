@@ -94,6 +94,7 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 
 	now := time.Now()
 	var report BattleReport
+	var rewardApply RewardApplyResult
 	capturedToGarrison := map[string]int{}
 	capturedSourceFaction := ""
 	state, err := s.repo.UpdateCombatState(playerID, now, func(state *GameState) error {
@@ -205,6 +206,23 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 			report.GeneralLevelBefore = expResult.LevelBefore
 			report.GeneralLevelAfter = expResult.LevelAfter
 		}
+		dropRewards, dropSnapshots, err := rollNpcBattleDrops(npc, report)
+		if err != nil {
+			return err
+		}
+		if len(dropRewards) > 0 {
+			apply, err := ApplyRewardsToStateWithContext(state, dropRewards, RewardGrantContext{
+				PlayerID: state.Player.ID,
+				RefType:  LedgerRefBattleReward,
+				RefID:    report.ID,
+				Reason:   "npc_battle_drop",
+			}, now)
+			if err != nil {
+				return err
+			}
+			mergeRewardApplyResult(&rewardApply, apply)
+			report.Drops = dropSnapshots
+		}
 		report.PvpAttackerGenerals = buildPvpGeneralSnapshots(state, generalIDs)
 		report.GrantedRewards = buildBattleGrantedRewards(report)
 
@@ -217,6 +235,7 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 	if err != nil {
 		return AttackNpcResponse{}, err
 	}
+	s.flushRewardSideEffects(rewardApply)
 
 	if len(capturedToGarrison) > 0 {
 		result, err := s.CreateGarrisonDetachment(CreateGarrisonDetachmentRequest{
@@ -794,7 +813,54 @@ func buildBattleGrantedRewards(report BattleReport) []Reward {
 			Amount: report.GeneralExpGained,
 		})
 	}
+	for _, drop := range report.Drops {
+		if drop.Type == RewardTypeItem && drop.ItemID != "" && drop.Amount > 0 {
+			rewards = append(rewards, Reward{
+				Type:   RewardTypeItem,
+				ID:     drop.ItemID,
+				Amount: drop.Amount,
+			})
+		}
+	}
 	return rewards
+}
+
+// rollNpcBattleDrops 按 NPC 层级绑定的掉落池生成胜利掉落。
+func rollNpcBattleDrops(npc *NpcCity, report BattleReport) ([]Reward, []BattleReportDrop, error) {
+	if npc == nil || report.Result != "attacker_victory" {
+		return nil, nil, nil
+	}
+	cfg := GetNpcConfig()
+	tierCfg, ok := cfg.Tiers[strings.TrimSpace(npc.Tier)]
+	if !ok || strings.TrimSpace(tierCfg.DropPoolID) == "" {
+		return nil, nil, nil
+	}
+	rewards, err := RollDropPoolRewards(tierCfg.DropPoolID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rewards, buildBattleReportDrops(rewards), nil
+}
+
+// buildBattleReportDrops 把标准奖励转换为战报掉落快照。
+func buildBattleReportDrops(rewards []Reward) []BattleReportDrop {
+	drops := []BattleReportDrop{}
+	for _, reward := range rewards {
+		if reward.Type != RewardTypeItem || reward.Amount <= 0 {
+			continue
+		}
+		drop := BattleReportDrop{
+			Type:   reward.Type,
+			ItemID: reward.ID,
+			Amount: reward.Amount,
+		}
+		if item, ok := GetItemDefinition(reward.ID); ok {
+			drop.Name = item.Name
+			drop.Quality = item.Quality
+		}
+		drops = append(drops, drop)
+	}
+	return drops
 }
 
 func calculatePlunder(npc *NpcCity, carryCapacity int) map[string]int {

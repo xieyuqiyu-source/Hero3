@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import type { BattleReport } from '@/types/game'
 import { useConfigStore } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
+import { sortUnitEntries } from '@/utils/unitOrder'
 
 interface ScoutResultModalProps {
   report: BattleReport
@@ -18,7 +19,8 @@ const ScoutResultModal: FC<ScoutResultModalProps> = ({ report, onClose }) => {
   const navigate = useNavigate()
   const nickname = useGameStore((s) => s.state?.player.nickname ?? '我方')
   const defenderFaction = report.defenderFaction
-  const defenderUnits = useConfigStore((s) => s.units)?.[defenderFaction] ?? {}
+  const units = useConfigStore((s) => s.units)
+  const defenderUnits = units?.[defenderFaction] ?? {}
   const reportDefenderUnits = report.defenderUnits ?? {}
   const reportDefenderResources = report.defenderResources ?? {}
 
@@ -84,7 +86,7 @@ const ScoutResultModal: FC<ScoutResultModalProps> = ({ report, onClose }) => {
                 <div>
                   <h3 className="text-[11px] font-semibold text-[var(--color-text-primary)] mb-1.5">守军</h3>
                   <div className="flex flex-wrap gap-1.5">
-                    {Object.entries(reportDefenderUnits).filter(([, v]) => v > 0).map(([unitType, count]) => (
+                    {sortUnitEntries(reportDefenderUnits, defenderFaction, units ?? undefined).filter(([, v]) => v > 0).map(([unitType, count]) => (
                       <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-blue-500/10 text-blue-600 font-medium">
                         {getUnitName(unitType)} ×{count.toLocaleString()}
                       </span>

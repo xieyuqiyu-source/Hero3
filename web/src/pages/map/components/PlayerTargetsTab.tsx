@@ -128,7 +128,7 @@ const PlayerTargetsTab: FC = () => {
 
   // handleGeneralToggle 切换本次 PVP 出征携带武将。
   const handleGeneralToggle = useCallback((generalId: string) => {
-    setSelectedGeneralIds((prev) => prev.includes(generalId) ? prev.filter((id) => id !== generalId) : [...prev, generalId])
+    setSelectedGeneralIds((prev) => prev.includes(generalId) ? [] : [generalId])
   }, [])
 
   // handleScout 执行玩家侦查。

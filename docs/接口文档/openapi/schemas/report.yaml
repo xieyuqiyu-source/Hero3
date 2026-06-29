@@ -30,6 +30,11 @@ BattleReport:
       type: string
     detail:
       $ref: '#/components/schemas/BattleReportDetail'
+    drops:
+      type: array
+      description: 本场战斗直接掉落的物品快照，名称和品质用于战报高亮展示。
+      items:
+        $ref: '#/components/schemas/BattleReportDrop'
     share:
       $ref: '#/components/schemas/BattleReportShareLink'
     read:

@@ -74,7 +74,7 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
 
   // handleGeneralToggle 切换本次 NPC 出征是否携带指定武将。
   const handleGeneralToggle = (generalId: string) => {
-    setSelectedGeneralIds((prev) => prev.includes(generalId) ? prev.filter((id) => id !== generalId) : [...prev, generalId])
+    setSelectedGeneralIds((prev) => prev.includes(generalId) ? [] : [generalId])
   }
 
   const handleDispatch = async () => {

@@ -5,6 +5,7 @@ import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
 import type { BattleReport } from '@/types/game'
 import { getTraitMeta } from '@/utils/traits'
+import { sortUnitEntries, sortUnitIds } from '@/utils/unitOrder'
 import { gameApi } from '@/api/game'
 import { buildReportShareURL } from '../reportPresentation'
 
@@ -17,6 +18,12 @@ const RESOURCE_LABELS: Record<string, string> = { wood: '木材', stone: '石料
 const RESOURCE_ICONS: Record<string, string> = { wood: '🪵', stone: '🪨', iron: '💎', food: '🌾' }
 const RESOURCE_ORDER = ['wood', 'stone', 'iron', 'food']
 const TYPE_LABELS: Record<string, string> = { attack: '攻击', plunder: '掠夺', scout: '侦查', reinforce: '增援' }
+const DROP_QUALITY_CLASS: Record<string, string> = {
+  common: 'text-slate-600 bg-slate-500/10 border-slate-500/20',
+  rare: 'text-blue-600 bg-blue-500/10 border-blue-500/20',
+  epic: 'text-purple-600 bg-purple-500/10 border-purple-500/20',
+  legendary: 'text-amber-600 bg-amber-500/10 border-amber-500/25',
+}
 
 // safeMap 兼容旧战报或异常空字段，避免详情页读取 null。
 function safeMap(value?: Record<string, number> | null): Record<string, number> {
@@ -68,7 +75,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const allUnitIds = Object.keys(factionUnits).length > 0
     ? Object.keys(factionUnits)
     : Object.keys(report.dispatchedUnits ?? {})
-  const visibleAllUnitIds = allUnitIds.filter((unitType) => !isHiddenReportUnit(unitType, units ?? undefined))
+  const visibleAllUnitIds = sortUnitIds(allUnitIds, faction, units ?? undefined).filter((unitType) => !isHiddenReportUnit(unitType, units ?? undefined))
 
   // 防守方阵营兵种
   const defenderFaction = report.defenderFaction || ''
@@ -76,7 +83,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const defenderAllUnitIds = Object.keys(defenderFactionUnits).length > 0
     ? Object.keys(defenderFactionUnits)
     : Object.keys(report.defenderUnits ?? {})
-  const visibleDefenderAllUnitIds = defenderAllUnitIds.filter((unitType) => !isHiddenReportUnit(unitType, units ?? undefined))
+  const visibleDefenderAllUnitIds = sortUnitIds(defenderAllUnitIds, defenderFaction, units ?? undefined).filter((unitType) => !isHiddenReportUnit(unitType, units ?? undefined))
 
   const getUnitName = (unitType: string): string => {
     // 尝试从所有阵营配置里找名字
@@ -95,7 +102,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   }
 
   const formatTroopMap = (troops?: Record<string, number>) => {
-    const text = Object.entries(troops ?? {})
+    const text = sortUnitEntries(troops, faction, units ?? undefined)
       .filter(([, amount]) => amount > 0)
       .map(([unitType, amount]) => `${getUnitName(unitType)} ${amount.toLocaleString()}`)
       .join('、')
@@ -124,6 +131,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const capturedToGarrison = safeMap(report.capturedToGarrison)
   const revivedUnits = safeMap(report.revivedUnits)
   const traitTriggered = safeArray(report.traitTriggered)
+  const drops = report.drops ?? report.detail?.rewards?.drops ?? []
   const topDisplayName = isDefenseView ? targetDisplayName : selfDisplayName
   const bottomDisplayName = isDefenseView ? selfDisplayName : targetDisplayName
   const topPower = isDefenseView ? report.enemyPower : report.playerPower
@@ -168,7 +176,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
       return `${label}: ${value.toLocaleString()}`
     }
     if (typeof value === 'object' && value !== null) {
-      const text = Object.entries(value)
+      const text = sortUnitEntries(value, faction, units ?? undefined)
         .filter(([, amount]) => amount > 0)
         .map(([unitType, amount]) => `${getUnitName(unitType)} ${amount.toLocaleString()}`)
         .join('、')
@@ -334,7 +342,20 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
         <div className="px-4 py-2 border-b border-[var(--color-border)]">
           <div className="flex items-center">
             <span className="text-xs font-medium text-[var(--color-text-secondary)] w-16 flex-shrink-0">宝物掉落</span>
-            <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">无</span>
+            <div className="flex flex-1 flex-wrap items-center justify-center gap-1.5">
+              {drops.length > 0 ? (
+                drops.map((drop, index) => (
+                  <span
+                    key={`${drop.itemId ?? drop.name ?? 'drop'}-${index}`}
+                    className={`rounded-lg border px-2 py-1 text-[10px] font-bold ${DROP_QUALITY_CLASS[drop.quality ?? ''] ?? DROP_QUALITY_CLASS.common}`}
+                  >
+                    {drop.name ?? drop.itemId} ×{drop.amount.toLocaleString()}
+                  </span>
+                ))
+              ) : (
+                <span className="text-[10px] text-[var(--color-text-muted)]">无</span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -395,7 +416,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
               <div>
                 <div className="text-[11px] font-semibold text-pink-500 mb-1.5">美人计·俘虏归队</div>
                 <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(capturedUnits).filter(([, v]) => v > 0).map(([unitType, count]) => (
+                  {sortUnitEntries(capturedUnits, faction, units ?? undefined).filter(([, v]) => v > 0).map(([unitType, count]) => (
                     <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-pink-500/10 text-pink-600 font-medium">
                       {getUnitName(unitType)} +{count}
                     </span>
@@ -408,7 +429,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
               <div>
                 <div className="text-[11px] font-semibold text-pink-500 mb-1.5">美人计·俘虏驻防</div>
                 <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(capturedToGarrison).filter(([, v]) => v > 0).map(([unitType, count]) => (
+                  {sortUnitEntries(capturedToGarrison, faction, units ?? undefined).filter(([, v]) => v > 0).map(([unitType, count]) => (
                     <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-pink-500/10 text-pink-600 font-medium">
                       {getUnitName(unitType)} +{count}
                     </span>
@@ -421,7 +442,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
               <div>
                 <div className="text-[11px] font-semibold text-emerald-500 mb-1.5">仁德·复活归队</div>
                 <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(revivedUnits).filter(([, v]) => v > 0).map(([unitType, count]) => (
+                  {sortUnitEntries(revivedUnits, faction, units ?? undefined).filter(([, v]) => v > 0).map(([unitType, count]) => (
                     <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 font-medium">
                       {getUnitName(unitType)} +{count}
                     </span>

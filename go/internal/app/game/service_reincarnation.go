@@ -759,6 +759,12 @@ func buildReincarnationReport(run ReincarnationRun, wave ReincarnationWave, stat
 		battleType = "dungeon_reincarnation_defense"
 	}
 	enemyBefore := addIntMaps(wave.EnemyRemaining, enemyLosses)
+	playerPower := int(result.AttackPower)
+	enemyPower := int(result.DefensePower)
+	if viewType == ReportViewDefense {
+		playerPower = int(result.DefensePower)
+		enemyPower = int(result.AttackPower)
+	}
 	return NormalizeBattleReport(BattleReport{
 		ID:                "br_" + randomID(8),
 		EventID:           "event_ra_" + randomID(8),
@@ -773,8 +779,8 @@ func buildReincarnationReport(run ReincarnationRun, wave ReincarnationWave, stat
 		TargetName:        fmt.Sprintf("轮回绝境 %d 层 第 %d 波", run.Level, wave.WaveIndex),
 		Type:              wave.WaveType,
 		Result:            reportResult,
-		PlayerPower:       int(result.AttackPower),
-		EnemyPower:        int(result.DefensePower),
+		PlayerPower:       playerPower,
+		EnemyPower:        enemyPower,
 		DispatchedUnits:   cloneStringIntMap(troops),
 		LostUnits:         cloneStringIntMap(losses),
 		DefenderFaction:   wave.EnemyFaction,

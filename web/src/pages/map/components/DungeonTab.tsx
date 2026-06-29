@@ -403,7 +403,7 @@ const WavePanel: FC<{
     setTroops(next)
   }
   const toggleGeneral = (generalId: string) => {
-    setSelectedGeneralIds((prev) => prev.includes(generalId) ? prev.filter((id) => id !== generalId) : [...prev, generalId])
+    setSelectedGeneralIds((prev) => prev.includes(generalId) ? [] : [generalId])
   }
 
   return (

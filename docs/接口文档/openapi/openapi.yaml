@@ -154,6 +154,10 @@ paths:
     $ref: ./paths/items.yaml#/~1api~1v1~1admin~1items~1config
   /api/v1/admin/items/config/validate:
     $ref: ./paths/items.yaml#/~1api~1v1~1admin~1items~1config~1validate
+  /api/v1/admin/items/drop-pools:
+    $ref: ./paths/items.yaml#/~1api~1v1~1admin~1items~1drop-pools
+  /api/v1/admin/items/drop-pools/validate:
+    $ref: ./paths/items.yaml#/~1api~1v1~1admin~1items~1drop-pools~1validate
   /api/v1/admin/items/inventory:
     $ref: ./paths/items.yaml#/~1api~1v1~1admin~1items~1inventory
   /api/v1/admin/items/ledger:

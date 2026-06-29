@@ -514,6 +514,7 @@ export interface NpcCountRule {
 
 export interface NpcTierConfig {
   multiplier: number
+  dropPoolId?: string
   armyRange: IntRange
   armyTypes: IntRange
   traitCount: IntRange

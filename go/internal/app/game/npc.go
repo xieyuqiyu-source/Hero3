@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -65,6 +66,7 @@ type NpcTierConfig struct {
 	ArmyTypes  IntRange     `json:"armyTypes"`
 	TraitCount IntRange     `json:"traitCount"`
 	Count      NpcCountRule `json:"count"`
+	DropPoolID string       `json:"dropPoolId,omitempty"`
 }
 
 type IntRange struct {
@@ -247,6 +249,11 @@ func validateNpcConfig(cfg NpcConfig) error {
 		}
 		if tierCfg.TraitCount.Min < 0 || tierCfg.TraitCount.Max < tierCfg.TraitCount.Min {
 			return fmt.Errorf("npc config: tier %q traitCount invalid (min=%d, max=%d)", tier, tierCfg.TraitCount.Min, tierCfg.TraitCount.Max)
+		}
+		if strings.TrimSpace(tierCfg.DropPoolID) != "" {
+			if _, ok := GetDropPoolDefinition(tierCfg.DropPoolID); !ok && len(GetDropPoolsConfig()) > 0 {
+				return fmt.Errorf("npc config: tier %q dropPoolId not found: %s", tier, tierCfg.DropPoolID)
+			}
 		}
 		guaranteed += tierCfg.Count.Guaranteed
 	}

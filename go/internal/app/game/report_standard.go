@@ -118,6 +118,7 @@ func BuildBattleReportDetail(report BattleReport) BattleReportDetail {
 		SecondarySide: secondary,
 		Rewards: BattleReportRewards{
 			Resources:          cloneReportIntMap(report.Rewards),
+			Drops:              append([]BattleReportDrop(nil), report.Drops...),
 			CityGold:           report.OverflowCityGold,
 			GeneralExp:         report.GeneralExpGained,
 			GeneralLevelBefore: report.GeneralLevelBefore,

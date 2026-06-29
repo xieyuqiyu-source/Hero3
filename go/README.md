@@ -46,7 +46,7 @@ go/
 - `general_registry.go`：武将配置查询、武将注册判断、全部武将配置列表。
 - `general_growth.go`：武将等级、经验、属性点和战斗经验计算。
 - `general_effects.go`：武将配置装配、属性拆解和 Modifier 来源。
-- `general_combat.go`：武将特性接入战斗特性总线和战报结果。
+- `general_combat.go`：武将特性接入战斗特性总线和战报结果；真实战斗每次最多 1 名参战武将，NPC/PVP/副本按显式携带或守城主将触发。
 - `service_general.go`：武将加点、洗点、换将等玩家操作。
 
 兵种/军事系统当前集中在：

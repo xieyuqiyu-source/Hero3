@@ -18,6 +18,12 @@ type DropPoolDefinition struct {
 	ID    string           `json:"id,omitempty"`
 	Rolls int              `json:"rolls"`
 	Items []DropPoolReward `json:"items"`
+	Slots []DropPoolSlot   `json:"slots,omitempty"`
+}
+
+type DropPoolSlot struct {
+	Rolls int              `json:"rolls,omitempty"`
+	Items []DropPoolReward `json:"items"`
 }
 
 type DropPoolReward struct {
@@ -44,6 +50,27 @@ func LoadDropPoolsConfig(path string) error {
 		return err
 	}
 	if err := ValidateDropPoolsConfig(cfg); err != nil {
+		return err
+	}
+	dropPoolsMu.Lock()
+	dropPoolsConfig = cloneDropPoolsConfig(cfg)
+	dropPoolsMu.Unlock()
+	return nil
+}
+
+// SaveDropPoolsConfig 校验并持久化掉落池配置。
+func SaveDropPoolsConfig(path string, cfg DropPoolsConfig) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("掉落池配置路径不能为空")
+	}
+	if err := ValidateDropPoolsConfig(cfg); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
 		return err
 	}
 	dropPoolsMu.Lock()
@@ -84,39 +111,21 @@ func ValidateDropPoolsConfig(cfg DropPoolsConfig) error {
 		if pool.ID != "" && pool.ID != id {
 			return errors.New("掉落池 ID 和配置 key 不一致: " + id)
 		}
-		if pool.Rolls <= 0 {
+		if len(pool.Slots) > 0 {
+			for _, slot := range pool.Slots {
+				if err := validateDropPoolItems(cfg, id, slot.Items); err != nil {
+					return err
+				}
+				if slot.Rolls < 0 {
+					return errors.New("掉落池槽位抽取次数不能小于 0: " + id)
+				}
+			}
+		} else if pool.Rolls <= 0 {
 			return errors.New("掉落池抽取次数必须大于 0: " + id)
-		}
-		if len(pool.Items) == 0 {
+		} else if len(pool.Items) == 0 {
 			return errors.New("掉落池奖励项不能为空: " + id)
-		}
-		totalWeight := 0
-		for _, item := range pool.Items {
-			if item.Weight <= 0 {
-				return errors.New("掉落项权重必须大于 0: " + id)
-			}
-			if item.Amount <= 0 {
-				return errors.New("掉落项数量必须大于 0: " + id)
-			}
-			switch strings.TrimSpace(item.Type) {
-			case RewardTypeItem:
-				if _, ok := GetItemDefinition(item.ID); !ok {
-					return errors.New("掉落项引用的物品不存在: " + id)
-				}
-			case "drop_pool":
-				if strings.TrimSpace(item.DropPoolID) == "" || item.DropPoolID == id {
-					return errors.New("掉落池不能引用自身或空掉落池: " + id)
-				}
-				if _, ok := cfg[item.DropPoolID]; !ok {
-					return errors.New("掉落项引用的掉落池不存在: " + id)
-				}
-			default:
-				return errors.New("掉落项类型不合法: " + id)
-			}
-			totalWeight += item.Weight
-		}
-		if totalWeight <= 0 {
-			return errors.New("掉落池总权重必须大于 0: " + id)
+		} else if err := validateDropPoolItems(cfg, id, pool.Items); err != nil {
+			return err
 		}
 	}
 	for id := range cfg {
@@ -136,7 +145,7 @@ func hasDropPoolCycle(cfg DropPoolsConfig, id string, visiting map[string]bool, 
 	}
 	visiting[id] = true
 	pool := cfg[id]
-	for _, item := range pool.Items {
+	for _, item := range dropPoolCycleItems(pool) {
 		if strings.TrimSpace(item.Type) != "drop_pool" {
 			continue
 		}
@@ -150,6 +159,53 @@ func hasDropPoolCycle(cfg DropPoolsConfig, id string, visiting map[string]bool, 
 	return false
 }
 
+func validateDropPoolItems(cfg DropPoolsConfig, poolID string, items []DropPoolReward) error {
+	if len(items) == 0 {
+		return errors.New("掉落池奖励项不能为空: " + poolID)
+	}
+	totalWeight := 0
+	for _, item := range items {
+		if item.Weight <= 0 {
+			return errors.New("掉落项权重必须大于 0: " + poolID)
+		}
+		if strings.TrimSpace(item.Type) == "none" {
+			totalWeight += item.Weight
+			continue
+		}
+		if item.Amount <= 0 {
+			return errors.New("掉落项数量必须大于 0: " + poolID)
+		}
+		switch strings.TrimSpace(item.Type) {
+		case RewardTypeItem:
+			if _, ok := GetItemDefinition(item.ID); !ok {
+				return errors.New("掉落项引用的物品不存在: " + poolID)
+			}
+		case "drop_pool":
+			if strings.TrimSpace(item.DropPoolID) == "" || item.DropPoolID == poolID {
+				return errors.New("掉落池不能引用自身或空掉落池: " + poolID)
+			}
+			if _, ok := cfg[item.DropPoolID]; !ok {
+				return errors.New("掉落项引用的掉落池不存在: " + poolID)
+			}
+		default:
+			return errors.New("掉落项类型不合法: " + poolID)
+		}
+		totalWeight += item.Weight
+	}
+	if totalWeight <= 0 {
+		return errors.New("掉落池总权重必须大于 0: " + poolID)
+	}
+	return nil
+}
+
+func dropPoolCycleItems(pool DropPoolDefinition) []DropPoolReward {
+	items := append([]DropPoolReward(nil), pool.Items...)
+	for _, slot := range pool.Slots {
+		items = append(items, slot.Items...)
+	}
+	return items
+}
+
 func cloneDropPoolsConfig(source DropPoolsConfig) DropPoolsConfig {
 	next := make(DropPoolsConfig, len(source))
 	for id, pool := range source {
@@ -161,6 +217,13 @@ func cloneDropPoolsConfig(source DropPoolsConfig) DropPoolsConfig {
 func cloneDropPoolDefinition(source DropPoolDefinition) DropPoolDefinition {
 	next := source
 	next.Items = append([]DropPoolReward(nil), source.Items...)
+	next.Slots = make([]DropPoolSlot, 0, len(source.Slots))
+	for _, slot := range source.Slots {
+		next.Slots = append(next.Slots, DropPoolSlot{
+			Rolls: slot.Rolls,
+			Items: append([]DropPoolReward(nil), slot.Items...),
+		})
+	}
 	return next
 }
 
@@ -171,12 +234,34 @@ func RollDropPoolRewards(poolID string) ([]Reward, error) {
 		return nil, ErrDropPoolNotFound
 	}
 	rewards := []Reward{}
+	if len(pool.Slots) > 0 {
+		for _, slot := range pool.Slots {
+			rolls := slot.Rolls
+			if rolls <= 0 {
+				rolls = 1
+			}
+			rolled, err := rollDropPoolItems(slot.Items, rolls)
+			if err != nil {
+				return nil, err
+			}
+			rewards = append(rewards, rolled...)
+		}
+		return rewards, nil
+	}
+	return rollDropPoolItems(pool.Items, pool.Rolls)
+}
+
+func rollDropPoolItems(items []DropPoolReward, rolls int) ([]Reward, error) {
+	rewards := []Reward{}
+	pool := DropPoolDefinition{Rolls: rolls, Items: items}
 	for i := 0; i < pool.Rolls; i++ {
 		item, err := pickDropPoolReward(pool)
 		if err != nil {
 			return nil, err
 		}
 		switch strings.TrimSpace(item.Type) {
+		case "none":
+			continue
 		case RewardTypeItem:
 			rewards = append(rewards, Reward{Type: RewardTypeItem, ID: strings.TrimSpace(item.ID), Amount: item.Amount})
 		case "drop_pool":

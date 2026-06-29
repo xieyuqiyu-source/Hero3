@@ -95,6 +95,70 @@
                   type: boolean
                 error:
                   type: string
+/api/v1/admin/items/drop-pools:
+  get:
+    tags: [Admin]
+    summary: GM 查询掉落池配置
+    responses:
+      '200':
+        description: 掉落池配置
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: object
+  put:
+    tags: [Admin]
+    summary: GM 保存掉落池配置
+    description: 保存后立即影响后续 NPC、副本、宝箱等引用掉落池的奖励结算。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties:
+              type: object
+    responses:
+      '200':
+        description: 保存后的掉落池配置
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: object
+      '400':
+        description: 配置格式或内容不合法
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/items/drop-pools/validate:
+  post:
+    tags: [Admin]
+    summary: GM 校验掉落池配置
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties:
+              type: object
+    responses:
+      '200':
+        description: 校验结果
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ok:
+                  type: boolean
+                error:
+                  type: string
 /api/v1/admin/items/inventory:
   get:
     tags: [Admin]

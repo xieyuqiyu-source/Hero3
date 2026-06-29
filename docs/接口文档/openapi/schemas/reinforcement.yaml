@@ -15,6 +15,8 @@ SendReinforcementRequest:
         type: integer
     generalIds:
       type: array
+      maxItems: 1
+      description: 本次增援携带的武将 ID，最多 1 个；为空表示不携带武将。
       items:
         type: string
     speedMultiplier:

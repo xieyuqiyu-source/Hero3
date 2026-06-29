@@ -43,6 +43,9 @@ func normalizeBattleGeneralIDs(state *GameState, generalIDs []string) ([]string,
 			return nil, ErrGeneralBusy
 		}
 		result = append(result, generalID)
+		if len(result) > 1 {
+			return nil, ErrInvalidGeneral
+		}
 	}
 	return result, nil
 }

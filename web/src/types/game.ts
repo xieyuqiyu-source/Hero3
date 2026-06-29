@@ -323,6 +323,7 @@ export interface BattleReport {
   defenderRevealed: boolean
   defenderResources: Record<string, number>
   rewards: Record<string, number>
+  drops?: Array<{ type: string; itemId?: string; name?: string; amount: number; quality?: string }>
   overflow?: Record<string, number>
   overflowCityGold?: number
   generalExpGained?: number

@@ -287,6 +287,7 @@ effectiveDefense := ApplyTraits(baseDefense, "cavalryDefenseBonus", npc.TraitBuf
   "tiers": {
     "small": {
       "multiplier": 1.0,
+      "dropPoolId": "npc_small_exp_pack",
       "armyRange": { "min": 50, "max": 300 },
       "armyTypes": { "min": 1, "max": 2 },
       "traitCount": { "min": 0, "max": 0 },
@@ -294,6 +295,7 @@ effectiveDefense := ApplyTraits(baseDefense, "cavalryDefenseBonus", npc.TraitBuf
     },
     "medium": {
       "multiplier": 4.0,
+      "dropPoolId": "npc_small_exp_pack",
       "armyRange": { "min": 300, "max": 1500 },
       "armyTypes": { "min": 2, "max": 3 },
       "traitCount": { "min": 0, "max": 1 },
@@ -301,6 +303,7 @@ effectiveDefense := ApplyTraits(baseDefense, "cavalryDefenseBonus", npc.TraitBuf
     },
     "large": {
       "multiplier": 8.0,
+      "dropPoolId": "npc_large_exp_pack",
       "armyRange": { "min": 1500, "max": 5000 },
       "armyTypes": { "min": 3, "max": 4 },
       "traitCount": { "min": 0, "max": 2 },
@@ -308,6 +311,7 @@ effectiveDefense := ApplyTraits(baseDefense, "cavalryDefenseBonus", npc.TraitBuf
     },
     "golden": {
       "multiplier": 16.0,
+      "dropPoolId": "npc_golden_exp_pack",
       "armyRange": { "min": 5000, "max": 15000 },
       "armyTypes": { "min": 4, "max": 5 },
       "traitCount": { "min": 1, "max": 3 },
@@ -336,6 +340,13 @@ effectiveDefense := ApplyTraits(baseDefense, "cavalryDefenseBonus", npc.TraitBuf
   }
 }
 ```
+
+`dropPoolId` 用于把 NPC 层级绑定到 `go/config/drop_pools.json` 中的掉落池。当前配置规则：
+
+- `small`、`medium`：绑定 `npc_small_exp_pack`，胜利后掉落将领小经验包。
+- `large`：绑定 `npc_large_exp_pack`，胜利后掉落将领中经验包，并低概率额外掉落将领大经验包。
+- `golden`：绑定 `npc_golden_exp_pack`，胜利后掉落将领中经验包，并配置中概率和小概率两个独立大经验包槽位。
+- 掉落只在玩家攻击 NPC 胜利时发放，并写入战报、背包和物品流水。
 
 ## <span style="color:#8b5cf6">11. 结算示例</span>
 

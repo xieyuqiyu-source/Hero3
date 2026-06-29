@@ -6,6 +6,7 @@ import type { BattleReport } from '@/types/game'
 import { useConfigStore } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
 import { getTraitMeta } from '@/utils/traits'
+import { sortUnitEntries } from '@/utils/unitOrder'
 
 interface BattleResultModalProps {
   report: BattleReport
@@ -13,6 +14,12 @@ interface BattleResultModalProps {
 }
 
 const RESOURCE_LABELS: Record<string, string> = { wood: '木材', stone: '石料', iron: '铁矿', food: '粮食' }
+const DROP_QUALITY_CLASS: Record<string, string> = {
+  common: 'text-slate-600 bg-slate-500/10 border-slate-500/20',
+  rare: 'text-blue-600 bg-blue-500/10 border-blue-500/20',
+  epic: 'text-purple-600 bg-purple-500/10 border-purple-500/20',
+  legendary: 'text-amber-600 bg-amber-500/10 border-amber-500/25',
+}
 
 const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
   const [visible, setVisible] = useState(false)
@@ -62,7 +69,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
       return `${label}: ${value.toLocaleString()}`
     }
     if (typeof value === 'object' && value !== null) {
-      const text = Object.entries(value)
+      const text = sortUnitEntries(value, faction, units ?? undefined)
         .filter(([, amount]) => amount > 0)
         .map(([unitType, amount]) => `${getUnitName(unitType)} ${amount.toLocaleString()}`)
         .join('、')
@@ -79,6 +86,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
   const generalExpGained = report.generalExpGained ?? report.detail?.rewards?.generalExp ?? 0
   const generalLevelBefore = report.generalLevelBefore ?? report.detail?.rewards?.generalLevelBefore
   const generalLevelAfter = report.generalLevelAfter ?? report.detail?.rewards?.generalLevelAfter
+  const drops = report.drops ?? report.detail?.rewards?.drops ?? []
 
   return (
     <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
@@ -161,7 +169,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
             <div>
               <h3 className="text-[11px] font-semibold text-[var(--color-text-primary)] mb-1.5">我方损失</h3>
               <div className="flex flex-wrap gap-1.5">
-                {Object.entries(report.lostUnits).filter(([, v]) => v > 0).map(([unitType, count]) => (
+                {sortUnitEntries(report.lostUnits, faction, units ?? undefined).filter(([, v]) => v > 0).map(([unitType, count]) => (
                   <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-red-500/10 text-red-600 font-medium">
                     {getUnitName(unitType)} ×{count}
                   </span>
@@ -187,6 +195,22 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
 
           {!hasRewards && isVictory && (
             <p className="text-xs text-[var(--color-text-muted)] text-center">敌方城池资源已空</p>
+          )}
+
+          {drops.length > 0 && (
+            <div>
+              <h3 className="text-[11px] font-semibold text-[var(--color-text-primary)] mb-1.5">宝物掉落</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {drops.map((drop, index) => (
+                  <span
+                    key={`${drop.itemId ?? drop.name ?? 'drop'}-${index}`}
+                    className={`rounded-lg border px-2 py-1 text-[10px] font-bold ${DROP_QUALITY_CLASS[drop.quality ?? ''] ?? DROP_QUALITY_CLASS.common}`}
+                  >
+                    {drop.name ?? drop.itemId} ×{drop.amount.toLocaleString()}
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Overflow → CityGold */}
@@ -245,7 +269,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
             <div>
               <h3 className="text-[11px] font-semibold text-pink-500 mb-1.5">🌸 美人计·俘虏归队</h3>
               <div className="flex flex-wrap gap-1.5">
-                {Object.entries(report.capturedUnits).filter(([, v]) => v > 0).map(([unitType, count]) => (
+                {sortUnitEntries(report.capturedUnits, faction, units ?? undefined).filter(([, v]) => v > 0).map(([unitType, count]) => (
                   <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-pink-500/10 text-pink-600 font-medium">
                     {getUnitName(unitType)} +{count}
                   </span>
@@ -259,7 +283,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
             <div>
               <h3 className="text-[11px] font-semibold text-pink-500 mb-1.5">🌸 美人计·俘虏驻防</h3>
               <div className="flex flex-wrap gap-1.5">
-                {Object.entries(report.capturedToGarrison).filter(([, v]) => v > 0).map(([unitType, count]) => (
+                {sortUnitEntries(report.capturedToGarrison, faction, units ?? undefined).filter(([, v]) => v > 0).map(([unitType, count]) => (
                   <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-pink-500/10 text-pink-600 font-medium">
                     {getUnitName(unitType)} +{count}
                   </span>
@@ -273,7 +297,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
             <div>
               <h3 className="text-[11px] font-semibold text-emerald-500 mb-1.5">🕊️ 仁德·复活归队</h3>
               <div className="flex flex-wrap gap-1.5">
-                {Object.entries(report.revivedUnits).filter(([, v]) => v > 0).map(([unitType, count]) => (
+                {sortUnitEntries(report.revivedUnits, faction, units ?? undefined).filter(([, v]) => v > 0).map(([unitType, count]) => (
                   <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 font-medium">
                     {getUnitName(unitType)} +{count}
                   </span>

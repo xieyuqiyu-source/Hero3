@@ -596,6 +596,10 @@ BattleReport:
       type: object
       additionalProperties:
         type: integer
+    drops:
+      type: array
+      items:
+        $ref: '#/components/schemas/BattleReportDrop'
     createdAt:
       type: string
       format: date-time

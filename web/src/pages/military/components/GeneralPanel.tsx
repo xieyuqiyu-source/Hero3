@@ -100,6 +100,7 @@ const GeneralPanel: FC = () => {
   const [selectedGeneralId, setSelectedGeneralId] = useState('')
   const [showChangeGeneralDialog, setShowChangeGeneralDialog] = useState(false)
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<{ stack: ItemStack; item?: ItemDefinition } | null>(null)
+  const [selectedItemUseAmount, setSelectedItemUseAmount] = useState(1)
   const inventoryRows = useMemo(() => {
     const slots = state?.inventorySlots?.length ? state.inventorySlots : Object.values(state?.inventory ?? {})
     return slots
@@ -126,7 +127,8 @@ const GeneralPanel: FC = () => {
   const attributeBreakdown = general.attributeBreakdown ?? {}
   const nextLevelExp = general.nextLevelExp ?? 0
   const expToNext = nextLevelExp > 0 ? Math.max(nextLevelExp - general.exp, 0) : 0
-  const expProgress = nextLevelExp > 0 ? Math.min(100, Math.round((general.exp / nextLevelExp) * 100)) : 100
+  const expProgress = nextLevelExp > 0 ? Math.min(100, (general.exp / nextLevelExp) * 100) : 100
+  const expProgressText = `${expProgress.toFixed(2)}%`
   const statEntries = STAT_ORDER.map((key) => [key, general.stats?.[key] ?? 0] as const)
   const availableStatPoints = general.availableStatPoints ?? 0
   const factionGenerals = state?.player.faction ? (factions?.[state.player.faction]?.generals ?? []) : []
@@ -152,15 +154,28 @@ const GeneralPanel: FC = () => {
     }
   }
 
+  // 打开背包物品详情弹窗。
+  const openInventoryItem = (stack: ItemStack, item?: ItemDefinition) => {
+    setSelectedInventoryItem({ stack, item })
+    setSelectedItemUseAmount(1)
+  }
+
+  // 关闭背包物品详情弹窗。
+  const closeInventoryItem = () => {
+    setSelectedInventoryItem(null)
+    setSelectedItemUseAmount(1)
+  }
+
   // 使用背包中的指定物品。
-  const handleUseItem = async (stack: ItemStack, item?: ItemDefinition) => {
+  const handleUseItem = async (stack: ItemStack, item?: ItemDefinition, amount = 1) => {
     if (!activePlayerId || !item?.usable || usingItemId) return
+    const useAmount = Math.max(1, Math.min(stack.amount, Math.floor(amount) || 1))
     setUsingItemId(stack.itemId)
     try {
-      const result = await gameApi.useItem(activePlayerId, stack.itemId, 1)
+      const result = await gameApi.useItem(activePlayerId, stack.itemId, useAmount)
       patchState(result.patch)
-      setSelectedInventoryItem(null)
-      toast.success(`已使用 ${item.name}`)
+      closeInventoryItem()
+      toast.success(`已使用 ${item.name} ×${useAmount.toLocaleString()}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '物品使用失败')
     } finally {
@@ -226,7 +241,7 @@ const GeneralPanel: FC = () => {
             <h2 className="text-lg font-bold text-[var(--color-text-primary)]">{general.name}</h2>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-xs px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 font-bold">Lv.{general.level}</span>
-              <span className="text-[10px] text-[var(--color-text-muted)]">EXP {general.exp}</span>
+              <span className="text-[10px] text-[var(--color-text-muted)]">EXP {expProgressText}</span>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -255,7 +270,7 @@ const GeneralPanel: FC = () => {
 
         <div className="mb-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2">
           <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)] mb-1.5">
-            <span>当前累计经验 {general.exp.toLocaleString()}</span>
+            <span>当前经验进度 {expProgressText}</span>
             <span>{nextLevelExp > 0 ? `下级还需 ${expToNext.toLocaleString()}` : '已满级'}</span>
           </div>
           <div className="h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
@@ -365,7 +380,7 @@ const GeneralPanel: FC = () => {
                 <button
                   key={stack.slotId ?? stack.itemId}
                   type="button"
-                  onClick={() => setSelectedInventoryItem({ stack, item })}
+                  onClick={() => openInventoryItem(stack, item)}
                   className={`relative grid h-[72px] w-[72px] place-items-center rounded-lg border bg-[var(--color-surface-dim)] cursor-pointer transition hover:brightness-110 ${qualityClass}`}
                   title={item?.name ?? stack.itemId}
                 >
@@ -441,8 +456,10 @@ const GeneralPanel: FC = () => {
         const Icon = effectIcon(item?.effects ?? [])
         const quality = itemQuality(item)
         const qualityClass = QUALITY_CLASS[quality] ?? QUALITY_CLASS.common
+        const canBatchUse = Boolean(item?.usable && item.stackable && stack.amount > 1)
+        const useAmount = Math.max(1, Math.min(stack.amount, Math.floor(selectedItemUseAmount) || 1))
         return (
-          <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setSelectedInventoryItem(null)}>
+          <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={closeInventoryItem}>
             <div className="w-full max-w-[360px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
               <div className="mb-3 flex items-start gap-3">
                 <div className={`relative grid h-[72px] w-[72px] shrink-0 place-items-center rounded-lg border bg-[var(--color-surface-dim)] ${qualityClass}`}>
@@ -459,7 +476,7 @@ const GeneralPanel: FC = () => {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setSelectedInventoryItem(null)}
+                      onClick={closeInventoryItem}
                       className="grid h-7 w-7 place-items-center rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-surface-dim)] hover:text-[var(--color-text-primary)]"
                     >
                       <X size={15} />
@@ -470,10 +487,38 @@ const GeneralPanel: FC = () => {
               <p className="min-h-16 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3 text-xs leading-relaxed text-[var(--color-text-secondary)]">
                 {item?.description ?? '配置不存在，请检查物品表。'}
               </p>
+              {canBatchUse && (
+                <div className="mt-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-[var(--color-text-primary)]">使用数量</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)]">拥有 {stack.amount.toLocaleString()}</span>
+                  </div>
+                  <div className="grid grid-cols-[1fr_auto] gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={stack.amount}
+                      value={selectedItemUseAmount}
+                      onChange={(event) => {
+                        const next = Math.max(1, Math.min(stack.amount, Math.floor(Number(event.target.value)) || 1))
+                        setSelectedItemUseAmount(next)
+                      }}
+                      className="h-9 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm font-bold text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent-border)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSelectedItemUseAmount(stack.amount)}
+                      className="h-9 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-bold text-[var(--color-text-secondary)] hover:border-[var(--color-accent-border)]"
+                    >
+                      全部
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedInventoryItem(null)}
+                  onClick={closeInventoryItem}
                   className="h-9 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] text-xs font-bold text-[var(--color-text-secondary)] hover:border-[var(--color-accent-border)]"
                 >
                   取消
@@ -481,11 +526,11 @@ const GeneralPanel: FC = () => {
                 <button
                   type="button"
                   disabled={!item?.usable || usingItemId === stack.itemId}
-                  onClick={() => handleUseItem(stack, item)}
+                  onClick={() => handleUseItem(stack, item, canBatchUse ? useAmount : 1)}
                   className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-[var(--color-accent)] text-xs font-bold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   <Sparkles size={13} />
-                  使用
+                  {canBatchUse ? `使用 ×${useAmount.toLocaleString()}` : '使用'}
                 </button>
               </div>
             </div>

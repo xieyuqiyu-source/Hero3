@@ -1,6 +1,7 @@
 package game
 
 import (
+	"errors"
 	"strings"
 	"time"
 )
@@ -30,6 +31,37 @@ func (s *Service) UpdateItemsConfig(config ItemsConfig) error {
 // ValidateItemsConfigForAdmin 校验 GM 提交的物品配置。
 func (s *Service) ValidateItemsConfigForAdmin(config ItemsConfig) error {
 	return ValidateItemsConfig(config)
+}
+
+// ListDropPoolsConfig 返回当前掉落池配置。
+func (s *Service) ListDropPoolsConfig() DropPoolsConfig {
+	return GetDropPoolsConfig()
+}
+
+// UpdateDropPoolsConfig 保存并热更新掉落池配置。
+func (s *Service) UpdateDropPoolsConfig(config DropPoolsConfig) error {
+	if err := s.ValidateDropPoolsConfigForAdmin(config); err != nil {
+		return err
+	}
+	return SaveDropPoolsConfig(s.dropPoolsPath, config)
+}
+
+// ValidateDropPoolsConfigForAdmin 校验 GM 提交的掉落池配置。
+func (s *Service) ValidateDropPoolsConfigForAdmin(config DropPoolsConfig) error {
+	if err := ValidateDropPoolsConfig(config); err != nil {
+		return err
+	}
+	npcConfig := GetNpcConfig()
+	for tier, tierConfig := range npcConfig.Tiers {
+		dropPoolID := strings.TrimSpace(tierConfig.DropPoolID)
+		if dropPoolID == "" {
+			continue
+		}
+		if _, ok := config[dropPoolID]; !ok {
+			return errors.New("NPC 层级 " + tier + " 引用的掉落池不存在: " + dropPoolID)
+		}
+	}
+	return nil
 }
 
 // ListItemLedger 查询物品流水。
