@@ -27,6 +27,7 @@ import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
 import { useAnnouncementUnread } from '@/hooks/useAnnouncementUnread'
 import { sortArmyForDisplay } from '@/utils/armySort'
+import { canViewInternalTools } from '@/utils/accountAccess'
 
 export interface NavItem {
   key: string
@@ -53,6 +54,8 @@ interface SidebarProps {
 const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate, onToggle }) => {
   const navigate = useNavigate()
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
+  const account = useAccountStore((s) => s.account)
+  const canViewHelp = canViewInternalTools(account?.username)
   const resources = useProjectedResources()
   const units = useConfigStore((s) => s.units)
   const factionUnits = units?.[gameState?.player.faction ?? '']
@@ -70,7 +73,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
     { key: 'mail', label: '信函', hasNotify: unreadMailCount > 0 },
     { key: 'notice', label: '公告', hasNotify: announcementUnread },
     { key: 'account', label: '账户', hasNotify: false },
-    { key: 'help', label: '帮助', hasNotify: false },
+    ...(canViewHelp ? [{ key: 'help', label: '帮助', hasNotify: false }] : []),
   ]
 
   return (

@@ -31,6 +31,7 @@ import { useProjectedResources } from '@/hooks/useProjectedResources'
 import { useConfigStore } from '@/store/configStore'
 import { FACTION_LABELS, FACTION_COLORS } from '@/utils/faction'
 import { sortArmyForDisplay } from '@/utils/armySort'
+import { canViewInternalTools } from '@/utils/accountAccess'
 import type { GameState } from '@/types/game'
 
 interface LayoutProps {
@@ -257,6 +258,8 @@ const MobileSidebarContent: FC<{
 
   const unreadMessageCount = gameState?.unreadMessageCount ?? 0
   const unreadMailCount = gameState?.unreadMailCount ?? 0
+  const account = useAccountStore((s) => s.account)
+  const canViewHelp = canViewInternalTools(account?.username)
   const announcementUnread = useAnnouncementUnread()
   const newsHasNotify = unreadMessageCount > 0
   const quickActions = [
@@ -264,7 +267,7 @@ const MobileSidebarContent: FC<{
     { key: 'mail', label: '信函', hasNotify: unreadMailCount > 0 },
     { key: 'notice', label: '公告', hasNotify: announcementUnread },
     { key: 'account', label: '账户', hasNotify: false },
-    { key: 'help', label: '帮助', hasNotify: false },
+    ...(canViewHelp ? [{ key: 'help', label: '帮助', hasNotify: false }] : []),
   ]
   const resources = useProjectedResources()
   const units = useConfigStore((s) => s.units)

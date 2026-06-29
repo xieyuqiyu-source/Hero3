@@ -3,6 +3,8 @@ import { FlaskConical, RotateCcw, Shield, Swords, Zap } from 'lucide-react'
 import { gameApi, type BattleSimulationResponse, type CombatUnitLoss } from '@/api/game'
 import { useConfigStore, type UnitConfig } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
+import { useAccountStore } from '@/store/accountStore'
+import { canViewInternalTools } from '@/utils/accountAccess'
 
 type BattleMode = 'attack' | 'plunder'
 
@@ -63,6 +65,8 @@ function formatRate(value: number): string {
 }
 
 const BattleSimulator: FC = () => {
+  const account = useAccountStore((s) => s.account)
+  const canViewSimulator = canViewInternalTools(account?.username)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const playerFaction = useGameStore((s) => s.state?.player.faction ?? 'wei')
   const factions = useConfigStore((s) => s.factions)
@@ -194,6 +198,8 @@ const BattleSimulator: FC = () => {
     : result?.result.winner === 'defender'
       ? '守方胜'
       : '平局'
+
+  if (!canViewSimulator) return null
 
   return (
     <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">

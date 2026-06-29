@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { BookOpen, ChevronDown, FileText, FolderOpen, RefreshCw, Search } from 'lucide-react'
 import { gameApi, type HelpDocument, type HelpDocumentSummary } from '@/api/game'
+import { useAccountStore } from '@/store/accountStore'
+import { canViewInternalTools } from '@/utils/accountAccess'
 
 interface HelpCategory {
   key: string
@@ -33,6 +35,8 @@ const CATEGORY_META: Record<string, { label: string; description: string }> = {
 
 /** 帮助页面主组件，负责加载文档索引和当前文档。 */
 function HelpPage() {
+  const account = useAccountStore((s) => s.account)
+  const canViewHelp = canViewInternalTools(account?.username)
   const [documents, setDocuments] = useState<HelpDocumentSummary[]>([])
   const [activeId, setActiveId] = useState('')
   const [activeDocument, setActiveDocument] = useState<HelpDocument | null>(null)
@@ -73,6 +77,7 @@ function HelpPage() {
 
   /** loadDocuments 拉取帮助文档索引并设置默认选中文档。 */
   const loadDocuments = useCallback(async () => {
+    if (!canViewHelp) return
     setLoading(true)
     setError('')
     try {
@@ -85,10 +90,11 @@ function HelpPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [canViewHelp])
 
   /** loadDocument 拉取当前选中文档正文。 */
   const loadDocument = useCallback(async (documentId: string) => {
+    if (!canViewHelp) return
     setDocumentLoading(true)
     setError('')
     try {
@@ -99,16 +105,33 @@ function HelpPage() {
     } finally {
       setDocumentLoading(false)
     }
-  }, [])
+  }, [canViewHelp])
 
   useEffect(() => {
+    if (!canViewHelp) return
     void loadDocuments()
-  }, [loadDocuments])
+  }, [canViewHelp, loadDocuments])
 
   useEffect(() => {
-    if (!activeId) return
+    if (!canViewHelp || !activeId) return
     void loadDocument(activeId)
-  }, [activeId, loadDocument])
+  }, [activeId, canViewHelp, loadDocument])
+
+  if (!canViewHelp) {
+    return (
+      <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--color-surface-dim)] text-[var(--color-text-muted)]">
+            <BookOpen size={22} />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-[var(--color-text-primary)]">帮助中心</h1>
+            <p className="text-sm text-[var(--color-text-secondary)]">当前账号暂无查看权限。</p>
+          </div>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section className="space-y-4 help-page">
