@@ -94,6 +94,114 @@ func TestDefenderVictoryAttackMode(t *testing.T) {
 	}
 }
 
+func TestNoLossPowerRatioThreshold(t *testing.T) {
+	original := GetCombatConfig()
+	t.Cleanup(func() {
+		if err := SaveCombatConfig("", original); err != nil {
+			t.Fatalf("restore combat config: %v", err)
+		}
+	})
+	config := defaultCombatConfig()
+	config.Rules["test_no_loss"] = RuleConfig{
+		ID:                        "test_no_loss",
+		Name:                      "无损阈值测试",
+		Mode:                      "attack",
+		Exponent:                  1.422,
+		NoLossPowerRatioThreshold: 0.001,
+		EqualResult:               "mutual_destruction",
+		LossDistribution:          "proportional",
+		DefenseFormula:            "weighted",
+	}
+	if err := SaveCombatConfig("", config); err != nil {
+		t.Fatalf("save combat config: %v", err)
+	}
+
+	input := CombatInput{
+		RuleID: "test_no_loss",
+		Attacker: Army{
+			Faction: "wei",
+			Units: []Unit{
+				{ID: "huBaoQi", Category: "cavalry", Count: 50000, Attack: 36, InfantryDefense: 16, CavalryDefense: 21, CarryCapacity: 140},
+			},
+		},
+		Defender: Army{
+			Faction: "shu",
+			Units: []Unit{
+				{ID: "huge_defender", Category: "infantry", Count: 2000000000, Attack: 1, InfantryDefense: 1, CavalryDefense: 1, CarryCapacity: 1},
+			},
+		},
+	}
+
+	result := Resolve(input)
+
+	if result.Winner != "defender" {
+		t.Fatalf("expected defender victory, got %s", result.Winner)
+	}
+	if result.DefenderLossRate != 0 {
+		t.Fatalf("expected defender no loss, got loss rate %.12f", result.DefenderLossRate)
+	}
+	for _, loss := range result.DefenderLosses {
+		if loss.Losses != 0 {
+			t.Fatalf("expected no defender losses, got %+v", result.DefenderLosses)
+		}
+	}
+}
+
+func TestNoLossPowerRatioThresholdCanBeTightened(t *testing.T) {
+	original := GetCombatConfig()
+	t.Cleanup(func() {
+		if err := SaveCombatConfig("", original); err != nil {
+			t.Fatalf("restore combat config: %v", err)
+		}
+	})
+	config := defaultCombatConfig()
+	config.Rules["test_tight_no_loss"] = RuleConfig{
+		ID:                        "test_tight_no_loss",
+		Name:                      "严格无损阈值测试",
+		Mode:                      "attack",
+		Exponent:                  1.422,
+		NoLossPowerRatioThreshold: 0.0001,
+		EqualResult:               "mutual_destruction",
+		LossDistribution:          "proportional",
+		DefenseFormula:            "weighted",
+	}
+	if err := SaveCombatConfig("", config); err != nil {
+		t.Fatalf("save combat config: %v", err)
+	}
+
+	input := CombatInput{
+		RuleID: "test_tight_no_loss",
+		Attacker: Army{
+			Faction: "wei",
+			Units: []Unit{
+				{ID: "attacker", Category: "infantry", Count: 1000, Attack: 1, InfantryDefense: 1, CavalryDefense: 1, CarryCapacity: 1},
+			},
+		},
+		Defender: Army{
+			Faction: "shu",
+			Units: []Unit{
+				{ID: "defender", Category: "infantry", Count: 1000000, Attack: 1, InfantryDefense: 1, CavalryDefense: 1, CarryCapacity: 1},
+			},
+		},
+	}
+
+	result := Resolve(input)
+
+	if result.Winner != "defender" {
+		t.Fatalf("expected defender victory, got %s", result.Winner)
+	}
+	if result.DefenderLossRate <= 0 {
+		t.Fatalf("expected defender loss when threshold is tightened, got %.12f", result.DefenderLossRate)
+	}
+	totalDefenderLosses := 0
+	for _, loss := range result.DefenderLosses {
+		totalDefenderLosses += loss.Losses
+	}
+	if totalDefenderLosses == 0 {
+		t.Fatalf("expected actual defender losses when threshold is tightened, got %+v", result.DefenderLosses)
+	}
+}
+
 func TestPlunderMode(t *testing.T) {
 	// 100 青州军 掠夺 80 青州军
 	input := CombatInput{

@@ -38,6 +38,7 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
   )
 
   const isActive = currentBoost > 1
+  const isSameMultiplierRenewal = isActive && currentBoost === selectedMultiplier
 
   useEffect(() => {
     if (multiplierOptions.length > 0 && !multiplierOptions.includes(selectedMultiplier)) {
@@ -98,7 +99,7 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
     try {
       const result = await gameApi.purchaseBoost(activePlayerId, selectedMultiplier, hours)
       patchResourceAction(result)
-      toast.success(isActive ? `产量加成已叠加 ×${selectedMultiplier}` : `产量 ×${selectedMultiplier} 加成已激活`)
+      toast.success(isSameMultiplierRenewal ? `产量 ×${selectedMultiplier} 已续时` : `产量 ×${selectedMultiplier} 加成已激活`)
       setOpen(false)
       setConfirmOpen(false)
     } catch (e: unknown) {
@@ -209,8 +210,8 @@ const BoostButton: FC<BoostButtonProps> = ({ currentBoost = 1 }) => {
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => handleConfirmPurchase()}
-        title={isActive ? '叠加产量加成' : '购买产量加成'}
-        description={`全资源产量追加 ×${selectedMultiplier}，时间延长 ${pendingHours} 小时`}
+        title={isSameMultiplierRenewal ? '续订产量加成' : '购买产量加成'}
+        description={isSameMultiplierRenewal ? `全资源产量保持 ×${selectedMultiplier}，时间延长 ${pendingHours} 小时` : `全资源产量切换为 ×${selectedMultiplier}，持续 ${pendingHours} 小时`}
         cost={calcPrice(selectedMultiplier, pendingHours)}
         loading={loading}
       />

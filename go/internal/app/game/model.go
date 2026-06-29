@@ -489,9 +489,9 @@ type GameState struct {
 	ResourceSettledAt   string                  `json:"resourceSettledAt"`
 	CityGold            FlexInt                 `json:"cityGold"`
 	LastExchangeAt      string                  `json:"lastExchangeAt,omitempty"`
-	ProductionBoost     int                     `json:"productionBoost,omitempty"`    // 当前产量加成总倍率，可由多次购买叠加
+	ProductionBoost     int                     `json:"productionBoost,omitempty"`    // 当前产量加成倍率，同倍率购买续时，不同倍率购买重算
 	ProductionBoostEnd  string                  `json:"productionBoostEnd,omitempty"` // 加成到期时间
-	CapacityBoost       int                     `json:"capacityBoost,omitempty"`      // 当前仓库容量加成总倍率，可由多次购买叠加
+	CapacityBoost       int                     `json:"capacityBoost,omitempty"`      // 当前仓库容量加成倍率，同倍率购买续时，不同倍率购买重算
 	CapacityBoostEnd    string                  `json:"capacityBoostEnd,omitempty"`   // 容量加成到期时间
 	Buildings           []Building              `json:"buildings"`
 	ResourceSlots       []ResourceSlot          `json:"resourceSlots,omitempty"`

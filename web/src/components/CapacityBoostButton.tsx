@@ -38,6 +38,7 @@ const CapacityBoostButton: FC<CapacityBoostButtonProps> = ({ currentBoost = 1 })
   )
 
   const isActive = currentBoost > 1
+  const isSameMultiplierRenewal = isActive && currentBoost === selectedMultiplier
 
   useEffect(() => {
     if (multiplierOptions.length > 0 && !multiplierOptions.includes(selectedMultiplier)) {
@@ -98,7 +99,7 @@ const CapacityBoostButton: FC<CapacityBoostButtonProps> = ({ currentBoost = 1 })
     try {
       const result = await gameApi.purchaseCapacityBoost(activePlayerId, selectedMultiplier, hours)
       patchResourceAction(result)
-      toast.success(isActive ? `仓库扩容已叠加 ×${selectedMultiplier}` : `仓库 ×${selectedMultiplier} 扩容已激活`)
+      toast.success(isSameMultiplierRenewal ? `仓库 ×${selectedMultiplier} 已续时` : `仓库 ×${selectedMultiplier} 扩容已激活`)
       setOpen(false)
       setConfirmOpen(false)
     } catch (e: unknown) {
@@ -209,8 +210,8 @@ const CapacityBoostButton: FC<CapacityBoostButtonProps> = ({ currentBoost = 1 })
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => handleConfirmPurchase()}
-        title={isActive ? '叠加仓库扩容' : '购买仓库扩容'}
-        description={`仓库容量追加 ×${selectedMultiplier}，时间延长 ${pendingHours} 小时`}
+        title={isSameMultiplierRenewal ? '续订仓库扩容' : '购买仓库扩容'}
+        description={isSameMultiplierRenewal ? `仓库容量保持 ×${selectedMultiplier}，时间延长 ${pendingHours} 小时` : `仓库容量切换为 ×${selectedMultiplier}，持续 ${pendingHours} 小时`}
         cost={calcPrice(selectedMultiplier, pendingHours)}
         loading={loading}
       />

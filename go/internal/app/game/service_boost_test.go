@@ -16,15 +16,15 @@ func newBoostTestService(t *testing.T) (*Service, *MemoryRepository, string) {
 		t.Fatalf("CreateAccount failed: %v", err)
 	}
 	state := newPlayerState("player_boost", "加成测试", "wei", "caocao", now)
-	state.CityGold = 10000
+	state.CityGold = 20000
 	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
 		t.Fatalf("CreatePlayer failed: %v", err)
 	}
 	return NewServiceWithRepository(repo), repo, state.Player.ID
 }
 
-// TestPurchaseBoostStacksMultiplierAndExtendsTime 验证产量加成可以叠倍率并续时。
-func TestPurchaseBoostStacksMultiplierAndExtendsTime(t *testing.T) {
+// TestPurchaseBoostExtendsTimeForSameMultiplier 验证同倍率产量加成只续时，不叠倍率。
+func TestPurchaseBoostExtendsTimeForSameMultiplier(t *testing.T) {
 	svc, _, playerID := newBoostTestService(t)
 	first, err := svc.PurchaseBoost(playerID, 2, 1)
 	if err != nil {
@@ -34,7 +34,7 @@ func TestPurchaseBoostStacksMultiplierAndExtendsTime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse first end: %v", err)
 	}
-	second, err := svc.PurchaseBoost(playerID, 4, 6)
+	second, err := svc.PurchaseBoost(playerID, 2, 6)
 	if err != nil {
 		t.Fatalf("second PurchaseBoost failed: %v", err)
 	}
@@ -42,16 +42,47 @@ func TestPurchaseBoostStacksMultiplierAndExtendsTime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse second end: %v", err)
 	}
-	if second.ProductionBoost != 8 {
-		t.Fatalf("expected stacked production boost x8, got x%d", second.ProductionBoost)
+	if second.ProductionBoost != 2 {
+		t.Fatalf("expected production boost to stay x2, got x%d", second.ProductionBoost)
 	}
 	if secondEnd.Before(firstEnd.Add(6*time.Hour-5*time.Second)) || secondEnd.After(firstEnd.Add(6*time.Hour+5*time.Second)) {
 		t.Fatalf("expected second end to extend from first end by 6h, first=%s second=%s", firstEnd, secondEnd)
 	}
 }
 
-// TestPurchaseCapacityBoostStacksMultiplierAndExtendsTime 验证容量加成可以叠倍率并续时。
-func TestPurchaseCapacityBoostStacksMultiplierAndExtendsTime(t *testing.T) {
+// TestPurchaseBoostRecalculatesForDifferentMultiplier 验证不同倍率会重新计算，不继承旧时长。
+func TestPurchaseBoostRecalculatesForDifferentMultiplier(t *testing.T) {
+	svc, _, playerID := newBoostTestService(t)
+	first, err := svc.PurchaseBoost(playerID, 2, 24)
+	if err != nil {
+		t.Fatalf("first PurchaseBoost failed: %v", err)
+	}
+	firstEnd, err := time.Parse(resourceDateLayout, first.ProductionBoostEnd)
+	if err != nil {
+		t.Fatalf("parse first end: %v", err)
+	}
+	secondStart := time.Now().UTC()
+	second, err := svc.PurchaseBoost(playerID, 16, 24)
+	if err != nil {
+		t.Fatalf("second PurchaseBoost failed: %v", err)
+	}
+	secondEnd, err := time.Parse(resourceDateLayout, second.ProductionBoostEnd)
+	if err != nil {
+		t.Fatalf("parse second end: %v", err)
+	}
+	if second.ProductionBoost != 16 {
+		t.Fatalf("expected production boost to become x16, got x%d", second.ProductionBoost)
+	}
+	if !secondEnd.Before(firstEnd.Add(2 * time.Hour)) {
+		t.Fatalf("expected different multiplier to reset from now instead of extending old end, first=%s second=%s", firstEnd, secondEnd)
+	}
+	if secondEnd.Before(secondStart.Add(24*time.Hour-5*time.Second)) || secondEnd.After(secondStart.Add(24*time.Hour+5*time.Second)) {
+		t.Fatalf("expected second end to be about 24h from purchase, start=%s second=%s", secondStart, secondEnd)
+	}
+}
+
+// TestPurchaseCapacityBoostExtendsTimeForSameMultiplier 验证同倍率容量加成只续时，不叠倍率。
+func TestPurchaseCapacityBoostExtendsTimeForSameMultiplier(t *testing.T) {
 	svc, _, playerID := newBoostTestService(t)
 	first, err := svc.PurchaseCapacityBoost(playerID, 2, 1)
 	if err != nil {
@@ -61,7 +92,7 @@ func TestPurchaseCapacityBoostStacksMultiplierAndExtendsTime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse first end: %v", err)
 	}
-	second, err := svc.PurchaseCapacityBoost(playerID, 4, 6)
+	second, err := svc.PurchaseCapacityBoost(playerID, 2, 6)
 	if err != nil {
 		t.Fatalf("second PurchaseCapacityBoost failed: %v", err)
 	}
@@ -69,11 +100,42 @@ func TestPurchaseCapacityBoostStacksMultiplierAndExtendsTime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse second end: %v", err)
 	}
-	if second.CapacityBoost != 8 {
-		t.Fatalf("expected stacked capacity boost x8, got x%d", second.CapacityBoost)
+	if second.CapacityBoost != 2 {
+		t.Fatalf("expected capacity boost to stay x2, got x%d", second.CapacityBoost)
 	}
 	if secondEnd.Before(firstEnd.Add(6*time.Hour-5*time.Second)) || secondEnd.After(firstEnd.Add(6*time.Hour+5*time.Second)) {
 		t.Fatalf("expected second end to extend from first end by 6h, first=%s second=%s", firstEnd, secondEnd)
+	}
+}
+
+// TestPurchaseCapacityBoostRecalculatesForDifferentMultiplier 验证容量加成不同倍率会重新计算。
+func TestPurchaseCapacityBoostRecalculatesForDifferentMultiplier(t *testing.T) {
+	svc, _, playerID := newBoostTestService(t)
+	first, err := svc.PurchaseCapacityBoost(playerID, 2, 24)
+	if err != nil {
+		t.Fatalf("first PurchaseCapacityBoost failed: %v", err)
+	}
+	firstEnd, err := time.Parse(resourceDateLayout, first.CapacityBoostEnd)
+	if err != nil {
+		t.Fatalf("parse first end: %v", err)
+	}
+	secondStart := time.Now().UTC()
+	second, err := svc.PurchaseCapacityBoost(playerID, 16, 24)
+	if err != nil {
+		t.Fatalf("second PurchaseCapacityBoost failed: %v", err)
+	}
+	secondEnd, err := time.Parse(resourceDateLayout, second.CapacityBoostEnd)
+	if err != nil {
+		t.Fatalf("parse second end: %v", err)
+	}
+	if second.CapacityBoost != 16 {
+		t.Fatalf("expected capacity boost to become x16, got x%d", second.CapacityBoost)
+	}
+	if !secondEnd.Before(firstEnd.Add(2 * time.Hour)) {
+		t.Fatalf("expected different multiplier to reset from now instead of extending old end, first=%s second=%s", firstEnd, secondEnd)
+	}
+	if secondEnd.Before(secondStart.Add(24*time.Hour-5*time.Second)) || secondEnd.After(secondStart.Add(24*time.Hour+5*time.Second)) {
+		t.Fatalf("expected second end to be about 24h from purchase, start=%s second=%s", secondStart, secondEnd)
 	}
 }
 

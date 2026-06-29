@@ -72,9 +72,8 @@ func (s *Service) PurchaseBoost(playerID string, multiplier int, hours int) (Gam
 		}
 		state.CityGold -= FlexInt(cost)
 
-		// 支持重复购买叠加：倍率累乘，时长接在当前未过期时间之后。
-		state.ProductionBoost = stackBoostMultiplier(state.ProductionBoost, state.ProductionBoostEnd, multiplier, now)
-		state.ProductionBoostEnd = extendBoostEnd(state.ProductionBoostEnd, hours, now)
+		// 同倍率续订叠加时长；不同倍率或已过期时按本次购买重新计算。
+		state.ProductionBoost, state.ProductionBoostEnd = applyBoostPurchase(state.ProductionBoost, state.ProductionBoostEnd, multiplier, hours, now)
 		state.ServerTime = now.UTC().Format(resourceDateLayout)
 
 		// 通过 Modifier 管线重新计算产量（含加成）
@@ -149,9 +148,8 @@ func (s *Service) PurchaseCapacityBoost(playerID string, multiplier int, hours i
 		}
 		state.CityGold -= FlexInt(cost)
 
-		// 支持重复购买叠加：倍率累乘，时长接在当前未过期时间之后。
-		state.CapacityBoost = stackBoostMultiplier(state.CapacityBoost, state.CapacityBoostEnd, multiplier, now)
-		state.CapacityBoostEnd = extendBoostEnd(state.CapacityBoostEnd, hours, now)
+		// 同倍率续订叠加时长；不同倍率或已过期时按本次购买重新计算。
+		state.CapacityBoost, state.CapacityBoostEnd = applyBoostPurchase(state.CapacityBoost, state.CapacityBoostEnd, multiplier, hours, now)
 		state.ServerTime = now.UTC().Format(resourceDateLayout)
 
 		// 通过 Modifier 管线重新计算容量（含加成）
@@ -203,27 +201,15 @@ func validBoostHours(hours int) bool {
 	return ok
 }
 
-// stackBoostMultiplier 叠加当前仍生效的购买加成倍率。
-func stackBoostMultiplier(current int, currentEnd string, added int, now time.Time) int {
-	if current <= 1 || currentEnd == "" {
-		return added
-	}
-	expiresAt, err := time.Parse(resourceDateLayout, currentEnd)
-	if err != nil || !now.Before(expiresAt) {
-		return added
-	}
-	return current * added
-}
-
-// extendBoostEnd 把新增时长接到当前未过期结束时间之后。
-func extendBoostEnd(currentEnd string, addedHours int, now time.Time) string {
+// applyBoostPurchase 计算购买后的倍率和到期时间。
+func applyBoostPurchase(current int, currentEnd string, purchased int, addedHours int, now time.Time) (int, string) {
 	base := now
-	if currentEnd != "" {
+	if current == purchased && currentEnd != "" {
 		if expiresAt, err := time.Parse(resourceDateLayout, currentEnd); err == nil && now.Before(expiresAt) {
 			base = expiresAt
 		}
 	}
-	return base.Add(time.Duration(addedHours) * time.Hour).UTC().Format(resourceDateLayout)
+	return purchased, base.Add(time.Duration(addedHours) * time.Hour).UTC().Format(resourceDateLayout)
 }
 
 // sortedIntKeys 返回按升序排列的 int map key。

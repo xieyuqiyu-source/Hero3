@@ -10,13 +10,14 @@ import (
 
 // RuleConfig 单条战斗规则配置
 type RuleConfig struct {
-	ID               string  `json:"id"`
-	Name             string  `json:"name"`
-	Mode             string  `json:"mode"`             // "attack" or "plunder"
-	Exponent         float64 `json:"exponent"`         // 损失指数（默认 1.422）
-	EqualResult      string  `json:"equalResult"`      // "mutual_destruction" or "defender_wins"
-	LossDistribution string  `json:"lossDistribution"` // "proportional" or "weak_first"
-	DefenseFormula   string  `json:"defenseFormula"`   // "weighted"（按步骑加权）
+	ID                        string  `json:"id"`
+	Name                      string  `json:"name"`
+	Mode                      string  `json:"mode"`                      // "attack" or "plunder"
+	Exponent                  float64 `json:"exponent"`                  // 损失指数（默认 1.422）
+	NoLossPowerRatioThreshold float64 `json:"noLossPowerRatioThreshold"` // 弱强实力比低于该值时胜方无损
+	EqualResult               string  `json:"equalResult"`               // "mutual_destruction" or "defender_wins"
+	LossDistribution          string  `json:"lossDistribution"`          // "proportional" or "weak_first"
+	DefenseFormula            string  `json:"defenseFormula"`            // "weighted"（按步骑加权）
 }
 
 // CombatConfig 战斗系统总配置
@@ -72,6 +73,9 @@ func RegisterRule(rule RuleConfig) error {
 	}
 	if rule.Exponent <= 0 {
 		rule.Exponent = 1.422
+	}
+	if rule.NoLossPowerRatioThreshold <= 0 {
+		rule.NoLossPowerRatioThreshold = 0.001
 	}
 	if rule.EqualResult == "" {
 		rule.EqualResult = "mutual_destruction"
@@ -168,6 +172,8 @@ func LoadCombatConfig(path string) error {
 		return err
 	}
 
+	normalizeCombatConfig(&config)
+
 	combatMu.Lock()
 	activeCombat = config
 	combatMu.Unlock()
@@ -175,6 +181,8 @@ func LoadCombatConfig(path string) error {
 }
 
 func SaveCombatConfig(path string, config CombatConfig) error {
+	normalizeCombatConfig(&config)
+
 	if path == "" {
 		combatMu.Lock()
 		activeCombat = config
@@ -206,22 +214,24 @@ func defaultCombatConfig() CombatConfig {
 		},
 		Rules: map[string]RuleConfig{
 			RuleOfficialAttack: {
-				ID:               RuleOfficialAttack,
-				Name:             "官方攻击规则",
-				Mode:             "attack",
-				Exponent:         1.422,
-				EqualResult:      "mutual_destruction",
-				LossDistribution: "proportional",
-				DefenseFormula:   "weighted",
+				ID:                        RuleOfficialAttack,
+				Name:                      "官方攻击规则",
+				Mode:                      "attack",
+				Exponent:                  1.422,
+				NoLossPowerRatioThreshold: 0.001,
+				EqualResult:               "mutual_destruction",
+				LossDistribution:          "proportional",
+				DefenseFormula:            "weighted",
 			},
 			RuleOfficialPlunder: {
-				ID:               RuleOfficialPlunder,
-				Name:             "官方掠夺规则",
-				Mode:             "plunder",
-				Exponent:         1.422,
-				EqualResult:      "half_each",
-				LossDistribution: "proportional",
-				DefenseFormula:   "weighted",
+				ID:                        RuleOfficialPlunder,
+				Name:                      "官方掠夺规则",
+				Mode:                      "plunder",
+				Exponent:                  1.422,
+				NoLossPowerRatioThreshold: 0.001,
+				EqualResult:               "half_each",
+				LossDistribution:          "proportional",
+				DefenseFormula:            "weighted",
 			},
 		},
 		WallConfig: map[string]WallEntry{
@@ -229,5 +239,38 @@ func defaultCombatConfig() CombatConfig {
 			"shu": {Base: 1.02},
 			"wu":  {Base: 1.025},
 		},
+	}
+}
+
+// normalizeCombatConfig 补齐旧配置缺失字段，保证默认规则在加载和保存后稳定。
+func normalizeCombatConfig(config *CombatConfig) {
+	if config == nil {
+		return
+	}
+	for id, rule := range config.Rules {
+		rule.ID = strings.TrimSpace(rule.ID)
+		if rule.ID == "" {
+			rule.ID = id
+		}
+		rule.Mode = strings.TrimSpace(rule.Mode)
+		if rule.Mode == "" {
+			rule.Mode = "attack"
+		}
+		if rule.Exponent <= 0 {
+			rule.Exponent = 1.422
+		}
+		if rule.NoLossPowerRatioThreshold <= 0 {
+			rule.NoLossPowerRatioThreshold = 0.001
+		}
+		if rule.EqualResult == "" {
+			rule.EqualResult = "mutual_destruction"
+		}
+		if rule.LossDistribution == "" {
+			rule.LossDistribution = "proportional"
+		}
+		if rule.DefenseFormula == "" {
+			rule.DefenseFormula = "weighted"
+		}
+		config.Rules[id] = rule
 	}
 }

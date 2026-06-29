@@ -68,6 +68,8 @@ go build ./cmd/server
 - `clone-data` 不复制或清空 `schema_migrations`，测试库迁移记录由测试库自己的迁移命令维护。
 - 物品系统使用 `go/config/items.json` 和 `go/config/drop_pools.json` 配置注册；背包权威表按格子 `slot_id` 存储，兼容接口仍返回按物品聚合的 `inventory`。
 - 物品获得和消耗会写入 `item_ledger`，GM 后台可查看物品配置、玩家背包格子和物品流水。
+- 战斗规则使用 `go/config/combat.json`，GM 后台可调整损失指数、场景规则映射和悬殊战力无损阈值 `noLossPowerRatioThreshold`。
+- 购买产量/容量加成时，同倍率续订只叠加剩余时间；不同倍率购买会按新倍率和新时长重新计算。
 - 轮回绝境副本使用 `go/config/reincarnation.json` 配置层级、波次、加成、金币重置随机加成价格和奖励；玩家入口位于“地图 -> 副本”，GM 后台可编辑 JSON 配置、查看实例并处理异常结算。
 - 军事招募页展示攻城武器营和特殊建筑营，两者只能消耗账户金币升级，提供攻城/特殊兵种征兵速度提升和征兵消耗减免。
 

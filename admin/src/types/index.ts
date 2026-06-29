@@ -256,6 +256,7 @@ export interface CombatRuleConfig {
   name: string
   mode: string
   exponent: number
+  noLossPowerRatioThreshold: number
   equalResult: string
   lossDistribution: string
   defenseFormula: string

@@ -71,6 +71,7 @@ export default function CombatConfigPanel() {
           name: '自定义规则',
           mode: 'attack',
           exponent: 1.422,
+          noLossPowerRatioThreshold: 0.001,
           equalResult: 'mutual_destruction',
           lossDistribution: 'proportional',
           defenseFormula: 'weighted',
@@ -176,7 +177,7 @@ export default function CombatConfigPanel() {
                   <Trash2 size={14} />
                 </button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 <label className="grid gap-1">
                   <span className="text-[10px] text-[var(--color-text-muted)]">损失指数</span>
                   <input
@@ -184,6 +185,16 @@ export default function CombatConfigPanel() {
                     step="0.001"
                     value={rule.exponent}
                     onChange={(e) => updateRule(ruleId, 'exponent', parseFloat(e.target.value) || 0)}
+                    className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-[10px] text-[var(--color-text-muted)]">无损比</span>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={rule.noLossPowerRatioThreshold ?? 0.001}
+                    onChange={(e) => updateRule(ruleId, 'noLossPowerRatioThreshold', parseFloat(e.target.value) || 0)}
                     className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
                   />
                 </label>

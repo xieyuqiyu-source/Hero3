@@ -56,6 +56,7 @@ go/
 - `recruit_timing.go`：征兵时长、征兵消耗和征兵速度/消耗加成计算。
 - `service_recruit.go`：征兵、极速完成征兵等玩家操作。
 - `military_combat.go`：出兵扣兵、非战斗兵种限制、战斗单位构建和场景规则解析。
+- `config/combat.json`：战斗规则配置，包含损失指数、场景规则映射和悬殊战力无损阈值 `noLossPowerRatioThreshold`。
 
 道具/Buff 系统当前集中在：
 

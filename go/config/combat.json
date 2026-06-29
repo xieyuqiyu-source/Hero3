@@ -11,6 +11,7 @@
       "name": "官方攻击规则",
       "mode": "attack",
       "exponent": 1.422,
+      "noLossPowerRatioThreshold": 0.001,
       "equalResult": "mutual_destruction",
       "lossDistribution": "proportional",
       "defenseFormula": "weighted"
@@ -20,6 +21,7 @@
       "name": "官方掠夺规则",
       "mode": "plunder",
       "exponent": 1.422,
+      "noLossPowerRatioThreshold": 0.001,
       "equalResult": "half_each",
       "lossDistribution": "proportional",
       "defenseFormula": "weighted"

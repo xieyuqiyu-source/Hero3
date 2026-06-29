@@ -134,19 +134,33 @@ func calculateLossRates(a float64, b float64, winner string, rule RuleConfig) (f
 
 	switch winner {
 	case "attacker":
-		ratio := math.Pow(b/a, exp)
+		powerRatio := b / a
+		ratio := math.Pow(powerRatio, exp)
 		if rule.Mode == "plunder" {
+			if isNoLossPowerRatio(powerRatio, rule) {
+				return 0, 1.0 / (1 + ratio)
+			}
 			return ratio / (1 + ratio), 1.0 / (1 + ratio)
 		}
 		// 攻击模式：败方全灭
+		if isNoLossPowerRatio(powerRatio, rule) {
+			return 0, 1.0
+		}
 		return ratio, 1.0
 
 	case "defender":
-		ratio := math.Pow(a/b, exp)
+		powerRatio := a / b
+		ratio := math.Pow(powerRatio, exp)
 		if rule.Mode == "plunder" {
+			if isNoLossPowerRatio(powerRatio, rule) {
+				return 1.0 / (1 + ratio), 0
+			}
 			return 1.0 / (1 + ratio), ratio / (1 + ratio)
 		}
 		// 攻击模式：败方全灭
+		if isNoLossPowerRatio(powerRatio, rule) {
+			return 1.0, 0
+		}
 		return 1.0, ratio
 
 	default: // draw
@@ -156,6 +170,12 @@ func calculateLossRates(a float64, b float64, winner string, rule RuleConfig) (f
 		// 攻击模式：同归于尽
 		return 1.0, 1.0
 	}
+}
+
+// isNoLossPowerRatio 判断弱强实力比是否触发胜方无损保护。
+func isNoLossPowerRatio(powerRatio float64, rule RuleConfig) bool {
+	threshold := rule.NoLossPowerRatioThreshold
+	return threshold > 0 && powerRatio > 0 && powerRatio <= threshold
 }
 
 // distributeLosses 按比例分配损失到各兵种
