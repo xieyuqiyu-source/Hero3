@@ -10,8 +10,8 @@ import LoginPage from './pages/login'
 import ReportSharePage from './pages/report/ReportSharePage'
 import CityPage from './pages/city'
 import MilitaryPage from './pages/military'
-import ReinforcementsPage from './pages/reinforcements'
 import MapPage from './pages/map'
+import AlliancePage from './pages/alliance'
 import NewsPage from './pages/news'
 import MailPage from './pages/mail'
 import NoticePage from './pages/notice'
@@ -47,8 +47,8 @@ function App() {
             <Route path="/" element={<Navigate to="/city" replace />} />
             <Route path="/city" element={<CityPage />} />
             <Route path="/military" element={<MilitaryPage />} />
-            <Route path="/reinforcements" element={<ReinforcementsPage />} />
             <Route path="/map" element={<MapPage />} />
+            <Route path="/alliance" element={<AlliancePage />} />
             <Route path="/news" element={<NewsPage />} />
             <Route path="/mail" element={<MailPage />} />
             <Route path="/notice" element={<NoticePage />} />

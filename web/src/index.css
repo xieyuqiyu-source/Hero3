@@ -79,6 +79,22 @@ body {
   animation: text-blink-red 0.7s ease-in-out infinite;
 }
 
+/* 轮回绝境开启按钮火焰脉冲效果。 */
+@keyframes reincarnation-fire {
+  0%, 100% {
+    box-shadow: 0 0 18px rgba(245, 158, 11, 0.45), 0 0 4px rgba(239, 68, 68, 0.55);
+    filter: saturate(1);
+  }
+  50% {
+    box-shadow: 0 0 34px rgba(245, 158, 11, 0.72), 0 0 14px rgba(239, 68, 68, 0.65);
+    filter: saturate(1.25);
+  }
+}
+
+.animate-reincarnation-fire {
+  animation: reincarnation-fire 1.25s ease-in-out infinite;
+}
+
 /* Slide-in animation for page transitions */
 @keyframes slide-in {
   from {

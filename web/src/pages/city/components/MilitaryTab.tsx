@@ -8,6 +8,7 @@ import {
   HardHat,
   Landmark,
   Castle,
+  Sparkles,
   Route,
   Eye,
   Store,
@@ -26,6 +27,7 @@ interface BuildingConfig {
   icon: FC<{ size?: number }>
   color: string
   bgColor: string
+  goldBorder?: boolean
 }
 
 /** 军事类建筑 */
@@ -61,6 +63,24 @@ const MILITARY_BUILDINGS: BuildingConfig[] = [
     icon: Hammer,
     color: 'text-zinc-600',
     bgColor: 'bg-zinc-50 dark:bg-zinc-950/20',
+  },
+  {
+    type: 'siege_camp',
+    name: '攻城武器营',
+    description: '金币强化攻城兵种征兵速度与消耗',
+    icon: Castle,
+    color: 'text-amber-500',
+    bgColor: 'bg-amber-500/10',
+    goldBorder: true,
+  },
+  {
+    type: 'special_camp',
+    name: '特殊建筑营',
+    description: '金币强化特殊兵种征兵速度与消耗',
+    icon: Sparkles,
+    color: 'text-fuchsia-500',
+    bgColor: 'bg-fuchsia-500/10',
+    goldBorder: true,
   },
 ]
 
@@ -156,7 +176,9 @@ const BuildingGroup: FC<BuildingGroupProps> = ({ title, icon: GroupIcon, configs
               rounded-2xl transition-all duration-300
               ${highlightedType === config.type
                 ? 'ring-2 ring-sky-400 ring-offset-2 ring-offset-[var(--color-bg)] animate-pulse'
-                : ''
+                : config.goldBorder
+                  ? 'ring-2 ring-amber-400/45 ring-offset-1 ring-offset-[var(--color-bg)]'
+                  : ''
               }
             `}
           >

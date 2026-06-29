@@ -6,7 +6,7 @@ import { toast } from '@/components/ui'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
 import { FACTION_COLORS, FACTION_LABELS } from '@/utils/faction'
-import type { BattleReport, PvpMarch, PvpRankingResponse, PvpStateResponse, PvpTargetSummary, PvpTargetsResponse, PvpWorldPosition } from '@/types/game'
+import type { ArmyUnit, BattleReport, General, PvpMarch, PvpRankingResponse, PvpStateResponse, PvpTargetSummary, PvpTargetsResponse, PvpWorldPosition } from '@/types/game'
 import ScoutResultModal from './ScoutResultModal'
 
 // PlayerTargetsTab 展示 PVP 玩家目标和行军状态。
@@ -28,6 +28,7 @@ const PlayerTargetsTab: FC = () => {
   const [busyTarget, setBusyTarget] = useState<string | null>(null)
   const [scoutReport, setScoutReport] = useState<BattleReport | null>(null)
   const [selectedMarchTarget, setSelectedMarchTarget] = useState<PvpTargetSummary | null>(null)
+  const [selectedReinforceTarget, setSelectedReinforceTarget] = useState<PvpTargetSummary | null>(null)
   const [selectedMarchMode, setSelectedMarchMode] = useState<'attack' | 'plunder'>('attack')
   const [selections, setSelections] = useState<Record<string, number>>({})
   const [selectedGeneralIds, setSelectedGeneralIds] = useState<string[]>([])
@@ -97,8 +98,17 @@ const PlayerTargetsTab: FC = () => {
 
   // openMarchSelector 打开 PVP 出征兵力选择面板。
   const openMarchSelector = useCallback((target: PvpTargetSummary, mode: 'attack' | 'plunder') => {
+    setSelectedReinforceTarget(null)
     setSelectedMarchTarget(target)
     setSelectedMarchMode(mode)
+    setSelections({})
+    setSelectedGeneralIds([])
+  }, [])
+
+  // openReinforceSelector 打开地图内增援兵力选择弹窗。
+  const openReinforceSelector = useCallback((target: PvpTargetSummary) => {
+    setSelectedMarchTarget(null)
+    setSelectedReinforceTarget(target)
     setSelections({})
     setSelectedGeneralIds([])
   }, [])
@@ -170,11 +180,33 @@ const PlayerTargetsTab: FC = () => {
     }
   }
 
-  // handleReinforce 提示玩家使用增援页定向派兵。
-  const handleReinforce = useCallback((target: PvpTargetSummary) => {
-    navigator.clipboard?.writeText(target.playerId).catch(() => undefined)
-    toast.info(`已复制目标 ID：${target.playerId}，可到增援页派出队伍。`)
-  }, [])
+  // handleReinforce 执行地图内增援派兵。
+  const handleReinforce = async () => {
+    const target = selectedReinforceTarget
+    if (!activePlayerId || busyTarget) return
+    if (!target) return
+    const troops = Object.fromEntries(Object.entries(selections).filter(([, amount]) => amount > 0))
+    if (Object.keys(troops).length === 0) {
+      toast.info('请先选择增援兵力')
+      return
+    }
+    setBusyTarget(`${target.playerId}:reinforce`)
+    try {
+      const result = await gameApi.sendReinforcement(activePlayerId, target.playerId, troops, selectedGeneralIds)
+      if (result.patch) {
+        useGameStore.getState().patchState(result.patch)
+      }
+      setSelectedReinforceTarget(null)
+      setSelections({})
+      setSelectedGeneralIds([])
+      void useGameStore.getState().loadMilitaryView()
+      toast.success(`已向 ${target.nickname} 派出增援。`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '发起增援失败')
+    } finally {
+      setBusyTarget(null)
+    }
+  }
 
   // panViewport 移动 PVP 地图视野。
   const panViewport = useCallback((dx: number, dy: number) => {
@@ -262,7 +294,7 @@ const PlayerTargetsTab: FC = () => {
             focused={target.playerId === focusedTargetId}
             busyTarget={busyTarget}
             onScout={handleScout}
-            onReinforce={handleReinforce}
+            onReinforce={openReinforceSelector}
             onMarch={openMarchSelector}
           />
         ))}
@@ -275,92 +307,45 @@ const PlayerTargetsTab: FC = () => {
       )}
 
       {scoutReport && <ScoutResultModal key={scoutReport.id} report={scoutReport} onClose={() => setScoutReport(null)} />}
+      {selectedReinforceTarget && (
+        <TroopSelectionModal
+          title={`增援 · ${selectedReinforceTarget.nickname}`}
+          description="选择要派出的增援兵力和随军武将"
+          closeLabel="关闭"
+          confirmLabel="确认增援"
+          totalSelected={totalSelected}
+          availableArmy={availableArmy}
+          availableGenerals={availableGenerals}
+          selectedGeneralIds={selectedGeneralIds}
+          selections={selections}
+          getUnitName={getUnitName}
+          onClose={() => setSelectedReinforceTarget(null)}
+          onGeneralToggle={handleGeneralToggle}
+          onSelectionChange={handleSelectionChange}
+          onSelectAll={handleSelectAll}
+          onConfirm={() => void handleReinforce()}
+          disabled={totalSelected <= 0 || busyTarget !== null}
+        />
+      )}
       {selectedMarchTarget && (
-        <div className="fixed inset-0 z-[9000] flex items-end justify-center bg-slate-950/45 p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-md rounded-t-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xl sm:rounded-2xl">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-bold text-[var(--color-text-primary)]">
-                  {selectedMarchMode === 'plunder' ? '掠夺' : '攻击'} · {selectedMarchTarget.nickname}
-                </h3>
-                <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">选择本次出征兵力和随军武将</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedMarchTarget(null)}
-                className="rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-secondary)]"
-              >
-                关闭
-              </button>
-            </div>
-            <div className="mt-3 max-h-72 space-y-3 overflow-y-auto">
-              <div className="rounded-xl bg-[var(--color-surface-dim)] px-3 py-2">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-bold text-[var(--color-text-primary)]">随军武将</span>
-                  <span className="text-[10px] text-[var(--color-text-muted)]">{selectedGeneralIds.length > 0 ? `已带 ${selectedGeneralIds.length}` : '不带将'}</span>
-                </div>
-                <div className="grid gap-1.5">
-                  {availableGenerals.map((general) => {
-                    const selected = selectedGeneralIds.includes(general.id)
-                    return (
-                      <button
-                        key={general.id}
-                        type="button"
-                        onClick={() => handleGeneralToggle(general.id)}
-                        className={`flex h-9 items-center justify-between rounded-lg border px-2 text-left text-xs transition-colors ${selected ? 'border-amber-400 bg-amber-400/15 text-amber-700' : 'border-[var(--color-border)] bg-white/60 text-[var(--color-text-secondary)] dark:bg-white/5'}`}
-                      >
-                        <span className="font-bold">{general.name}</span>
-                        <span className="text-[10px]">Lv.{general.level}</span>
-                      </button>
-                    )
-                  })}
-                  {availableGenerals.length === 0 && (
-                    <p className="py-2 text-center text-xs text-[var(--color-text-muted)]">暂无可随军武将</p>
-                  )}
-                </div>
-              </div>
-              {availableArmy.map((unit) => (
-                <div key={unit.unitType} className="flex items-center justify-between gap-3 rounded-xl bg-[var(--color-surface-dim)] px-3 py-2">
-                  <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--color-text-primary)]">
-                    {getUnitName(unit.unitType)}
-                    <span className="ml-1 text-[var(--color-text-muted)]">({unit.amount.toLocaleString()})</span>
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number"
-                      min={0}
-                      max={unit.amount}
-                      value={selections[unit.unitType] ?? 0}
-                      onChange={(event) => handleSelectionChange(unit.unitType, event.target.value)}
-                      className="h-8 w-20 rounded-lg border border-[var(--color-border)] bg-white px-2 text-center text-xs font-bold text-[var(--color-text-primary)] outline-none dark:bg-slate-900"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleSelectAll(unit.unitType)}
-                      className="h-8 rounded-lg px-2 text-[10px] font-bold text-[var(--color-accent)]"
-                    >
-                      全部
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {availableArmy.length === 0 && (
-                <p className="py-8 text-center text-xs text-[var(--color-text-muted)]">当前没有可出征兵力</p>
-              )}
-            </div>
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <span className="text-xs text-[var(--color-text-muted)]">已选 <b className="text-[var(--color-accent)]">{totalSelected.toLocaleString()}</b></span>
-              <button
-                type="button"
-                onClick={() => void handleMarch()}
-                disabled={totalSelected <= 0 || busyTarget !== null}
-                className="rounded-xl bg-[var(--color-accent)] px-5 py-2 text-xs font-bold text-white disabled:opacity-50"
-              >
-                确认出征
-              </button>
-            </div>
-          </div>
-        </div>
+        <TroopSelectionModal
+          title={`${selectedMarchMode === 'plunder' ? '掠夺' : '攻击'} · ${selectedMarchTarget.nickname}`}
+          description="选择本次出征兵力和随军武将"
+          closeLabel="关闭"
+          confirmLabel="确认出征"
+          totalSelected={totalSelected}
+          availableArmy={availableArmy}
+          availableGenerals={availableGenerals}
+          selectedGeneralIds={selectedGeneralIds}
+          selections={selections}
+          getUnitName={getUnitName}
+          onClose={() => setSelectedMarchTarget(null)}
+          onGeneralToggle={handleGeneralToggle}
+          onSelectionChange={handleSelectionChange}
+          onSelectAll={handleSelectAll}
+          onConfirm={() => void handleMarch()}
+          disabled={totalSelected <= 0 || busyTarget !== null}
+        />
       )}
     </div>
   )
@@ -468,6 +453,126 @@ const MapControlButton: FC<{ label: string; onClick: () => void; children: React
   >
     {children}
   </button>
+)
+
+const TroopSelectionModal: FC<{
+  title: string
+  description: string
+  closeLabel: string
+  confirmLabel: string
+  totalSelected: number
+  availableArmy: ArmyUnit[]
+  availableGenerals: General[]
+  selectedGeneralIds: string[]
+  selections: Record<string, number>
+  getUnitName: (unitType: string) => string
+  onClose: () => void
+  onGeneralToggle: (generalId: string) => void
+  onSelectionChange: (unitType: string, value: string) => void
+  onSelectAll: (unitType: string) => void
+  onConfirm: () => void
+  disabled: boolean
+}> = ({
+  title,
+  description,
+  closeLabel,
+  confirmLabel,
+  totalSelected,
+  availableArmy,
+  availableGenerals,
+  selectedGeneralIds,
+  selections,
+  getUnitName,
+  onClose,
+  onGeneralToggle,
+  onSelectionChange,
+  onSelectAll,
+  onConfirm,
+  disabled,
+}) => (
+  <div className="fixed inset-0 z-[9000] flex items-end justify-center bg-slate-950/45 p-0 sm:items-center sm:p-4">
+    <div className="w-full max-w-md rounded-t-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xl sm:rounded-2xl">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-bold text-[var(--color-text-primary)]">{title}</h3>
+          <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{description}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-secondary)]"
+        >
+          {closeLabel}
+        </button>
+      </div>
+      <div className="mt-3 max-h-72 space-y-3 overflow-y-auto">
+        <div className="rounded-xl bg-[var(--color-surface-dim)] px-3 py-2">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-bold text-[var(--color-text-primary)]">随军武将</span>
+            <span className="text-[10px] text-[var(--color-text-muted)]">{selectedGeneralIds.length > 0 ? `已带 ${selectedGeneralIds.length}` : '不带将'}</span>
+          </div>
+          <div className="grid gap-1.5">
+            {availableGenerals.map((general) => {
+              const selected = selectedGeneralIds.includes(general.id)
+              return (
+                <button
+                  key={general.id}
+                  type="button"
+                  onClick={() => onGeneralToggle(general.id)}
+                  className={`flex h-9 items-center justify-between rounded-lg border px-2 text-left text-xs transition-colors ${selected ? 'border-amber-400 bg-amber-400/15 text-amber-700' : 'border-[var(--color-border)] bg-white/60 text-[var(--color-text-secondary)] dark:bg-white/5'}`}
+                >
+                  <span className="font-bold">{general.name}</span>
+                  <span className="text-[10px]">Lv.{general.level}</span>
+                </button>
+              )
+            })}
+            {availableGenerals.length === 0 && (
+              <p className="py-2 text-center text-xs text-[var(--color-text-muted)]">暂无可随军武将</p>
+            )}
+          </div>
+        </div>
+        {availableArmy.map((unit) => (
+          <div key={unit.unitType} className="flex items-center justify-between gap-3 rounded-xl bg-[var(--color-surface-dim)] px-3 py-2">
+            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--color-text-primary)]">
+              {getUnitName(unit.unitType)}
+              <span className="ml-1 text-[var(--color-text-muted)]">({unit.amount.toLocaleString()})</span>
+            </span>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                min={0}
+                max={unit.amount}
+                value={selections[unit.unitType] ?? 0}
+                onChange={(event) => onSelectionChange(unit.unitType, event.target.value)}
+                className="h-8 w-20 rounded-lg border border-[var(--color-border)] bg-white px-2 text-center text-xs font-bold text-[var(--color-text-primary)] outline-none dark:bg-slate-900"
+              />
+              <button
+                type="button"
+                onClick={() => onSelectAll(unit.unitType)}
+                className="h-8 rounded-lg px-2 text-[10px] font-bold text-[var(--color-accent)]"
+              >
+                全部
+              </button>
+            </div>
+          </div>
+        ))}
+        {availableArmy.length === 0 && (
+          <p className="py-8 text-center text-xs text-[var(--color-text-muted)]">当前没有可派出兵力</p>
+        )}
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <span className="text-xs text-[var(--color-text-muted)]">已选 <b className="text-[var(--color-accent)]">{totalSelected.toLocaleString()}</b></span>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={disabled}
+          className="rounded-xl bg-[var(--color-accent)] px-5 py-2 text-xs font-bold text-white disabled:opacity-50"
+        >
+          {confirmLabel}
+        </button>
+      </div>
+    </div>
+  </div>
 )
 
 const PlayerTargetCard = memo(function PlayerTargetCard({
