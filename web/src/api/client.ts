@@ -42,6 +42,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   'exchange is on cooldown': '兑换冷却中，请稍后再试',
   'invalid fishing bait': '鱼饵无效',
   'general not found': '将领不存在',
+  'general change is on cooldown': '换将冷却中',
   'invalid general stat': '将领属性无效',
   'no general stat points available': '没有可用属性点',
   'general stat is at max level': '该属性已加满',

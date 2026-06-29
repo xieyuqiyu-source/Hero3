@@ -18,6 +18,7 @@ func applyHeroConfigToGeneral(g *General) {
 
 	cfg := GetGeneralsConfig()
 	promoteGeneralByExp(g)
+	g.CurrentLevelExp = generalExpRequiredForLevel(g.Level)
 	g.NextLevelExp = nextGeneralLevelExp(g.Level)
 	g.Stats = normalizeGeneralStats(g.Stats)
 	g.AvailableStatPoints = availableGeneralStatPoints(g.Level, g.Stats)

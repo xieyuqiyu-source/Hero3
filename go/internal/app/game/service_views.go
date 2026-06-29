@@ -57,6 +57,7 @@ type GeneralsView struct {
 	General            *General                `json:"general"`
 	Generals           []General               `json:"generals,omitempty"`
 	GeneralAssignments []GeneralAssignment     `json:"generalAssignments,omitempty"`
+	GeneralChangeUntil string                  `json:"generalChangeUntil,omitempty"`
 	ActiveModifiers    []ModifierBreakdownItem `json:"activeModifiers,omitempty"`
 	ServerTime         string                  `json:"serverTime"`
 }
@@ -100,6 +101,7 @@ type GeneralViewActionResult struct {
 	General            *General                `json:"general"`
 	Generals           []General               `json:"generals,omitempty"`
 	GeneralAssignments []GeneralAssignment     `json:"generalAssignments,omitempty"`
+	GeneralChangeUntil string                  `json:"generalChangeUntil,omitempty"`
 	ActiveModifiers    []ModifierBreakdownItem `json:"activeModifiers,omitempty"`
 	AccountGold        int                     `json:"accountGold"`
 	ServerTime         string                  `json:"serverTime"`
@@ -241,6 +243,7 @@ func BuildGeneralViewActionResult(state GameState, accountGold int) GeneralViewA
 		General:            state.General,
 		Generals:           state.Generals,
 		GeneralAssignments: state.GeneralAssignments,
+		GeneralChangeUntil: state.GeneralChangeUntil,
 		ActiveModifiers:    state.ActiveModifiers,
 		AccountGold:        accountGold,
 		ServerTime:         state.ServerTime,

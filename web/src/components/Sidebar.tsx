@@ -207,6 +207,8 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
           )}
         </div>
 
+        {!collapsed && <MarchAlertTags />}
+
         {/* Resources Placeholder */}
         <div className={`
           mb-2.5 rounded-2xl p-3
@@ -345,7 +347,6 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
               ) : (
                 <p className="text-xs text-[var(--color-text-secondary)] opacity-50">暂无兵力</p>
               )}
-              <MarchAlertTags />
             </>
           )}
         </div>

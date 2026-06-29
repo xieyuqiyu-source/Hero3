@@ -10,6 +10,8 @@ const (
 	GeneralLevelPercentAtMax   = 2.0
 	GeneralStatPercentPerPoint = 0.02
 	GeneralResetStatsGoldCost  = 10
+	GeneralChangeGoldCost      = 10
+	GeneralChangeCooldownHours = 24
 	generalExpQuadraticFactor  = 50
 	generalExpQuarticFactor    = 500
 )

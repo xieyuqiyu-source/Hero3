@@ -51,7 +51,7 @@ interface GameStore {
   /** 升级建筑 */
   upgradeBuilding: (buildingId: string) => Promise<void>
   /** 将领四维加点 */
-  allocateGeneralStat: (statKey: string) => Promise<void>
+  allocateGeneralStat: (statKey: string, amount?: number) => Promise<void>
   /** 将领洗点 */
   resetGeneralStats: () => Promise<number | undefined>
   /** 更换将领 */
@@ -110,6 +110,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       general: result.general,
       generals: result.generals ?? get().state?.generals,
       generalAssignments: result.generalAssignments ?? get().state?.generalAssignments,
+      generalChangeUntil: result.generalChangeUntil ?? get().state?.generalChangeUntil,
       activeModifiers: result.activeModifiers ?? get().state?.activeModifiers,
       serverTime: result.serverTime,
     }),
@@ -208,10 +209,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     get().patchCityAction(result)
     set({ error: null })
   },
-  allocateGeneralStat: async (statKey: string) => {
+  allocateGeneralStat: async (statKey: string, amount = 1) => {
     const playerId = get().activePlayerId
     if (!playerId) return
-    const result = await gameApi.allocateGeneralStat(playerId, statKey)
+    const result = await gameApi.allocateGeneralStat(playerId, statKey, amount)
     get().patchGeneralAction(result)
     set({ error: null })
   },

@@ -251,8 +251,8 @@ export const gameApi = {
   },
 
   /** 将领四维加点 */
-  allocateGeneralStat(playerId: string, statKey: string) {
-    return api.post<GeneralViewActionResult>('/military/general/stat', { playerId, statKey })
+  allocateGeneralStat(playerId: string, statKey: string, amount = 1) {
+    return api.post<GeneralViewActionResult>('/military/general/stat', { playerId, statKey, amount })
   },
 
   /** 将领洗点 */

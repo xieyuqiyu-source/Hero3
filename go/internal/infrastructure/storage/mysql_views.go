@@ -115,6 +115,7 @@ func (r *MySQLRepository) GetGeneralsView(playerID string) (game.GeneralsView, e
 		General:            state.General,
 		Generals:           state.Generals,
 		GeneralAssignments: state.GeneralAssignments,
+		GeneralChangeUntil: state.GeneralChangeUntil,
 		ActiveModifiers:    state.ActiveModifiers,
 		ServerTime:         state.ServerTime,
 	}, nil

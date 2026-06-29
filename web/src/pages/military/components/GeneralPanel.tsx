@@ -1,5 +1,5 @@
 // 武将详情面板，负责展示将领成长、特性和背包物品操作。
-import { type FC, useMemo, useState } from 'react'
+import { type FC, useEffect, useMemo, useState } from 'react'
 import { Boxes, Package, RefreshCcw, Repeat2, Sparkles, Swords, UserRound, X } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
@@ -40,6 +40,12 @@ const STAT_LABELS: Record<string, string> = {
   politics: '内政',
   command: '统率',
 }
+const STAT_DESCRIPTIONS: Record<string, string> = {
+  force: '影响部队攻击加成。',
+  intelligence: '影响征兵速度、行军速度和建造速度。',
+  politics: '影响资源产量、仓库容量和兑换收益。',
+  command: '影响部队防御、步兵防御和骑兵防御。',
+}
 const STAT_COLORS: Record<string, string> = {
   force: 'text-amber-600',
   intelligence: 'text-blue-500',
@@ -73,6 +79,8 @@ const QUALITY_LABEL: Record<string, string> = {
   legendary: '传说',
   mythic: '神话',
 }
+const GENERAL_RESET_GOLD_COST = 10
+const GENERAL_CHANGE_GOLD_COST = 10
 
 const effectIcon = (effects: ItemEffect[]) => {
   if (effects.some((effect) => effect.type === 'general_exp')) return UserRound
@@ -101,6 +109,12 @@ const GeneralPanel: FC = () => {
   const [showChangeGeneralDialog, setShowChangeGeneralDialog] = useState(false)
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<{ stack: ItemStack; item?: ItemDefinition } | null>(null)
   const [selectedItemUseAmount, setSelectedItemUseAmount] = useState(1)
+  const [cooldownNow, setCooldownNow] = useState(Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setCooldownNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
   const inventoryRows = useMemo(() => {
     const slots = state?.inventorySlots?.length ? state.inventorySlots : Object.values(state?.inventory ?? {})
     return slots
@@ -126,8 +140,11 @@ const GeneralPanel: FC = () => {
   const attributes = general.attributes ?? general.buffs ?? {}
   const attributeBreakdown = general.attributeBreakdown ?? {}
   const nextLevelExp = general.nextLevelExp ?? 0
+  const currentLevelExp = general.currentLevelExp ?? 0
+  const currentLevelProgress = Math.max(0, general.exp - currentLevelExp)
+  const currentLevelRequired = nextLevelExp > 0 ? Math.max(1, nextLevelExp - currentLevelExp) : 0
   const expToNext = nextLevelExp > 0 ? Math.max(nextLevelExp - general.exp, 0) : 0
-  const expProgress = nextLevelExp > 0 ? Math.min(100, (general.exp / nextLevelExp) * 100) : 100
+  const expProgress = nextLevelExp > 0 ? Math.min(100, (currentLevelProgress / currentLevelRequired) * 100) : 100
   const expProgressText = `${expProgress.toFixed(2)}%`
   const statEntries = STAT_ORDER.map((key) => [key, general.stats?.[key] ?? 0] as const)
   const availableStatPoints = general.availableStatPoints ?? 0
@@ -135,6 +152,12 @@ const GeneralPanel: FC = () => {
   const changeTargets = factionGenerals.filter((item) => item.id !== general.id)
   const targetGeneralId = selectedGeneralId || changeTargets[0]?.id || ''
   const selectedChangeTarget = changeTargets.find((item) => item.id === targetGeneralId)
+  const accountGold = account?.gold ?? 0
+  const canAffordReset = accountGold >= GENERAL_RESET_GOLD_COST
+  const canAffordChange = accountGold >= GENERAL_CHANGE_GOLD_COST
+  const changeCooldownMs = getRemainingMs(state?.generalChangeUntil, cooldownNow)
+  const changeCooldownText = changeCooldownMs > 0 ? formatDuration(changeCooldownMs) : ''
+  const canChangeGeneralNow = canAffordChange && changeCooldownMs <= 0
 
   // 根据四维归类展示对应的属性加成，让信息直接贴在进度条上。
   const getStatAttributeEntries = (statKey: string) => {
@@ -144,11 +167,13 @@ const GeneralPanel: FC = () => {
   }
 
   // 提升指定四维属性点。
-  const handleAllocateStat = async (statKey: string) => {
-    if (availableStatPoints <= 0 || allocatingStat) return
+  const handleAllocateStat = async (statKey: string, amount = 1) => {
+    const currentValue = general.stats?.[statKey] ?? 0
+    const useAmount = Math.max(1, Math.min(amount, availableStatPoints, 100 - currentValue))
+    if (availableStatPoints <= 0 || useAmount <= 0 || allocatingStat) return
     setAllocatingStat(statKey)
     try {
-      await allocateGeneralStat(statKey)
+      await allocateGeneralStat(statKey, useAmount)
     } finally {
       setAllocatingStat(null)
     }
@@ -186,7 +211,11 @@ const GeneralPanel: FC = () => {
   // 消耗金币重置四维加点。
   const handleResetStats = async () => {
     if (resettingStats) return
-    const confirmed = window.confirm('确认消耗 10 金币重置四维加点？等级和经验会保留。')
+    if (!canAffordReset) {
+      toast.error(`金币不足，洗点需要 ${GENERAL_RESET_GOLD_COST} 金币。`)
+      return
+    }
+    const confirmed = window.confirm(`确认消耗 ${GENERAL_RESET_GOLD_COST} 金币重置四维加点？等级和经验会保留。`)
     if (!confirmed) return
     setResettingStats(true)
     try {
@@ -212,6 +241,14 @@ const GeneralPanel: FC = () => {
   // 确认更换当前将领。
   const handleChangeGeneral = async () => {
     if (!targetGeneralId || changingGeneral) return
+    if (changeCooldownMs > 0) {
+      toast.error(`换将冷却中，还需 ${changeCooldownText}。`)
+      return
+    }
+    if (!canAffordChange) {
+      toast.error(`金币不足，换将需要 ${GENERAL_CHANGE_GOLD_COST} 金币。`)
+      return
+    }
     setChangingGeneral(true)
     try {
       const accountGold = await changeGeneral(targetGeneralId)
@@ -248,9 +285,9 @@ const GeneralPanel: FC = () => {
             <button
               type="button"
               onClick={() => void handleResetStats()}
-              disabled={resettingStats}
+              disabled={resettingStats || !canAffordReset}
               className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 text-[11px] font-bold text-amber-600 transition hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-              title={`消耗 10 金币洗点，当前金币 ${account?.gold ?? 0}`}
+              title={`消耗 ${GENERAL_RESET_GOLD_COST} 金币洗点，当前金币 ${accountGold}`}
             >
               <RefreshCcw size={12} />
               {resettingStats ? '洗点中' : '洗点'}
@@ -258,20 +295,24 @@ const GeneralPanel: FC = () => {
             <button
               type="button"
               onClick={handleOpenChangeGeneral}
-              disabled={changeTargets.length === 0 || changingGeneral}
+              disabled={changeTargets.length === 0 || changingGeneral || !canChangeGeneralNow}
               className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 text-[11px] font-bold text-blue-600 transition hover:bg-blue-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-              title={changeTargets.length === 0 ? '无可更换将领' : '选择要更换的将领'}
+              title={changeTargets.length === 0 ? '无可更换将领' : changeCooldownText ? `换将冷却中，还需 ${changeCooldownText}` : `消耗 ${GENERAL_CHANGE_GOLD_COST} 金币换将，当前金币 ${accountGold}`}
             >
               <Repeat2 size={12} />
-              换将
+              {changeCooldownText ? changeCooldownText : '换将'}
             </button>
           </div>
         </div>
 
         <div className="mb-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2">
           <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)] mb-1.5">
-            <span>当前经验进度 {expProgressText}</span>
-            <span>{nextLevelExp > 0 ? `下级还需 ${expToNext.toLocaleString()}` : '已满级'}</span>
+            <span>
+              当前经验 {nextLevelExp > 0
+                ? `${currentLevelProgress.toLocaleString()} / ${currentLevelRequired.toLocaleString()} (${expProgressText})`
+                : `已满级 (${expProgressText})`}
+            </span>
+            <span>{nextLevelExp > 0 ? `还需 ${expToNext.toLocaleString()}` : '已满级'}</span>
           </div>
           <div className="h-2 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
             <div
@@ -284,7 +325,7 @@ const GeneralPanel: FC = () => {
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs font-semibold text-[var(--color-text-primary)]">四维</h3>
-            {availableStatPoints > 0 && <span className="text-[10px] font-semibold text-amber-600">可加点</span>}
+            <span className="text-[10px] font-semibold text-amber-600">可分配 {availableStatPoints.toLocaleString()} 点</span>
           </div>
           <div className="space-y-2">
             {statEntries.map(([key, value]) => {
@@ -297,7 +338,9 @@ const GeneralPanel: FC = () => {
                     style={{ width: `${progress}%` }}
                   />
                   <div className="relative flex h-full items-center gap-2 px-3">
-                    <span className={`shrink-0 text-xs font-bold ${STAT_COLORS[key]}`}>{STAT_LABELS[key]}</span>
+                    <span className={`shrink-0 text-xs font-bold ${STAT_COLORS[key]}`} title={STAT_DESCRIPTIONS[key]}>
+                      {STAT_LABELS[key]}
+                    </span>
                     <div className="ml-auto flex min-w-0 flex-wrap justify-end gap-1 overflow-hidden">
                       {statAttributes.slice(0, 3).map(([attributeKey, attributeValue]) => (
                         <span
@@ -311,12 +354,33 @@ const GeneralPanel: FC = () => {
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleAllocateStat(key)}
+                      onClick={() => handleAllocateStat(key, 1)}
                       disabled={availableStatPoints <= 0 || value >= 100 || allocatingStat !== null}
                       className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-bold text-amber-600 transition-colors enabled:hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
                       title={`提升${STAT_LABELS[key]}`}
                     >
                       {allocatingStat === key ? '…' : '+'}
+                    </button>
+                    {[5, 10].map((amount) => (
+                      <button
+                        key={amount}
+                        type="button"
+                        onClick={() => handleAllocateStat(key, amount)}
+                        disabled={availableStatPoints <= 0 || value >= 100 || allocatingStat !== null}
+                        className="grid h-7 w-8 flex-shrink-0 place-items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[10px] font-bold text-amber-600 transition-colors enabled:hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                        title={`${STAT_LABELS[key]} +${amount}`}
+                      >
+                        +{amount}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => handleAllocateStat(key, availableStatPoints)}
+                      disabled={availableStatPoints <= 0 || value >= 100 || allocatingStat !== null}
+                      className="grid h-7 w-10 flex-shrink-0 place-items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[10px] font-bold text-amber-600 transition-colors enabled:hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                      title={`${STAT_LABELS[key]}加到当前可用上限`}
+                    >
+                      最大
                     </button>
                   </div>
                 </div>
@@ -403,7 +467,9 @@ const GeneralPanel: FC = () => {
               </div>
               <div className="min-w-0 flex-1">
                 <h4 className="text-sm font-bold text-[var(--color-text-primary)]">选择将领</h4>
-                <p className="text-[10px] text-[var(--color-text-muted)]">保留等级和经验，四维加点会重置</p>
+                <p className="text-[10px] text-[var(--color-text-muted)]">
+                  {changeCooldownText ? `换将冷却中，还需 ${changeCooldownText}` : `消耗 ${GENERAL_CHANGE_GOLD_COST} 金币，保留等级和经验，四维加点会重置`}
+                </p>
               </div>
               <button
                 type="button"
@@ -440,7 +506,7 @@ const GeneralPanel: FC = () => {
               </button>
               <button
                 type="button"
-                disabled={!selectedChangeTarget || changingGeneral}
+                disabled={!selectedChangeTarget || changingGeneral || !canChangeGeneralNow}
                 onClick={() => void handleChangeGeneral()}
                 className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-blue-500 text-xs font-bold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45"
               >
@@ -539,6 +605,25 @@ const GeneralPanel: FC = () => {
       })()}
     </div>
   )
+}
+
+// getRemainingMs 计算换将冷却剩余毫秒数。
+function getRemainingMs(value: string | undefined, nowMs: number) {
+  if (!value) return 0
+  const targetMs = new Date(value).getTime()
+  if (Number.isNaN(targetMs)) return 0
+  return Math.max(0, targetMs - nowMs)
+}
+
+// formatDuration 把冷却时间显示成紧凑的时分秒。
+function formatDuration(ms: number) {
+  const totalSeconds = Math.ceil(ms / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  if (hours > 0) return `${hours}小时${minutes.toString().padStart(2, '0')}分`
+  if (minutes > 0) return `${minutes}分${seconds.toString().padStart(2, '0')}秒`
+  return `${seconds}秒`
 }
 
 export default GeneralPanel

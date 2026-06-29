@@ -794,7 +794,7 @@ func TestAllocateGeneralStatUpdatesAttributes(t *testing.T) {
 	}
 	attackBefore := state.General.Attributes[StatAttackBonus]
 
-	next, err := service.AllocateGeneralStat("player_stat", "force")
+	next, err := service.AllocateGeneralStat("player_stat", "force", 1)
 	if err != nil {
 		t.Fatalf("allocate general stat: %v", err)
 	}
@@ -831,7 +831,7 @@ func TestAllocateGeneralStatRejectsMaxedStat(t *testing.T) {
 		t.Fatalf("create player: %v", err)
 	}
 
-	if _, err := service.AllocateGeneralStat("player_stat_max", "force"); !errors.Is(err, ErrStatMaxLevel) {
+	if _, err := service.AllocateGeneralStat("player_stat_max", "force", 1); !errors.Is(err, ErrStatMaxLevel) {
 		t.Fatalf("expected ErrStatMaxLevel, got %v", err)
 	}
 }

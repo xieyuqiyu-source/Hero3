@@ -73,6 +73,7 @@ func (h *Handlers) AllocateGeneralStat(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		PlayerID string `json:"playerId"`
 		StatKey  string `json:"statKey"`
+		Amount   int    `json:"amount,omitempty"`
 	}
 	if !decodeJSON(w, r, &payload) {
 		return
@@ -81,7 +82,7 @@ func (h *Handlers) AllocateGeneralStat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, err := h.gameService.AllocateGeneralStat(payload.PlayerID, payload.StatKey)
+	state, err := h.gameService.AllocateGeneralStat(payload.PlayerID, payload.StatKey, payload.Amount)
 	if err != nil {
 		status := http.StatusBadRequest
 		switch {
@@ -147,7 +148,7 @@ func (h *Handlers) ChangeGeneral(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, game.ErrPlayerNotFound), errors.Is(err, game.ErrGeneralNotFound), errors.Is(err, game.ErrItemNotFound):
 			status = http.StatusNotFound
-		case errors.Is(err, game.ErrInvalidGeneral), errors.Is(err, game.ErrInsufficientItem):
+		case errors.Is(err, game.ErrInvalidGeneral), errors.Is(err, game.ErrInsufficientItem), errors.Is(err, game.ErrInsufficientGold), errors.Is(err, game.ErrGeneralChangeCooldown):
 			status = http.StatusUnprocessableEntity
 		}
 		writeError(w, status, err.Error())

@@ -5,6 +5,7 @@ import { gameApi } from '@/api/game'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
 import type { Reinforcement } from '@/types/game'
+import { sortUnitEntries } from '@/utils/unitOrder'
 
 const SOURCE_LABELS: Record<'reinforcement' | 'obtained', string> = {
   reinforcement: '增援',
@@ -73,11 +74,11 @@ const GarrisonPanel: FC<GarrisonPanelProps> = ({ gameStateReady = true, compact 
   }, [records])
 
   return (
-    <section className={`rounded-2xl p-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)] shadow-[0_4px_12px_rgba(15,23,42,0.03)] ${compact ? '' : 'mb-2.5'}`}>
+    <section className={`rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-3 shadow-[0_4px_12px_rgba(16,185,129,0.08)] ${compact ? '' : 'mb-2.5'}`}>
       <div className="flex items-center gap-2 mb-2">
-        <ShieldPlus size={14} className="text-[var(--color-accent)]" />
+        <ShieldPlus size={14} className="text-emerald-600" />
         <span className="text-sm font-semibold text-[var(--color-text-primary)]">驻防队伍</span>
-        <span className="ml-auto text-xs font-semibold text-[var(--color-accent)]">{totalTroops.toLocaleString()}</span>
+        <span className="ml-auto text-xs font-semibold text-emerald-600">{totalTroops.toLocaleString()}</span>
       </div>
       {records.length > 0 ? (
         <div className="space-y-1.5">
@@ -161,14 +162,14 @@ function earlierText(a?: string, b?: string) {
 const GarrisonCard: FC<{ record: Reinforcement; units: ReturnType<typeof useConfigStore.getState>['units'] }> = ({ record, units }) => {
   const sourceType = normalizeDisplaySourceType(record.sourceType)
   const total = Object.values(record.remainingTroops ?? {}).reduce((sum, amount) => sum + amount, 0)
-  const troopEntries = Object.entries(record.remainingTroops ?? {}).filter(([, amount]) => amount > 0)
+  const troopEntries = sortUnitEntries(record.remainingTroops, record.fromPlayerFaction, units ?? undefined).filter(([, amount]) => amount > 0)
   const title = SOURCE_LABELS[sourceType]
 
   return (
-    <div className="rounded-xl bg-white/60 dark:bg-white/5 border border-[var(--color-border)] px-2.5 py-2">
+    <div className="rounded-xl border border-emerald-500/20 bg-white/70 px-2.5 py-2 dark:bg-emerald-500/10">
       <div className="flex items-center gap-1.5">
-        <span className="min-w-0 flex-1 text-[10px] font-bold text-[var(--color-accent)]">{title}</span>
-        <span className="shrink-0 text-[10px] font-semibold text-[var(--color-accent)]">{total.toLocaleString()}</span>
+        <span className="min-w-0 flex-1 text-[10px] font-bold text-emerald-600">{title}</span>
+        <span className="shrink-0 text-[10px] font-semibold text-emerald-600">{total.toLocaleString()}</span>
       </div>
       <div className="mt-1.5 space-y-1">
         {troopEntries.length > 0 ? troopEntries.map(([unitType, amount]) => (

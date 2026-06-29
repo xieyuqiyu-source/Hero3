@@ -616,6 +616,7 @@ func (r *MemoryRepository) GetGeneralsView(playerID string) (GeneralsView, error
 		General:            state.General,
 		Generals:           state.Generals,
 		GeneralAssignments: state.GeneralAssignments,
+		GeneralChangeUntil: state.GeneralChangeUntil,
 		ActiveModifiers:    state.ActiveModifiers,
 		ServerTime:         state.ServerTime,
 	}, nil

@@ -37,6 +37,7 @@ var (
 	ErrQueueFull                = errors.New("recruit queue is full")
 	ErrInvalidGeneral           = errors.New("invalid general for faction")
 	ErrGeneralNotFound          = errors.New("general not found")
+	ErrGeneralChangeCooldown    = errors.New("general change is on cooldown")
 	ErrInvalidStatKey           = errors.New("invalid general stat")
 	ErrNoStatPoints             = errors.New("no general stat points available")
 	ErrStatMaxLevel             = errors.New("general stat is at max level")

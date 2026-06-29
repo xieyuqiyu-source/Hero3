@@ -1,4 +1,4 @@
-// 本组件在军队框内展示玩家当前相关的行军倒计时提示。
+// 本组件在左侧菜单展示玩家当前相关的行军倒计时提示。
 import { RotateCcw, Zap } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type FC } from 'react'
 import { gameApi } from '@/api/game'
@@ -18,11 +18,19 @@ interface MarchAlertItem {
   endsAt?: string
   fallbackText?: string
   sortAt: number
+  priority: number
   pvpMarch?: PvpMarch
 }
 
 interface MarchAlertTagsProps {
   limit?: number
+}
+
+const ALERT_PRIORITY: Record<MarchTag, number> = {
+  被攻击: 0,
+  出征: 1,
+  被侦查: 2,
+  增援: 3,
 }
 
 // MarchAlertTags 聚合 PVP 行军和增援行军，显示成简短高亮标签。
@@ -97,7 +105,7 @@ const MarchAlertTags: FC<MarchAlertTagsProps> = ({ limit = 5 }) => {
     })
 
     return next
-      .sort((a, b) => a.sortAt - b.sortAt)
+      .sort((a, b) => a.priority - b.priority || a.sortAt - b.sortAt)
       .slice(0, limit)
   }, [activePlayerId, limit, pvpMarches, receivedReinforcements, sentReinforcements])
 
@@ -160,15 +168,15 @@ const MarchAlertTags: FC<MarchAlertTagsProps> = ({ limit = 5 }) => {
   if (items.length === 0) return null
 
   return (
-    <div className="mt-2 space-y-1">
+    <div className="mb-2.5 space-y-1">
       {items.map((item) => (
         <div
           key={item.id}
-          className="flex h-8 min-w-0 items-center gap-1.5 rounded-lg border border-amber-400/45 bg-amber-300/20 px-2 text-[10px] shadow-[inset_0_0_14px_rgba(251,191,36,0.12)]"
+          className={`flex h-8 min-w-0 items-center gap-1.5 rounded-lg border px-2 text-[10px] shadow-[inset_0_0_14px_rgba(239,68,68,0.12)] ${alertClass(item.tag).row}`}
         >
-          <span className="shrink-0 rounded bg-amber-400 px-1.5 py-0.5 font-black text-amber-950">{item.tag}</span>
+          <span className={`shrink-0 rounded px-1.5 py-0.5 font-black ${alertClass(item.tag).tag}`}>{item.tag}</span>
           <span className="min-w-0 flex-1 truncate font-bold text-[var(--color-text-primary)]">{item.playerName || '未知玩家'}</span>
-          <span className="shrink-0 font-mono font-black text-amber-700">{item.fallbackText ?? formatCountdown(item.endsAt, nowMs)}</span>
+          <span className={`shrink-0 font-mono font-black ${alertClass(item.tag).time}`}>{item.fallbackText ?? formatCountdown(item.endsAt, nowMs)}</span>
           {item.pvpMarch && canAcceleratePvpMarch(item.pvpMarch) && (
             <button
               type="button"
@@ -208,6 +216,7 @@ function buildPvpAlertItem(march: PvpMarch, activePlayerId: string): MarchAlertI
       endsAt: march.status === 'returning' ? march.returnsAt : march.arrivesAt,
       fallbackText: march.status === 'resolving' ? '结算中' : undefined,
       sortAt: toTime(march.status === 'returning' ? march.returnsAt : march.arrivesAt),
+      priority: ALERT_PRIORITY.出征,
       pvpMarch: march.status === 'marching' ? march : undefined,
     }
   }
@@ -221,6 +230,7 @@ function buildPvpAlertItem(march: PvpMarch, activePlayerId: string): MarchAlertI
       endsAt: march.arrivesAt,
       fallbackText: march.status === 'resolving' ? '结算中' : undefined,
       sortAt: toTime(march.arrivesAt),
+      priority: ALERT_PRIORITY.被攻击,
     }
   }
 
@@ -237,6 +247,7 @@ function buildSentReinforcementItem(reinforcement: Reinforcement): MarchAlertIte
     playerName: reinforcement.toPlayerName ?? reinforcement.toPlayerId,
     endsAt,
     sortAt: toTime(endsAt),
+    priority: ALERT_PRIORITY.增援,
   }
 }
 
@@ -249,6 +260,30 @@ function buildReceivedReinforcementItem(reinforcement: Reinforcement): MarchAler
     playerName: reinforcement.fromPlayerName ?? reinforcement.fromPlayerId,
     endsAt: reinforcement.arriveAt,
     sortAt: toTime(reinforcement.arriveAt),
+    priority: ALERT_PRIORITY.增援,
+  }
+}
+
+// alertClass 返回不同倒计时类型的视觉样式。
+function alertClass(tag: MarchTag) {
+  if (tag === '被攻击') {
+    return {
+      row: 'border-red-500/55 bg-red-500/15',
+      tag: 'bg-red-500 text-white',
+      time: 'text-red-600',
+    }
+  }
+  if (tag === '出征' || tag === '被侦查') {
+    return {
+      row: 'border-rose-500/45 bg-rose-500/10',
+      tag: 'bg-rose-500 text-white',
+      time: 'text-rose-600',
+    }
+  }
+  return {
+    row: 'border-emerald-500/35 bg-emerald-500/10',
+    tag: 'bg-emerald-500 text-white',
+    time: 'text-emerald-600',
   }
 }
 

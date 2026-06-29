@@ -95,6 +95,7 @@ type General struct {
 	Name                string                                     `json:"name"`
 	Level               int                                        `json:"level"`
 	Exp                 int                                        `json:"exp"`
+	CurrentLevelExp     int                                        `json:"currentLevelExp,omitempty"`     // 当前等级起始累计经验，用于前端显示本级进度
 	NextLevelExp        int                                        `json:"nextLevelExp,omitempty"`        // 下一等级所需累计经验；满级为 0
 	AvailableStatPoints int                                        `json:"availableStatPoints,omitempty"` // 可分配四维点数
 	Stats               map[string]int                             `json:"stats,omitempty"`               // 四维加点，单项上限 100
@@ -499,6 +500,7 @@ type GameState struct {
 	General             *General                `json:"general"`
 	Generals            []General               `json:"generals,omitempty"`
 	GeneralAssignments  []GeneralAssignment     `json:"generalAssignments,omitempty"`
+	GeneralChangeUntil  string                  `json:"generalChangeUntil,omitempty"` // 换将冷却结束时间，空表示可更换
 	Army                []ArmyUnit              `json:"army"`
 	RecruitQueues       []RecruitQueue          `json:"recruitQueues"`
 	NpcState            *NpcState               `json:"npcState,omitempty"`

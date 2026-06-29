@@ -8,7 +8,6 @@
   "tiers": {
     "golden": {
       "multiplier": 16,
-      "dropPoolId": "npc_golden_exp_pack",
       "armyRange": {
         "min": 5000,
         "max": 500001
@@ -22,13 +21,13 @@
         "max": 3
       },
       "count": {
-        "guaranteed": 0,
+        "guaranteed": 1,
         "weight": 0
-      }
+      },
+      "dropPoolId": "npc_golden_exp_pack"
     },
     "large": {
       "multiplier": 8,
-      "dropPoolId": "npc_large_exp_pack",
       "armyRange": {
         "min": 1500,
         "max": 20000
@@ -42,13 +41,13 @@
         "max": 2
       },
       "count": {
-        "guaranteed": 1,
+        "guaranteed": 2,
         "weight": 2
-      }
+      },
+      "dropPoolId": "npc_large_exp_pack"
     },
     "medium": {
       "multiplier": 4,
-      "dropPoolId": "npc_medium_exp_pack",
       "armyRange": {
         "min": 300,
         "max": 1500
@@ -64,11 +63,11 @@
       "count": {
         "guaranteed": 2,
         "weight": 3
-      }
+      },
+      "dropPoolId": "npc_medium_exp_pack"
     },
     "small": {
       "multiplier": 1,
-      "dropPoolId": "npc_small_exp_pack",
       "armyRange": {
         "min": 50,
         "max": 300
@@ -82,9 +81,10 @@
         "max": 0
       },
       "count": {
-        "guaranteed": 4,
+        "guaranteed": 2,
         "weight": 5
-      }
+      },
+      "dropPoolId": "npc_small_exp_pack"
     }
   },
   "recoveryProfiles": [

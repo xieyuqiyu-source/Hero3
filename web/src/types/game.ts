@@ -116,6 +116,7 @@ export interface GeneralViewActionResult {
   general?: General
   generals?: General[]
   generalAssignments?: GeneralAssignment[]
+  generalChangeUntil?: string
   activeModifiers?: ModifierBreakdownItem[]
   accountGold: number
   serverTime: string
@@ -851,6 +852,7 @@ export interface General {
   name: string
   level: number
   exp: number
+  currentLevelExp?: number
   nextLevelExp?: number
   availableStatPoints?: number
   stats?: Record<string, number>
@@ -894,6 +896,7 @@ export interface GameState {
   general: General | null
   generals?: General[]
   generalAssignments?: GeneralAssignment[]
+  generalChangeUntil?: string
   army: ArmyUnit[]
   recruitQueues: RecruitQueue[]
   npcState?: NpcState | null

@@ -10,7 +10,7 @@ type GeneralActionResult struct {
 	AccountGold int       `json:"accountGold"`
 }
 
-func (s *Service) AllocateGeneralStat(playerID string, statKey string) (GameState, error) {
+func (s *Service) AllocateGeneralStat(playerID string, statKey string, amount int) (GameState, error) {
 	playerID = strings.TrimSpace(playerID)
 	statKey = strings.TrimSpace(statKey)
 	if playerID == "" {
@@ -18,6 +18,9 @@ func (s *Service) AllocateGeneralStat(playerID string, statKey string) (GameStat
 	}
 	if !isValidGeneralStatKey(statKey) {
 		return GameState{}, ErrInvalidStatKey
+	}
+	if amount <= 0 {
+		amount = 1
 	}
 
 	now := time.Now()
@@ -29,14 +32,14 @@ func (s *Service) AllocateGeneralStat(playerID string, statKey string) (GameStat
 		}
 
 		applyHeroConfigToGeneral(state.General)
-		if state.General.Stats[statKey] >= GeneralMaxStatPointsPerKey {
+		if state.General.Stats[statKey]+amount > GeneralMaxStatPointsPerKey {
 			return ErrStatMaxLevel
 		}
-		if state.General.AvailableStatPoints <= 0 {
+		if state.General.AvailableStatPoints < amount {
 			return ErrNoStatPoints
 		}
 
-		state.General.Stats[statKey]++
+		state.General.Stats[statKey] += amount
 		applyHeroConfigToGeneral(state.General)
 		syncActiveGeneralToRoster(state)
 		refreshGeneralDerivedState(state, now)
@@ -118,13 +121,20 @@ func (s *Service) ChangeGeneral(playerID string, generalID string, itemID string
 	}
 
 	now := time.Now()
+	accountID, err := s.repo.GetAccountIDByPlayerID(playerID)
+	if err != nil {
+		return GeneralActionResult{}, err
+	}
 	beforeItemAmount := 0
 	afterItemAmount := 0
-	state, err := s.repo.UpdateGeneralState(playerID, now, func(state *GameState) error {
+	account, state, err := s.repo.UpdateAccountGeneralState(accountID, playerID, now, func(account *Account, state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 		if state.General == nil {
 			return ErrGeneralNotFound
+		}
+		if account.Gold < GeneralChangeGoldCost {
+			return ErrInsufficientGold
 		}
 		if state.General.ID == generalID {
 			return ErrInvalidGeneral
@@ -135,6 +145,9 @@ func (s *Service) ChangeGeneral(playerID string, generalID string, itemID string
 		hero, ok := GetHeroConfig(generalID)
 		if !ok || !hero.Enabled || hero.Faction != state.Player.Faction {
 			return ErrInvalidGeneral
+		}
+		if changeUntil, err := time.Parse(resourceDateLayout, strings.TrimSpace(state.GeneralChangeUntil)); err == nil && now.Before(changeUntil) {
+			return ErrGeneralChangeCooldown
 		}
 
 		if itemID != "" {
@@ -148,6 +161,8 @@ func (s *Service) ChangeGeneral(playerID string, generalID string, itemID string
 			afterItemAmount = inventoryItemAmount(state, itemID)
 		}
 
+		account.Gold -= GeneralChangeGoldCost
+		state.GeneralChangeUntil = now.Add(GeneralChangeCooldownHours * time.Hour).UTC().Format(resourceDateLayout)
 		EnsureGeneralRoster(state, now)
 		if _, owned := findOwnedGeneral(state.Generals, generalID); owned {
 			if err := SetActiveGeneral(state, generalID, now); err != nil {
@@ -167,6 +182,30 @@ func (s *Service) ChangeGeneral(playerID string, generalID string, itemID string
 	if err != nil {
 		return GeneralActionResult{}, err
 	}
+	s.recordLedger(GoldLedgerEntry{
+		AccountID:    accountID,
+		PlayerID:     playerID,
+		Currency:     LedgerCurrencyGold,
+		Direction:    LedgerDirectionDebit,
+		Amount:       GeneralChangeGoldCost,
+		BalanceAfter: account.Gold,
+		RefType:      "general_change",
+		RefID:        generalID,
+		Reason:       "更换将领",
+	})
+	s.publishCurrencyChanged(playerID, accountID, generalID, "general_change")
+	s.publishEvent(GameEvent{
+		Type:      EventGeneralChanged,
+		PlayerID:  playerID,
+		AccountID: accountID,
+		RefType:   "general_change",
+		RefID:     generalID,
+		Payload: map[string]any{
+			"action": "change_general",
+			"cost":   GeneralChangeGoldCost,
+		},
+		CreatedAt: now.UTC().Format(resourceDateLayout),
+	})
 	if itemID != "" {
 		_ = s.repo.WriteItemLedger(ItemLedgerEntry{
 			ID:           "item_ledger_" + randomID(12),
@@ -182,13 +221,7 @@ func (s *Service) ChangeGeneral(playerID string, generalID string, itemID string
 		})
 	}
 
-	accountGold := 0
-	if accountID, err := s.repo.GetAccountIDByPlayerID(playerID); err == nil {
-		if account, err := s.repo.GetAccountByID(accountID); err == nil {
-			accountGold = account.Gold
-		}
-	}
-	return GeneralActionResult{State: state, AccountGold: accountGold}, nil
+	return GeneralActionResult{State: state, AccountGold: account.Gold}, nil
 }
 
 func isGeneralAllowedForFaction(faction string, generalID string) bool {
