@@ -101,6 +101,8 @@ type ReincarnationActionResult struct {
 	Army           []ArmyUnit           `json:"army,omitempty"`
 	Inventory      map[string]ItemStack `json:"inventory,omitempty"`
 	InventorySlots []ItemStack          `json:"inventorySlots,omitempty"`
+	General        *General             `json:"general,omitempty"`
+	Generals       []General            `json:"generals,omitempty"`
 	AccountGold    int                  `json:"accountGold,omitempty"`
 	Cost           int                  `json:"cost,omitempty"`
 	ServerTime     string               `json:"serverTime"`
@@ -114,6 +116,7 @@ type StartReincarnationRequest struct {
 type ReincarnationTroopRequest struct {
 	PlayerID       string         `json:"playerId"`
 	Troops         map[string]int `json:"troops"`
+	GeneralIDs     []string       `json:"generalIds,omitempty"`
 	ClientActionID string         `json:"clientActionId,omitempty"`
 }
 

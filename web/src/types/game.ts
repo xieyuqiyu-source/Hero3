@@ -273,6 +273,8 @@ export interface ReincarnationActionResult {
   army?: ArmyUnit[]
   inventory?: Record<string, ItemStack>
   inventorySlots?: ItemStack[]
+  general?: General
+  generals?: General[]
   accountGold?: number
   cost?: number
   serverTime: string

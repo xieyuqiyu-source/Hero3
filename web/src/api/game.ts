@@ -363,9 +363,9 @@ export const gameApi = {
   },
 
   /** 攻击 NPC 城池 */
-  attackNpc(playerId: string, npcId: string, mode: 'attack' | 'plunder', units: Record<string, number>) {
+  attackNpc(playerId: string, npcId: string, mode: 'attack' | 'plunder', units: Record<string, number>, generalIds: string[] = []) {
     return api.post<{ battleReport: BattleReport; resources: ResourceState; army: ArmyUnit[]; general?: General; generals?: General[]; cityGold: number; npcState?: GameState['npcState']; serverTime: string }>('/map/npc-cities/attack', {
-      playerId, npcId, mode, units,
+      playerId, npcId, mode, units, generalIds,
     })
   },
 
@@ -390,13 +390,13 @@ export const gameApi = {
   },
 
   /** 进攻轮回绝境波次 */
-  attackReincarnationWave(playerId: string, waveId: string, troops: Record<string, number>, clientActionId?: string) {
-    return api.post<ReincarnationActionResult>(`/dungeons/reincarnation/waves/${waveId}/attack`, { playerId, troops, clientActionId })
+  attackReincarnationWave(playerId: string, waveId: string, troops: Record<string, number>, generalIds: string[] = [], clientActionId?: string) {
+    return api.post<ReincarnationActionResult>(`/dungeons/reincarnation/waves/${waveId}/attack`, { playerId, troops, generalIds, clientActionId })
   },
 
   /** 防守轮回绝境波次 */
-  readyReincarnationDefense(playerId: string, waveId: string, troops: Record<string, number>, clientActionId?: string) {
-    return api.post<ReincarnationActionResult>(`/dungeons/reincarnation/waves/${waveId}/defense-ready`, { playerId, troops, clientActionId })
+  readyReincarnationDefense(playerId: string, waveId: string, troops: Record<string, number>, generalIds: string[] = [], clientActionId?: string) {
+    return api.post<ReincarnationActionResult>(`/dungeons/reincarnation/waves/${waveId}/defense-ready`, { playerId, troops, generalIds, clientActionId })
   },
 
   /** 重置轮回绝境当前波随机加成 */

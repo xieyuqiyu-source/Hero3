@@ -1,13 +1,14 @@
 /* 本文件实现地图副本页，并接入轮回绝境副本玩法。 */
-import { type FC, useEffect, useState } from 'react'
+import { type FC, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Crown, Flame, Lock, ScrollText, ShieldAlert, Swords, Timer, Trophy } from 'lucide-react'
+import { ChevronDown, Crown, Flame, Lock, ScrollText, ShieldAlert, Swords, Timer, Trophy } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
 import { useAccountStore } from '@/store/accountStore'
 import { useConfigStore } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
-import type { ReincarnationRun, ReincarnationWave, Reward } from '@/types/game'
+import type { BattleReport, General, ReincarnationLevelConfig, ReincarnationRun, ReincarnationWave, Reward } from '@/types/game'
+import BattleResultModal from './BattleResultModal'
 import reincarnationAbyssBg from '@/assets/dungeons/reincarnation-abyss.webp'
 import kingsWarBg from '@/assets/dungeons/kings-war.webp'
 import famousGeneralsBg from '@/assets/dungeons/famous-generals.webp'
@@ -71,9 +72,11 @@ const ReincarnationAbyssPanel: FC = () => {
   const [run, setRun] = useState<ReincarnationRun | null>(null)
   const [selectedLevel, setSelectedLevel] = useState(1)
   const [troops, setTroops] = useState<Record<string, number>>({})
+  const [selectedGeneralIds, setSelectedGeneralIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [defenseCountdown, setDefenseCountdown] = useState(0)
   const [lastReportId, setLastReportId] = useState('')
+  const [battleReport, setBattleReport] = useState<BattleReport | null>(null)
 
   const army = state?.army ?? []
   const currentWave = run?.waves.find((wave) => wave.waveIndex === run.currentWave)
@@ -81,6 +84,12 @@ const ReincarnationAbyssPanel: FC = () => {
   const playerFaction = state?.player.faction ?? ''
   const unitConfig = units?.[playerFaction] ?? {}
   const remainingSeconds = run ? Math.max(0, Math.floor((new Date(run.expiresAt).getTime() - Date.now()) / 1000)) : 0
+  const availableGenerals = useMemo(() => {
+    const busy = new Set((state?.generalAssignments ?? [])
+      .filter((item) => item.id !== 'main' && item.slot !== 'main')
+      .map((item) => item.generalId))
+    return (state?.generals ?? (state?.general ? [state.general] : [])).filter((general) => !busy.has(general.id))
+  }, [state?.general, state?.generalAssignments, state?.generals])
 
   useEffect(() => {
     if (!activePlayerId) return
@@ -89,9 +98,8 @@ const ReincarnationAbyssPanel: FC = () => {
   }, [activePlayerId])
 
   useEffect(() => {
-    if (availableLevels[0] && selectedLevel === 1) {
-      setSelectedLevel(availableLevels[0].level)
-    }
+    if (availableLevels.length === 0) return
+    if (!availableLevels.some((level) => level.level === selectedLevel)) setSelectedLevel(availableLevels[0].level)
   }, [availableLevels, selectedLevel])
 
   useEffect(() => {
@@ -155,15 +163,19 @@ const ReincarnationAbyssPanel: FC = () => {
     try {
       const clientActionId = `${currentWave.id}_${Date.now()}_${Math.random().toString(16).slice(2)}`
       const result = currentWave.waveType === 'defense'
-        ? await gameApi.readyReincarnationDefense(activePlayerId, currentWave.id, troops, clientActionId)
-        : await gameApi.attackReincarnationWave(activePlayerId, currentWave.id, troops, clientActionId)
+        ? await gameApi.readyReincarnationDefense(activePlayerId, currentWave.id, troops, selectedGeneralIds, clientActionId)
+        : await gameApi.attackReincarnationWave(activePlayerId, currentWave.id, troops, selectedGeneralIds, clientActionId)
       setRun(result.run)
       setTroops({})
+      setSelectedGeneralIds([])
       setLastReportId(result.battleReport?.id ?? '')
+      setBattleReport(result.battleReport ?? null)
       patchState({
         army: result.army,
         inventory: result.inventory,
         inventorySlots: result.inventorySlots,
+        general: result.general,
+        generals: result.generals,
         serverTime: result.serverTime,
       })
       toast.success(currentWave.waveType === 'defense' ? '防守结算完成' : '进攻结算完成')
@@ -232,9 +244,10 @@ const ReincarnationAbyssPanel: FC = () => {
   const waveProgress = run ? Math.round(((run.currentWave - 1) / 18) * 100) : 0
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-violet-500/30 bg-[var(--color-surface)] shadow-[0_18px_44px_rgba(88,28,135,0.12)]">
+    <>
+    <section className="overflow-visible rounded-2xl border border-violet-500/30 bg-[var(--color-surface)] shadow-[0_18px_44px_rgba(88,28,135,0.12)]">
       <div
-        className="relative min-h-[210px] p-5 sm:p-6"
+        className={`relative min-h-[210px] p-5 sm:p-6 ${run ? 'rounded-t-2xl' : 'rounded-2xl'}`}
         style={{
           backgroundImage: `linear-gradient(90deg,rgba(2,6,23,0.9),rgba(2,6,23,0.5),rgba(2,6,23,0.12)), url(${reincarnationAbyssBg})`,
           backgroundPosition: 'center',
@@ -247,50 +260,41 @@ const ReincarnationAbyssPanel: FC = () => {
             <h2 className='text-[clamp(2.3rem,5vw,4.4rem)] font-black leading-none text-white [font-family:"STKaiti","KaiTi","Songti_SC","SimSun",serif]'>
               轮回绝境
             </h2>
-            <p className="mt-3 max-w-xl text-sm font-medium text-violet-100/85">18 波攻防轮转，真实兵力损耗，通关或结束后统一结算累计奖励。</p>
+            <p className="mt-3 max-w-xl text-sm font-medium text-violet-100/85">
+              18 波攻防轮转，随机加成，真实兵力损耗；通关、失败或超时后统一结算累计奖励。等级从低到高依次是万兵、十万、百万...百亿。考验你的兵种全面度的时刻已经来临，进入地狱吧。
+            </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {run ? (
               <>
                 <StatusPill icon={Timer} text={run.status === 'running' ? `剩余 ${formatDuration(remainingSeconds)}` : statusLabel(run.status)} />
                 <StatusPill icon={Trophy} text={`${run.levelName} · 第 ${run.currentWave}/18 波`} />
               </>
             ) : (
-              <StatusPill icon={Flame} text="可开启" />
+              <div className="flex flex-wrap items-center gap-2">
+                <LevelSelectMenu
+                  levels={availableLevels}
+                  value={selectedLevel}
+                  onChange={setSelectedLevel}
+                  disabled={loading || availableLevels.length === 0}
+                />
+                <button
+                  type="button"
+                  onClick={() => void startRun()}
+                  disabled={loading || !activePlayerId || availableLevels.length === 0}
+                  className="animate-reincarnation-fire inline-flex items-center gap-1.5 rounded-full border border-amber-300/70 bg-amber-400/20 px-3 py-1.5 text-xs font-bold text-amber-100 backdrop-blur transition hover:bg-amber-400/28 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Flame size={13} />
+                  可开启
+                </button>
+              </div>
             )}
           </div>
         </div>
       </div>
 
-      <div className="p-4 sm:p-5">
-        {!run ? (
-          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-            <div>
-              <label className="mb-2 block text-xs font-bold text-[var(--color-text-primary)]">选择轮回层级</label>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {availableLevels.map((level) => (
-                  <button
-                    key={level.level}
-                    type="button"
-                    onClick={() => setSelectedLevel(level.level)}
-                    className={`rounded-xl border px-3 py-2 text-left transition ${selectedLevel === level.level ? 'border-violet-500/60 bg-violet-500/12' : 'border-[var(--color-border)] bg-[var(--color-surface-dim)] hover:border-violet-500/30'}`}
-                  >
-                    <span className="block text-xs font-bold text-[var(--color-text-primary)]">{level.name}</span>
-                    <span className="mt-1 block text-[10px] text-[var(--color-text-muted)]">规模 {compactNumber(level.enemyTroopBase)}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => void startRun()}
-              disabled={loading || !activePlayerId}
-              className="h-10 rounded-xl bg-violet-600 px-5 text-sm font-bold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              开启轮回
-            </button>
-          </div>
-        ) : (
+      {run && (
+        <div className="p-4 sm:p-5">
           <div className="space-y-4">
             <div className="h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
               <div className="h-full rounded-full bg-violet-500 transition-all" style={{ width: `${waveProgress}%` }} />
@@ -302,6 +306,9 @@ const ReincarnationAbyssPanel: FC = () => {
                 army={army}
                 troops={troops}
                 setTroops={setTroops}
+                availableGenerals={availableGenerals}
+                selectedGeneralIds={selectedGeneralIds}
+                setSelectedGeneralIds={setSelectedGeneralIds}
                 unitConfig={unitConfig}
                 factionName={factions?.[currentWave.enemyFaction]?.name ?? currentWave.enemyFaction}
                 rewardText={rewardText}
@@ -347,9 +354,16 @@ const ReincarnationAbyssPanel: FC = () => {
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </section>
+    {battleReport && (
+      <BattleResultModal
+        report={battleReport}
+        onClose={() => setBattleReport(null)}
+      />
+    )}
+    </>
   )
 }
 
@@ -359,6 +373,9 @@ const WavePanel: FC<{
   army: Array<{ unitType: string; amount: number }>
   troops: Record<string, number>
   setTroops: (value: Record<string, number>) => void
+  availableGenerals: General[]
+  selectedGeneralIds: string[]
+  setSelectedGeneralIds: (value: string[] | ((prev: string[]) => string[])) => void
   unitConfig: Record<string, { name: string }>
   factionName: string
   rewardText: (rewards: Reward[]) => string
@@ -366,7 +383,7 @@ const WavePanel: FC<{
   canResetBonus: boolean
   onResetBonus: () => void
   resetDisabled: boolean
-}> = ({ wave, army, troops, setTroops, unitConfig, factionName, rewardText, resetCost, canResetBonus, onResetBonus, resetDisabled }) => {
+}> = ({ wave, army, troops, setTroops, availableGenerals, selectedGeneralIds, setSelectedGeneralIds, unitConfig, factionName, rewardText, resetCost, canResetBonus, onResetBonus, resetDisabled }) => {
   const selectedTotal = Object.values(troops).reduce((sum, value) => sum + value, 0)
   const enemyTotal = totalMapAmount(wave.enemyTroops)
   const enemyRemaining = totalMapAmount(wave.enemyRemaining)
@@ -384,6 +401,9 @@ const WavePanel: FC<{
     if (fill <= 0) return
     next[unitType] = fill
     setTroops(next)
+  }
+  const toggleGeneral = (generalId: string) => {
+    setSelectedGeneralIds((prev) => prev.includes(generalId) ? prev.filter((id) => id !== generalId) : [...prev, generalId])
   }
 
   return (
@@ -431,6 +451,34 @@ const WavePanel: FC<{
           <p className="text-xs font-bold text-[var(--color-text-primary)]">{wave.waveType === 'attack' ? '进攻出兵' : '防守配置'}</p>
           <span className="text-[10px] font-semibold text-[var(--color-text-muted)]">已选 {compactNumber(selectedTotal)}</span>
         </div>
+        <div className="mb-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-bold text-[var(--color-text-primary)]">参战武将</span>
+            <span className="text-[10px] text-[var(--color-text-muted)]">{selectedGeneralIds.length > 0 ? `已带 ${selectedGeneralIds.length}` : '不带将'}</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {availableGenerals.map((general) => {
+              const selected = selectedGeneralIds.includes(general.id)
+              return (
+                <button
+                  key={general.id}
+                  type="button"
+                  onClick={() => toggleGeneral(general.id)}
+                  className={`rounded-lg border px-2 py-1 text-[11px] font-bold transition ${
+                    selected
+                      ? 'border-amber-500/50 bg-amber-500/15 text-amber-600'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface-dim)] text-[var(--color-text-secondary)] hover:border-amber-500/30'
+                  }`}
+                >
+                  {general.name} Lv.{general.level}
+                </button>
+              )
+            })}
+            {availableGenerals.length === 0 && (
+              <span className="text-[10px] text-[var(--color-text-muted)]">暂无空闲武将</span>
+            )}
+          </div>
+        </div>
         <div className="space-y-2">
           {army.filter((unit) => unit.amount > 0).map((unit) => (
             <button
@@ -465,6 +513,97 @@ const StatusPill: FC<{ icon: typeof Timer; text: string }> = ({ icon: Icon, text
     {text}
   </span>
 )
+
+// LevelSelectMenu 渲染与副本状态按钮统一风格的层级下拉。
+const LevelSelectMenu: FC<{
+  levels: ReincarnationLevelConfig[]
+  value: number
+  onChange: (value: number) => void
+  disabled: boolean
+}> = ({ levels, value, onChange, disabled }) => {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const selected = levels.find((level) => level.level === value)
+
+  useEffect(() => {
+    if (!open) return
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    window.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen((current) => !current)}
+        disabled={disabled}
+        className={`
+          inline-flex h-8 min-w-[76px] items-center justify-center gap-1.5
+          rounded-full border border-white/25 bg-white/12 px-3
+          text-xs font-bold text-white backdrop-blur
+          transition-all duration-200
+          hover:border-white/40 hover:bg-white/18
+          disabled:cursor-not-allowed disabled:opacity-50
+          ${open ? 'border-amber-300/70 bg-amber-400/15 text-amber-100 shadow-[0_0_18px_rgba(245,158,11,0.28)]' : ''}
+        `}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        <span>{selected ? levelShortName(selected.name) : '层级'}</span>
+        <ChevronDown size={12} className={`transition-transform duration-200 ${open ? 'rotate-180 text-amber-200' : 'text-white/70'}`} />
+      </button>
+
+      {open && (
+        <div
+          className="
+            absolute bottom-full right-0 z-30 mb-2 w-32 overflow-hidden
+            rounded-xl border border-[var(--color-border)]
+            bg-[var(--color-surface)] p-1
+            shadow-[0_18px_44px_rgba(15,23,42,0.22)]
+            animate-[fadeScaleIn_160ms_ease-out]
+          "
+          role="menu"
+        >
+          {levels.map((level) => {
+            const active = level.level === value
+            return (
+              <button
+                key={level.level}
+                type="button"
+                onClick={() => {
+                  onChange(level.level)
+                  setOpen(false)
+                }}
+                className={`
+                  flex h-8 w-full items-center justify-between rounded-lg px-2.5
+                  text-xs font-bold transition-colors
+                  ${active
+                    ? 'bg-[var(--color-accent-light)] text-[var(--color-accent)]'
+                    : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-dim)] hover:text-[var(--color-text-primary)]'
+                  }
+                `}
+                role="menuitem"
+              >
+                <span>{levelShortName(level.name)}</span>
+                <span className="text-[10px] opacity-60">Lv.{level.level}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 
 const InfoLine: FC<{ label: string; value: string; tone: 'green' | 'amber' }> = ({ label, value, tone }) => (
   <div className={`rounded-lg border px-3 py-2 ${tone === 'green' ? 'border-green-500/25 bg-green-500/10 text-green-500' : 'border-amber-500/25 bg-amber-500/10 text-amber-500'}`}>
@@ -535,6 +674,10 @@ function compactNumber(value: number) {
   if (value >= 100000000) return `${Math.round(value / 100000000)}亿`
   if (value >= 10000) return `${Math.round(value / 10000)}万`
   return value.toLocaleString()
+}
+
+function levelShortName(name: string) {
+  return name.replace(/轮回/g, '').trim() || name
 }
 
 function formatDuration(seconds: number) {

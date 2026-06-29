@@ -104,7 +104,13 @@ func TestNormalizeBattleReportBuildsDefenseDetail(t *testing.T) {
 		DefenderUnits:     map[string]int{"weiInfantry": 9},
 		DefenderLostUnits: map[string]int{"weiInfantry": 9},
 		DefenderRevealed:  true,
-		CreatedAt:         time.Now().UTC().Format(time.RFC3339),
+		PvpAttackerGenerals: []PvpGeneralSnapshot{
+			{ID: "caocao", Name: "曹操", Level: 3},
+		},
+		PvpDefenderGenerals: []PvpGeneralSnapshot{
+			{ID: "liubei", Name: "刘备", Level: 4},
+		},
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	})
 
 	if report.Detail == nil || report.Detail.ViewType != ReportViewDefense {
@@ -115,6 +121,51 @@ func TestNormalizeBattleReportBuildsDefenseDetail(t *testing.T) {
 	}
 	if report.Title != "许昌（玩家） 攻击 成都" {
 		t.Fatalf("defense report title should swap attacker and defender, got %q", report.Title)
+	}
+	if len(report.Detail.PrimarySide.Generals) != 1 || report.Detail.PrimarySide.Generals[0].ID != "caocao" {
+		t.Fatalf("defense report attacker side should show attacker general, got %+v", report.Detail.PrimarySide.Generals)
+	}
+	if len(report.Detail.SecondarySide.Generals) != 1 || report.Detail.SecondarySide.Generals[0].ID != "liubei" {
+		t.Fatalf("defense report defender side should show defender general, got %+v", report.Detail.SecondarySide.Generals)
+	}
+}
+
+func TestNormalizeBattleReportRepairsDefenseDetailGenerals(t *testing.T) {
+	report := NormalizeBattleReport(BattleReport{
+		ID:            "br_defense_repair",
+		PlayerID:      "player_d",
+		PlayerName:    "成都",
+		PlayerFaction: "shu",
+		TargetID:      "player_a",
+		TargetName:    "许昌（玩家）",
+		Type:          "defense",
+		ViewType:      ReportViewDefense,
+		SourceType:    ReportSourcePlayerCity,
+		Result:        "defender_victory",
+		PvpAttackerGenerals: []PvpGeneralSnapshot{
+			{ID: "caocao", Name: "曹操", Level: 3},
+		},
+		PvpDefenderGenerals: []PvpGeneralSnapshot{
+			{ID: "liubei", Name: "刘备", Level: 4},
+		},
+		Detail: &BattleReportDetail{
+			PrimarySide: BattleReportSide{
+				Role:     "attacker",
+				Generals: []BattleReportGeneral{{ID: "liubei", Name: "刘备", Level: 4, Role: "attacker"}},
+			},
+			SecondarySide: &BattleReportSide{
+				Role:     "defender",
+				Generals: []BattleReportGeneral{{ID: "caocao", Name: "曹操", Level: 3, Role: "defender"}},
+			},
+		},
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	})
+
+	if len(report.Detail.PrimarySide.Generals) != 1 || report.Detail.PrimarySide.Generals[0].ID != "caocao" {
+		t.Fatalf("expected repaired attacker general, got %+v", report.Detail.PrimarySide.Generals)
+	}
+	if report.Detail.SecondarySide == nil || len(report.Detail.SecondarySide.Generals) != 1 || report.Detail.SecondarySide.Generals[0].ID != "liubei" {
+		t.Fatalf("expected repaired defender general, got %+v", report.Detail.SecondarySide)
 	}
 }
 

@@ -322,6 +322,11 @@ ReincarnationTroopRequest:
       type: object
       additionalProperties:
         type: integer
+    generalIds:
+      type: array
+      description: 本次波次携带的参战武将 ID；为空表示不带武将，不享受武将加成也不获得武将经验。
+      items:
+        type: string
     clientActionId:
       type: string
       description: 建议每次真实操作生成一次，用于网络重试幂等。

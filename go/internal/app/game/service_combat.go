@@ -1,3 +1,4 @@
+// 本文件实现 NPC 战斗、侦查和战斗模拟服务。
 package game
 
 import (
@@ -18,10 +19,11 @@ var (
 
 // AttackNpcRequest 攻击 NPC 请求
 type AttackNpcRequest struct {
-	PlayerID string         `json:"playerId"`
-	NpcID    string         `json:"npcId"`
-	Mode     string         `json:"mode"`  // "attack" or "plunder"
-	Units    map[string]int `json:"units"` // unitType → count
+	PlayerID   string         `json:"playerId"`
+	NpcID      string         `json:"npcId"`
+	Mode       string         `json:"mode"`  // "attack" or "plunder"
+	Units      map[string]int `json:"units"` // unitType → count
+	GeneralIDs []string       `json:"generalIds,omitempty"`
 }
 
 // AttackNpcResponse 攻击 NPC 响应
@@ -121,7 +123,11 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 		}
 
 		npc := &state.NpcState.Cities[npcIdx]
-		attackerUnits, err := validateAndConsumeArmy(state, req.Units)
+		generalIDs, err := normalizeBattleGeneralIDs(state, req.GeneralIDs)
+		if err != nil {
+			return err
+		}
+		attackerUnits, err := validateAndConsumeArmyWithModifiers(state, req.Units, modifierSourcesForBattleGenerals(state, generalIDs)...)
 		if err != nil {
 			return err
 		}
@@ -130,7 +136,7 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 
 		attackerArmy := buildCombatArmy(state.Player.Faction, attackerUnits)
 		defenderArmy := buildNpcCombatArmy(npc)
-		activeTraits := buildActiveTraits(state.General)
+		activeTraits := buildActiveTraitsForGeneralIDs(state, generalIDs)
 		beforeCtx := &general.BeforeBattleContext{
 			Attacker:          &attackerArmy,
 			Defender:          &defenderArmy,
@@ -193,14 +199,13 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 		}
 		mergeTraitOutcomes(&report, afterBattleCtx.Triggered)
 
-		expGained := calculateGeneralBattleExpFromLosses(npc.Faction, result.DefenderLosses)
-		expResult := applyGeneralBattleExp(state.General, expGained)
-		syncActiveGeneralToRoster(state)
+		expResult := applyGeneralBattleExpToRoster(state, generalIDs, calculateGeneralBattleExpFromLosses(npc.Faction, result.DefenderLosses))
 		if expResult.Gained > 0 {
 			report.GeneralExpGained = expResult.Gained
 			report.GeneralLevelBefore = expResult.LevelBefore
 			report.GeneralLevelAfter = expResult.LevelAfter
 		}
+		report.PvpAttackerGenerals = buildPvpGeneralSnapshots(state, generalIDs)
 		report.GrantedRewards = buildBattleGrantedRewards(report)
 
 		if report.OverflowCityGold > 0 {

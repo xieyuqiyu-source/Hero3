@@ -60,7 +60,7 @@ func (h *Handlers) AttackReincarnationWave(w http.ResponseWriter, r *http.Reques
 	if !h.requireOwnership(w, r, req.PlayerID) {
 		return
 	}
-	result, err := h.gameService.AttackReincarnationWave(req.PlayerID, r.PathValue("waveId"), req.Troops, req.ClientActionID)
+	result, err := h.gameService.AttackReincarnationWave(req.PlayerID, r.PathValue("waveId"), req.Troops, req.GeneralIDs, req.ClientActionID)
 	if err != nil {
 		writeReincarnationError(w, err)
 		return
@@ -78,7 +78,7 @@ func (h *Handlers) ReadyReincarnationDefense(w http.ResponseWriter, r *http.Requ
 	if !h.requireOwnership(w, r, req.PlayerID) {
 		return
 	}
-	result, err := h.gameService.ReadyReincarnationDefense(req.PlayerID, r.PathValue("waveId"), req.Troops, req.ClientActionID)
+	result, err := h.gameService.ReadyReincarnationDefense(req.PlayerID, r.PathValue("waveId"), req.Troops, req.GeneralIDs, req.ClientActionID)
 	if err != nil {
 		writeReincarnationError(w, err)
 		return
@@ -150,7 +150,7 @@ func writeReincarnationError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, game.ErrPlayerNotFound), errors.Is(err, game.ErrReincarnationRunNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, game.ErrReincarnationActive), errors.Is(err, game.ErrInvalidReincarnation), errors.Is(err, game.ErrInvalidAmount), errors.Is(err, game.ErrNoUnitsSelected), errors.Is(err, game.ErrInsufficientArmy), errors.Is(err, game.ErrInsufficientGold):
+	case errors.Is(err, game.ErrReincarnationActive), errors.Is(err, game.ErrInvalidReincarnation), errors.Is(err, game.ErrInvalidAmount), errors.Is(err, game.ErrNoUnitsSelected), errors.Is(err, game.ErrInsufficientArmy), errors.Is(err, game.ErrInsufficientGold), errors.Is(err, game.ErrGeneralNotFound), errors.Is(err, game.ErrGeneralBusy):
 		writeError(w, http.StatusBadRequest, err.Error())
 	default:
 		writeError(w, http.StatusInternalServerError, err.Error())

@@ -1,3 +1,4 @@
+// 本文件提供地图和 NPC 城池相关 HTTP 接口处理器。
 package api
 
 import (
@@ -75,6 +76,8 @@ func (h *Handlers) AttackNpc(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusBadRequest
 		case errors.Is(err, game.ErrInsufficientArmy):
 			status = http.StatusUnprocessableEntity
+		case errors.Is(err, game.ErrGeneralNotFound), errors.Is(err, game.ErrGeneralBusy):
+			status = http.StatusBadRequest
 		}
 		writeError(w, status, err.Error())
 		return

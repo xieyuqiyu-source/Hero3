@@ -47,7 +47,7 @@ func TestReincarnationStartAndAttack(t *testing.T) {
 		t.Fatalf("expected first wave attack, got %s", wave.WaveType)
 	}
 
-	result, err := service.AttackReincarnationWave(state.Player.ID, wave.ID, map[string]int{"qingZhouArmy": 1000}, "attack-once")
+	result, err := service.AttackReincarnationWave(state.Player.ID, wave.ID, map[string]int{"qingZhouArmy": 1000}, nil, "attack-once")
 	if err != nil {
 		t.Fatalf("AttackReincarnationWave failed: %v", err)
 	}
@@ -64,8 +64,15 @@ func TestReincarnationStartAndAttack(t *testing.T) {
 	if len(saved.Battles) != 1 {
 		t.Fatalf("expected one battle record, got %d", len(saved.Battles))
 	}
+	stateAfterNoGeneral, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState after no-general attack failed: %v", err)
+	}
+	if got := pvpTestGeneralExp(stateAfterNoGeneral, "caocao"); got != 0 {
+		t.Fatalf("expected no exp when reincarnation attack carries no general, got %d", got)
+	}
 
-	repeated, err := service.AttackReincarnationWave(state.Player.ID, wave.ID, map[string]int{"qingZhouArmy": 1000}, "attack-once")
+	repeated, err := service.AttackReincarnationWave(state.Player.ID, wave.ID, map[string]int{"qingZhouArmy": 1000}, nil, "attack-once")
 	if err != nil {
 		t.Fatalf("repeated AttackReincarnationWave failed: %v", err)
 	}
@@ -78,6 +85,65 @@ func TestReincarnationStartAndAttack(t *testing.T) {
 	}
 	if len(savedAfterRepeat.Battles) != 1 {
 		t.Fatalf("expected repeated action to keep one battle record, got %d", len(savedAfterRepeat.Battles))
+	}
+}
+
+// TestReincarnationSelectedGeneralGainsExp 验证副本携带武将杀敌后发放武将经验。
+func TestReincarnationSelectedGeneralGainsExp(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "config")
+	if err := LoadUnitsConfig(filepath.Join(root, "units")); err != nil {
+		t.Fatalf("LoadUnitsConfig failed: %v", err)
+	}
+	if err := LoadItemsConfig(filepath.Join(root, "items.json")); err != nil {
+		t.Fatalf("LoadItemsConfig failed: %v", err)
+	}
+	if err := LoadDropPoolsConfig(filepath.Join(root, "drop_pools.json")); err != nil {
+		t.Fatalf("LoadDropPoolsConfig failed: %v", err)
+	}
+	if err := LoadReincarnationConfig(filepath.Join(root, "reincarnation.json")); err != nil {
+		t.Fatalf("LoadReincarnationConfig failed: %v", err)
+	}
+
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	now := time.Date(2026, 6, 29, 12, 10, 0, 0, time.UTC)
+	if err := repo.CreateAccount(Account{ID: "account_reincarnation_general", Username: "reincarnation_general", CreatedAt: now}); err != nil {
+		t.Fatalf("CreateAccount failed: %v", err)
+	}
+	state := newPlayerState("player_reincarnation_general", "轮回武将测试", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "qingZhouArmy", Amount: 50000}}
+	if err := repo.CreatePlayer("account_reincarnation_general", state, now); err != nil {
+		t.Fatalf("CreatePlayer failed: %v", err)
+	}
+
+	started, err := service.StartReincarnationRun(state.Player.ID, 1)
+	if err != nil {
+		t.Fatalf("StartReincarnationRun failed: %v", err)
+	}
+	run := started.Run
+	firstEnemyUnit := combatUnitIDsForFaction(run.Waves[0].EnemyFaction)[0]
+	run.Waves[0].EnemyTroops = map[string]int{firstEnemyUnit: 1}
+	run.Waves[0].EnemyRemaining = map[string]int{firstEnemyUnit: 1}
+	if err := repo.SaveReincarnationRun(run); err != nil {
+		t.Fatalf("SaveReincarnationRun test fixture failed: %v", err)
+	}
+
+	result, err := service.AttackReincarnationWave(state.Player.ID, run.Waves[0].ID, map[string]int{"qingZhouArmy": 1000}, []string{"caocao"}, "attack-with-general")
+	if err != nil {
+		t.Fatalf("AttackReincarnationWave with general failed: %v", err)
+	}
+	if result.BattleReport == nil || result.BattleReport.GeneralExpGained <= 0 || len(result.BattleReport.PvpAttackerGenerals) != 1 {
+		t.Fatalf("expected reincarnation report general exp and snapshot, got %+v", result.BattleReport)
+	}
+	if result.General == nil || result.General.Exp <= 0 {
+		t.Fatalf("expected action result to return updated general, got %+v", result.General)
+	}
+	stored, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState failed: %v", err)
+	}
+	if got := pvpTestGeneralExp(stored, "caocao"); got != result.BattleReport.GeneralExpGained {
+		t.Fatalf("expected stored general exp %d, got %d", result.BattleReport.GeneralExpGained, got)
 	}
 }
 
@@ -184,7 +250,7 @@ func TestReincarnationDefenseFailureGrantsClearedRewards(t *testing.T) {
 	}
 	for attempt := 0; attempt < 10 && run.CurrentWave == 1; attempt++ {
 		wave := run.Waves[0]
-		result, err := service.AttackReincarnationWave(state.Player.ID, wave.ID, map[string]int{"qingZhouArmy": 10000}, "clear-wave-1-"+string(rune('a'+attempt)))
+		result, err := service.AttackReincarnationWave(state.Player.ID, wave.ID, map[string]int{"qingZhouArmy": 10000}, nil, "clear-wave-1-"+string(rune('a'+attempt)))
 		if err != nil {
 			t.Fatalf("AttackReincarnationWave attempt %d failed: %v", attempt, err)
 		}
@@ -195,7 +261,7 @@ func TestReincarnationDefenseFailureGrantsClearedRewards(t *testing.T) {
 	}
 
 	defenseWave := run.Waves[1]
-	result, err := service.ReadyReincarnationDefense(state.Player.ID, defenseWave.ID, map[string]int{"qingZhouArmy": 1}, "defense-fail-once")
+	result, err := service.ReadyReincarnationDefense(state.Player.ID, defenseWave.ID, map[string]int{"qingZhouArmy": 1}, nil, "defense-fail-once")
 	if err != nil {
 		t.Fatalf("ReadyReincarnationDefense failed: %v", err)
 	}

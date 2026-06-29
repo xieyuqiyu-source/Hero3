@@ -164,6 +164,11 @@ AttackNpcRequest:
       example:
         infantry: 50
         cavalry: 20
+    generalIds:
+      type: array
+      description: 本次出征携带的参战武将 ID；为空表示不带武将，不享受武将加成也不获得武将经验。
+      items:
+        type: string
 AttackNpcResponse:
   type: object
   required:

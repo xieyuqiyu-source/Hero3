@@ -134,11 +134,12 @@ func (s *Service) ResetReincarnationWaveBonus(playerID string, waveID string) (R
 }
 
 // AttackReincarnationWave 结算一次进攻波出兵。
-func (s *Service) AttackReincarnationWave(playerID string, waveID string, troops map[string]int, clientActionID string) (ReincarnationActionResult, error) {
+func (s *Service) AttackReincarnationWave(playerID string, waveID string, troops map[string]int, generalIDs []string, clientActionID string) (ReincarnationActionResult, error) {
 	now := time.Now().UTC()
 	var report BattleReport
 	duplicateReportID := ""
 	state, run, reports, err := s.repo.UpdateReincarnationRunWithState(playerID, runIDFromWaveID(waveID), now, func(state *GameState, run *ReincarnationRun) ([]BattleReport, error) {
+		EnsureGeneralRoster(state, now)
 		wave := activeReincarnationWave(run)
 		if wave == nil || wave.ID != waveID || wave.WaveType != ReincarnationWaveAttack || wave.Status != ReincarnationWaveActive {
 			return nil, ErrInvalidReincarnation
@@ -154,7 +155,11 @@ func (s *Service) AttackReincarnationWave(playerID string, waveID string, troops
 		if totalTroops(troops) > wave.TroopCap {
 			return nil, ErrInvalidAmount
 		}
-		playerUnits, err := validateAndConsumeArmy(state, troops)
+		battleGeneralIDs, err := normalizeBattleGeneralIDs(state, generalIDs)
+		if err != nil {
+			return nil, err
+		}
+		playerUnits, err := validateAndConsumeArmyWithModifiers(state, troops, modifierSourcesForBattleGenerals(state, battleGeneralIDs)...)
 		if err != nil {
 			return nil, err
 		}
@@ -173,6 +178,15 @@ func (s *Service) AttackReincarnationWave(playerID string, waveID string, troops
 			clearReincarnationWave(run, wave, now)
 		}
 		report = buildReincarnationReport(*run, *wave, state, troops, playerLosses, enemyLosses, result, ReportViewAttack, passed, now)
+		expResult := applyGeneralBattleExpToRoster(state, battleGeneralIDs, calculateGeneralBattleExpFromLosses(wave.EnemyFaction, result.DefenderLosses))
+		if expResult.Gained > 0 {
+			report.GeneralExpGained = expResult.Gained
+			report.GeneralLevelBefore = expResult.LevelBefore
+			report.GeneralLevelAfter = expResult.LevelAfter
+		}
+		report.PvpAttackerGenerals = buildPvpGeneralSnapshots(state, battleGeneralIDs)
+		report.Detail = nil
+		report = NormalizeBattleReport(report)
 		run.Battles = append(run.Battles, buildReincarnationBattle(*run, *wave, troops, playerLosses, enemyLosses, passed, report.ID, clientActionID, now))
 		return []BattleReport{report}, nil
 	})
@@ -199,11 +213,12 @@ func (s *Service) AttackReincarnationWave(playerID string, waveID string, troops
 }
 
 // ReadyReincarnationDefense 结算防守波。
-func (s *Service) ReadyReincarnationDefense(playerID string, waveID string, troops map[string]int, clientActionID string) (ReincarnationActionResult, error) {
+func (s *Service) ReadyReincarnationDefense(playerID string, waveID string, troops map[string]int, generalIDs []string, clientActionID string) (ReincarnationActionResult, error) {
 	now := time.Now().UTC()
 	var report BattleReport
 	duplicateReportID := ""
 	state, run, reports, err := s.repo.UpdateReincarnationRunWithState(playerID, runIDFromWaveID(waveID), now, func(state *GameState, run *ReincarnationRun) ([]BattleReport, error) {
+		EnsureGeneralRoster(state, now)
 		wave := activeReincarnationWave(run)
 		if wave == nil || wave.ID != waveID || wave.WaveType != ReincarnationWaveDefense || wave.Status != ReincarnationWaveActive {
 			return nil, ErrInvalidReincarnation
@@ -219,7 +234,11 @@ func (s *Service) ReadyReincarnationDefense(playerID string, waveID string, troo
 		if totalTroops(troops) > wave.TroopCap {
 			return nil, ErrInvalidAmount
 		}
-		defenderUnits, err := buildSimulatedCombatUnits(state.Player.Faction, troops, now, CollectModifierSources(state)...)
+		battleGeneralIDs, err := normalizeBattleGeneralIDs(state, generalIDs)
+		if err != nil {
+			return nil, err
+		}
+		defenderUnits, err := buildSimulatedCombatUnits(state.Player.Faction, troops, now, modifierSourcesForBattleGenerals(state, battleGeneralIDs)...)
 		if err != nil {
 			return nil, err
 		}
@@ -246,6 +265,15 @@ func (s *Service) ReadyReincarnationDefense(playerID string, waveID string, troo
 			failReincarnationRun(run, wave, "defense_failed", now)
 		}
 		report = buildReincarnationReport(*run, *wave, state, troops, playerLosses, enemyLosses, result, ReportViewDefense, passed, now)
+		expResult := applyGeneralBattleExpToRoster(state, battleGeneralIDs, calculateGeneralBattleExpFromLosses(wave.EnemyFaction, result.AttackerLosses))
+		if expResult.Gained > 0 {
+			report.GeneralExpGained = expResult.Gained
+			report.GeneralLevelBefore = expResult.LevelBefore
+			report.GeneralLevelAfter = expResult.LevelAfter
+		}
+		report.PvpDefenderGenerals = buildPvpGeneralSnapshots(state, battleGeneralIDs)
+		report.Detail = nil
+		report = NormalizeBattleReport(report)
 		run.Battles = append(run.Battles, buildReincarnationBattle(*run, *wave, troops, playerLosses, enemyLosses, passed, report.ID, clientActionID, now))
 		return []BattleReport{report}, nil
 	})
@@ -498,6 +526,8 @@ func buildReincarnationActionResult(run ReincarnationRun, report *BattleReport, 
 		Army:           state.Army,
 		Inventory:      state.Inventory,
 		InventorySlots: state.InventorySlots,
+		General:        state.General,
+		Generals:       state.Generals,
 		ServerTime:     now.Format(resourceDateLayout),
 	}
 }

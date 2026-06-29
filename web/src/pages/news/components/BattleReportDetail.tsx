@@ -1,3 +1,4 @@
+/* 本文件实现战报详情页，兼容 NPC、PVP 和副本战斗的标准战报展示。 */
 import { type FC, useState } from 'react'
 import { ArrowLeft, Share2, Check } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
@@ -38,7 +39,6 @@ function isHiddenReportUnit(unitType: string, units?: Record<string, Record<stri
 
 const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => {
   const faction = useGameStore((s) => s.state?.player.faction) || report.playerFaction || ''
-  const general = useGameStore((s) => s.state?.general)
   const units = useConfigStore((s) => s.units)
   const factionUnits = units?.[faction] ?? {}
   const [copied, setCopied] = useState(false)
@@ -115,7 +115,6 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const pvpReinforcements = safeArray(report.pvpReinforcements)
   const pvpReinforcementLosses = report.pvpReinforcementLosses ?? {}
   const hasPvpGenerals = pvpAttackerGenerals.length > 0 || pvpDefenderGenerals.length > 0
-  const isPvpReport = report.sourceType === 'player_city' || hasPvpGenerals || pvpPointEntries.length > 0
   const dispatchedUnits = safeMap(report.dispatchedUnits)
   const lostUnits = safeMap(report.lostUnits)
   const rewards = safeMap(report.rewards)
@@ -136,18 +135,18 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const bottomUnits = isDefenseView ? dispatchedUnits : defenderUnits
   const bottomLostUnits = isDefenseView ? lostUnits : defenderLostUnits
   const bottomRevealed = isDefenseView ? true : report.defenderRevealed
-  const topGeneralText = isPvpReport
-    ? formatPvpGenerals(pvpAttackerGenerals)
-    : `${general?.name ?? '—'}${general ? ` Lv.${general.level}` : ''}`
-  const bottomGeneralText = isPvpReport ? formatPvpGenerals(pvpDefenderGenerals) : '无'
+  const topGeneralText = hasPvpGenerals ? formatPvpGenerals(pvpAttackerGenerals) : '无'
+  const bottomGeneralText = hasPvpGenerals ? formatPvpGenerals(pvpDefenderGenerals) : '无'
   const reportGeneralExp = report.generalExpGained ?? report.detail?.rewards?.generalExp ?? 0
+  const generalLevelBefore = report.generalLevelBefore ?? report.detail?.rewards?.generalLevelBefore
+  const generalLevelAfter = report.generalLevelAfter ?? report.detail?.rewards?.generalLevelAfter
   const generalExpText = reportGeneralExp > 0
-    ? `+${reportGeneralExp}${report.generalLevelAfter && report.generalLevelBefore && report.generalLevelAfter > report.generalLevelBefore
-      ? ` Lv.${report.generalLevelBefore} → Lv.${report.generalLevelAfter}`
+    ? `+${reportGeneralExp}${generalLevelAfter && generalLevelBefore && generalLevelAfter > generalLevelBefore
+      ? ` Lv.${generalLevelBefore} → Lv.${generalLevelAfter}`
       : ''}`
     : '—'
-  const topGeneralExpText = isPvpReport && isDefenseView ? '—' : generalExpText
-  const bottomGeneralExpText = isPvpReport && isDefenseView ? generalExpText : '—'
+  const topGeneralExpText = isDefenseView ? '—' : generalExpText
+  const bottomGeneralExpText = isDefenseView ? generalExpText : '—'
 
   const formatOutcomeDetail = (key: string, value: number | string | Record<string, number>): string => {
     const labels: Record<string, string> = {
@@ -437,7 +436,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
       {(pvpPointEntries.length > 0 || hasPvpGenerals || pvpReinforcements.length > 0 || Object.keys(pvpReinforcementLosses).length > 0) && (
         <div className="rounded-2xl border border-indigo-400/40 bg-indigo-400/5 overflow-hidden">
           <div className="px-4 py-2 border-b border-indigo-400/30 bg-indigo-400/10">
-            <span className="text-xs font-bold text-indigo-600">PVP 结算</span>
+            <span className="text-xs font-bold text-indigo-600">参战信息</span>
           </div>
           <div className="p-4 space-y-3">
             {pvpPointEntries.length > 0 && (

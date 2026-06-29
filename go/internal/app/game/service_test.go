@@ -1,3 +1,4 @@
+// 本文件覆盖游戏应用服务的核心行为测试。
 package game
 
 import (
@@ -1603,6 +1604,102 @@ func TestAttackNpcUsesStateTransactionAndPublishesBattleEvent(t *testing.T) {
 	}
 	if len(stored.Army) != 1 || stored.Army[0].UnitType != "weiInfantry" || stored.Army[0].Amount != 10 {
 		t.Fatalf("expected surviving army returned through state transaction, got %+v", stored.Army)
+	}
+}
+
+func TestAttackNpcOnlyAppliesSelectedGeneral(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	setTestGeneralsConfig(t, GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"test_general": {
+				ID:      "test_general",
+				Name:    "测试将领",
+				Faction: "wei",
+				Enabled: true,
+				Buffs:   map[string]float64{StatAttackBonus: 1},
+			},
+		},
+	})
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_attack_general_rule", Username: "attack_general_rule", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_attack_general_rule", "GeneralRule", "wei", "test_general", now)
+	state.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 500}}
+	state.NpcState = &NpcState{
+		Cities: []NpcCity{
+			testNpcCity("npc_without_general", now),
+			testNpcCity("npc_with_general", now),
+		},
+		LastRefreshedAt: now.UTC().Format(resourceDateLayout),
+	}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	without, err := svc.AttackNpc(AttackNpcRequest{
+		PlayerID: state.Player.ID,
+		NpcID:    "npc_without_general",
+		Mode:     "attack",
+		Units:    map[string]int{"weiInfantry": 100},
+	})
+	if err != nil {
+		t.Fatalf("AttackNpc without general failed: %v", err)
+	}
+	storedWithout, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("get state without general: %v", err)
+	}
+	if got := pvpTestGeneralExp(storedWithout, "test_general"); got != 0 {
+		t.Fatalf("expected no general exp without selected general, got %d", got)
+	}
+	if without.BattleReport.GeneralExpGained != 0 || len(without.BattleReport.PvpAttackerGenerals) != 0 {
+		t.Fatalf("expected report without general participation, got %+v", without.BattleReport)
+	}
+
+	withGeneral, err := svc.AttackNpc(AttackNpcRequest{
+		PlayerID:   state.Player.ID,
+		NpcID:      "npc_with_general",
+		Mode:       "attack",
+		Units:      map[string]int{"weiInfantry": 100},
+		GeneralIDs: []string{"test_general"},
+	})
+	if err != nil {
+		t.Fatalf("AttackNpc with general failed: %v", err)
+	}
+	storedWith, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("get state with general: %v", err)
+	}
+	if got := pvpTestGeneralExp(storedWith, "test_general"); got <= 0 {
+		t.Fatalf("expected selected general to gain exp, got %d", got)
+	}
+	if withGeneral.BattleReport.GeneralExpGained <= 0 || len(withGeneral.BattleReport.PvpAttackerGenerals) != 1 {
+		t.Fatalf("expected report to include selected general and exp, got %+v", withGeneral.BattleReport)
+	}
+	if withGeneral.BattleReport.PlayerPower <= without.BattleReport.PlayerPower {
+		t.Fatalf("expected selected general to increase attack power, without=%d with=%d", without.BattleReport.PlayerPower, withGeneral.BattleReport.PlayerPower)
+	}
+}
+
+func testNpcCity(id string, now time.Time) NpcCity {
+	return NpcCity{
+		ID:                id,
+		Name:              id,
+		Faction:           "wei",
+		Resources:         map[string]int{"wood": 0},
+		StorageCapacity:   map[string]int{},
+		ProductionPerHour: map[string]int{},
+		Army:              []ArmyUnit{{UnitType: "weiInfantry", Amount: 10}},
+		MaxArmy:           []ArmyUnit{{UnitType: "weiInfantry", Amount: 10}},
+		ResourceSettledAt: now.UTC().Format(resourceDateLayout),
+		ArmySettledAt:     now.UTC().Format(resourceDateLayout),
+		GeneratedAt:       now.UTC().Format(resourceDateLayout),
 	}
 }
 

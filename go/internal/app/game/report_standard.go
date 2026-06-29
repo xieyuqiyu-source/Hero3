@@ -49,6 +49,7 @@ func NormalizeBattleReport(report BattleReport) BattleReport {
 	if report.Share != nil {
 		report.Detail.Share = report.Share
 	}
+	syncBattleReportDetailGenerals(&report)
 	return report
 }
 
@@ -57,6 +58,7 @@ func BuildBattleReportDetail(report BattleReport) BattleReportDetail {
 	report.ViewType = valueOrDefault(report.ViewType, inferReportViewType(report))
 	report.SourceType = valueOrDefault(report.SourceType, inferReportSourceType(report))
 	report.BattleType = valueOrDefault(report.BattleType, report.Type)
+	ownerGenerals, targetGenerals := reportOwnerAndTargetGenerals(report)
 
 	primary := BattleReportSide{
 		Role:         primaryRoleForReport(report),
@@ -69,7 +71,7 @@ func BuildBattleReportDetail(report BattleReport) BattleReportDetail {
 		TargetID:     report.PlayerID,
 		TargetName:   report.PlayerName,
 		Power:        report.PlayerPower,
-		Generals:     convertPvpGenerals(report.PvpAttackerGenerals, "attacker"),
+		Generals:     convertPvpGenerals(ownerGenerals, primaryRoleForReport(report)),
 		Units:        buildReportUnits(report.PlayerFaction, report.DispatchedUnits, report.LostUnits, nil),
 	}
 	secondary := &BattleReportSide{
@@ -83,7 +85,7 @@ func BuildBattleReportDetail(report BattleReport) BattleReportDetail {
 		TargetID:     report.TargetID,
 		TargetName:   report.TargetName,
 		Power:        report.EnemyPower,
-		Generals:     convertPvpGenerals(report.PvpDefenderGenerals, "defender"),
+		Generals:     convertPvpGenerals(targetGenerals, secondaryRoleForReport(report)),
 		Units:        buildReportUnits(report.DefenderFaction, report.DefenderUnits, report.DefenderLostUnits, nil),
 		Resources:    cloneReportIntMap(report.DefenderResources),
 	}
@@ -424,6 +426,39 @@ func convertPvpGenerals(generals []PvpGeneralSnapshot, role string) []BattleRepo
 		})
 	}
 	return result
+}
+
+// reportOwnerAndTargetGenerals 返回战报拥有者和目标两侧的武将快照。
+func reportOwnerAndTargetGenerals(report BattleReport) ([]PvpGeneralSnapshot, []PvpGeneralSnapshot) {
+	if report.ViewType != ReportViewDefense {
+		return report.PvpAttackerGenerals, report.PvpDefenderGenerals
+	}
+	if report.SourceType == ReportSourceDungeon {
+		if len(report.PvpDefenderGenerals) > 0 {
+			return report.PvpDefenderGenerals, nil
+		}
+		return report.PvpAttackerGenerals, nil
+	}
+	return report.PvpDefenderGenerals, report.PvpAttackerGenerals
+}
+
+// syncBattleReportDetailGenerals 校正已有标准详情中的武将侧，兼容已保存的旧错位战报。
+func syncBattleReportDetailGenerals(report *BattleReport) {
+	if report == nil || report.Detail == nil || len(report.PvpAttackerGenerals)+len(report.PvpDefenderGenerals) == 0 {
+		return
+	}
+	ownerGenerals, targetGenerals := reportOwnerAndTargetGenerals(*report)
+	if report.ViewType == ReportViewDefense {
+		report.Detail.PrimarySide.Generals = convertPvpGenerals(targetGenerals, "attacker")
+		if report.Detail.SecondarySide != nil {
+			report.Detail.SecondarySide.Generals = convertPvpGenerals(ownerGenerals, "defender")
+		}
+		return
+	}
+	report.Detail.PrimarySide.Generals = convertPvpGenerals(ownerGenerals, primaryRoleForReport(*report))
+	if report.Detail.SecondarySide != nil {
+		report.Detail.SecondarySide.Generals = convertPvpGenerals(targetGenerals, secondaryRoleForReport(*report))
+	}
 }
 
 // mergeIntMapKeys 合并多个兵种 map 的键并保持稳定顺序。

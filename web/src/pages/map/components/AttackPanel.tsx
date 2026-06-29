@@ -1,4 +1,5 @@
-import { useState, useEffect, type FC } from 'react'
+/* 本文件实现 NPC 城池出征面板，负责侦查、攻击、掠夺和参战武将选择。 */
+import { useState, useEffect, useMemo, type FC } from 'react'
 import { Swords, ShieldAlert, Search, X, AlertTriangle } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
@@ -16,8 +17,9 @@ interface AttackPanelProps {
 
 const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
-  const army = useGameStore((s) => s.state?.army ?? [])
-  const faction = useGameStore((s) => s.state?.player.faction ?? 'wei')
+  const state = useGameStore((s) => s.state)
+  const army = state?.army ?? []
+  const faction = state?.player.faction ?? 'wei'
   const patchState = useGameStore((s) => s.patchState)
   const units = useConfigStore((s) => s.units)
   const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
@@ -28,6 +30,7 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
   const [dispatching, setDispatching] = useState(false)
   const [battleReport, setBattleReport] = useState<BattleReport | null>(null)
   const [scoutReport, setScoutReport] = useState<BattleReport | null>(null)
+  const [selectedGeneralIds, setSelectedGeneralIds] = useState<string[]>([])
   const [visible, setVisible] = useState(false)
   const [showWarning, setShowWarning] = useState(false)
   const [dismissToday, setDismissToday] = useState(() => {
@@ -40,7 +43,17 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
     requestAnimationFrame(() => setVisible(true))
   }, [])
 
+  useEffect(() => {
+    if (mode === 'scout') setSelectedGeneralIds([])
+  }, [mode])
+
   const factionUnits = units?.[faction] ?? {}
+  const availableGenerals = useMemo(() => {
+    const busy = new Set((state?.generalAssignments ?? [])
+      .filter((item) => item.id !== 'main' && item.slot !== 'main')
+      .map((item) => item.generalId))
+    return (state?.generals ?? (state?.general ? [state.general] : [])).filter((general) => !busy.has(general.id))
+  }, [state?.general, state?.generalAssignments, state?.generals])
 
   const getUnitName = (unitType: string): string => {
     return factionUnits[unitType]?.name ?? unitType
@@ -59,6 +72,11 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
     setSelections(prev => ({ ...prev, [unitType]: max }))
   }
 
+  // handleGeneralToggle 切换本次 NPC 出征是否携带指定武将。
+  const handleGeneralToggle = (generalId: string) => {
+    setSelectedGeneralIds((prev) => prev.includes(generalId) ? prev.filter((id) => id !== generalId) : [...prev, generalId])
+  }
+
   const handleDispatch = async () => {
     if (!activePlayerId || totalSelected <= 0 || dispatching) return
 
@@ -70,7 +88,7 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
 
     setDispatching(true)
     try {
-      const result = await gameApi.attackNpc(activePlayerId, city.id, mode as 'attack' | 'plunder', dispatchUnits)
+      const result = await gameApi.attackNpc(activePlayerId, city.id, mode as 'attack' | 'plunder', dispatchUnits, selectedGeneralIds)
       patchState({
         resources: result.resources,
         army: result.army,
@@ -166,6 +184,37 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
               <Swords size={12} />攻击
             </button>
           </div>
+
+          {mode !== 'scout' && (
+            <div className="mb-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-2">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[var(--color-text-primary)]">参战武将</span>
+                <span className="text-[10px] text-[var(--color-text-muted)]">{selectedGeneralIds.length > 0 ? `已带 ${selectedGeneralIds.length}` : '不带将'}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {availableGenerals.map((general) => {
+                  const selected = selectedGeneralIds.includes(general.id)
+                  return (
+                    <button
+                      key={general.id}
+                      type="button"
+                      onClick={() => handleGeneralToggle(general.id)}
+                      className={`rounded-lg border px-2 py-1 text-[11px] font-bold transition ${
+                        selected
+                          ? 'border-amber-500/50 bg-amber-500/15 text-amber-600'
+                          : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:border-amber-500/30'
+                      }`}
+                    >
+                      {general.name} Lv.{general.level}
+                    </button>
+                  )
+                })}
+                {availableGenerals.length === 0 && (
+                  <span className="text-[10px] text-[var(--color-text-muted)]">暂无空闲武将</span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Unit Selection (hidden in scout mode) */}
           {mode !== 'scout' && (

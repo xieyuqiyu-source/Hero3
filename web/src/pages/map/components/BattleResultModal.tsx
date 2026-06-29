@@ -1,3 +1,4 @@
+/* 本文件实现战斗结算弹窗，展示战损、奖励、参战武将经验和特性结果。 */
 import { useState, useEffect, type FC } from 'react'
 import { Trophy, Skull, X, Share2, Check } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -75,6 +76,9 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
   const pvpPointEntries = Object.entries(report.pvpPointsDelta ?? {}).filter(([, amount]) => amount !== 0)
   const pvpReinforcementCount = report.pvpReinforcements?.length ?? 0
   const pvpGeneralCount = (report.pvpAttackerGenerals?.length ?? 0) + (report.pvpDefenderGenerals?.length ?? 0)
+  const generalExpGained = report.generalExpGained ?? report.detail?.rewards?.generalExp ?? 0
+  const generalLevelBefore = report.generalLevelBefore ?? report.detail?.rewards?.generalLevelBefore
+  const generalLevelAfter = report.generalLevelAfter ?? report.detail?.rewards?.generalLevelAfter
 
   return (
     <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
@@ -120,13 +124,13 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
             <span className="text-sm font-bold text-[var(--color-text-primary)]">{report.targetName}</span>
           </div>
 
-          {(report.generalExpGained ?? 0) > 0 && (
+          {generalExpGained > 0 && (
             <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/25">
               <span className="text-[11px] font-semibold text-amber-600">将领经验</span>
               <span className="text-[11px] font-bold text-amber-600">
-                +{report.generalExpGained}
-                {report.generalLevelAfter && report.generalLevelBefore && report.generalLevelAfter > report.generalLevelBefore
-                  ? ` Lv.${report.generalLevelBefore} → Lv.${report.generalLevelAfter}`
+                +{generalExpGained}
+                {generalLevelAfter && generalLevelBefore && generalLevelAfter > generalLevelBefore
+                  ? ` Lv.${generalLevelBefore} → Lv.${generalLevelAfter}`
                   : ''}
               </span>
             </div>
@@ -135,7 +139,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
           {(pvpPointEntries.length > 0 || pvpGeneralCount > 0 || pvpReinforcementCount > 0) && (
             <div className="rounded-xl bg-indigo-500/10 border border-indigo-500/25 px-3 py-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold text-indigo-600">PVP 结算</span>
+                <span className="text-[11px] font-semibold text-indigo-600">参战信息</span>
                 <span className="text-[10px] text-indigo-600">
                   {[pvpGeneralCount > 0 ? `武将 ${pvpGeneralCount} 位` : '', pvpReinforcementCount > 0 ? `驻防/援军 ${pvpReinforcementCount} 队` : ''].filter(Boolean).join(' · ')}
                 </span>

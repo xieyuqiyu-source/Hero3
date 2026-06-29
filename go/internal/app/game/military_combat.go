@@ -1,3 +1,4 @@
+// 本文件归口兵种接入战斗引擎的场景限制、出兵校验和单位构建逻辑。
 package game
 
 import (
@@ -6,8 +7,6 @@ import (
 
 	"hero3/internal/core/combat"
 )
-
-// 本文件归口兵种接入战斗引擎的场景限制和单位构建逻辑。
 
 // combatSceneForPVE 根据玩家战斗模式解析 PVE 战斗场景。
 func combatSceneForPVE(mode string) string {
@@ -24,6 +23,11 @@ func activeCombatRuleID(scene string) string {
 
 // validateAndConsumeArmy 校验玩家出兵并扣除派遣兵力。
 func validateAndConsumeArmy(state *GameState, units map[string]int) ([]combat.Unit, error) {
+	return validateAndConsumeArmyWithModifiers(state, units, CollectModifierSources(state)...)
+}
+
+// validateAndConsumeArmyWithModifiers 校验并扣除出兵，使用调用方明确传入的加成来源构建战斗单位。
+func validateAndConsumeArmyWithModifiers(state *GameState, units map[string]int, modSources ...ModifierSource) ([]combat.Unit, error) {
 	if len(units) == 0 {
 		return nil, ErrNoUnitsSelected
 	}
@@ -31,7 +35,6 @@ func validateAndConsumeArmy(state *GameState, units map[string]int) ([]combat.Un
 	faction := state.Player.Faction
 	var combatUnits []combat.Unit
 	now := time.Now()
-	modSources := CollectModifierSources(state)
 
 	for unitType, count := range units {
 		if count <= 0 {
