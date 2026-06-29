@@ -97,141 +97,157 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 	var rewardApply RewardApplyResult
 	capturedToGarrison := map[string]int{}
 	capturedSourceFaction := ""
-	state, err := s.repo.UpdateCombatState(playerID, now, func(state *GameState) error {
-		if state.General != nil {
-			applyHeroConfigToGeneral(state.General)
-		}
-		EnsureGeneralRoster(state, now)
-
-		nextState, _ := settleResources(*state, now)
-		*state = nextState
-
-		if state.NpcState == nil || len(state.NpcState.Cities) == 0 {
-			return ErrNpcNotFound
-		}
-
-		settleNpcCities(state.NpcState, now)
-
-		npcIdx := -1
-		for i, city := range state.NpcState.Cities {
-			if city.ID == npcID {
-				npcIdx = i
-				break
+	var state GameState
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		report = BattleReport{}
+		rewardApply = RewardApplyResult{}
+		capturedToGarrison = map[string]int{}
+		capturedSourceFaction = ""
+		state, err = s.repo.UpdateCombatState(playerID, now, func(state *GameState) error {
+			if state.General != nil {
+				applyHeroConfigToGeneral(state.General)
 			}
-		}
-		if npcIdx == -1 {
-			return ErrNpcNotFound
-		}
+			EnsureGeneralRoster(state, now)
 
-		npc := &state.NpcState.Cities[npcIdx]
-		generalIDs, err := normalizeBattleGeneralIDs(state, req.GeneralIDs)
-		if err != nil {
-			return err
-		}
-		attackerUnits, err := validateAndConsumeArmyWithModifiers(state, req.Units, modifierSourcesForBattleGenerals(state, generalIDs)...)
-		if err != nil {
-			return err
-		}
+			nextState, _ := settleResources(*state, now)
+			*state = nextState
 
-		ruleID := activeCombatRuleID(combatSceneForPVE(mode))
-
-		attackerArmy := buildCombatArmy(state.Player.Faction, attackerUnits)
-		defenderArmy := buildNpcCombatArmy(npc)
-		activeTraits := buildActiveTraitsForGeneralIDs(state, generalIDs)
-		beforeCtx := &general.BeforeBattleContext{
-			Attacker:          &attackerArmy,
-			Defender:          &defenderArmy,
-			AttackerOwnsTrait: true,
-			DefenderOwnsTrait: false,
-			IsPvP:             false,
-			SameFaction:       true,
-		}
-		general.Dispatch(beforeCtx, activeTraits)
-		capturedToArmy, routedToGarrison := splitCapturedUnitsByOwnerFaction(state.Player.Faction, beforeCtx.CapturedToArmy)
-		capturedToGarrison = mergeTroopMaps(routedToGarrison, beforeCtx.CapturedToGarrison)
-		capturedSourceFaction = npc.Faction
-		for unitType, count := range capturedToArmy {
-			mergeIntoArmy(state, unitType, count)
-		}
-
-		result := combat.Resolve(combat.CombatInput{
-			RuleID:    ruleID,
-			Attacker:  attackerArmy,
-			Defender:  defenderArmy,
-			WallLevel: 0,
-		})
-
-		afterCombatCtx := &general.AfterCombatResolveContext{
-			Result:            &result,
-			Attacker:          &attackerArmy,
-			Defender:          &defenderArmy,
-			AttackerOwnsTrait: true,
-			DefenderOwnsTrait: false,
-			IsAttackerOnly:    true,
-		}
-		general.Dispatch(afterCombatCtx, activeTraits)
-
-		report = applyNpcBattleResult(state, npc, result, attackerUnits, mode, now)
-		if len(capturedToArmy) > 0 {
-			report.CapturedUnits = capturedToArmy
-		}
-		if len(capturedToGarrison) > 0 {
-			report.CapturedToGarrison = cloneStringIntMap(capturedToGarrison)
-		}
-		mergeTraitOutcomes(&report, beforeCtx.Triggered)
-		mergeTraitOutcomes(&report, afterCombatCtx.Triggered)
-
-		playerArmyMap := armySliceToMap(state.Army)
-		afterBattleCtx := &general.AfterBattleContext{
-			PlayerArmy:   playerArmyMap,
-			PlayerLosses: report.LostUnits,
-			IsAttacker:   true,
-			Won:          report.Result == "attacker_victory",
-		}
-		general.Dispatch(afterBattleCtx, activeTraits)
-		if len(afterBattleCtx.Revived) > 0 {
-			state.Army = armyMapToSlice(playerArmyMap)
-			if report.RevivedUnits == nil {
-				report.RevivedUnits = map[string]int{}
+			if state.NpcState == nil || len(state.NpcState.Cities) == 0 {
+				return ErrNpcNotFound
 			}
-			for k, v := range afterBattleCtx.Revived {
-				report.RevivedUnits[k] = v
-			}
-		}
-		mergeTraitOutcomes(&report, afterBattleCtx.Triggered)
 
-		expResult := applyGeneralBattleExpToRoster(state, generalIDs, calculateGeneralBattleExpFromLosses(npc.Faction, result.DefenderLosses))
-		if expResult.Gained > 0 {
-			report.GeneralExpGained = expResult.Gained
-			report.GeneralLevelBefore = expResult.LevelBefore
-			report.GeneralLevelAfter = expResult.LevelAfter
-		}
-		dropRewards, dropSnapshots, err := rollNpcBattleDrops(npc, report)
-		if err != nil {
-			return err
-		}
-		if len(dropRewards) > 0 {
-			apply, err := ApplyRewardsToStateWithContext(state, dropRewards, RewardGrantContext{
-				PlayerID: state.Player.ID,
-				RefType:  LedgerRefBattleReward,
-				RefID:    report.ID,
-				Reason:   "npc_battle_drop",
-			}, now)
+			settleNpcCities(state.NpcState, now)
+
+			npcIdx := -1
+			for i, city := range state.NpcState.Cities {
+				if city.ID == npcID {
+					npcIdx = i
+					break
+				}
+			}
+			if npcIdx == -1 {
+				return ErrNpcNotFound
+			}
+
+			npc := &state.NpcState.Cities[npcIdx]
+			generalIDs, err := normalizeBattleGeneralIDs(state, req.GeneralIDs)
 			if err != nil {
 				return err
 			}
-			mergeRewardApplyResult(&rewardApply, apply)
-			report.Drops = dropSnapshots
-		}
-		report.PvpAttackerGenerals = buildPvpGeneralSnapshots(state, generalIDs)
-		report.GrantedRewards = buildBattleGrantedRewards(report)
+			attackerUnits, err := validateAndConsumeArmyWithModifiers(state, req.Units, modifierSourcesForBattleGenerals(state, generalIDs)...)
+			if err != nil {
+				return err
+			}
 
-		if report.OverflowCityGold > 0 {
-			state.CityGold += FlexInt(report.OverflowCityGold)
+			ruleID := activeCombatRuleID(combatSceneForPVE(mode))
+
+			attackerArmy := buildCombatArmy(state.Player.Faction, attackerUnits)
+			defenderArmy := buildNpcCombatArmy(npc)
+			activeTraits := buildActiveTraitsForGeneralIDs(state, generalIDs)
+			beforeCtx := &general.BeforeBattleContext{
+				Attacker:          &attackerArmy,
+				Defender:          &defenderArmy,
+				AttackerOwnsTrait: true,
+				DefenderOwnsTrait: false,
+				IsPvP:             false,
+				SameFaction:       true,
+			}
+			general.Dispatch(beforeCtx, activeTraits)
+			capturedToArmy, routedToGarrison := splitCapturedUnitsByOwnerFaction(state.Player.Faction, beforeCtx.CapturedToArmy)
+			capturedToGarrison = mergeTroopMaps(routedToGarrison, beforeCtx.CapturedToGarrison)
+			capturedSourceFaction = npc.Faction
+			for unitType, count := range capturedToArmy {
+				mergeIntoArmy(state, unitType, count)
+			}
+
+			result := combat.Resolve(combat.CombatInput{
+				RuleID:    ruleID,
+				Attacker:  attackerArmy,
+				Defender:  defenderArmy,
+				WallLevel: 0,
+			})
+
+			afterCombatCtx := &general.AfterCombatResolveContext{
+				Result:            &result,
+				Attacker:          &attackerArmy,
+				Defender:          &defenderArmy,
+				AttackerOwnsTrait: true,
+				DefenderOwnsTrait: false,
+				IsAttackerOnly:    true,
+			}
+			general.Dispatch(afterCombatCtx, activeTraits)
+
+			report = applyNpcBattleResult(state, npc, result, attackerUnits, mode, now)
+			if len(capturedToArmy) > 0 {
+				report.CapturedUnits = capturedToArmy
+			}
+			if len(capturedToGarrison) > 0 {
+				report.CapturedToGarrison = cloneStringIntMap(capturedToGarrison)
+			}
+			mergeTraitOutcomes(&report, beforeCtx.Triggered)
+			mergeTraitOutcomes(&report, afterCombatCtx.Triggered)
+
+			playerArmyMap := armySliceToMap(state.Army)
+			afterBattleCtx := &general.AfterBattleContext{
+				PlayerArmy:   playerArmyMap,
+				PlayerLosses: report.LostUnits,
+				IsAttacker:   true,
+				Won:          report.Result == "attacker_victory",
+			}
+			general.Dispatch(afterBattleCtx, activeTraits)
+			if len(afterBattleCtx.Revived) > 0 {
+				state.Army = armyMapToSlice(playerArmyMap)
+				if report.RevivedUnits == nil {
+					report.RevivedUnits = map[string]int{}
+				}
+				for k, v := range afterBattleCtx.Revived {
+					report.RevivedUnits[k] = v
+				}
+			}
+			mergeTraitOutcomes(&report, afterBattleCtx.Triggered)
+
+			expResult := applyGeneralBattleExpToRoster(state, generalIDs, calculateGeneralBattleExpFromLosses(npc.Faction, result.DefenderLosses))
+			if expResult.Gained > 0 {
+				report.GeneralExpGained = expResult.Gained
+				report.GeneralLevelBefore = expResult.LevelBefore
+				report.GeneralLevelAfter = expResult.LevelAfter
+			}
+			dropRewards, dropSnapshots, err := rollNpcBattleDrops(npc, report)
+			if err != nil {
+				return err
+			}
+			if len(dropRewards) > 0 {
+				apply, err := ApplyRewardsToStateWithContext(state, dropRewards, RewardGrantContext{
+					PlayerID: state.Player.ID,
+					RefType:  LedgerRefBattleReward,
+					RefID:    report.ID,
+					Reason:   "npc_battle_drop",
+				}, now)
+				if err != nil {
+					return err
+				}
+				mergeRewardApplyResult(&rewardApply, apply)
+				report.Drops = dropSnapshots
+			}
+			report.PvpAttackerGenerals = buildPvpGeneralSnapshots(state, generalIDs)
+			report.GrantedRewards = buildBattleGrantedRewards(report)
+
+			if report.OverflowCityGold > 0 {
+				state.CityGold += FlexInt(report.OverflowCityGold)
+			}
+			state.ServerTime = now.UTC().Format(resourceDateLayout)
+			return nil
+		})
+		if err == nil {
+			break
 		}
-		state.ServerTime = now.UTC().Format(resourceDateLayout)
-		return nil
-	})
+		if !isRetryableStorageConflict(err) || attempt == 2 {
+			return AttackNpcResponse{}, err
+		}
+		slog.Warn("npc attack transaction retry after storage conflict", "playerId", playerID, "npcId", npcID, "attempt", attempt+1, "error", err)
+		time.Sleep(time.Duration(attempt+1) * 80 * time.Millisecond)
+	}
 	if err != nil {
 		return AttackNpcResponse{}, err
 	}
@@ -300,6 +316,19 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 		NpcState:     state.NpcState,
 		ServerTime:   state.ServerTime,
 	}, nil
+}
+
+// isRetryableStorageConflict 判断数据库事务冲突是否适合立即重试。
+func isRetryableStorageConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "deadlock") ||
+		strings.Contains(text, "error 1213") ||
+		strings.Contains(text, "40001") ||
+		strings.Contains(text, "lock wait timeout") ||
+		strings.Contains(text, "error 1205")
 }
 
 // SimulateBattle 使用和 NPC 进攻一致的战斗规则计算结果，但不改变任何玩家状态。
