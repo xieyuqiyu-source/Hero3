@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Castle,
   Swords,
-  ShieldPlus,
+  UsersRound,
   Map,
   ChevronLeft,
   ChevronRight,
@@ -37,7 +37,7 @@ export interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { key: 'city', label: '城池', icon: Castle },
   { key: 'military', label: '军事', icon: Swords },
-  { key: 'reinforcements', label: '增援', icon: ShieldPlus },
+  { key: 'alliance', label: '联盟', icon: UsersRound },
   { key: 'map', label: '地图', icon: Map },
   { key: 'settings', label: '设置', icon: Settings },
 ]

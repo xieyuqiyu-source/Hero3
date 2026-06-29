@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Castle,
   Swords,
-  ShieldPlus,
+  UsersRound,
   Map,
   Package,
   Warehouse,
@@ -250,7 +250,7 @@ const MobileSidebarContent: FC<{
   const navItems = [
     { key: 'city', label: '城池', icon: Castle },
     { key: 'military', label: '军事', icon: Swords },
-    { key: 'reinforcements', label: '增援', icon: ShieldPlus },
+    { key: 'alliance', label: '联盟', icon: UsersRound },
     { key: 'map', label: '地图', icon: Map },
     { key: 'settings', label: '设置', icon: Settings },
   ]
