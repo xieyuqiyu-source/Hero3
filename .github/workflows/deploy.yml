@@ -106,7 +106,8 @@ jobs:
 
           REMOTE_RELEASE_ARCHIVE="/tmp/hero3-release.${HERO3_SHA}.tar.gz"
 
-          timeout --kill-after=10s 180s scp \
+          ls -lh "$HERO3_RELEASE_ARCHIVE"
+          timeout --kill-after=10s 600s ssh \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=accept-new \
@@ -115,9 +116,9 @@ jobs:
             -o ServerAliveInterval=10 \
             -o ServerAliveCountMax=6 \
             -i ~/.ssh/hero3_deploy_key \
-            -P "$HERO3_SSH_PORT" \
-            "$HERO3_RELEASE_ARCHIVE" \
-            "$HERO3_SSH_USER@$HERO3_SSH_HOST:$REMOTE_RELEASE_ARCHIVE"
+            -p "$HERO3_SSH_PORT" \
+            "$HERO3_SSH_USER@$HERO3_SSH_HOST" \
+            "cat > '$REMOTE_RELEASE_ARCHIVE'" < "$HERO3_RELEASE_ARCHIVE"
 
           timeout --kill-after=10s 900s ssh \
             -o BatchMode=yes \
