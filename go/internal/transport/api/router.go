@@ -91,6 +91,7 @@ func registerAccountRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("DELETE /api/v1/accounts/{accountId}", handlers.DeleteAccount)
 	mux.HandleFunc("POST /api/v1/players/create", handlers.CreatePlayer)
 	mux.HandleFunc("DELETE /api/v1/players/{playerId}", handlers.DeletePlayer)
+	mux.HandleFunc("POST /api/v1/players/{playerId}/restore-delete", handlers.RestorePlayerDeletion)
 }
 
 // registerCityRoutes 注册城池、建筑和资源路由。

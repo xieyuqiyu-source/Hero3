@@ -454,6 +454,78 @@ func TestCreatePlayerPublishesCreatedEvent(t *testing.T) {
 	}
 }
 
+func TestDeletePlayerSchedulesAndRestoresDeletion(t *testing.T) {
+	service := NewService()
+	repo := service.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_delete_delay", Username: "delete_delay", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_delete_delay", "待删除", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := service.DeletePlayer(state.Player.ID)
+	if err != nil {
+		t.Fatalf("DeletePlayer schedule failed: %v", err)
+	}
+	if result.Status != "scheduled" || result.DeleteScheduledAt == "" {
+		t.Fatalf("expected scheduled deletion result, got %+v", result)
+	}
+
+	players, err := service.ListPlayers(account.ID)
+	if err != nil {
+		t.Fatalf("ListPlayers failed: %v", err)
+	}
+	if len(players) != 1 || players[0].DeleteScheduledAt == "" {
+		t.Fatalf("expected pending deletion summary, got %+v", players)
+	}
+
+	restored, err := service.RestorePlayerDeletion(state.Player.ID)
+	if err != nil {
+		t.Fatalf("RestorePlayerDeletion failed: %v", err)
+	}
+	if restored.Status != "restored" {
+		t.Fatalf("expected restored result, got %+v", restored)
+	}
+	players, err = service.ListPlayers(account.ID)
+	if err != nil {
+		t.Fatalf("ListPlayers after restore failed: %v", err)
+	}
+	if len(players) != 1 || players[0].DeleteScheduledAt != "" {
+		t.Fatalf("expected restored player without deletion schedule, got %+v", players)
+	}
+}
+
+func TestListPlayersPurgesDueDeletedPlayers(t *testing.T) {
+	service := NewService()
+	repo := service.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_delete_due", Username: "delete_due", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_delete_due", "到期删除", "wei", "caocao", now)
+	state.DeleteRequestedAt = now.Add(-2 * time.Hour).UTC().Format(resourceDateLayout)
+	state.DeleteScheduledAt = now.Add(-time.Hour).UTC().Format(resourceDateLayout)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	players, err := service.ListPlayers(account.ID)
+	if err != nil {
+		t.Fatalf("ListPlayers failed: %v", err)
+	}
+	if len(players) != 0 {
+		t.Fatalf("expected due deletion to be purged, got %+v", players)
+	}
+	if _, err := repo.GetState(state.Player.ID); !errors.Is(err, ErrPlayerNotFound) {
+		t.Fatalf("expected player hard deleted, got %v", err)
+	}
+}
+
 func TestAdjustResourcesPublishesResourceChangedEvent(t *testing.T) {
 	service := NewService()
 	repo := service.repo.(*MemoryRepository)

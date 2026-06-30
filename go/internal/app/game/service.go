@@ -74,6 +74,7 @@ var (
 )
 
 const resourceDateLayout = time.RFC3339
+const playerDeletionDelay = time.Hour
 
 type Service struct {
 	repo              Repository
@@ -304,6 +305,13 @@ func (s *Service) LoginAccount(username string, password string) (Account, error
 }
 
 func (s *Service) ListPlayers(accountID string) ([]PlayerSummary, error) {
+	players, err := s.repo.ListPlayers(accountID)
+	if err != nil {
+		return nil, err
+	}
+	if !s.purgeDuePlayerDeletions(players, time.Now()) {
+		return players, nil
+	}
 	return s.repo.ListPlayers(accountID)
 }
 
@@ -456,12 +464,82 @@ func (s *Service) DeleteAccount(accountID string) error {
 	return s.repo.DeleteAccount(accountID)
 }
 
-func (s *Service) DeletePlayer(playerID string) error {
+func (s *Service) DeletePlayer(playerID string) (PlayerDeletionResult, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
-		return ErrPlayerNotFound
+		return PlayerDeletionResult{}, ErrPlayerNotFound
 	}
-	return s.repo.DeletePlayer(playerID)
+	state, err := s.repo.GetState(playerID)
+	if err != nil {
+		return PlayerDeletionResult{}, err
+	}
+	now := time.Now().UTC()
+	if state.DeleteScheduledAt != "" {
+		if scheduledAt, err := time.Parse(resourceDateLayout, state.DeleteScheduledAt); err == nil && !now.Before(scheduledAt) {
+			if err := s.repo.DeletePlayer(playerID); err != nil {
+				return PlayerDeletionResult{}, err
+			}
+			return PlayerDeletionResult{Status: "deleted", PlayerID: playerID}, nil
+		}
+		return PlayerDeletionResult{
+			Status:            "scheduled",
+			PlayerID:          playerID,
+			DeleteRequestedAt: state.DeleteRequestedAt,
+			DeleteScheduledAt: state.DeleteScheduledAt,
+		}, nil
+	}
+	requestedAt := now.Format(resourceDateLayout)
+	scheduledAt := now.Add(playerDeletionDelay).Format(resourceDateLayout)
+	if _, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+		state.DeleteRequestedAt = requestedAt
+		state.DeleteScheduledAt = scheduledAt
+		state.ServerTime = requestedAt
+		return nil
+	}); err != nil {
+		return PlayerDeletionResult{}, err
+	}
+	return PlayerDeletionResult{
+		Status:            "scheduled",
+		PlayerID:          playerID,
+		DeleteRequestedAt: requestedAt,
+		DeleteScheduledAt: scheduledAt,
+	}, nil
+}
+
+func (s *Service) RestorePlayerDeletion(playerID string) (PlayerDeletionResult, error) {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return PlayerDeletionResult{}, ErrPlayerNotFound
+	}
+	now := time.Now().UTC()
+	state, err := s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+		state.DeleteRequestedAt = ""
+		state.DeleteScheduledAt = ""
+		state.ServerTime = now.Format(resourceDateLayout)
+		return nil
+	})
+	if err != nil {
+		return PlayerDeletionResult{}, err
+	}
+	return PlayerDeletionResult{Status: "restored", PlayerID: state.Player.ID}, nil
+}
+
+func (s *Service) purgeDuePlayerDeletions(players []PlayerSummary, now time.Time) bool {
+	purged := false
+	now = now.UTC()
+	for _, player := range players {
+		if player.DeleteScheduledAt == "" {
+			continue
+		}
+		scheduledAt, err := time.Parse(resourceDateLayout, player.DeleteScheduledAt)
+		if err != nil || now.Before(scheduledAt) {
+			continue
+		}
+		if err := s.repo.DeletePlayer(player.ID); err == nil {
+			purged = true
+		}
+	}
+	return purged
 }
 
 func (s *Service) GetState(playerID string) (GameState, error) {

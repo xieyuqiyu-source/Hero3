@@ -168,10 +168,25 @@ func (h *Handlers) DeletePlayer(w http.ResponseWriter, r *http.Request) {
 	if !h.requireOwnership(w, r, playerID) {
 		return
 	}
-	if err := h.gameService.DeletePlayer(playerID); err != nil {
+	result, err := h.gameService.DeletePlayer(playerID)
+	if err != nil {
 		writeError(w, http.StatusNotFound, "player not found")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handlers) RestorePlayerDeletion(w http.ResponseWriter, r *http.Request) {
+	playerID := r.PathValue("playerId")
+	if !h.requireOwnership(w, r, playerID) {
+		return
+	}
+	result, err := h.gameService.RestorePlayerDeletion(playerID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "player not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }

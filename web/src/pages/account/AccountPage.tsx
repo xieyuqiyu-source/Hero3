@@ -8,15 +8,18 @@ import { getFactionLabel } from '@/utils/faction'
 import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
 import CloudSyncModal from '@/components/CloudSyncModal'
+import { deletionRemainingMs, formatDeletionCountdown, isPlayerDeletionPending } from '@/utils/playerDeletion'
 import Section from './components/Section'
 import InfoItem from './components/InfoItem'
 
 const AccountPage: FC = () => {
   const navigate = useNavigate()
   const { account, players, logout, loadPlayers } = useAccountStore()
+  const restorePlayerDeletion = useAccountStore((s) => s.restorePlayerDeletion)
   const { state: gameState, activePlayerId, clearActivePlayer, setActivePlayer, loadGameState } = useGameStore()
   const [cloudSyncOpen, setCloudSyncOpen] = useState(false)
   const [switching, setSwitching] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
 
   // 页面加载时拉取存档列表
   useEffect(() => {
@@ -24,6 +27,11 @@ const AccountPage: FC = () => {
       loadPlayers()
     }
   }, [account, loadPlayers])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   const handleLogout = () => {
     logout()
@@ -35,7 +43,8 @@ const AccountPage: FC = () => {
   }
 
   const handleSelectPlayer = async (playerId: string) => {
-    if (playerId === activePlayerId || switching) return
+    const player = players.find((p) => p.id === playerId)
+    if (!player || isPlayerDeletionPending(player) || playerId === activePlayerId || switching) return
     setSwitching(playerId)
     try {
       setActivePlayer(playerId)
@@ -48,6 +57,11 @@ const AccountPage: FC = () => {
   const handleCloudSyncClose = () => {
     setCloudSyncOpen(false)
     loadPlayers()
+  }
+
+  const handleRestorePlayer = async (e: React.MouseEvent, playerId: string) => {
+    e.stopPropagation()
+    await restorePlayerDeletion(playerId)
   }
 
   return (
@@ -90,21 +104,24 @@ const AccountPage: FC = () => {
           <div className="space-y-2">
             {players.map((p) => {
               const isActive = p.id === activePlayerId
+              const pendingDelete = isPlayerDeletionPending(p)
+              const remaining = deletionRemainingMs(p, now)
               return (
-                <button
+                <div
                   key={p.id}
-                  type="button"
                   onClick={() => handleSelectPlayer(p.id)}
-                  disabled={isActive || switching !== null}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void handleSelectPlayer(p.id) }}
+                  role="button"
+                  tabIndex={pendingDelete || isActive || switching !== null ? -1 : 0}
                   className={`
                     w-full flex items-center justify-between px-3 py-2.5 rounded-xl
-                    border text-left cursor-pointer
+                    border text-left
                     transition-all duration-200
                     ${isActive
                       ? 'bg-[var(--color-accent-light)] border-[var(--color-accent-border)]'
                       : 'bg-[var(--color-surface-dim)] border-[var(--color-border)] hover:border-[var(--color-accent-border)]'
                     }
-                    disabled:cursor-default
+                    ${pendingDelete || isActive || switching !== null ? 'cursor-default opacity-85' : 'cursor-pointer'}
                   `}
                 >
                   <div className="flex flex-col gap-1">
@@ -119,6 +136,11 @@ const AccountPage: FC = () => {
                       {isActive && (
                         <span className="text-[10px] text-[var(--color-accent)] font-medium">当前</span>
                       )}
+                      {pendingDelete && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 font-medium">
+                          删除倒计时 {formatDeletionCountdown(remaining)}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
                       <span>兵力 {p.totalArmy.toLocaleString()}</span>
@@ -129,9 +151,18 @@ const AccountPage: FC = () => {
                     {switching === p.id && (
                       <span className="text-[10px] text-[var(--color-text-muted)]">切换中...</span>
                     )}
+                    {pendingDelete && (
+                      <button
+                        type="button"
+                        onClick={(e) => void handleRestorePlayer(e, p.id)}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 cursor-pointer"
+                      >
+                        恢复
+                      </button>
+                    )}
                     <span className="text-[10px] text-[var(--color-text-muted)]">{p.updatedAt}</span>
                   </div>
-                </button>
+                </div>
               )
             })}
           </div>

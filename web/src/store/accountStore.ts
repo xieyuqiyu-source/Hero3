@@ -25,6 +25,8 @@ interface AccountStore {
   loadPlayers: () => Promise<void>
   /** 删除存档 */
   deletePlayer: (playerId: string) => Promise<void>
+  /** 恢复待删除存档 */
+  restorePlayerDeletion: (playerId: string) => Promise<void>
   /** 从 localStorage 恢复会话 */
   restore: () => void
 }
@@ -84,10 +86,16 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
   },
 
   deletePlayer: async (playerId: string) => {
-    await gameApi.deletePlayer(playerId)
-    // 删除后刷新列表
-    const players = get().players.filter((p) => p.id !== playerId)
-    set({ players })
+    const result = await gameApi.deletePlayer(playerId)
+    if (result.status === 'deleted' || result.status === 'scheduled') {
+      clearActivePlayerSession()
+    }
+    await get().loadPlayers()
+  },
+
+  restorePlayerDeletion: async (playerId: string) => {
+    await gameApi.restorePlayerDeletion(playerId)
+    await get().loadPlayers()
   },
 
   restore: () => {

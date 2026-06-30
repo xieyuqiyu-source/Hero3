@@ -22,6 +22,15 @@ export interface PlayerSummary {
   totalArmy: number
   buildingLevel: number
   updatedAt: string
+  deleteRequestedAt?: string
+  deleteScheduledAt?: string
+}
+
+export interface PlayerDeletionResult {
+  status: 'scheduled' | 'deleted' | 'restored' | string
+  playerId: string
+  deleteRequestedAt?: string
+  deleteScheduledAt?: string
 }
 
 export type AnnouncementType = 'system' | 'maintenance' | 'update' | 'activity' | 'compensation' | 'emergency'

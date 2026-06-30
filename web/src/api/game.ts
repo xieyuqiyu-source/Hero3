@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, NpcCity, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, PlayerDeletionResult, NpcCity, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult } from '@/types/game'
 import type { BalanceConfig, FactionConfig, FishingConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -217,7 +217,12 @@ export const gameApi = {
 
   /** 删除存档 */
   deletePlayer(playerId: string) {
-    return api.delete<{ status: string }>(`/players/${playerId}`)
+    return api.delete<PlayerDeletionResult>(`/players/${playerId}`)
+  },
+
+  /** 取消存档删除 */
+  restorePlayerDeletion(playerId: string) {
+    return api.post<PlayerDeletionResult>(`/players/${playerId}/restore-delete`, {})
   },
 
   /** 升级建筑 */

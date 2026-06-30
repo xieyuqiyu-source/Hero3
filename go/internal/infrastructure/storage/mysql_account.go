@@ -248,7 +248,9 @@ func (r *MySQLRepository) ListPlayers(accountID string) ([]game.PlayerSummary, e
 		`SELECT p.id, p.nickname, p.faction, p.mail_code,
 			COALESCE(army.total_army, 0),
 			COALESCE(buildings.building_level, 0),
-			p.updated_at
+			p.updated_at,
+			COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p.state_json, '$.deleteRequestedAt')), ''),
+			COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p.state_json, '$.deleteScheduledAt')), '')
 			 FROM players p
 			 LEFT JOIN (
 				SELECT player_id, SUM(amount) AS total_army
@@ -275,18 +277,21 @@ func (r *MySQLRepository) ListPlayers(accountID string) ([]game.PlayerSummary, e
 		var totalArmy int
 		var buildingLevel int
 		var updatedAt time.Time
-		if err := rows.Scan(&id, &nickname, &faction, &mailCode, &totalArmy, &buildingLevel, &updatedAt); err != nil {
+		var deleteRequestedAt, deleteScheduledAt string
+		if err := rows.Scan(&id, &nickname, &faction, &mailCode, &totalArmy, &buildingLevel, &updatedAt, &deleteRequestedAt, &deleteScheduledAt); err != nil {
 			return nil, err
 		}
 
 		summary := game.PlayerSummary{
-			ID:            id,
-			Nickname:      nickname,
-			Faction:       faction,
-			MailCode:      mailCode,
-			TotalArmy:     totalArmy,
-			BuildingLevel: buildingLevel,
-			UpdatedAt:     updatedAt.UTC().Format(time.RFC3339),
+			ID:                id,
+			Nickname:          nickname,
+			Faction:           faction,
+			MailCode:          mailCode,
+			TotalArmy:         totalArmy,
+			BuildingLevel:     buildingLevel,
+			UpdatedAt:         updatedAt.UTC().Format(time.RFC3339),
+			DeleteRequestedAt: deleteRequestedAt,
+			DeleteScheduledAt: deleteScheduledAt,
 		}
 
 		players = append(players, summary)
@@ -301,7 +306,9 @@ func (r *MySQLRepository) ListAllPlayers() ([]game.PlayerSummary, error) {
 		`SELECT p.id, p.nickname, p.faction, p.mail_code,
 				COALESCE(army.total_army, 0),
 				COALESCE(buildings.building_level, 0),
-				p.updated_at
+				p.updated_at,
+				COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p.state_json, '$.deleteRequestedAt')), ''),
+				COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p.state_json, '$.deleteScheduledAt')), '')
 			 FROM players p
 			 LEFT JOIN (
 				SELECT player_id, SUM(amount) AS total_army
@@ -324,7 +331,7 @@ func (r *MySQLRepository) ListAllPlayers() ([]game.PlayerSummary, error) {
 	for rows.Next() {
 		var summary game.PlayerSummary
 		var updatedAt time.Time
-		if err := rows.Scan(&summary.ID, &summary.Nickname, &summary.Faction, &summary.MailCode, &summary.TotalArmy, &summary.BuildingLevel, &updatedAt); err != nil {
+		if err := rows.Scan(&summary.ID, &summary.Nickname, &summary.Faction, &summary.MailCode, &summary.TotalArmy, &summary.BuildingLevel, &updatedAt, &summary.DeleteRequestedAt, &summary.DeleteScheduledAt); err != nil {
 			return nil, err
 		}
 		summary.UpdatedAt = updatedAt.UTC().Format(time.RFC3339)

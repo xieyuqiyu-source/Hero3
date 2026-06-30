@@ -4,8 +4,8 @@ import { Cloud, LogIn, UserPlus, ArrowLeft, Check, Trash2 } from 'lucide-react'
 import { Modal } from '@/components/ui'
 import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
-import { useConfirmPreferenceStore } from '@/store/confirmPreferenceStore'
 import type { PlayerSummary } from '@/types/game'
+import { deletionRemainingMs, formatDeletionCountdown, isPlayerDeletionPending } from '@/utils/playerDeletion'
 
 type View = 'login' | 'register' | 'saves'
 
@@ -16,17 +16,23 @@ interface CloudSyncModalProps {
 
 const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
   const navigate = useNavigate()
-  const { account, players, login, register, loadPlayers, deletePlayer } = useAccountStore()
+  const { account, players, login, register, loadPlayers, deletePlayer, restorePlayerDeletion } = useAccountStore()
   const { setActivePlayer, loadGameState } = useGameStore()
-  const skipConfirmations = useConfirmPreferenceStore((s) => s.skipConfirmations)
 
   const [view, setView] = useState<View>(account ? 'saves' : 'login')
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     if (open && account) {
       loadPlayers()
     }
   }, [open, account, loadPlayers])
+
+  useEffect(() => {
+    if (!open) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [open])
 
   const activeView: View = account ? 'saves' : (view === 'saves' ? 'login' : view)
   const [username, setUsername] = useState('')
@@ -70,6 +76,7 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
   }
 
   const handleSelectSave = async (player: PlayerSummary) => {
+    if (isPlayerDeletionPending(player)) return
     setActivePlayer(player.id)
     await loadGameState(player.id)
     onClose()
@@ -78,9 +85,19 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
 
   const handleDeletePlayer = async (e: React.MouseEvent, player: PlayerSummary) => {
     e.stopPropagation()
-    if (!skipConfirmations && !confirm(`确定删除存档「${player.nickname}」吗？此操作不可恢复。`)) return
+    if (!confirm(`确定申请删除存档「${player.nickname}」吗？\n\n确认后会进入 1 小时冷静期，期间可以恢复。`)) return
+    if (!confirm(`请再次确认：存档「${player.nickname}」将在 1 小时后删除。\n\n冷静期结束后刷新列表会自动删除。`)) return
     try {
       await deletePlayer(player.id)
+    } catch {
+      // silently fail
+    }
+  }
+
+  const handleRestorePlayer = async (e: React.MouseEvent, player: PlayerSummary) => {
+    e.stopPropagation()
+    try {
+      await restorePlayerDeletion(player.id)
     } catch {
       // silently fail
     }
@@ -297,17 +314,22 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
 
           {players.length > 0 ? (
             <div className="space-y-2">
-              {players.map((player) => (
-                <button
+              {players.map((player) => {
+                const pendingDelete = isPlayerDeletionPending(player)
+                const remaining = deletionRemainingMs(player, now)
+                return (
+                <div
                   key={player.id}
-                  type="button"
                   onClick={() => handleSelectSave(player)}
-                  className="
+                  onKeyDown={(e) => { if (e.key === 'Enter') void handleSelectSave(player) }}
+                  role="button"
+                  tabIndex={pendingDelete ? -1 : 0}
+                  className={`
                     w-full flex items-center gap-3 px-4 py-3 rounded-xl
                     bg-[var(--color-surface-dim)] border border-[var(--color-border)]
-                    hover:border-[var(--color-accent-border)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.06)]
-                    cursor-pointer transition-all duration-200 text-left
-                  "
+                    ${pendingDelete ? 'opacity-80 cursor-default' : 'hover:border-[var(--color-accent-border)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.06)] cursor-pointer'}
+                    transition-all duration-200 text-left
+                  `}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -315,28 +337,43 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-accent-light)] text-[var(--color-accent)] font-medium">
                         {player.faction}
                       </span>
+                      {pendingDelete && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 font-medium">
+                          删除倒计时 {formatDeletionCountdown(remaining)}
+                        </span>
+                      )}
                     </div>
                     <div className="mt-1">
                       <span className="text-[11px] text-[var(--color-text-muted)]">{player.updatedAt}</span>
                     </div>
                   </div>
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => handleDeletePlayer(e, player)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleDeletePlayer(e as unknown as React.MouseEvent, player) }}
-                    className="
-                      w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0
-                      text-[var(--color-text-muted)] hover:text-red-500 hover:bg-red-500/10
-                      transition-colors duration-150
-                    "
-                    aria-label={`删除存档 ${player.nickname}`}
-                  >
-                    <Trash2 size={14} />
-                  </div>
-                  <Check size={16} className="text-[var(--color-text-muted)] flex-shrink-0" />
-                </button>
-              ))}
+                  {pendingDelete ? (
+                    <button
+                      type="button"
+                      onClick={(e) => handleRestorePlayer(e, player)}
+                      className="px-2.5 py-1.5 rounded-lg flex-shrink-0 text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 hover:bg-emerald-500/20 cursor-pointer transition-colors"
+                    >
+                      恢复
+                    </button>
+                  ) : (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => handleDeletePlayer(e, player)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleDeletePlayer(e as unknown as React.MouseEvent, player) }}
+                      className="
+                        w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0
+                        text-[var(--color-text-muted)] hover:text-red-500 hover:bg-red-500/10
+                        transition-colors duration-150
+                      "
+                      aria-label={`删除存档 ${player.nickname}`}
+                    >
+                      <Trash2 size={14} />
+                    </div>
+                  )}
+                  {!pendingDelete && <Check size={16} className="text-[var(--color-text-muted)] flex-shrink-0" />}
+                </div>
+              )})}
             </div>
           ) : (
             <div className="flex items-center justify-center py-6">

@@ -30,13 +30,22 @@ type Account struct {
 }
 
 type PlayerSummary struct {
-	ID            string `json:"id"`
-	Nickname      string `json:"nickname"`
-	Faction       string `json:"faction"`
-	MailCode      string `json:"mailCode,omitempty"`
-	TotalArmy     int    `json:"totalArmy"`
-	BuildingLevel int    `json:"buildingLevel"`
-	UpdatedAt     string `json:"updatedAt"`
+	ID                string `json:"id"`
+	Nickname          string `json:"nickname"`
+	Faction           string `json:"faction"`
+	MailCode          string `json:"mailCode,omitempty"`
+	TotalArmy         int    `json:"totalArmy"`
+	BuildingLevel     int    `json:"buildingLevel"`
+	UpdatedAt         string `json:"updatedAt"`
+	DeleteRequestedAt string `json:"deleteRequestedAt,omitempty"`
+	DeleteScheduledAt string `json:"deleteScheduledAt,omitempty"`
+}
+
+type PlayerDeletionResult struct {
+	Status            string `json:"status"`
+	PlayerID          string `json:"playerId"`
+	DeleteRequestedAt string `json:"deleteRequestedAt,omitempty"`
+	DeleteScheduledAt string `json:"deleteScheduledAt,omitempty"`
 }
 
 type AccountSummary struct {
@@ -510,6 +519,8 @@ type GameState struct {
 	UnreadMailCount     int                     `json:"unreadMailCount"`
 	ActiveModifiers     []ModifierBreakdownItem `json:"activeModifiers,omitempty"`
 	Buffs               []Buff                  `json:"buffs,omitempty"` // 通用加成列表（GM/活动/任务等）
+	DeleteRequestedAt   string                  `json:"deleteRequestedAt,omitempty"`
+	DeleteScheduledAt   string                  `json:"deleteScheduledAt,omitempty"`
 	ServerTime          string                  `json:"serverTime"`
 }
 
@@ -647,12 +658,14 @@ func buildPlayerSummary(state GameState, updatedAt time.Time) PlayerSummary {
 		buildingLevel += b.Level
 	}
 	return PlayerSummary{
-		ID:            state.Player.ID,
-		Nickname:      state.Player.Nickname,
-		Faction:       state.Player.Faction,
-		TotalArmy:     totalArmy,
-		BuildingLevel: buildingLevel,
-		UpdatedAt:     updatedAt.UTC().Format(time.RFC3339),
+		ID:                state.Player.ID,
+		Nickname:          state.Player.Nickname,
+		Faction:           state.Player.Faction,
+		TotalArmy:         totalArmy,
+		BuildingLevel:     buildingLevel,
+		UpdatedAt:         updatedAt.UTC().Format(time.RFC3339),
+		DeleteRequestedAt: state.DeleteRequestedAt,
+		DeleteScheduledAt: state.DeleteScheduledAt,
 	}
 }
 
