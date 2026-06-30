@@ -29,6 +29,54 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: |
+            web/pnpm-lock.yaml
+            admin/pnpm-lock.yaml
+
+      - name: Build release artifacts
+        run: |
+          set -euo pipefail
+          RELEASE_DIR="/tmp/hero3-release.${GITHUB_SHA}"
+          RELEASE_ARCHIVE="/tmp/hero3-release.${GITHUB_SHA}.tar.gz"
+          rm -rf "$RELEASE_DIR" "$RELEASE_ARCHIVE"
+          mkdir -p "$RELEASE_DIR/go/bin" "$RELEASE_DIR/go/config" "$RELEASE_DIR/web" "$RELEASE_DIR/admin" "$RELEASE_DIR/deploy"
+
+          cd "$GITHUB_WORKSPACE/go"
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "$RELEASE_DIR/go/bin/hero3-server" ./cmd/server
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "$RELEASE_DIR/go/bin/hero3-dbtool" ./cmd/dbtool
+          rsync -a "$GITHUB_WORKSPACE/go/config/" "$RELEASE_DIR/go/config/"
+
+          corepack enable
+          corepack prepare pnpm@10.24.0 --activate
+
+          cd "$GITHUB_WORKSPACE/web"
+          pnpm install --frozen-lockfile
+          pnpm build
+          rsync -a "$GITHUB_WORKSPACE/web/dist/" "$RELEASE_DIR/web/"
+
+          cd "$GITHUB_WORKSPACE/admin"
+          pnpm install --frozen-lockfile
+          pnpm build
+          rsync -a "$GITHUB_WORKSPACE/admin/dist/" "$RELEASE_DIR/admin/"
+
+          if [ -d "$GITHUB_WORKSPACE/deploy/systemd" ]; then
+            mkdir -p "$RELEASE_DIR/deploy/systemd"
+            rsync -a "$GITHUB_WORKSPACE/deploy/systemd/" "$RELEASE_DIR/deploy/systemd/"
+          fi
+          tar -czf "$RELEASE_ARCHIVE" -C "$RELEASE_DIR" .
+          echo "HERO3_RELEASE_ARCHIVE=$RELEASE_ARCHIVE" >> "$GITHUB_ENV"
+
       - name: Configure SSH
         env:
           HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
@@ -58,11 +106,9 @@ jobs:
           test -n "$HERO3_REF_NAME"
           test -n "$HERO3_SHA"
           test -n "$HERO3_SSH_USER"
+          test -f "$HERO3_RELEASE_ARCHIVE"
 
-          SOURCE_ARCHIVE="/tmp/hero3-source.${HERO3_SHA}.tar.gz"
-          REMOTE_SOURCE_ARCHIVE="/tmp/hero3-source.${HERO3_SHA}.tar.gz"
-          trap 'rm -f "$SOURCE_ARCHIVE"' EXIT
-          git archive --format=tar.gz -o "$SOURCE_ARCHIVE" "$HERO3_SHA"
+          REMOTE_RELEASE_ARCHIVE="/tmp/hero3-release.${HERO3_SHA}.tar.gz"
 
           scp \
             -o BatchMode=yes \
@@ -74,8 +120,8 @@ jobs:
             -o ServerAliveCountMax=6 \
             -i ~/.ssh/hero3_deploy_key \
             -P "$HERO3_SSH_PORT" \
-            "$SOURCE_ARCHIVE" \
-            "$HERO3_SSH_USER@$HERO3_SSH_HOST:$REMOTE_SOURCE_ARCHIVE"
+            "$HERO3_RELEASE_ARCHIVE" \
+            "$HERO3_SSH_USER@$HERO3_SSH_HOST:$REMOTE_RELEASE_ARCHIVE"
 
           ssh \
             -o BatchMode=yes \
@@ -88,21 +134,16 @@ jobs:
             -i ~/.ssh/hero3_deploy_key \
             -p "$HERO3_SSH_PORT" \
             "$HERO3_SSH_USER@$HERO3_SSH_HOST" \
-            "HERO3_REF_NAME='$HERO3_REF_NAME' HERO3_SHA='$HERO3_SHA' HERO3_SOURCE_ARCHIVE='$REMOTE_SOURCE_ARCHIVE' bash -s" <<'EOF'
+            "HERO3_REF_NAME='$HERO3_REF_NAME' HERO3_SHA='$HERO3_SHA' HERO3_RELEASE_ARCHIVE='$REMOTE_RELEASE_ARCHIVE' bash -s" <<'EOF'
           set -euo pipefail
 
-          SOURCE_DIR="/opt/hero3/source"
-          STAGING_SOURCE_DIR="/opt/hero3/source.${HERO3_SHA}"
+          RELEASE_DIR="/tmp/hero3-release.${HERO3_SHA}"
           STAMP="$(date +%Y%m%d%H%M%S)"
-          SERVER_BIN="/tmp/hero3-server.${HERO3_SHA}"
-          DBTOOL_BIN="/tmp/hero3-dbtool.${HERO3_SHA}"
 
           log() {
             printf '\n[%s] %s\n' "$(date -Is)" "$*"
           }
 
-          command -v go >/dev/null
-          command -v pnpm >/dev/null
           command -v rsync >/dev/null
           command -v flock >/dev/null
           command -v tar >/dev/null
@@ -116,29 +157,12 @@ jobs:
           mkdir -p /opt/hero3/backups /var/www/hero3/backups
           mkdir -p /opt/hero3/go/bin /opt/hero3/go/config /var/www/hero3/web /var/www/hero3/admin
 
-          log "Updating source from uploaded archive"
-          test -f "$HERO3_SOURCE_ARCHIVE"
-          rm -rf "$STAGING_SOURCE_DIR"
-          mkdir -p "$STAGING_SOURCE_DIR"
-          tar -xzf "$HERO3_SOURCE_ARCHIVE" -C "$STAGING_SOURCE_DIR"
-          rm -rf "$SOURCE_DIR"
-          mv "$STAGING_SOURCE_DIR" "$SOURCE_DIR"
-          rm -f "$HERO3_SOURCE_ARCHIVE"
-
-          log "Building backend"
-          cd "$SOURCE_DIR/go"
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "$SERVER_BIN" ./cmd/server
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "$DBTOOL_BIN" ./cmd/dbtool
-
-          log "Building web"
-          cd "$SOURCE_DIR/web"
-          pnpm install --frozen-lockfile
-          pnpm build
-
-          log "Building admin"
-          cd "$SOURCE_DIR/admin"
-          pnpm install --frozen-lockfile
-          pnpm build
+          log "Extracting uploaded release"
+          test -f "$HERO3_RELEASE_ARCHIVE"
+          rm -rf "$RELEASE_DIR"
+          mkdir -p "$RELEASE_DIR"
+          tar -xzf "$HERO3_RELEASE_ARCHIVE" -C "$RELEASE_DIR"
+          rm -f "$HERO3_RELEASE_ARCHIVE"
 
           log "Backing up current release"
           if [ -f /opt/hero3/go/bin/hero3-server ]; then
@@ -152,19 +176,19 @@ jobs:
           fi
 
           log "Installing release"
-          install -m 755 "$SERVER_BIN" /opt/hero3/go/bin/hero3-server
-          install -m 755 "$DBTOOL_BIN" /opt/hero3/go/bin/hero3-dbtool
-          rsync -a --delete "$SOURCE_DIR/go/config/" /opt/hero3/go/config/
-          rsync -a --delete "$SOURCE_DIR/web/dist/" /var/www/hero3/web/
-          rsync -a --delete "$SOURCE_DIR/admin/dist/" /var/www/hero3/admin/
+          install -m 755 "$RELEASE_DIR/go/bin/hero3-server" /opt/hero3/go/bin/hero3-server
+          install -m 755 "$RELEASE_DIR/go/bin/hero3-dbtool" /opt/hero3/go/bin/hero3-dbtool
+          rsync -a --delete "$RELEASE_DIR/go/config/" /opt/hero3/go/config/
+          rsync -a --delete "$RELEASE_DIR/web/" /var/www/hero3/web/
+          rsync -a --delete "$RELEASE_DIR/admin/" /var/www/hero3/admin/
           printf '%s %s\n' "${HERO3_SHA:0:7}" "deployed from ${HERO3_REF_NAME}" > /opt/hero3/RELEASE
 
           log "Restarting services"
-          if [ -d "$SOURCE_DIR/deploy/systemd" ]; then
-            install -m 644 "$SOURCE_DIR/deploy/systemd/hero3-battle-report-cleanup.service" /etc/systemd/system/hero3-battle-report-cleanup.service
-            install -m 644 "$SOURCE_DIR/deploy/systemd/hero3-battle-report-cleanup.timer" /etc/systemd/system/hero3-battle-report-cleanup.timer
-            install -m 644 "$SOURCE_DIR/deploy/systemd/hero3-maintenance-status.service" /etc/systemd/system/hero3-maintenance-status.service
-            install -m 644 "$SOURCE_DIR/deploy/systemd/hero3-maintenance-status.timer" /etc/systemd/system/hero3-maintenance-status.timer
+          if [ -d "$RELEASE_DIR/deploy/systemd" ]; then
+            install -m 644 "$RELEASE_DIR/deploy/systemd/hero3-battle-report-cleanup.service" /etc/systemd/system/hero3-battle-report-cleanup.service
+            install -m 644 "$RELEASE_DIR/deploy/systemd/hero3-battle-report-cleanup.timer" /etc/systemd/system/hero3-battle-report-cleanup.timer
+            install -m 644 "$RELEASE_DIR/deploy/systemd/hero3-maintenance-status.service" /etc/systemd/system/hero3-maintenance-status.service
+            install -m 644 "$RELEASE_DIR/deploy/systemd/hero3-maintenance-status.timer" /etc/systemd/system/hero3-maintenance-status.timer
             systemctl daemon-reload
             systemctl enable --now hero3-battle-report-cleanup.timer
             systemctl enable --now hero3-maintenance-status.timer
@@ -174,7 +198,7 @@ jobs:
           systemctl reload nginx
           curl --fail --show-error --silent --retry 10 --retry-delay 2 --retry-connrefused http://127.0.0.1:8081/healthz
 
-          rm -f "$SERVER_BIN" "$DBTOOL_BIN"
+          rm -rf "$RELEASE_DIR"
           EOF
 
       - name: Health check
