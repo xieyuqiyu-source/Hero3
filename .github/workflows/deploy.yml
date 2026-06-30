@@ -106,7 +106,7 @@ jobs:
 
           REMOTE_RELEASE_ARCHIVE="/tmp/hero3-release.${HERO3_SHA}.tar.gz"
 
-          scp \
+          timeout --kill-after=10s 180s scp \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=accept-new \
@@ -119,7 +119,7 @@ jobs:
             "$HERO3_RELEASE_ARCHIVE" \
             "$HERO3_SSH_USER@$HERO3_SSH_HOST:$REMOTE_RELEASE_ARCHIVE"
 
-          ssh \
+          timeout --kill-after=10s 900s ssh \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=accept-new \
@@ -143,6 +143,12 @@ jobs:
           command -v rsync >/dev/null
           command -v flock >/dev/null
           command -v tar >/dev/null
+          command -v timeout >/dev/null
+
+          show_hero3_logs() {
+            systemctl status hero3 --no-pager -l || true
+            journalctl -u hero3 -n 120 --no-pager || true
+          }
 
           exec 9>/tmp/hero3-deploy.lock
           if ! flock -n 9; then
@@ -185,14 +191,22 @@ jobs:
             install -m 644 "$RELEASE_DIR/deploy/systemd/hero3-battle-report-cleanup.timer" /etc/systemd/system/hero3-battle-report-cleanup.timer
             install -m 644 "$RELEASE_DIR/deploy/systemd/hero3-maintenance-status.service" /etc/systemd/system/hero3-maintenance-status.service
             install -m 644 "$RELEASE_DIR/deploy/systemd/hero3-maintenance-status.timer" /etc/systemd/system/hero3-maintenance-status.timer
-            systemctl daemon-reload
-            systemctl enable --now hero3-battle-report-cleanup.timer
-            systemctl enable --now hero3-maintenance-status.timer
+            timeout --kill-after=10s 60s systemctl daemon-reload
+            timeout --kill-after=10s 60s systemctl enable --now hero3-battle-report-cleanup.timer
+            timeout --kill-after=10s 60s systemctl enable --now hero3-maintenance-status.timer
           fi
-          systemctl restart hero3
-          nginx -t
-          systemctl reload nginx
-          curl --fail --show-error --silent --retry 10 --retry-delay 2 --retry-connrefused http://127.0.0.1:8081/healthz
+          if ! timeout --kill-after=10s 120s systemctl restart hero3; then
+            log "hero3 restart failed or timed out"
+            show_hero3_logs
+            exit 1
+          fi
+          timeout --kill-after=10s 30s nginx -t
+          timeout --kill-after=10s 30s systemctl reload nginx
+          if ! timeout --kill-after=10s 60s curl --fail --show-error --silent --retry 10 --retry-delay 2 --retry-connrefused http://127.0.0.1:8081/healthz; then
+            log "hero3 local health check failed"
+            show_hero3_logs
+            exit 1
+          fi
 
           rm -rf "$RELEASE_DIR"
           EOF
