@@ -27,7 +27,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 2
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -45,32 +45,43 @@ jobs:
           set -euo pipefail
           RELEASE_DIR="/tmp/hero3-release.${GITHUB_SHA}"
           RELEASE_ARCHIVE="/tmp/hero3-release.${GITHUB_SHA}.tar.gz"
+          INCLUDE_STATIC=1
+          if git rev-parse --verify HEAD^ >/dev/null 2>&1 && git diff --quiet HEAD^ HEAD -- web admin; then
+            INCLUDE_STATIC=0
+          fi
           rm -rf "$RELEASE_DIR" "$RELEASE_ARCHIVE"
-          mkdir -p "$RELEASE_DIR/go/bin" "$RELEASE_DIR/go/config" "$RELEASE_DIR/web" "$RELEASE_DIR/admin" "$RELEASE_DIR/deploy"
+          mkdir -p "$RELEASE_DIR/go/bin" "$RELEASE_DIR/go/config" "$RELEASE_DIR/deploy"
 
           cd "$GITHUB_WORKSPACE/go"
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "$RELEASE_DIR/go/bin/hero3-server" ./cmd/server
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "$RELEASE_DIR/go/bin/hero3-dbtool" ./cmd/dbtool
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o "$RELEASE_DIR/go/bin/hero3-server" ./cmd/server
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o "$RELEASE_DIR/go/bin/hero3-dbtool" ./cmd/dbtool
           rsync -a "$GITHUB_WORKSPACE/go/config/" "$RELEASE_DIR/go/config/"
 
-          corepack enable
-          corepack prepare pnpm@10.24.0 --activate
+          if [ "$INCLUDE_STATIC" = "1" ]; then
+            corepack enable
+            corepack prepare pnpm@10.24.0 --activate
 
-          cd "$GITHUB_WORKSPACE/web"
-          pnpm install --frozen-lockfile
-          pnpm build
-          rsync -a "$GITHUB_WORKSPACE/web/dist/" "$RELEASE_DIR/web/"
+            cd "$GITHUB_WORKSPACE/web"
+            pnpm install --frozen-lockfile
+            pnpm build
+            mkdir -p "$RELEASE_DIR/web"
+            rsync -a "$GITHUB_WORKSPACE/web/dist/" "$RELEASE_DIR/web/"
 
-          cd "$GITHUB_WORKSPACE/admin"
-          pnpm install --frozen-lockfile
-          pnpm build
-          rsync -a "$GITHUB_WORKSPACE/admin/dist/" "$RELEASE_DIR/admin/"
+            cd "$GITHUB_WORKSPACE/admin"
+            pnpm install --frozen-lockfile
+            pnpm build
+            mkdir -p "$RELEASE_DIR/admin"
+            rsync -a "$GITHUB_WORKSPACE/admin/dist/" "$RELEASE_DIR/admin/"
+          else
+            echo "web/admin unchanged, skipping static artifact build"
+          fi
 
           if [ -d "$GITHUB_WORKSPACE/deploy/systemd" ]; then
             mkdir -p "$RELEASE_DIR/deploy/systemd"
             rsync -a "$GITHUB_WORKSPACE/deploy/systemd/" "$RELEASE_DIR/deploy/systemd/"
           fi
           tar -czf "$RELEASE_ARCHIVE" -C "$RELEASE_DIR" .
+          du -sh "$RELEASE_DIR" "$RELEASE_ARCHIVE"
           echo "HERO3_RELEASE_ARCHIVE=$RELEASE_ARCHIVE" >> "$GITHUB_ENV"
 
       - name: Configure SSH
@@ -107,7 +118,7 @@ jobs:
           REMOTE_RELEASE_ARCHIVE="/tmp/hero3-release.${HERO3_SHA}.tar.gz"
 
           ls -lh "$HERO3_RELEASE_ARCHIVE"
-          timeout --kill-after=10s 600s ssh \
+          timeout --kill-after=10s 900s ssh \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=accept-new \
@@ -171,10 +182,10 @@ jobs:
           if [ -f /opt/hero3/go/bin/hero3-server ]; then
             cp -a /opt/hero3/go/bin/hero3-server "/opt/hero3/backups/hero3-server.$STAMP"
           fi
-          if [ -d /var/www/hero3/web ]; then
+          if [ -d "$RELEASE_DIR/web" ] && [ -d /var/www/hero3/web ]; then
             tar -czf "/var/www/hero3/backups/web.$STAMP.tar.gz" -C /var/www/hero3 web
           fi
-          if [ -d /var/www/hero3/admin ]; then
+          if [ -d "$RELEASE_DIR/admin" ] && [ -d /var/www/hero3/admin ]; then
             tar -czf "/var/www/hero3/backups/admin.$STAMP.tar.gz" -C /var/www/hero3 admin
           fi
 
@@ -182,8 +193,16 @@ jobs:
           install -m 755 "$RELEASE_DIR/go/bin/hero3-server" /opt/hero3/go/bin/hero3-server
           install -m 755 "$RELEASE_DIR/go/bin/hero3-dbtool" /opt/hero3/go/bin/hero3-dbtool
           rsync -a --delete "$RELEASE_DIR/go/config/" /opt/hero3/go/config/
-          rsync -a --delete "$RELEASE_DIR/web/" /var/www/hero3/web/
-          rsync -a --delete "$RELEASE_DIR/admin/" /var/www/hero3/admin/
+          if [ -d "$RELEASE_DIR/web" ]; then
+            rsync -a --delete "$RELEASE_DIR/web/" /var/www/hero3/web/
+          else
+            log "Skipping web static install"
+          fi
+          if [ -d "$RELEASE_DIR/admin" ]; then
+            rsync -a --delete "$RELEASE_DIR/admin/" /var/www/hero3/admin/
+          else
+            log "Skipping admin static install"
+          fi
           printf '%s %s\n' "${HERO3_SHA:0:7}" "deployed from ${HERO3_REF_NAME}" > /opt/hero3/RELEASE
 
           log "Restarting services"
