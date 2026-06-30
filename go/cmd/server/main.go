@@ -86,9 +86,13 @@ func main() {
 		}
 		defer db.Close()
 
-		if err := storage.MigrateMySQL(ctx, db); err != nil {
-			logger.Error("database migration failed", "error", err)
-			os.Exit(1)
+		if shouldRunStartupMigrations(cfg) {
+			if err := storage.MigrateMySQL(ctx, db); err != nil {
+				logger.Error("database migration failed", "error", err)
+				os.Exit(1)
+			}
+		} else {
+			logger.Info("database startup migration skipped", "env", cfg.Environment)
 		}
 
 		gameService = game.NewServiceWithRepository(storage.NewMySQLRepository(db))
@@ -171,6 +175,11 @@ func main() {
 	}
 
 	logger.Info("Hero3 API server stopped")
+}
+
+// shouldRunStartupMigrations 判断服务启动时是否自动执行数据库结构迁移。
+func shouldRunStartupMigrations(cfg config.Config) bool {
+	return cfg.RunStartupMigrations
 }
 
 // validateDevelopmentDatabase 防止本地开发模式误连稳定玩家库。

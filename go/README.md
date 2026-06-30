@@ -117,6 +117,8 @@ HERO3_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localho
 # HERO3_DATABASE_DSN=hero3_user:hero3_password@tcp(127.0.0.1:3306)/hero3?parseTime=true&charset=utf8mb4&loc=UTC
 # 本地开发建议使用 test_ 前缀测试库。
 # HERO3_DATABASE_DSN=hero3_user:hero3_password@tcp(127.0.0.1:3306)/test_hero3?parseTime=true&charset=utf8mb4&loc=UTC
+# 生产环境默认跳过启动迁移，开发环境默认执行；如需覆盖可显式设置。
+# HERO3_RUN_STARTUP_MIGRATIONS=false
 # HERO3_ALLOW_DEVELOPMENT_DATABASE=false
 ```
 
@@ -124,7 +126,7 @@ HERO3_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localho
 
 不配置 `HERO3_DATABASE_DSN` 时，服务使用内存存储，重启后账号和新建存档会丢失。
 
-配置 `HERO3_DATABASE_DSN` 后，服务使用 MySQL/MariaDB，并在启动时自动创建当前需要的表：
+配置 `HERO3_DATABASE_DSN` 后，服务使用 MySQL/MariaDB。开发环境默认在启动时执行当前需要的轻量迁移；生产环境默认不在 `hero3-server` 启动时执行迁移，避免线上重启抢 DDL/回填锁，结构变更应通过 `make migrate` 或服务器上的 `hero3-dbtool migrate` 在低峰执行：
 
 - `accounts`：轻账号
 - `players`：账号绑定的游戏存档，`state_json` 只保留轻量兼容快照，不再保存资源、建筑、兵力、武将、背包、Buff 等权威资产大字段
@@ -169,6 +171,7 @@ go run ./cmd/server
 - 本地开发库使用 `test_hero3`，避免开发调试误写稳定玩家数据。
 - `HERO3_ENV=development` 时，后端默认拒绝连接非 `test_` 前缀数据库。
 - 如确需临时连接非测试库，必须显式设置 `HERO3_ALLOW_DEVELOPMENT_DATABASE=true`。
+- `HERO3_ENV=production` 时，`HERO3_RUN_STARTUP_MIGRATIONS` 默认等于 `false`；如确需在启动时迁移，必须显式设置为 `true`。
 - `make migrate` 只迁移当前 `HERO3_DATABASE_DSN` 指向的库。
 - `make migrate-test` 会按当前库名生成 `test_` 前缀库并执行迁移；执行该命令的数据库账号必须拥有 `CREATE DATABASE` 权限。
 - 如果数据库账号没有建库权限，需要先由服务器管理员创建并授权 `test_hero3`，再把 `go/.env` 的 DSN 改到该库。

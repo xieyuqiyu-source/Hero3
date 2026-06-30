@@ -59,7 +59,7 @@ go build ./cmd/server
 数据库：
 
 - 默认不配置数据库时使用内存存储，适合快速开发。
-- 配置 `HERO3_DATABASE_DSN` 后启用 MySQL/MariaDB，启动时会自动创建当前需要的账号和存档表。
+- 配置 `HERO3_DATABASE_DSN` 后启用 MySQL/MariaDB；开发环境默认随服务启动执行轻量迁移，生产环境默认跳过启动迁移，结构变更应在低峰通过 `make migrate` 或 `hero3-dbtool migrate` 执行。
 - 本地开发模式应连接 `test_` 前缀测试库，例如 `test_hero3`，不要直接写稳定玩家库。
 - `make migrate` 迁移当前 DSN 指向的库，`make migrate-test` 创建并迁移 `test_` 前缀测试库。
 - `make clone-data` 可从 `HERO3_SOURCE_DATABASE_DSN` 复制数据到当前 `test_` 目标库，复制后自动回填并校验资源、背包、建筑、资源田格子、兵力、征兵队列、武将、Buff、玩家货币和旧 NPC 状态权威表。

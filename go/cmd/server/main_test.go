@@ -67,3 +67,12 @@ func TestValidateDevelopmentDatabaseReturnsDSNError(t *testing.T) {
 		t.Fatal("expected invalid dsn to fail")
 	}
 }
+
+func TestShouldRunStartupMigrationsUsesConfigFlag(t *testing.T) {
+	if !shouldRunStartupMigrations(config.Config{RunStartupMigrations: true}) {
+		t.Fatal("expected startup migrations to run when enabled")
+	}
+	if shouldRunStartupMigrations(config.Config{RunStartupMigrations: false}) {
+		t.Fatal("expected startup migrations to be skipped when disabled")
+	}
+}
