@@ -1,3 +1,4 @@
+/* 本文件实现 GM 后台建筑与经济数值配置面板。 */
 import { useEffect, useState } from 'react'
 import { Sliders, Save, ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
@@ -9,6 +10,17 @@ const BUILDING_LABELS: Record<string, string> = {
   iron_mine: '铁矿',
   farm: '农田',
   warehouse: '仓库',
+  infantry_camp: '步兵营',
+  cavalry_camp: '骑兵营',
+  siege_camp: '攻城武器营',
+  special_camp: '特殊建筑营',
+  weapon_bureau: '兵器司',
+  armor_bureau: '防具司',
+  construction_bureau: '建造司',
+  administration: '政务厅',
+  relay_station: '驿站',
+  city_wall: '城墙',
+  beacon_tower: '烽火台',
 }
 
 const RES_LABELS: Record<string, string> = {
@@ -31,6 +43,12 @@ const STAT_LABELS: Record<string, string> = {
   cavalryDefenseBonus: '骑防',
   infantryRecruitSpeedBonus: '步兵征兵',
   cavalryRecruitSpeedBonus: '骑兵征兵',
+  siegeRecruitSpeedBonus: '攻城征兵',
+  specialRecruitSpeedBonus: '特殊征兵',
+  infantryRecruitCostReduction: '步兵减耗',
+  cavalryRecruitCostReduction: '骑兵减耗',
+  siegeRecruitCostReduction: '攻城减耗',
+  specialRecruitCostReduction: '特殊减耗',
   buildSpeedBonus: '建造速度',
   recruitSpeedBonus: '征兵速度',
   marchSpeedBonus: '行军速度',
@@ -138,6 +156,24 @@ export default function BalanceConfigPanel() {
           upgradeCostByLevel: {
             ...building.upgradeCostByLevel,
             [String(level)]: { ...currentCost, [resource]: value },
+          },
+        },
+      },
+    })
+  }
+
+  const updateGoldUpgradeCost = (buildingType: string, level: number, value: number) => {
+    if (!balance) return
+    const building = balance.buildings[buildingType]
+    setBalance({
+      ...balance,
+      buildings: {
+        ...balance.buildings,
+        [buildingType]: {
+          ...building,
+          goldUpgradeCostByLevel: {
+            ...building.goldUpgradeCostByLevel,
+            [String(level)]: value,
           },
         },
       },
@@ -362,6 +398,7 @@ export default function BalanceConfigPanel() {
                       onCapacityChange={updateCapacityAtLevel}
                       onUpgradeSecondsChange={updateUpgradeSeconds}
                       onUpgradeCostChange={updateUpgradeCost}
+                      onGoldUpgradeCostChange={updateGoldUpgradeCost}
                       onModifierChange={updateModifier}
                       onModifierAdd={addModifier}
                       onModifierRemove={removeModifier}
@@ -387,6 +424,7 @@ function BuildingLevelTable({
   onCapacityChange,
   onUpgradeSecondsChange,
   onUpgradeCostChange,
+  onGoldUpgradeCostChange,
   onModifierChange,
   onModifierAdd,
   onModifierRemove,
@@ -397,6 +435,7 @@ function BuildingLevelTable({
   onCapacityChange: (type: string, level: number, value: number) => void
   onUpgradeSecondsChange: (type: string, level: number, value: number) => void
   onUpgradeCostChange: (type: string, level: number, resource: string, value: number) => void
+  onGoldUpgradeCostChange: (type: string, level: number, value: number) => void
   onModifierChange: (type: string, level: number, index: number, modifier: ModifierConfig) => void
   onModifierAdd: (type: string, level: number) => void
   onModifierRemove: (type: string, level: number, index: number) => void
@@ -405,12 +444,15 @@ function BuildingLevelTable({
     ...(building.productionByLevel?.map((_, index) => index) ?? []),
     ...(building.capacityByLevel?.map((_, index) => index) ?? []),
     ...Object.keys(building.upgradeCostByLevel ?? {}).map(Number),
+    ...Object.keys(building.goldUpgradeCostByLevel ?? {}).map(Number),
     ...Object.keys(building.upgradeSecondsByLevel ?? {}).map(Number),
     ...Object.keys(building.modifiersByLevel ?? {}).map(Number),
   ].filter((level) => Number.isFinite(level))
   const levels = levelKeys.length > 0 ? Math.max(...levelKeys) + 1 : 0
   const hasProduction = (building.productionByLevel?.length ?? 0) > 0
   const hasCapacity = (building.capacityByLevel?.length ?? 0) > 0
+  const hasResourceCost = Object.keys(building.upgradeCostByLevel ?? {}).length > 0
+  const hasGoldCost = Object.keys(building.goldUpgradeCostByLevel ?? {}).length > 0
   const hasModifiers = Object.keys(building.modifiersByLevel ?? {}).length > 0
 
   return (
@@ -422,13 +464,15 @@ function BuildingLevelTable({
             {hasProduction && <th className="text-left py-1 pr-2 font-bold">产量/h</th>}
             {hasCapacity && <th className="text-left py-1 pr-2 font-bold">容量</th>}
             <th className="text-left py-1 pr-2 font-bold">升级时间(s)</th>
-            <th className="text-left py-1 font-bold">升级消耗</th>
+            {hasResourceCost && <th className="text-left py-1 font-bold">资源消耗</th>}
+            {hasGoldCost && <th className="text-left py-1 font-bold">账号金币</th>}
             {hasModifiers && <th className="text-left py-1 pl-2 font-bold">属性加成</th>}
           </tr>
         </thead>
         <tbody>
           {Array.from({ length: levels }, (_, i) => {
             const upgradeCost = levelRecordValue(building.upgradeCostByLevel, i)
+            const goldUpgradeCost = levelRecordValue(building.goldUpgradeCostByLevel, i)
             const upgradeSeconds = levelRecordValue(building.upgradeSecondsByLevel, i)
             const modifiers = levelRecordValue(building.modifiersByLevel, i) ?? []
             return (
@@ -462,21 +506,36 @@ function BuildingLevelTable({
                     className="h-6 min-w-[72px] px-1 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
                   />
                 </td>
-                <td className="py-1.5">
-                  <div className="grid min-w-[220px] grid-cols-2 gap-1">
-                    {Object.keys(RES_LABELS).map((res) => (
-                      <label key={res} className="flex items-center gap-1">
-                        <span className="shrink-0 text-[9px] text-[var(--color-text-muted)]">{RES_LABELS[res]}</span>
-                        <input
-                          type="number"
-                          value={upgradeCost?.[res] ?? 0}
-                          onChange={(e) => onUpgradeCostChange(buildingType, i, res, parseInt(e.target.value) || 0)}
-                          className="h-6 min-w-[64px] px-1 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
-                        />
-                      </label>
-                    ))}
-                  </div>
-                </td>
+                {hasResourceCost && (
+                  <td className="py-1.5">
+                    <div className="grid min-w-[220px] grid-cols-2 gap-1">
+                      {Object.keys(RES_LABELS).map((res) => (
+                        <label key={res} className="flex items-center gap-1">
+                          <span className="shrink-0 text-[9px] text-[var(--color-text-muted)]">{RES_LABELS[res]}</span>
+                          <input
+                            type="number"
+                            value={upgradeCost?.[res] ?? 0}
+                            onChange={(e) => onUpgradeCostChange(buildingType, i, res, parseInt(e.target.value) || 0)}
+                            className="h-6 min-w-[64px] px-1 rounded text-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </td>
+                )}
+                {hasGoldCost && (
+                  <td className="py-1.5">
+                    <label className="flex min-w-[96px] items-center gap-1">
+                      <span className="shrink-0 text-[9px] text-amber-600">金币</span>
+                      <input
+                        type="number"
+                        value={goldUpgradeCost ?? 0}
+                        onChange={(e) => onGoldUpgradeCostChange(buildingType, i, parseInt(e.target.value) || 0)}
+                        className="h-6 min-w-[72px] px-1 rounded text-[10px] border border-amber-500/30 bg-amber-500/5 text-[var(--color-text-primary)]"
+                      />
+                    </label>
+                  </td>
+                )}
                 {hasModifiers && (
                   <td className="py-1.5 pl-2">
                     <div className="grid gap-1 min-w-[360px]">

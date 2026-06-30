@@ -1,3 +1,4 @@
+// 本组件提供全局页面布局、桌面侧栏、手机侧栏和移动端菜单入口。
 import { useEffect, useState, type FC, type ReactNode } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
@@ -12,6 +13,7 @@ import {
   Settings,
   LoaderCircle,
   ChevronDown,
+  UserRound,
 } from 'lucide-react'
 import Sidebar from './Sidebar'
 import ThemeToggle from './ThemeToggle'
@@ -55,6 +57,11 @@ const Layout: FC<LayoutProps> = ({ children }) => {
 
   const handleNavigate = (key: string) => {
     navigate(`/${key}`)
+    setMobileOpen(false)
+  }
+
+  const handleNavigateGenerals = () => {
+    navigate('/military?tab=generals')
     setMobileOpen(false)
   }
 
@@ -131,6 +138,7 @@ const Layout: FC<LayoutProps> = ({ children }) => {
           activeKey={activeKey}
           gameState={gameState}
           onNavigate={handleNavigate}
+          onNavigateGenerals={handleNavigateGenerals}
         />
       </aside>
 
@@ -243,10 +251,12 @@ const MobileSidebarContent: FC<{
   activeKey: string
   gameState: GameState | null
   onNavigate: (key: string) => void
+  onNavigateGenerals: () => void
 }> = ({
   activeKey,
   gameState,
   onNavigate,
+  onNavigateGenerals,
 }) => {
   const navItems = [
     { key: 'city', label: '城池', icon: Castle },
@@ -274,6 +284,9 @@ const MobileSidebarContent: FC<{
   const factionUnits = units?.[gameState?.player.faction ?? '']
   const visibleArmy = sortArmyForDisplay(gameState?.army, factionUnits)
   const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
+  const mainGeneralBusy = Boolean(gameState?.general && gameState.generalAssignments?.some((item) => (
+    item.generalId === gameState.general?.id && item.id !== 'main' && item.slot !== 'main'
+  )))
 
   return (
     <>
@@ -363,6 +376,31 @@ const MobileSidebarContent: FC<{
           </div>
           <p className="text-xs text-[var(--color-text-secondary)] opacity-50">仓库容量预留</p>
         </div>
+        )}
+
+        {/* General */}
+        {gameState?.general && (
+          <button
+            type="button"
+            onClick={onNavigateGenerals}
+            className="
+              mb-2.5 w-full rounded-2xl border border-[var(--color-border)]
+              bg-[var(--color-surface-dim)] p-3 text-left
+              transition-colors duration-200
+              hover:border-[var(--color-accent-border)] hover:bg-[var(--color-surface)]
+            "
+          >
+            <div className="flex items-center gap-2">
+              <UserRound size={14} className="text-amber-600" />
+              <span className="text-sm font-semibold text-[var(--color-text-primary)]">{gameState.general.name}</span>
+              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-600">
+                Lv.{gameState.general.level}
+              </span>
+              <span className="ml-auto text-[10px] text-[var(--color-text-muted)]">
+                {mainGeneralBusy ? '随军中' : '将领'}
+              </span>
+            </div>
+          </button>
         )}
 
         {/* Army */}
