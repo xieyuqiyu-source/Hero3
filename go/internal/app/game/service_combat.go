@@ -92,6 +92,10 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 		mode = "attack"
 	}
 
+	lock := s.getPlayerLock(playerID)
+	lock.Lock()
+	defer lock.Unlock()
+
 	now := time.Now()
 	var report BattleReport
 	var rewardApply RewardApplyResult

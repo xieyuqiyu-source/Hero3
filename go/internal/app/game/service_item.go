@@ -2,6 +2,7 @@ package game
 
 import (
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 )
@@ -134,27 +135,44 @@ func (s *Service) UseItem(playerID string, itemID string, amount int) (UseItemRe
 	defer lock.Unlock()
 
 	now := time.Now()
-	effects := map[string]int{}
 	var before, after coreAssetSnapshot
+	var effects map[string]int
+	var state GameState
+	var err error
 	beforeItemAmount := 0
 	afterItemAmount := 0
-	state, err := s.repo.UpdateItemState(playerID, now, func(state *GameState) error {
-		nextState, _ := settleResources(*state, now)
-		*state = nextState
-		before = snapshotCoreAssets(state)
-		beforeItemAmount = inventoryItemAmount(state, itemID)
-		if !consumeItemFromInventory(state, itemID, amount, now) {
-			return ErrInsufficientItem
+	for attempt := 0; attempt < 3; attempt++ {
+		effects = map[string]int{}
+		before = coreAssetSnapshot{}
+		after = coreAssetSnapshot{}
+		beforeItemAmount = 0
+		afterItemAmount = 0
+		state, err = s.repo.UpdateItemState(playerID, now, func(state *GameState) error {
+			nextState, _ := settleResources(*state, now)
+			*state = nextState
+			before = snapshotCoreAssets(state)
+			beforeItemAmount = inventoryItemAmount(state, itemID)
+			if !consumeItemFromInventory(state, itemID, amount, now) {
+				return ErrInsufficientItem
+			}
+			applied, err := applyItemEffects(state, item, amount)
+			if err != nil {
+				return err
+			}
+			effects = applied
+			afterItemAmount = inventoryItemAmount(state, itemID)
+			after = snapshotCoreAssets(state)
+			return nil
+		})
+		if err == nil {
+			break
 		}
-		applied, err := applyItemEffects(state, item, amount)
-		if err != nil {
-			return err
+		if !isRetryableStorageConflict(err) || attempt == 2 {
+			return UseItemResult{}, err
 		}
-		effects = applied
-		afterItemAmount = inventoryItemAmount(state, itemID)
-		after = snapshotCoreAssets(state)
-		return nil
-	})
+		slog.Warn("item use transaction retry after storage conflict", "playerId", playerID, "itemId", itemID, "amount", amount, "attempt", attempt+1, "error", err)
+		time.Sleep(time.Duration(attempt+1) * 80 * time.Millisecond)
+	}
 	if err != nil {
 		return UseItemResult{}, err
 	}
