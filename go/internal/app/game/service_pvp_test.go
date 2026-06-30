@@ -1038,6 +1038,65 @@ func TestPvpMarchAccelerateDeductsCityGoldAndShortensArrival(t *testing.T) {
 	}
 }
 
+func TestPvpBattleReturnUsesActualAcceleratedOutboundDuration(t *testing.T) {
+	svc, repo, attacker, defender := newPvpTestService(t)
+	attacker.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	attacker.CityGold = 100
+	defender.Army = nil
+	repo.players[attacker.Player.ID] = attacker
+	repo.players[defender.Player.ID] = defender
+
+	started, err := svc.StartPvpAttack(PvpAttackRequest{
+		PlayerID:       attacker.Player.ID,
+		TargetPlayerID: defender.Player.ID,
+		MarchMode:      PvpMarchTypeAttack,
+		Troops:         map[string]int{"weiInfantry": 40},
+	})
+	if err != nil {
+		t.Fatalf("StartPvpAttack failed: %v", err)
+	}
+	first, err := svc.AcceleratePvpMarch(attacker.Player.ID, started.March.ID)
+	if err != nil {
+		t.Fatalf("first AcceleratePvpMarch failed: %v", err)
+	}
+	second, err := svc.AcceleratePvpMarch(attacker.Player.ID, started.March.ID)
+	if err != nil {
+		t.Fatalf("second AcceleratePvpMarch failed: %v", err)
+	}
+	startedAt, err := time.Parse(resourceDateLayout, second.March.StartedAt)
+	if err != nil {
+		t.Fatalf("parse startedAt failed: %v", err)
+	}
+	arrivesAt, err := time.Parse(resourceDateLayout, second.March.ArrivesAt)
+	if err != nil {
+		t.Fatalf("parse arrivesAt failed: %v", err)
+	}
+	actualOutboundSeconds := int(math.Ceil(arrivesAt.Sub(startedAt).Seconds()))
+	if actualOutboundSeconds <= 0 || actualOutboundSeconds >= started.March.DurationSeconds {
+		t.Fatalf("expected acceleration to shorten outbound duration, first=%+v second=%+v actual=%d original=%d", first.March, second.March, actualOutboundSeconds, started.March.DurationSeconds)
+	}
+	forcePvpMarchDueWithOutboundDuration(t, repo, started.March.ID, time.Duration(actualOutboundSeconds)*time.Second)
+
+	if _, err := svc.ResolvePvpMarch(started.March.ID); err != nil {
+		t.Fatalf("ResolvePvpMarch failed: %v", err)
+	}
+	march, err := repo.GetPvpMarch(started.March.ID)
+	if err != nil {
+		t.Fatalf("GetPvpMarch failed: %v", err)
+	}
+	returnStartedAt, err := time.Parse(resourceDateLayout, march.ReturnStartedAt)
+	if err != nil {
+		t.Fatalf("parse returnStartedAt failed: %v", err)
+	}
+	returnsAt, err := time.Parse(resourceDateLayout, march.ReturnsAt)
+	if err != nil {
+		t.Fatalf("parse returnsAt failed: %v", err)
+	}
+	if got := int(returnsAt.Sub(returnStartedAt).Seconds()); got != actualOutboundSeconds {
+		t.Fatalf("expected return duration to equal actual accelerated outbound %d, got %d march=%+v", actualOutboundSeconds, got, march)
+	}
+}
+
 func TestPvpAttackRespectsDailyLimitAndProtection(t *testing.T) {
 	svc, repo, attacker, defender := newPvpTestService(t)
 	now := time.Now().UTC()
@@ -1271,6 +1330,20 @@ func forcePvpMarchDue(t *testing.T, repo *MemoryRepository, marchID string) {
 	defer repo.mu.Unlock()
 	march := repo.pvpMarches[marchID]
 	march.ArrivesAt = time.Now().Add(-time.Second).UTC().Format(resourceDateLayout)
+	repo.pvpMarches[marchID] = march
+}
+
+func forcePvpMarchDueWithOutboundDuration(t *testing.T, repo *MemoryRepository, marchID string, duration time.Duration) {
+	t.Helper()
+	if duration <= 0 {
+		duration = time.Second
+	}
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	arrivesAt := time.Now().Add(-time.Second).UTC()
+	march := repo.pvpMarches[marchID]
+	march.StartedAt = arrivesAt.Add(-duration).Format(resourceDateLayout)
+	march.ArrivesAt = arrivesAt.Format(resourceDateLayout)
 	repo.pvpMarches[marchID] = march
 }
 

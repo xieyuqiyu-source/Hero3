@@ -1182,14 +1182,11 @@ func (s *Service) ResolvePvpMarch(marchID string) (PvpBattle, error) {
 		}
 		nowText := now.Format(resourceDateLayout)
 		if totalTroops(march.AttackTroops) > 0 {
-			returnSeconds, returnSpeed, err := calculatePvpMarchTravel(attacker.Player.Faction, march.AttackTroops, now, pvpModifierSourcesForGenerals(attacker, march.AttackGenerals))
-			if err != nil {
-				return PvpBattle{}, BattleReport{}, BattleReport{}, nil, nil, err
-			}
+			returnSeconds := calculatePvpOutboundTravelSeconds(march)
 			march.Status = PvpMarchStatusReturning
 			march.ReturnStartedAt = nowText
 			march.ReturnsAt = now.Add(time.Duration(returnSeconds) * time.Second).Format(resourceDateLayout)
-			march.SpeedMultiplier = returnSpeed
+			march.SpeedMultiplier = calculatePvpSpeedMultiplier(march)
 			updatePvpGeneralAssignmentStatus(attacker, march, PvpMarchStatusReturning)
 		} else {
 			march.Status = PvpMarchStatusResolved
@@ -1896,6 +1893,25 @@ func calculatePvpRecallReturnSeconds(march *PvpMarch, now time.Time) int {
 		return durationSeconds
 	}
 	return elapsedSeconds
+}
+
+// calculatePvpOutboundTravelSeconds 返回本次出征从开始到实际抵达花费的秒数，用于战后返程对称。
+func calculatePvpOutboundTravelSeconds(march *PvpMarch) int {
+	if march == nil {
+		return defaultPvpMarchSeconds
+	}
+	startedAt, errStart := time.Parse(resourceDateLayout, strings.TrimSpace(march.StartedAt))
+	arrivesAt, errArrive := time.Parse(resourceDateLayout, strings.TrimSpace(march.ArrivesAt))
+	if errStart == nil && errArrive == nil && arrivesAt.After(startedAt) {
+		seconds := int(math.Ceil(arrivesAt.Sub(startedAt).Seconds()))
+		if seconds > 0 {
+			return seconds
+		}
+	}
+	if march.DurationSeconds > 0 {
+		return march.DurationSeconds
+	}
+	return defaultPvpMarchSeconds
 }
 
 // calculatePvpSpeedMultiplier 根据当前到达时间反推展示用行军速度倍率。

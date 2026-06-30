@@ -9,7 +9,7 @@ import type { PvpMarch, Reinforcement } from '@/types/game'
 const PVP_RECALL_WINDOW_MS = 120_000
 const PVP_MAX_ACCELERATE_TIMES = 2
 
-type MarchTag = '出征' | '增援' | '被攻击' | '被侦查'
+type MarchTag = '出征' | '返程' | '增援' | '被攻击' | '被侦查'
 
 interface MarchAlertItem {
   id: string
@@ -29,8 +29,9 @@ interface MarchAlertTagsProps {
 const ALERT_PRIORITY: Record<MarchTag, number> = {
   被攻击: 0,
   出征: 1,
-  被侦查: 2,
-  增援: 3,
+  返程: 2,
+  被侦查: 3,
+  增援: 4,
 }
 
 // MarchAlertTags 聚合 PVP 行军和增援行军，显示成简短高亮标签。
@@ -172,7 +173,7 @@ const MarchAlertTags: FC<MarchAlertTagsProps> = ({ limit = 5 }) => {
       {items.map((item) => (
         <div
           key={item.id}
-          className={`flex h-8 min-w-0 items-center gap-1.5 rounded-lg border px-2 text-[10px] shadow-[inset_0_0_14px_rgba(239,68,68,0.12)] ${alertClass(item.tag).row}`}
+          className={`flex h-8 min-w-0 items-center gap-1.5 rounded-lg border px-2 text-[10px] ${alertClass(item.tag).row}`}
         >
           <span className={`shrink-0 rounded px-1.5 py-0.5 font-black ${alertClass(item.tag).tag}`}>{item.tag}</span>
           <span className="min-w-0 flex-1 truncate font-bold text-[var(--color-text-primary)]">{item.playerName || '未知玩家'}</span>
@@ -209,14 +210,15 @@ const MarchAlertTags: FC<MarchAlertTagsProps> = ({ limit = 5 }) => {
 function buildPvpAlertItem(march: PvpMarch, activePlayerId: string): MarchAlertItem | null {
   if (march.attackerPlayerId === activePlayerId) {
     if (march.status !== 'marching' && march.status !== 'returning' && march.status !== 'resolving') return null
+    const returning = march.status === 'returning'
     return {
       id: `pvp:${march.id}:attack`,
-      tag: '出征',
+      tag: returning ? '返程' : '出征',
       playerName: march.defenderName,
-      endsAt: march.status === 'returning' ? march.returnsAt : march.arrivesAt,
+      endsAt: returning ? march.returnsAt : march.arrivesAt,
       fallbackText: march.status === 'resolving' ? '结算中' : undefined,
-      sortAt: toTime(march.status === 'returning' ? march.returnsAt : march.arrivesAt),
-      priority: ALERT_PRIORITY.出征,
+      sortAt: toTime(returning ? march.returnsAt : march.arrivesAt),
+      priority: returning ? ALERT_PRIORITY.返程 : ALERT_PRIORITY.出征,
       pvpMarch: march.status === 'marching' ? march : undefined,
     }
   }
@@ -268,20 +270,20 @@ function buildReceivedReinforcementItem(reinforcement: Reinforcement): MarchAler
 function alertClass(tag: MarchTag) {
   if (tag === '被攻击') {
     return {
-      row: 'border-red-500/55 bg-red-500/15',
+      row: 'border-red-500/55 bg-red-500/15 shadow-[inset_0_0_14px_rgba(239,68,68,0.12)]',
       tag: 'bg-red-500 text-white',
       time: 'text-red-600',
     }
   }
   if (tag === '出征' || tag === '被侦查') {
     return {
-      row: 'border-rose-500/45 bg-rose-500/10',
+      row: 'border-rose-500/45 bg-rose-500/10 shadow-[inset_0_0_14px_rgba(244,63,94,0.12)]',
       tag: 'bg-rose-500 text-white',
       time: 'text-rose-600',
     }
   }
   return {
-    row: 'border-emerald-500/35 bg-emerald-500/10',
+    row: 'border-emerald-500/35 bg-emerald-500/10 shadow-[inset_0_0_14px_rgba(16,185,129,0.12)]',
     tag: 'bg-emerald-500 text-white',
     time: 'text-emerald-600',
   }
