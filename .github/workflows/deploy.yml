@@ -24,6 +24,11 @@ jobs:
       HERO3_HEALTH_URL: https://hero3.ccoos.cn/healthz
 
     steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
       - name: Configure SSH
         env:
           HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
@@ -50,10 +55,27 @@ jobs:
           HERO3_SSH_USER: ${{ secrets.HERO3_SSH_USER }}
         run: |
           set -euo pipefail
-          test -n "$HERO3_REPOSITORY"
           test -n "$HERO3_REF_NAME"
           test -n "$HERO3_SHA"
           test -n "$HERO3_SSH_USER"
+
+          SOURCE_ARCHIVE="/tmp/hero3-source.${HERO3_SHA}.tar.gz"
+          REMOTE_SOURCE_ARCHIVE="/tmp/hero3-source.${HERO3_SHA}.tar.gz"
+          trap 'rm -f "$SOURCE_ARCHIVE"' EXIT
+          git archive --format=tar.gz -o "$SOURCE_ARCHIVE" "$HERO3_SHA"
+
+          scp \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=accept-new \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=6 \
+            -i ~/.ssh/hero3_deploy_key \
+            -P "$HERO3_SSH_PORT" \
+            "$SOURCE_ARCHIVE" \
+            "$HERO3_SSH_USER@$HERO3_SSH_HOST:$REMOTE_SOURCE_ARCHIVE"
 
           ssh \
             -o BatchMode=yes \
@@ -66,11 +88,11 @@ jobs:
             -i ~/.ssh/hero3_deploy_key \
             -p "$HERO3_SSH_PORT" \
             "$HERO3_SSH_USER@$HERO3_SSH_HOST" \
-            "HERO3_REPOSITORY='$HERO3_REPOSITORY' HERO3_REF_NAME='$HERO3_REF_NAME' HERO3_SHA='$HERO3_SHA' bash -s" <<'EOF'
+            "HERO3_REF_NAME='$HERO3_REF_NAME' HERO3_SHA='$HERO3_SHA' HERO3_SOURCE_ARCHIVE='$REMOTE_SOURCE_ARCHIVE' bash -s" <<'EOF'
           set -euo pipefail
 
           SOURCE_DIR="/opt/hero3/source"
-          REPO_URL="https://github.com/${HERO3_REPOSITORY}.git"
+          STAGING_SOURCE_DIR="/opt/hero3/source.${HERO3_SHA}"
           STAMP="$(date +%Y%m%d%H%M%S)"
           SERVER_BIN="/tmp/hero3-server.${HERO3_SHA}"
           DBTOOL_BIN="/tmp/hero3-dbtool.${HERO3_SHA}"
@@ -79,24 +101,11 @@ jobs:
             printf '\n[%s] %s\n' "$(date -Is)" "$*"
           }
 
-          git_network() {
-            attempt=1
-            until timeout --kill-after=10s 300s git -c http.version=HTTP/1.1 "$@"; do
-              if [ "$attempt" -ge 3 ]; then
-                return 1
-              fi
-              sleep "$((attempt * 10))"
-              attempt="$((attempt + 1))"
-              log "Retrying git network operation, attempt ${attempt}/3"
-            done
-          }
-
-          command -v git >/dev/null
           command -v go >/dev/null
           command -v pnpm >/dev/null
           command -v rsync >/dev/null
           command -v flock >/dev/null
-          command -v timeout >/dev/null
+          command -v tar >/dev/null
 
           exec 9>/tmp/hero3-deploy.lock
           if ! flock -n 9; then
@@ -107,22 +116,14 @@ jobs:
           mkdir -p /opt/hero3/backups /var/www/hero3/backups
           mkdir -p /opt/hero3/go/bin /opt/hero3/go/config /var/www/hero3/web /var/www/hero3/admin
 
-          log "Updating source"
-          if [ -d "$SOURCE_DIR/.git" ]; then
-            git -C "$SOURCE_DIR" remote set-url origin "$REPO_URL"
-            if git -C "$SOURCE_DIR" cat-file -e "$HERO3_SHA^{commit}" 2>/dev/null; then
-              log "Source already has target commit"
-            else
-              git_network -C "$SOURCE_DIR" fetch --depth 1 --prune origin "$HERO3_REF_NAME"
-            fi
-          else
-            rm -rf "$SOURCE_DIR"
-            git_network clone --depth 1 --single-branch --branch "$HERO3_REF_NAME" "$REPO_URL" "$SOURCE_DIR"
-          fi
-
-          git -C "$SOURCE_DIR" checkout -f "$HERO3_SHA"
-          git -C "$SOURCE_DIR" reset --hard "$HERO3_SHA"
-          git -C "$SOURCE_DIR" clean -fd
+          log "Updating source from uploaded archive"
+          test -f "$HERO3_SOURCE_ARCHIVE"
+          rm -rf "$STAGING_SOURCE_DIR"
+          mkdir -p "$STAGING_SOURCE_DIR"
+          tar -xzf "$HERO3_SOURCE_ARCHIVE" -C "$STAGING_SOURCE_DIR"
+          rm -rf "$SOURCE_DIR"
+          mv "$STAGING_SOURCE_DIR" "$SOURCE_DIR"
+          rm -f "$HERO3_SOURCE_ARCHIVE"
 
           log "Building backend"
           cd "$SOURCE_DIR/go"
@@ -156,7 +157,7 @@ jobs:
           rsync -a --delete "$SOURCE_DIR/go/config/" /opt/hero3/go/config/
           rsync -a --delete "$SOURCE_DIR/web/dist/" /var/www/hero3/web/
           rsync -a --delete "$SOURCE_DIR/admin/dist/" /var/www/hero3/admin/
-          git -C "$SOURCE_DIR" log -1 --pretty='%h %s' > /opt/hero3/RELEASE
+          printf '%s %s\n' "${HERO3_SHA:0:7}" "deployed from ${HERO3_REF_NAME}" > /opt/hero3/RELEASE
 
           log "Restarting services"
           if [ -d "$SOURCE_DIR/deploy/systemd" ]; then
