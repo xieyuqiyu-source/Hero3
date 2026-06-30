@@ -7,6 +7,7 @@ import { useConfigStore } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
 import { getTraitMeta } from '@/utils/traits'
 import { sortUnitEntries } from '@/utils/unitOrder'
+import { mergeBattleReportDrops } from '@/utils/reportDrops'
 
 interface BattleResultModalProps {
   report: BattleReport
@@ -87,6 +88,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
   const generalLevelBefore = report.generalLevelBefore ?? report.detail?.rewards?.generalLevelBefore
   const generalLevelAfter = report.generalLevelAfter ?? report.detail?.rewards?.generalLevelAfter
   const drops = report.drops ?? report.detail?.rewards?.drops ?? []
+  const mergedDrops = mergeBattleReportDrops(drops)
 
   return (
     <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
@@ -197,13 +199,13 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
             <p className="text-xs text-[var(--color-text-muted)] text-center">敌方城池资源已空</p>
           )}
 
-          {drops.length > 0 && (
+          {mergedDrops.length > 0 && (
             <div>
               <h3 className="text-[11px] font-semibold text-[var(--color-text-primary)] mb-1.5">宝物掉落</h3>
               <div className="flex flex-wrap gap-1.5">
-                {drops.map((drop, index) => (
+                {mergedDrops.map((drop) => (
                   <span
-                    key={`${drop.itemId ?? drop.name ?? 'drop'}-${index}`}
+                    key={`${drop.itemId ?? drop.name ?? 'drop'}-${drop.quality ?? ''}`}
                     className={`rounded-lg border px-2 py-1 text-[10px] font-bold ${DROP_QUALITY_CLASS[drop.quality ?? ''] ?? DROP_QUALITY_CLASS.common}`}
                   >
                     {drop.name ?? drop.itemId} ×{drop.amount.toLocaleString()}

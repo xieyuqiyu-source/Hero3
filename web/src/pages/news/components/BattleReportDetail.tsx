@@ -7,6 +7,7 @@ import type { BattleReport, BattleReportSweepExtra } from '@/types/game'
 import { getTraitMeta } from '@/utils/traits'
 import { sortUnitEntries, sortUnitIds } from '@/utils/unitOrder'
 import { gameApi } from '@/api/game'
+import { mergeBattleReportDrops } from '@/utils/reportDrops'
 import { buildReportShareURL } from '../reportPresentation'
 
 interface BattleReportDetailProps {
@@ -146,6 +147,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const revivedUnits = safeMap(report.revivedUnits)
   const traitTriggered = safeArray(report.traitTriggered)
   const drops = report.drops ?? report.detail?.rewards?.drops ?? []
+  const mergedDrops = mergeBattleReportDrops(drops)
   const topDisplayName = isDefenseView ? targetDisplayName : selfDisplayName
   const bottomDisplayName = isDefenseView ? selfDisplayName : targetDisplayName
   const topPower = isDefenseView ? report.enemyPower : report.playerPower
@@ -401,10 +403,10 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
           <div className="flex items-center">
             <span className="text-xs font-medium text-[var(--color-text-secondary)] w-16 flex-shrink-0">宝物掉落</span>
             <div className="flex flex-1 flex-wrap items-center justify-center gap-1.5">
-              {drops.length > 0 ? (
-                drops.map((drop, index) => (
+              {mergedDrops.length > 0 ? (
+                mergedDrops.map((drop) => (
                   <span
-                    key={`${drop.itemId ?? drop.name ?? 'drop'}-${index}`}
+                    key={`${drop.itemId ?? drop.name ?? 'drop'}-${drop.quality ?? ''}`}
                     className={`rounded-lg border px-2 py-1 text-[10px] font-bold ${DROP_QUALITY_CLASS[drop.quality ?? ''] ?? DROP_QUALITY_CLASS.common}`}
                   >
                     {drop.name ?? drop.itemId} ×{drop.amount.toLocaleString()}

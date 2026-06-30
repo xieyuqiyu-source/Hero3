@@ -78,6 +78,8 @@ func (h *Handlers) AttackNpc(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusUnprocessableEntity
 		case errors.Is(err, game.ErrGeneralNotFound), errors.Is(err, game.ErrGeneralBusy):
 			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrOperationTooFast):
+			status = http.StatusTooManyRequests
 		}
 		writeError(w, status, err.Error())
 		return
@@ -109,6 +111,8 @@ func (h *Handlers) SweepNpc(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusUnprocessableEntity
 		case errors.Is(err, game.ErrGeneralNotFound), errors.Is(err, game.ErrGeneralBusy):
 			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrOperationTooFast):
+			status = http.StatusTooManyRequests
 		}
 		writeError(w, status, err.Error())
 		return

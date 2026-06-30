@@ -70,6 +70,7 @@ var (
 	ErrReinforcementSlotFull    = errors.New("reinforcement source slots are full")
 	ErrReinforcementBusy        = errors.New("reinforcement is busy")
 	ErrGeneralBusy              = errors.New("general is already assigned")
+	ErrOperationTooFast         = errors.New("操作太快，请稍后再试")
 )
 
 const resourceDateLayout = time.RFC3339
@@ -77,7 +78,7 @@ const resourceDateLayout = time.RFC3339
 type Service struct {
 	repo              Repository
 	eventBus          *EventBus
-	playerLocks       sync.Map // per-player 互斥锁，防止并发购买/兑换竞态
+	playerLocks       sync.Map // per-player 互斥锁，防止同一存档的关键资产操作并发竞态
 	balancePath       string
 	factionsPath      string
 	unitsDir          string
@@ -94,6 +95,15 @@ type Service struct {
 func (s *Service) getPlayerLock(playerID string) *sync.Mutex {
 	val, _ := s.playerLocks.LoadOrStore(playerID, &sync.Mutex{})
 	return val.(*sync.Mutex)
+}
+
+// tryPlayerLockIfIdle 尝试获取玩家锁；若同一存档已有关键操作在执行，立即返回失败。
+func (s *Service) tryPlayerLockIfIdle(playerID string) (func(), bool) {
+	lock := s.getPlayerLock(playerID)
+	if !lock.TryLock() {
+		return nil, false
+	}
+	return lock.Unlock, true
 }
 
 type BootstrapResponse struct {

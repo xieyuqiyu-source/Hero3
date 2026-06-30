@@ -102,6 +102,16 @@ type ScoutNpcResponse struct {
 
 // AttackNpc 攻击 NPC 城池
 func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
+	playerID := strings.TrimSpace(req.PlayerID)
+	if playerID == "" {
+		return AttackNpcResponse{}, ErrPlayerNotFound
+	}
+	unlock, ok := s.tryPlayerLockIfIdle(playerID)
+	if !ok {
+		return AttackNpcResponse{}, ErrOperationTooFast
+	}
+	defer unlock()
+
 	return s.attackNpc(req, true)
 }
 
@@ -209,10 +219,6 @@ func (s *Service) attackNpc(req AttackNpcRequest, saveReport bool) (AttackNpcRes
 	if mode != "attack" && mode != "plunder" {
 		mode = "attack"
 	}
-
-	lock := s.getPlayerLock(playerID)
-	lock.Lock()
-	defer lock.Unlock()
 
 	now := time.Now()
 	var report BattleReport
@@ -462,6 +468,12 @@ func (s *Service) SweepNpc(req SweepNpcRequest) (SweepNpcResponse, error) {
 	if playerID == "" {
 		return SweepNpcResponse{}, ErrPlayerNotFound
 	}
+	unlock, ok := s.tryPlayerLockIfIdle(playerID)
+	if !ok {
+		return SweepNpcResponse{}, ErrOperationTooFast
+	}
+	defer unlock()
+
 	npcIDs := normalizeSweepNpcIDs(req.NpcIDs)
 	if len(npcIDs) == 0 {
 		return SweepNpcResponse{}, ErrNoSweepTargets

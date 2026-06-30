@@ -1879,6 +1879,71 @@ func TestPlayerAssetActionsAreSerializedPerPlayer(t *testing.T) {
 	}
 }
 
+func TestNpcAttackReturnsTooFastWhileSweepIsRunning(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+
+	svc := NewService()
+	baseRepo := svc.repo.(*MemoryRepository)
+	blockingRepo := &blockingAssetRepository{
+		MemoryRepository: baseRepo,
+		entered:          make(chan string, 2),
+		release:          make(chan struct{}),
+	}
+	svc.repo = blockingRepo
+
+	now := time.Now()
+	account := Account{ID: "acc_sweep_busy", Username: "sweep_busy", PasswordHash: "x", CreatedAt: now}
+	if err := blockingRepo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_sweep_busy", "SweepBusy", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	state.Resources.Capacity = map[string]int{"wood": 10000, "stone": 10000, "iron": 10000, "food": 10000}
+	state.NpcState = &NpcState{
+		Cities: []NpcCity{
+			testNpcCity("npc_sweep_busy_1", now),
+			testNpcCity("npc_sweep_busy_2", now),
+		},
+		LastRefreshedAt: now.UTC().Format(resourceDateLayout),
+	}
+	if err := blockingRepo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	sweepDone := make(chan error, 1)
+	go func() {
+		_, err := svc.SweepNpc(SweepNpcRequest{
+			PlayerID: state.Player.ID,
+			NpcIDs:   []string{"npc_sweep_busy_1"},
+			Mode:     "attack",
+		})
+		sweepDone <- err
+	}()
+	if got := <-blockingRepo.entered; got != "combat" {
+		t.Fatalf("expected sweep combat transaction to enter first, got %s", got)
+	}
+
+	_, err := svc.AttackNpc(AttackNpcRequest{
+		PlayerID: state.Player.ID,
+		NpcID:    "npc_sweep_busy_2",
+		Mode:     "attack",
+		Units:    map[string]int{"weiInfantry": 10},
+	})
+	if !errors.Is(err, ErrOperationTooFast) {
+		t.Fatalf("expected ErrOperationTooFast while sweep is running, got %v", err)
+	}
+	select {
+	case got := <-blockingRepo.entered:
+		t.Fatalf("expected busy attack not to enter storage transaction, but %s entered", got)
+	default:
+	}
+
+	blockingRepo.release <- struct{}{}
+	if err := <-sweepDone; err != nil {
+		t.Fatalf("sweep failed: %v", err)
+	}
+}
+
 func TestAttackNpcGrantsConfiguredItemDrops(t *testing.T) {
 	setTestCombatUnitsConfig(t)
 	root := filepath.Join("..", "..", "..", "config")
