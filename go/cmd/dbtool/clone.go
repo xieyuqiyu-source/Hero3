@@ -205,6 +205,33 @@ func runCloneData(args []string) error {
 		}
 		fmt.Printf("Buff 权威表已刷新：玩家 %d，Buff 行 %d\n", backfillResult.Players, backfillResult.Rows)
 	}
+	if !*skipAssetRefresh {
+		currencyBackfill, err := backfillPlayerCurrencies(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		currencyVerify, err := verifyPlayerCurrencies(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		if currencyVerify.Missing > 0 {
+			return fmt.Errorf("玩家货币权威表覆盖校验失败：玩家 %d，货币行 %d，缺失 %d", currencyVerify.Players, currencyVerify.ActualRows, currencyVerify.Missing)
+		}
+		fmt.Printf("玩家货币权威表已补齐：玩家 %d，新增货币行 %d\n", currencyBackfill.Players, currencyBackfill.Rows)
+
+		npcBackfill, err := backfillPlayerNpcStates(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		npcVerify, err := verifyPlayerNpcStates(ctx, *targetDSN)
+		if err != nil {
+			return err
+		}
+		if npcVerify.Missing > 0 {
+			return fmt.Errorf("玩家 NPC 状态权威表覆盖校验失败：玩家 %d，旧 NPC 快照 %d，权威行 %d，缺失 %d", npcVerify.Players, npcVerify.ExpectedRows, npcVerify.ActualRows, npcVerify.Missing)
+		}
+		fmt.Printf("玩家 NPC 状态权威表已补齐：旧 NPC 快照玩家 %d，新增 NPC 状态行 %d\n", npcBackfill.Players, npcBackfill.Rows)
+	}
 	return nil
 }
 

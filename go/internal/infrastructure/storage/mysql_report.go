@@ -14,6 +14,11 @@ import (
 	"hero3/internal/app/game"
 )
 
+const (
+	battleReportVisibleCapPerView   = 1000
+	battleReportCapDeleteBatchLimit = 500
+)
+
 // SaveReport 保存战报，同时写入标准索引字段和玩家阅读状态。
 func (r *MySQLRepository) SaveReport(report game.BattleReport) error {
 	return r.SaveReports([]game.BattleReport{report})

@@ -86,7 +86,7 @@ func (s *Service) DeductGold(playerID string, amount int, reason string) (Curren
 
 	now := time.Now()
 	refID := "city_gold_deduct_" + randomID(10)
-	state, err := s.repo.UpdateRewardState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateScopedRewardState(playerID, RewardAssetScope{Currency: true}, now, func(state *GameState) error {
 		if int(state.CityGold) < amount {
 			return ErrInsufficientCityGold
 		}
@@ -146,7 +146,7 @@ func (s *Service) ExchangeGoldToCityGold(accountID string, playerID string, gold
 	cityGoldGain := goldAmount * exchangeRate()
 	refID := "exchange_" + randomID(10)
 
-	account, state, err := s.repo.UpdateAccountRewardState(accountID, playerID, now, func(account *Account, state *GameState) error {
+	account, state, err := s.repo.UpdateScopedAccountRewardState(accountID, playerID, RewardAssetScope{Currency: true}, now, func(account *Account, state *GameState) error {
 		if err := ensureExchangeCooldown(*state, now); err != nil {
 			return err
 		}
@@ -206,7 +206,7 @@ func (s *Service) ExchangeCityGoldToGold(accountID string, playerID string, city
 	goldGain := cityGoldAmount / reverseExchangeRate()
 	refID := "exchange_" + randomID(10)
 
-	account, state, err := s.repo.UpdateAccountRewardState(accountID, playerID, now, func(account *Account, state *GameState) error {
+	account, state, err := s.repo.UpdateScopedAccountRewardState(accountID, playerID, RewardAssetScope{Currency: true}, now, func(account *Account, state *GameState) error {
 		if err := ensureExchangeCooldown(*state, now); err != nil {
 			return err
 		}

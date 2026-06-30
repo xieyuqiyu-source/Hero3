@@ -369,6 +369,13 @@ export const gameApi = {
     })
   },
 
+  /** 批量扫荡 NPC 城池 */
+  sweepNpc(playerId: string, npcIds: string[], mode: 'attack' | 'plunder', generalIds: string[] = []) {
+    return api.post<{ battleReport: BattleReport; done: number; failed: number; stopped: boolean; resources: ResourceState; army: ArmyUnit[]; general?: General; generals?: General[]; cityGold: number; npcState?: GameState['npcState']; serverTime: string }>('/map/npc-cities/sweep', {
+      playerId, npcIds, mode, generalIds,
+    })
+  },
+
   /** 侦查 NPC 城池 */
   scoutNpc(playerId: string, npcId: string) {
     return api.post<{ success: boolean; battleReport: BattleReport; npcCity: NpcCity | null; army: ArmyUnit[]; npcState?: GameState['npcState']; serverTime: string }>('/map/npc-cities/scout', { playerId, npcId })

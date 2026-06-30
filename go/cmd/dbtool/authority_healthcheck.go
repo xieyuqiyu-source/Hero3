@@ -17,6 +17,8 @@ type authorityHealthcheckResult struct {
 	MissingBuildings     int
 	MissingResourceSlots int
 	MissingGenerals      int
+	MissingCurrencies    int
+	MissingLegacyNpc     int
 	BigSnapshotPlayers   int
 }
 
@@ -41,17 +43,19 @@ func runHealthcheckAuthority(args []string) error {
 	if err != nil {
 		return err
 	}
-	if result.MissingResources > 0 || result.MissingBuildings > 0 || result.MissingResourceSlots > 0 || result.MissingGenerals > 0 || result.BigSnapshotPlayers > 0 {
-		return fmt.Errorf("权威表健康检查失败：玩家 %d，缺资源 %d，缺建筑 %d，缺资源田 %d，缺武将 %d，state_json 大字段残留玩家 %d",
+	if result.MissingResources > 0 || result.MissingBuildings > 0 || result.MissingResourceSlots > 0 || result.MissingGenerals > 0 || result.MissingCurrencies > 0 || result.MissingLegacyNpc > 0 || result.BigSnapshotPlayers > 0 {
+		return fmt.Errorf("权威表健康检查失败：玩家 %d，缺资源 %d，缺建筑 %d，缺资源田 %d，缺武将 %d，缺货币 %d，旧 NPC 快照缺权威行 %d，state_json 大字段残留玩家 %d",
 			result.Players,
 			result.MissingResources,
 			result.MissingBuildings,
 			result.MissingResourceSlots,
 			result.MissingGenerals,
+			result.MissingCurrencies,
+			result.MissingLegacyNpc,
 			result.BigSnapshotPlayers,
 		)
 	}
-	fmt.Printf("权威表健康检查通过：玩家 %d，基础权威表完整，state_json 无大字段残留\n", result.Players)
+	fmt.Printf("权威表健康检查通过：玩家 %d，基础权威表和玩家辅助权威表完整，state_json 无大字段残留\n", result.Players)
 	return nil
 }
 
@@ -75,6 +79,7 @@ func healthcheckAuthority(ctx context.Context, dsn string) (authorityHealthcheck
 		{target: &result.MissingBuildings, table: "player_buildings"},
 		{target: &result.MissingResourceSlots, table: "player_resource_slots"},
 		{target: &result.MissingGenerals, table: "player_generals"},
+		{target: &result.MissingCurrencies, table: "player_currencies"},
 	}
 	for _, check := range checks {
 		query := fmt.Sprintf(`SELECT COUNT(*)
@@ -86,9 +91,18 @@ func healthcheckAuthority(ctx context.Context, dsn string) (authorityHealthcheck
 		}
 	}
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*)
+		FROM players p
+		LEFT JOIN player_npc_states n ON n.player_id = p.id
+		WHERE JSON_CONTAINS_PATH(p.state_json, 'one', '$.npcState')
+			AND n.player_id IS NULL`).Scan(&result.MissingLegacyNpc); err != nil {
+		return authorityHealthcheckResult{}, err
+	}
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*)
 		FROM players
 		WHERE JSON_CONTAINS_PATH(state_json, 'one',
 			'$.resources',
+			'$.cityGold',
+			'$.lastExchangeAt',
 			'$.inventory',
 			'$.buildings',
 			'$.resourceSlots',
@@ -96,7 +110,9 @@ func healthcheckAuthority(ctx context.Context, dsn string) (authorityHealthcheck
 			'$.recruitQueues',
 			'$.generals',
 			'$.generalAssignments',
-			'$.buffs'
+			'$.buffs',
+			'$.npcState',
+			'$.serverTime'
 		)`).Scan(&result.BigSnapshotPlayers); err != nil {
 		return authorityHealthcheckResult{}, err
 	}

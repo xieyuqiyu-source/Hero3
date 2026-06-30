@@ -210,6 +210,9 @@ func (r *MySQLRepository) UpdateMailPlayerState(playerID string, mailID string, 
 	if state.Player.MailCode == "" {
 		state.Player.MailCode = mailCode
 	}
+	if err := overlayAuthoritativeCurrencyTx(tx, &state, playerID, updatedAt); err != nil {
+		return game.Account{}, game.GameState{}, game.Mail{}, err
+	}
 	if err := overlayAuthoritativeResourcesTx(tx, &state, playerID); err != nil {
 		return game.Account{}, game.GameState{}, game.Mail{}, err
 	}
@@ -235,7 +238,8 @@ func (r *MySQLRepository) UpdateMailPlayerState(playerID string, mailID string, 
 		return game.Account{}, game.GameState{}, game.Mail{}, err
 	}
 	previousResourceSnapshot := resourceSnapshotsFromStorageState(state.Resources)
-	previousInventorySnapshot := inventorySnapshotsFromStorageState(state.Inventory)
+	previousCurrencySnapshot := currencySnapshotFromState(state)
+	previousInventorySnapshot := inventorySnapshotsFromStorageStateWithSlots(state.Inventory, state.InventorySlots)
 	previousBuildingSnapshot := buildingSnapshotsFromStorageState(state.Buildings)
 	previousResourceSlotSnapshot := resourceSlotSnapshotsFromStorageState(state.ResourceSlots)
 	previousArmySnapshot := armySnapshotsFromStorageState(state.Army)
@@ -286,8 +290,13 @@ func (r *MySQLRepository) UpdateMailPlayerState(playerID string, mailID string, 
 			return game.Account{}, game.GameState{}, game.Mail{}, err
 		}
 	}
-	if inventorySnapshotChanged(previousInventorySnapshot, state.Inventory) {
-		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, state.InventorySlots, updatedAt.UTC()); err != nil {
+	if currencySnapshotChanged(previousCurrencySnapshot, state) {
+		if err := syncPlayerCurrencyTx(tx, playerID, &state, updatedAt.UTC()); err != nil {
+			return game.Account{}, game.GameState{}, game.Mail{}, err
+		}
+	}
+	if inventorySnapshotChangedWithSlots(previousInventorySnapshot, state.Inventory, state.InventorySlots) {
+		if err := syncPlayerInventoryDeltaTx(tx, playerID, previousInventorySnapshot, state.Inventory, state.InventorySlots, updatedAt.UTC()); err != nil {
 			return game.Account{}, game.GameState{}, game.Mail{}, err
 		}
 	}

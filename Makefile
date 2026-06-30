@@ -1,7 +1,7 @@
 # Hero3 项目 Makefile
 # 统一开发环境启动、构建、部署命令
 
-.PHONY: dev dev-go dev-web dev-admin build build-go build-web build-admin clean install migrate migrate-test print-test-dsn clone-data backfill-resources verify-resources backfill-inventory verify-inventory backfill-buildings verify-buildings backfill-resource-slots verify-resource-slots backfill-army verify-army backfill-recruit-queues verify-recruit-queues backfill-generals verify-generals backfill-buffs verify-buffs healthcheck-authority openapi openapi-lint openapi-bundle
+.PHONY: dev dev-go dev-web dev-admin build build-go build-dbtool build-web build-admin clean install migrate migrate-test print-test-dsn clone-data cleanup-battle-reports-dry-run cleanup-battle-reports report-stats lock-snapshot ensure-report-cleanup-indexes-dry-run ensure-report-cleanup-indexes maintenance-status backfill-resources verify-resources backfill-inventory verify-inventory backfill-buildings verify-buildings backfill-resource-slots verify-resource-slots backfill-army verify-army verify-recruit-queues backfill-recruit-queues backfill-generals verify-generals backfill-buffs verify-buffs backfill-currencies verify-currencies backfill-npc-states verify-npc-states healthcheck-authority openapi openapi-lint openapi-bundle
 
 # ===== 开发 =====
 
@@ -37,6 +37,10 @@ build: build-go build-web build-admin
 ## 构建 Go 后端
 build-go:
 	cd go && go build -o bin/server ./cmd/server
+
+## 构建数据库维护工具
+build-dbtool:
+	cd go && go build -o bin/dbtool ./cmd/dbtool
 
 ## 构建 Web 前端
 build-web:
@@ -136,9 +140,53 @@ backfill-buffs:
 verify-buffs:
 	cd go && go run ./cmd/dbtool verify-buffs
 
+## 从 state_json 补齐 player_currencies 权威表
+backfill-currencies:
+	cd go && go run ./cmd/dbtool backfill-currencies
+
+## 校验 player_currencies 是否覆盖所有玩家
+verify-currencies:
+	cd go && go run ./cmd/dbtool verify-currencies
+
+## 从 state_json.npcState 补齐 player_npc_states 权威表
+backfill-npc-states:
+	cd go && go run ./cmd/dbtool backfill-npc-states
+
+## 校验旧 NPC 快照是否已有 player_npc_states 承接
+verify-npc-states:
+	cd go && go run ./cmd/dbtool verify-npc-states
+
 ## 检查当前权威表覆盖和 state_json 轻量化状态
 healthcheck-authority:
 	cd go && go run ./cmd/dbtool healthcheck-authority
+
+## dry-run 统计可清理战报
+cleanup-battle-reports-dry-run:
+	cd go && go run ./cmd/dbtool cleanup-battle-reports
+
+## 正式分批清理过期和软删战报；生产库执行需显式允许
+cleanup-battle-reports:
+	cd go && go run ./cmd/dbtool cleanup-battle-reports --execute --allow-non-test --batch-size 500 --max-batches 4 --retention-hours 72 --pvp-retention-hours 168 --defense-retention-hours 168 --scout-retention-hours 168 --deleted-retention-hours 24
+
+## 统计战报总量、每日增长和玩家 Top
+report-stats:
+	cd go && go run ./cmd/dbtool report-stats
+
+## 只读输出活跃连接、事务和锁等待快照
+lock-snapshot:
+	cd go && go run ./cmd/dbtool lock-snapshot --min-seconds 1 --limit 30
+
+## dry-run 检查战报清理和可见上限索引
+ensure-report-cleanup-indexes-dry-run:
+	cd go && go run ./cmd/dbtool ensure-report-cleanup-indexes
+
+## 正式创建缺失的战报生命周期索引；生产库执行需显式允许
+ensure-report-cleanup-indexes:
+	cd go && go run ./cmd/dbtool ensure-report-cleanup-indexes --execute --allow-non-test
+
+## 只读汇总战报、清理索引和权威表健康状态
+maintenance-status:
+	cd go && go run ./cmd/dbtool maintenance-status
 
 # ===== 接口文档 =====
 
@@ -167,4 +215,9 @@ help:
 	@echo "  make build        构建所有"
 	@echo "  make clean        清理构建产物"
 	@echo "  make migrate      运行数据库迁移"
+	@echo "  make healthcheck-authority 检查权威表覆盖"
+	@echo "  make report-stats 统计战报增长"
+	@echo "  make lock-snapshot 查看数据库锁等待"
+	@echo "  make ensure-report-cleanup-indexes-dry-run 检查战报清理索引"
+	@echo "  make maintenance-status 汇总维护健康状态"
 	@echo "  make openapi      校验并打包接口文档"

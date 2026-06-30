@@ -113,6 +113,68 @@ func loadPlayerGeneralsWithQuery(queryer resourceQueryer, playerID string, lockC
 	return generals, len(generals) > 0, nil
 }
 
+// loadPlayerGeneralRowsTx 在事务内只锁定指定武将行。
+func loadPlayerGeneralRowsTx(tx *sql.Tx, playerID string, generalIDs []string) ([]game.General, bool, error) {
+	generalIDs = normalizeGeneralIDsForStorage(generalIDs)
+	if len(generalIDs) == 0 {
+		return []game.General{}, false, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(generalIDs)), ",")
+	args := make([]any, 0, len(generalIDs)+1)
+	args = append(args, playerID)
+	for _, generalID := range generalIDs {
+		args = append(args, generalID)
+	}
+	rows, err := tx.Query(
+		`SELECT general_id, level, exp, stats_json
+		 FROM player_generals
+		 WHERE player_id = ? AND general_id IN (`+placeholders+`)
+		 ORDER BY general_id
+		 FOR UPDATE`,
+		args...,
+	)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+
+	generals := []game.General{}
+	for rows.Next() {
+		general, err := scanStorageGeneralRows(rows)
+		if err != nil {
+			return nil, false, err
+		}
+		generals = append(generals, general)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	return generals, len(generals) > 0, nil
+}
+
+// scanStorageGeneralRows 把当前武将结果行还原为领域对象。
+func scanStorageGeneralRows(rows *sql.Rows) (game.General, error) {
+	var general game.General
+	var statsJSON []byte
+	if err := rows.Scan(&general.ID, &general.Level, &general.Exp, &statsJSON); err != nil {
+		return game.General{}, err
+	}
+	general.ID = strings.TrimSpace(general.ID)
+	if len(statsJSON) > 0 {
+		_ = json.Unmarshal(statsJSON, &general.Stats)
+	}
+	if general.Stats == nil {
+		general.Stats = map[string]int{}
+	}
+	if hero, ok := game.GetHeroConfig(general.ID); ok {
+		general.Name = hero.Name
+	} else {
+		general.Name = general.ID
+	}
+	applyStorageGeneralConfig(&general)
+	return general, nil
+}
+
 func loadPlayerGeneralAssignments(queryer resourceQueryer, playerID string) ([]game.GeneralAssignment, bool, error) {
 	return loadPlayerGeneralAssignmentsWithQuery(queryer, playerID, "")
 }
@@ -161,6 +223,64 @@ func loadPlayerGeneralAssignmentsWithQuery(queryer resourceQueryer, playerID str
 	return assignments, len(assignments) > 0, nil
 }
 
+// loadPlayerGeneralAssignmentsForGeneralsTx 在事务内只锁定指定武将相关占用行。
+func loadPlayerGeneralAssignmentsForGeneralsTx(tx *sql.Tx, playerID string, generalIDs []string) ([]game.GeneralAssignment, bool, error) {
+	generalIDs = normalizeGeneralIDsForStorage(generalIDs)
+	if len(generalIDs) == 0 {
+		return []game.GeneralAssignment{}, false, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(generalIDs)), ",")
+	args := make([]any, 0, len(generalIDs)+1)
+	args = append(args, playerID)
+	for _, generalID := range generalIDs {
+		args = append(args, generalID)
+	}
+	rows, err := tx.Query(
+		`SELECT assignment_id, general_id, assignment_slot, module_id, status, assigned_at, ends_at
+		 FROM player_general_assignments
+		 WHERE player_id = ? AND general_id IN (`+placeholders+`)
+		 ORDER BY assignment_id
+		 FOR UPDATE`,
+		args...,
+	)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+
+	assignments := []game.GeneralAssignment{}
+	for rows.Next() {
+		assignment, err := scanStorageGeneralAssignmentRows(rows)
+		if err != nil {
+			return nil, false, err
+		}
+		assignments = append(assignments, assignment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	return assignments, len(assignments) > 0, nil
+}
+
+// scanStorageGeneralAssignmentRows 把当前武将占用结果行还原为领域对象。
+func scanStorageGeneralAssignmentRows(rows *sql.Rows) (game.GeneralAssignment, error) {
+	var assignment game.GeneralAssignment
+	var assignedAt sql.NullTime
+	var endsAt sql.NullTime
+	if err := rows.Scan(&assignment.ID, &assignment.GeneralID, &assignment.Slot, &assignment.ModuleID, &assignment.Status, &assignedAt, &endsAt); err != nil {
+		return game.GeneralAssignment{}, err
+	}
+	assignment.ID = strings.TrimSpace(assignment.ID)
+	assignment.GeneralID = strings.TrimSpace(assignment.GeneralID)
+	if assignedAt.Valid {
+		assignment.AssignedAt = assignedAt.Time.UTC().Format(time.RFC3339)
+	}
+	if endsAt.Valid {
+		assignment.EndsAt = endsAt.Time.UTC().Format(time.RFC3339)
+	}
+	return assignment, nil
+}
+
 func syncPlayerGeneralsTx(tx *sql.Tx, playerID string, generals []game.General, updatedAt time.Time) error {
 	generalIDs := generalIDsFromState(generals)
 	if len(generalIDs) == 0 {
@@ -197,6 +317,24 @@ func syncPlayerGeneralsTx(tx *sql.Tx, playerID string, generals []game.General, 
 		}
 	}
 	return deleteStalePlayerGeneralsTx(tx, playerID, generalIDs)
+}
+
+// normalizeGeneralIDsForStorage 清理武将 ID 列表。
+func normalizeGeneralIDsForStorage(generalIDs []string) []string {
+	idSet := map[string]struct{}{}
+	for _, generalID := range generalIDs {
+		generalID = strings.TrimSpace(generalID)
+		if generalID == "" {
+			continue
+		}
+		idSet[generalID] = struct{}{}
+	}
+	result := make([]string, 0, len(idSet))
+	for generalID := range idSet {
+		result = append(result, generalID)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func syncPlayerGeneralAssignmentsTx(tx *sql.Tx, playerID string, assignments []game.GeneralAssignment, updatedAt time.Time) error {

@@ -59,7 +59,7 @@ func TestHealthcheckAuthorityAcceptsEmptyOptionalTables(t *testing.T) {
 	if err != nil {
 		t.Fatalf("healthcheck authority: %v", err)
 	}
-	if result.Players != 1 || result.MissingResources != 0 || result.MissingBuildings != 0 || result.MissingResourceSlots != 0 || result.MissingGenerals != 0 || result.BigSnapshotPlayers != 0 {
+	if result.Players != 1 || result.MissingResources != 0 || result.MissingBuildings != 0 || result.MissingResourceSlots != 0 || result.MissingGenerals != 0 || result.MissingCurrencies != 0 || result.MissingLegacyNpc != 0 || result.BigSnapshotPlayers != 0 {
 		t.Fatalf("unexpected healthcheck result: %+v", result)
 	}
 }
@@ -73,9 +73,7 @@ func insertAuthorityHealthcheckPlayer(t *testing.T, db *sql.DB, state game.GameS
 	state.Buffs = nil
 	snapshot := map[string]any{
 		"player":            state.Player,
-		"cityGold":          state.CityGold,
 		"resourceSettledAt": state.ResourceSettledAt,
-		"serverTime":        state.ServerTime,
 	}
 	stateJSON, err := json.Marshal(snapshot)
 	if err != nil {
@@ -114,5 +112,9 @@ func insertAuthorityHealthcheckPlayer(t *testing.T, db *sql.DB, state game.GameS
 			state.Player.ID, general.ID, state.Player.Faction, general.Level, general.Exp, `{}`, now, now); err != nil {
 			t.Fatalf("insert general: %v", err)
 		}
+	}
+	if _, err := db.Exec(`INSERT INTO player_currencies (player_id, city_gold, last_exchange_at, updated_at) VALUES (?, ?, ?, ?)`,
+		state.Player.ID, int(state.CityGold), nil, now); err != nil {
+		t.Fatalf("insert currency: %v", err)
 	}
 }

@@ -2,6 +2,7 @@
 package game
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -235,6 +236,60 @@ func TestMemoryReportsQueryByViewAndShareToken(t *testing.T) {
 	}
 	if shared.ID != "br_defense" {
 		t.Fatalf("unexpected shared report: %+v", shared)
+	}
+}
+
+func TestMemoryReportsVisibleCapAppliesPerView(t *testing.T) {
+	repo := NewMemoryRepository()
+	now := time.Now().UTC()
+	playerID := "player_memory_cap"
+	for i := 0; i < battleReportVisibleCapPerView+2; i++ {
+		report := BattleReport{
+			ID:        fmt.Sprintf("br_memory_cap_%05d", i),
+			PlayerID:  playerID,
+			Type:      "attack",
+			ViewType:  ReportViewAttack,
+			Result:    "attacker_victory",
+			CreatedAt: now.Add(time.Duration(i) * time.Second).Format(time.RFC3339),
+		}
+		if err := repo.SaveReport(report); err != nil {
+			t.Fatalf("SaveReport attack failed: %v", err)
+		}
+	}
+	if err := repo.SaveReport(BattleReport{
+		ID:        "br_memory_cap_defense",
+		PlayerID:  playerID,
+		Type:      "defense",
+		ViewType:  ReportViewDefense,
+		Result:    "defender_victory",
+		CreatedAt: now.Add(time.Hour).Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("SaveReport defense failed: %v", err)
+	}
+
+	allReports, err := repo.ListAllReports(playerID)
+	if err != nil {
+		t.Fatalf("ListAllReports failed: %v", err)
+	}
+	visibleAttack := 0
+	for _, report := range allReports {
+		report = NormalizeBattleReport(report)
+		if report.ViewType == ReportViewAttack && !report.DeletedByPlayer {
+			visibleAttack++
+		}
+	}
+	if visibleAttack != battleReportVisibleCapPerView {
+		t.Fatalf("expected attack reports capped at %d, got %d", battleReportVisibleCapPerView, visibleAttack)
+	}
+	if _, err := repo.GetReportForPlayer(playerID, "br_memory_cap_00000"); err == nil {
+		t.Fatal("expected oldest attack report to be soft deleted by visible cap")
+	}
+	defenseReports, defenseTotal, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: playerID, ViewType: ReportViewDefense, Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListReportsByQuery defense failed: %v", err)
+	}
+	if defenseTotal != 1 || len(defenseReports) != 1 || defenseReports[0].ID != "br_memory_cap_defense" {
+		t.Fatalf("expected defense report unaffected by attack cap, total=%d reports=%+v", defenseTotal, defenseReports)
 	}
 }
 

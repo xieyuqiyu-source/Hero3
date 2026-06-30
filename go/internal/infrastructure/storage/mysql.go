@@ -327,6 +327,23 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 				FOREIGN KEY (player_id) REFERENCES players(id)
 				ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS player_npc_states (
+			player_id VARCHAR(64) PRIMARY KEY,
+			npc_state_json JSON NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			CONSTRAINT fk_player_npc_states_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS player_currencies (
+			player_id VARCHAR(64) PRIMARY KEY,
+			city_gold INT NOT NULL DEFAULT 0,
+			last_exchange_at DATETIME(6) NULL,
+			updated_at DATETIME(6) NOT NULL,
+			CONSTRAINT fk_player_currencies_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS player_inventory (
 			player_id VARCHAR(64) NOT NULL,
 			slot_id VARCHAR(64) NOT NULL,
@@ -336,6 +353,7 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			updated_at DATETIME(6) NULL,
 			PRIMARY KEY (player_id, slot_id),
 			INDEX idx_player_inventory_item (item_id),
+			INDEX idx_player_inventory_player_item (player_id, item_id),
 			CONSTRAINT fk_player_inventory_player
 				FOREIGN KEY (player_id) REFERENCES players(id)
 				ON DELETE CASCADE
@@ -717,7 +735,11 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			INDEX idx_battle_reports_owner (owner_player_id, view_type, created_at),
 			INDEX idx_battle_reports_event (event_id),
 			INDEX idx_battle_reports_source (source_type, target_id, created_at),
-			INDEX idx_battle_reports_type (source_type, view_type, battle_type, created_at)
+			INDEX idx_battle_reports_type (source_type, view_type, battle_type, created_at),
+			INDEX idx_battle_reports_cleanup_created (created_at, id),
+			INDEX idx_battle_reports_cleanup_deleted (deleted_by_player, created_at, id),
+			INDEX idx_battle_reports_player_deleted_created (player_id, deleted_by_player, created_at),
+			INDEX idx_battle_reports_player_view_visible (player_id, view_type, deleted_by_player, created_at, id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS battle_events (
 			id VARCHAR(64) PRIMARY KEY,
@@ -758,7 +780,8 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			created_at DATETIME(6) NOT NULL,
 			updated_at DATETIME(6) NOT NULL,
 			UNIQUE KEY uniq_report_state_player (report_id, player_id),
-			INDEX idx_report_states_player (player_id, is_deleted, is_read, updated_at)
+			INDEX idx_report_states_player (player_id, is_deleted, is_read, updated_at),
+			INDEX idx_battle_report_states_cleanup_deleted (report_id, is_deleted, deleted_at)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS battle_report_participants (
 			id VARCHAR(64) PRIMARY KEY,
@@ -787,7 +810,8 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			visibility VARCHAR(32) NOT NULL,
 			expires_at DATETIME(6) NULL,
 			created_at DATETIME(6) NOT NULL,
-			UNIQUE KEY uniq_battle_report_token (token)
+			UNIQUE KEY uniq_battle_report_token (token),
+			INDEX idx_battle_report_links_report (report_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS pvp_marches (
 			id VARCHAR(64) PRIMARY KEY,
@@ -952,6 +976,9 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 		}
 	}
 	if err := ensurePlayerInventorySlots(ctx, db); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX idx_player_inventory_player_item ON player_inventory (player_id, item_id)`); err != nil && !isDuplicateKeyName(err) {
 		return err
 	}
 

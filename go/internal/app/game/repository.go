@@ -26,6 +26,8 @@ type AccountRepository interface {
 	GetAccountIDByPlayerID(playerID string) (string, error)
 }
 
+const battleReportVisibleCapPerView = 1000
+
 type PlayerStateRepository interface {
 	CreatePlayer(accountID string, state GameState, updatedAt time.Time) error
 	DeleteAccount(accountID string) error
@@ -36,6 +38,10 @@ type PlayerStateRepository interface {
 
 type PlayerMetaRepository interface {
 	UpdatePlayerMetaState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
+}
+
+type NpcStateRepository interface {
+	UpdateNpcState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
 }
 
 type BuildingAssetRepository interface {
@@ -53,6 +59,7 @@ type ResourceAssetRepository interface {
 
 type ItemAssetRepository interface {
 	UpdateItemState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
+	UpdateGeneralExpItemState(playerID string, itemID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
 }
 
 type GeneralAssetRepository interface {
@@ -60,13 +67,37 @@ type GeneralAssetRepository interface {
 	UpdateAccountGeneralState(accountID string, playerID string, updatedAt time.Time, update func(account *Account, state *GameState) error) (Account, GameState, error)
 }
 
+// CombatAssetScope 描述一次战斗事务已知需要锁定的资产范围。
+type CombatAssetScope struct {
+	UnitTypes        []string
+	GeneralIDs       []string
+	InventoryItemIDs []string
+	SkipInventory    bool
+}
+
 type CombatAssetRepository interface {
-	UpdateCombatState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
+	UpdateCombatState(playerID string, scope CombatAssetScope, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
 }
 
 type RewardAssetRepository interface {
 	UpdateRewardState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
+	UpdateScopedRewardState(playerID string, scope RewardAssetScope, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
 	UpdateAccountRewardState(accountID string, playerID string, updatedAt time.Time, update func(account *Account, state *GameState) error) (Account, GameState, error)
+	UpdateScopedAccountRewardState(accountID string, playerID string, scope RewardAssetScope, updatedAt time.Time, update func(account *Account, state *GameState) error) (Account, GameState, error)
+}
+
+// RewardAssetScope 描述奖励发放事务需要锁定和写回的资产范围。
+type RewardAssetScope struct {
+	Resources        bool
+	Currency         bool
+	AllInventory     bool
+	InventoryItemIDs []string
+	AllArmy          bool
+	UnitTypes        []string
+	AllGenerals      bool
+	GeneralIDs       []string
+	CurrentGeneral   bool
+	Buffs            bool
 }
 
 type AccountAssetRepository interface {
@@ -190,6 +221,7 @@ type Repository interface {
 	AccountRepository
 	PlayerStateRepository
 	PlayerMetaRepository
+	NpcStateRepository
 	BuildingAssetRepository
 	RecruitAssetRepository
 	ResourceAssetRepository
@@ -649,6 +681,10 @@ func (r *MemoryRepository) UpdatePlayerMetaState(playerID string, updatedAt time
 	return r.UpdatePlayerState(playerID, updatedAt, update)
 }
 
+func (r *MemoryRepository) UpdateNpcState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+	return r.UpdatePlayerState(playerID, updatedAt, update)
+}
+
 func (r *MemoryRepository) UpdateBuildingResourceState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
 	return r.UpdatePlayerState(playerID, updatedAt, update)
 }
@@ -669,6 +705,10 @@ func (r *MemoryRepository) UpdateItemState(playerID string, updatedAt time.Time,
 	return r.UpdatePlayerState(playerID, updatedAt, update)
 }
 
+func (r *MemoryRepository) UpdateGeneralExpItemState(playerID string, itemID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+	return r.UpdatePlayerState(playerID, updatedAt, update)
+}
+
 func (r *MemoryRepository) UpdateGeneralState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
 	return r.UpdatePlayerState(playerID, updatedAt, update)
 }
@@ -677,7 +717,7 @@ func (r *MemoryRepository) UpdateAccountGeneralState(accountID string, playerID 
 	return r.UpdateAccountPlayerState(accountID, playerID, updatedAt, update)
 }
 
-func (r *MemoryRepository) UpdateCombatState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+func (r *MemoryRepository) UpdateCombatState(playerID string, scope CombatAssetScope, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
 	return r.UpdatePlayerState(playerID, updatedAt, update)
 }
 
@@ -685,7 +725,15 @@ func (r *MemoryRepository) UpdateRewardState(playerID string, updatedAt time.Tim
 	return r.UpdatePlayerState(playerID, updatedAt, update)
 }
 
+func (r *MemoryRepository) UpdateScopedRewardState(playerID string, scope RewardAssetScope, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+	return r.UpdatePlayerState(playerID, updatedAt, update)
+}
+
 func (r *MemoryRepository) UpdateAccountRewardState(accountID string, playerID string, updatedAt time.Time, update func(account *Account, state *GameState) error) (Account, GameState, error) {
+	return r.UpdateAccountPlayerState(accountID, playerID, updatedAt, update)
+}
+
+func (r *MemoryRepository) UpdateScopedAccountRewardState(accountID string, playerID string, scope RewardAssetScope, updatedAt time.Time, update func(account *Account, state *GameState) error) (Account, GameState, error) {
 	return r.UpdateAccountPlayerState(accountID, playerID, updatedAt, update)
 }
 
@@ -754,12 +802,24 @@ func (r *MemoryRepository) SaveReports(reports []BattleReport) error {
 	for _, report := range reports {
 		report = NormalizeBattleReport(report)
 		r.reports[report.PlayerID] = append([]BattleReport{report}, r.reports[report.PlayerID]...)
-		// 保留最多 1000 条
-		if len(r.reports[report.PlayerID]) > 1000 {
-			r.reports[report.PlayerID] = r.reports[report.PlayerID][:1000]
-		}
+		enforceMemoryBattleReportVisibleCap(r.reports[report.PlayerID], report.ViewType)
 	}
 	return nil
+}
+
+// enforceMemoryBattleReportVisibleCap 软删除同一视角超过上限的旧可见战报。
+func enforceMemoryBattleReportVisibleCap(reports []BattleReport, viewType string) {
+	visible := 0
+	for i := range reports {
+		report := NormalizeBattleReport(reports[i])
+		if report.DeletedByPlayer || report.ViewType != viewType {
+			continue
+		}
+		visible++
+		if visible > battleReportVisibleCapPerView {
+			reports[i].DeletedByPlayer = true
+		}
+	}
 }
 
 // GetReportForPlayer 获取指定玩家拥有且未删除的战报。

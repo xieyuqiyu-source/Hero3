@@ -1,0 +1,13 @@
+# 本文件定义 Hero3 战报物理清理的定时触发器。
+[Unit]
+Description=Run Hero3 battle report cleanup periodically
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+RandomizedDelaySec=60s
+Persistent=true
+Unit=hero3-battle-report-cleanup.service
+
+[Install]
+WantedBy=timers.target

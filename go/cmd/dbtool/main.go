@@ -61,6 +61,14 @@ func main() {
 		err = runBackfillBuffs(os.Args[2:])
 	case "verify-buffs":
 		err = runVerifyBuffs(os.Args[2:])
+	case "backfill-currencies":
+		err = runBackfillCurrencies(os.Args[2:])
+	case "verify-currencies":
+		err = runVerifyCurrencies(os.Args[2:])
+	case "backfill-npc-states":
+		err = runBackfillNpcStates(os.Args[2:])
+	case "verify-npc-states":
+		err = runVerifyNpcStates(os.Args[2:])
 	case "healthcheck-authority":
 		err = runHealthcheckAuthority(os.Args[2:])
 	case "verify-battle-events":
@@ -75,6 +83,16 @@ func main() {
 		err = runRepairBattleEventLink(os.Args[2:])
 	case "backfill-battle-report-v2":
 		err = runBackfillBattleReportV2(os.Args[2:])
+	case "cleanup-battle-reports":
+		err = runCleanupBattleReports(os.Args[2:])
+	case "report-stats":
+		err = runBattleReportStats(os.Args[2:])
+	case "lock-snapshot":
+		err = runLockSnapshot(os.Args[2:])
+	case "ensure-report-cleanup-indexes":
+		err = runEnsureReportCleanupIndexes(os.Args[2:])
+	case "maintenance-status":
+		err = runMaintenanceStatus(os.Args[2:])
 	default:
 		printUsage()
 		err = fmt.Errorf("unknown command: %s", os.Args[1])
@@ -111,6 +129,10 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  verify-generals   校验 player_generals / player_general_assignments 与兼容快照")
 	fmt.Fprintln(os.Stderr, "  backfill-buffs 从 state_json 兼容快照回填 player_buffs")
 	fmt.Fprintln(os.Stderr, "  verify-buffs   校验 player_buffs 与 state_json.buffs 兼容快照")
+	fmt.Fprintln(os.Stderr, "  backfill-currencies 从 state_json 兼容快照补齐 player_currencies")
+	fmt.Fprintln(os.Stderr, "  verify-currencies   校验 player_currencies 覆盖所有玩家")
+	fmt.Fprintln(os.Stderr, "  backfill-npc-states 从 state_json.npcState 补齐 player_npc_states")
+	fmt.Fprintln(os.Stderr, "  verify-npc-states   校验 player_npc_states 覆盖旧 NPC 快照")
 	fmt.Fprintln(os.Stderr, "  healthcheck-authority 检查当前权威表覆盖和轻量 state_json 干净度")
 	fmt.Fprintln(os.Stderr, "  verify-battle-events 校验新战报事件关联和 PVP 战报引用")
 	fmt.Fprintln(os.Stderr, "  verify-battle-reports 校验新战报标准字段与 JSON 可解析性")
@@ -118,4 +140,9 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  repair-battle-report-state 为缺失的战报补齐玩家状态")
 	fmt.Fprintln(os.Stderr, "  repair-battle-event-link 为缺失事件的旧战报补齐事件关联")
 	fmt.Fprintln(os.Stderr, "  backfill-battle-report-v2 从旧 report_json 回填标准战报字段")
+	fmt.Fprintln(os.Stderr, "  cleanup-battle-reports 分批清理过期和软删战报，默认 dry-run")
+	fmt.Fprintln(os.Stderr, "  report-stats 只读统计战报总量、每日增长、类型和玩家 Top")
+	fmt.Fprintln(os.Stderr, "  lock-snapshot 只读输出活跃连接、InnoDB 事务和锁等待")
+	fmt.Fprintln(os.Stderr, "  ensure-report-cleanup-indexes 检查或创建战报清理专用索引，默认 dry-run")
+	fmt.Fprintln(os.Stderr, "  maintenance-status 只读汇总战报、清理索引和权威表健康状态")
 }

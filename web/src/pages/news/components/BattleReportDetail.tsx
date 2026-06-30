@@ -3,7 +3,7 @@ import { type FC, useState } from 'react'
 import { ArrowLeft, Share2, Check } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
-import type { BattleReport } from '@/types/game'
+import type { BattleReport, BattleReportSweepExtra } from '@/types/game'
 import { getTraitMeta } from '@/utils/traits'
 import { sortUnitEntries, sortUnitIds } from '@/utils/unitOrder'
 import { gameApi } from '@/api/game'
@@ -42,6 +42,20 @@ function isHiddenReportUnit(unitType: string, units?: Record<string, Record<stri
     if (config?.role === 'transport' || config?.name?.includes('商人')) return true
   }
   return unitType.toLowerCase().includes('merchant')
+}
+
+// readSweepExtra 读取扫荡聚合战报的扩展摘要，兼容旧数据没有 extra 的情况。
+function readSweepExtra(report: BattleReport): BattleReportSweepExtra | null {
+  if (report.battleType !== 'sweep' && report.detail?.battleType !== 'sweep') return null
+  const raw = report.detail?.extra?.sweep
+  if (!raw || typeof raw !== 'object') return {
+    requested: 0,
+    success: 0,
+    failed: 0,
+    stopped: false,
+    mode: report.type,
+  }
+  return raw as BattleReportSweepExtra
 }
 
 const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => {
@@ -146,6 +160,14 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const topGeneralText = hasPvpGenerals ? formatPvpGenerals(pvpAttackerGenerals) : '无'
   const bottomGeneralText = hasPvpGenerals ? formatPvpGenerals(pvpDefenderGenerals) : '无'
   const reportGeneralExp = report.generalExpGained ?? report.detail?.rewards?.generalExp ?? 0
+  const sweepExtra = readSweepExtra(report)
+  const isSweepReport = Boolean(sweepExtra)
+  const sweepRequested = sweepExtra?.requested ?? 0
+  const sweepSuccess = sweepExtra?.success ?? 0
+  const sweepFailed = sweepExtra?.failed ?? 0
+  const sweepStopped = sweepExtra?.stopped ?? false
+  const totalLost = Object.values(lostUnits).reduce((sum, amount) => sum + amount, 0)
+  const totalKills = Object.values(defenderLostUnits).reduce((sum, amount) => sum + amount, 0)
   const generalLevelBefore = report.generalLevelBefore ?? report.detail?.rewards?.generalLevelBefore
   const generalLevelAfter = report.generalLevelAfter ?? report.detail?.rewards?.generalLevelAfter
   const generalExpText = reportGeneralExp > 0
@@ -210,12 +232,48 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
       {/* Title */}
       <div className={`text-center py-3 rounded-xl ${isVictory ? 'bg-green-500/10' : isDraw ? 'bg-slate-500/10' : 'bg-red-500/10'}`}>
         <h2 className={`text-base font-bold ${isVictory ? 'text-green-600' : isDraw ? 'text-slate-500' : 'text-red-600'}`}>
-          {topDisplayName} {TYPE_LABELS[report.type] ?? '攻击'} {bottomDisplayName}
+          {isSweepReport ? 'NPC 扫荡' : `${topDisplayName} ${TYPE_LABELS[report.type] ?? '攻击'} ${bottomDisplayName}`}
         </h2>
         <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
           {new Date(report.createdAt).toLocaleString('zh-CN')}
         </p>
       </div>
+
+      {isSweepReport && (
+        <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/5 overflow-hidden">
+          <div className="px-4 py-2 border-b border-emerald-400/20 bg-emerald-400/10">
+            <span className="text-xs font-bold text-emerald-600">扫荡汇总</span>
+            {sweepStopped && <span className="ml-2 text-[10px] font-medium text-amber-600">已中止</span>}
+          </div>
+          <div className="grid grid-cols-2 gap-px bg-[var(--color-border)] sm:grid-cols-4">
+            {[
+              ['目标', sweepRequested > 0 ? sweepRequested.toLocaleString() : '—'],
+              ['成功', sweepSuccess > 0 ? sweepSuccess.toLocaleString() : '—'],
+              ['失败', sweepFailed > 0 ? sweepFailed.toLocaleString() : '0'],
+              ['城金', report.overflowCityGold ? `+${report.overflowCityGold.toLocaleString()}` : '0'],
+            ].map(([label, value]) => (
+              <div key={label} className="bg-[var(--color-surface)] px-3 py-2 text-center">
+                <div className="text-[10px] text-[var(--color-text-muted)]">{label}</div>
+                <div className="mt-0.5 text-sm font-bold text-[var(--color-text-primary)]">{value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="grid gap-2 p-4 sm:grid-cols-3">
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+              <div className="text-[10px] font-medium text-[var(--color-text-secondary)]">总击杀</div>
+              <div className="mt-1 text-sm font-bold text-red-600">{totalKills.toLocaleString()}</div>
+            </div>
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+              <div className="text-[10px] font-medium text-[var(--color-text-secondary)]">总战损</div>
+              <div className="mt-1 text-sm font-bold text-[var(--color-text-primary)]">{totalLost.toLocaleString()}</div>
+            </div>
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+              <div className="text-[10px] font-medium text-[var(--color-text-secondary)]">武将经验</div>
+              <div className="mt-1 text-sm font-bold text-emerald-600">+{reportGeneralExp.toLocaleString()}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 进攻方 */}
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">

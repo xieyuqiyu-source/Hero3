@@ -196,6 +196,40 @@ func rewardsRequireAccount(rewards []Reward) bool {
 	return false
 }
 
+func rewardAssetScopeForRewards(rewards []Reward) RewardAssetScope {
+	scope := RewardAssetScope{}
+	for _, reward := range rewards {
+		rewardType := strings.TrimSpace(reward.Type)
+		rewardID := strings.TrimSpace(reward.ID)
+		switch rewardType {
+		case RewardTypeResource:
+			scope.Resources = true
+		case RewardTypeCityGold:
+			scope.Currency = true
+		case RewardTypeItem:
+			if rewardID != "" {
+				scope.InventoryItemIDs = append(scope.InventoryItemIDs, rewardID)
+			}
+		case RewardTypeUnit:
+			if rewardID != "" {
+				scope.UnitTypes = append(scope.UnitTypes, rewardID)
+			}
+		case RewardTypeGeneral:
+			// 新增武将需要完整名册判断重复和主将占用，暂时保留武将全量事务。
+			scope.AllGenerals = true
+		case RewardTypeGeneralExp:
+			if rewardID == "" || rewardID == "current_general" {
+				scope.CurrentGeneral = true
+			} else {
+				scope.GeneralIDs = append(scope.GeneralIDs, rewardID)
+			}
+		case RewardTypeBuff:
+			scope.Buffs = true
+		}
+	}
+	return scope
+}
+
 func (s *Service) GrantRewards(playerID string, rewards []Reward, ctx RewardGrantContext) (RewardGrantResult, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
@@ -229,7 +263,7 @@ func (s *Service) GrantRewards(playerID string, rewards []Reward, ctx RewardGran
 
 func (s *Service) grantRewardsWithAccount(accountID string, playerID string, rewards []Reward, ctx RewardGrantContext, now time.Time) (Account, GameState, RewardApplyResult, error) {
 	var applyResult RewardApplyResult
-	account, state, err := s.repo.UpdateAccountRewardState(accountID, playerID, now, func(account *Account, state *GameState) error {
+	account, state, err := s.repo.UpdateScopedAccountRewardState(accountID, playerID, rewardAssetScopeForRewards(rewards), now, func(account *Account, state *GameState) error {
 		result, err := ApplyRewardsToStateWithContext(state, rewards, ctx, now)
 		if err != nil {
 			return err
@@ -261,7 +295,7 @@ func (s *Service) grantRewardsWithAccount(accountID string, playerID string, rew
 
 func (s *Service) grantRewardsToPlayerState(playerID string, rewards []Reward, ctx RewardGrantContext, now time.Time) (GameState, RewardApplyResult, error) {
 	var applyResult RewardApplyResult
-	state, err := s.repo.UpdateRewardState(playerID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateScopedRewardState(playerID, rewardAssetScopeForRewards(rewards), now, func(state *GameState) error {
 		result, err := ApplyRewardsToStateWithContext(state, rewards, ctx, now)
 		if err != nil {
 			return err
@@ -277,11 +311,23 @@ func (s *Service) grantRewardsToPlayerState(playerID string, rewards []Reward, c
 }
 
 func (s *Service) flushRewardSideEffects(result RewardApplyResult) {
+	s.flushRewardSideEffectsWithEvents(result, true)
+}
+
+func (s *Service) flushRewardSideEffectsWithoutEvents(result RewardApplyResult) {
+	s.flushRewardSideEffectsWithEvents(result, false)
+}
+
+// flushRewardSideEffectsWithEvents 落地奖励流水，并按需要发布奖励事件。
+func (s *Service) flushRewardSideEffectsWithEvents(result RewardApplyResult, publishEvents bool) {
 	for _, entry := range result.LedgerEntries {
 		s.recordLedger(entry)
 	}
 	for _, entry := range result.ItemLedgerEntries {
 		_ = s.repo.WriteItemLedger(entry)
+	}
+	if !publishEvents {
+		return
 	}
 	for _, event := range result.Events {
 		s.publishEvent(event)

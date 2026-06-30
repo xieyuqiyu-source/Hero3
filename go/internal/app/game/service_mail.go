@@ -290,7 +290,7 @@ func (s *Service) SendServerBroadcastMail(req SendServerBroadcastMailRequest) (S
 
 	now := time.Now()
 	var senderState GameState
-	state, err := s.repo.UpdateRewardState(senderID, now, func(state *GameState) error {
+	state, err := s.repo.UpdateScopedRewardState(senderID, RewardAssetScope{Currency: true}, now, func(state *GameState) error {
 		if int(state.CityGold) < ServerBroadcastCost {
 			return ErrInsufficientCityGold
 		}

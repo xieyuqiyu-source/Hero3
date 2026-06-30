@@ -29,3 +29,29 @@ func TestAssetTransactionsDoNotCallFullGetStateAfterCommit(t *testing.T) {
 		}
 	}
 }
+
+// TestPlayerInventoryDeletesStaySlotScoped 防止背包同步重新引入玩家级大范围删除锁。
+func TestPlayerInventoryDeletesStaySlotScoped(t *testing.T) {
+	files := []string{
+		"mysql_player_state.go",
+		"mysql_combat_assets.go",
+		"mysql_item_assets.go",
+		"mysql_general_assets.go",
+		"mysql_general_exp_item_assets.go",
+		"mysql_reward_assets.go",
+		"mysql_mail.go",
+	}
+	for _, file := range files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		normalized := strings.Join(strings.Fields(string(content)), " ")
+		if strings.Contains(normalized, "DELETE FROM player_inventory WHERE player_id = ?`,") {
+			t.Fatalf("%s must not delete all player_inventory rows by player_id", file)
+		}
+		if strings.Contains(normalized, "DELETE FROM player_inventory WHERE player_id = ? AND slot_id NOT IN") {
+			t.Fatalf("%s must not delete player_inventory rows with NOT IN", file)
+		}
+	}
+}

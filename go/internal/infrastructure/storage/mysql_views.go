@@ -158,6 +158,9 @@ func (r *MySQLRepository) loadViewState(playerID string, options viewLoadOptions
 		return game.GameState{}, err
 	}
 	state := base.state
+	if err := r.overlayAuthoritativeCurrency(&state, playerID); err != nil {
+		return game.GameState{}, err
+	}
 	if options.resources {
 		resources, found, err := loadPlayerResources(r.db, playerID)
 		if err != nil {

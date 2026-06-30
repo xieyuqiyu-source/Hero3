@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1607,6 +1608,277 @@ func TestAttackNpcUsesStateTransactionAndPublishesBattleEvent(t *testing.T) {
 	}
 }
 
+// combatScopeRecorderRepository 记录服务传入战斗仓储的作用域，便于验证业务路径没有退回全量锁。
+type combatScopeRecorderRepository struct {
+	*MemoryRepository
+	combatScopes []CombatAssetScope
+}
+
+// UpdateCombatState 记录战斗作用域后复用内存仓储行为。
+func (r *combatScopeRecorderRepository) UpdateCombatState(playerID string, scope CombatAssetScope, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+	r.combatScopes = append(r.combatScopes, scope)
+	return r.MemoryRepository.UpdateCombatState(playerID, scope, updatedAt, update)
+}
+
+func TestScoutNpcPassesScoutUnitCombatScope(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	addPvpScoutTestUnits(t)
+
+	baseRepo := NewMemoryRepository()
+	repo := &combatScopeRecorderRepository{MemoryRepository: baseRepo}
+	svc := NewServiceWithRepository(repo)
+	now := time.Now()
+	account := Account{ID: "acc_scout_scope", Username: "scout_scope", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_scout_scope", "ScoutScope", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "weiScout", Amount: 5}, {UnitType: "weiInfantry", Amount: 99}}
+	state.NpcState = &NpcState{
+		Cities: []NpcCity{{
+			ID:                "npc_scout_scope",
+			Name:              "侦查作用域城",
+			Faction:           "wei",
+			Resources:         map[string]int{"wood": 10},
+			StorageCapacity:   map[string]int{},
+			ProductionPerHour: map[string]int{},
+			Army:              []ArmyUnit{{UnitType: "weiScout", Amount: 2}, {UnitType: "weiInfantry", Amount: 10}},
+			ResourceSettledAt: now.UTC().Format(resourceDateLayout),
+			ArmySettledAt:     now.UTC().Format(resourceDateLayout),
+			GeneratedAt:       now.UTC().Format(resourceDateLayout),
+		}},
+		LastRefreshedAt: now.UTC().Format(resourceDateLayout),
+	}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	if _, err := svc.ScoutNpc(ScoutNpcRequest{PlayerID: state.Player.ID, NpcID: "npc_scout_scope"}); err != nil {
+		t.Fatalf("ScoutNpc failed: %v", err)
+	}
+	if len(repo.combatScopes) != 1 {
+		t.Fatalf("expected one combat scope, got %+v", repo.combatScopes)
+	}
+	scope := repo.combatScopes[0]
+	if len(scope.UnitTypes) != 1 || scope.UnitTypes[0] != "weiScout" {
+		t.Fatalf("expected scout scope to lock only weiScout, got %+v", scope)
+	}
+	if len(scope.GeneralIDs) != 0 {
+		t.Fatalf("expected scout scope not to lock generals, got %+v", scope)
+	}
+	if !scope.SkipInventory {
+		t.Fatalf("expected scout scope to skip inventory, got %+v", scope)
+	}
+}
+
+func TestSweepNpcCreatesOneAggregateReport(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_sweep_report", Username: "sweep_report", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_sweep_report", "Sweep", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	state.Resources.Capacity = map[string]int{"wood": 10000, "stone": 10000, "iron": 10000, "food": 10000}
+	state.NpcState = &NpcState{
+		Cities: []NpcCity{
+			testNpcCity("npc_sweep_1", now),
+			testNpcCity("npc_sweep_2", now),
+		},
+		LastRefreshedAt: now.UTC().Format(resourceDateLayout),
+	}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	events := []GameEvent{}
+	svc.SubscribeEvent(EventBattleFinished, func(event GameEvent) {
+		events = append(events, event)
+	})
+
+	result, err := svc.SweepNpc(SweepNpcRequest{
+		PlayerID: state.Player.ID,
+		NpcIDs:   []string{"npc_sweep_1", "npc_sweep_2"},
+		Mode:     "attack",
+	})
+	if err != nil {
+		t.Fatalf("SweepNpc failed: %v", err)
+	}
+	if result.Done != 2 || result.Failed != 0 || result.Stopped {
+		t.Fatalf("unexpected sweep result: %+v", result)
+	}
+	if result.BattleReport.BattleType != "sweep" || result.BattleReport.Title != "NPC 扫荡" {
+		t.Fatalf("expected aggregate sweep report, got %+v", result.BattleReport)
+	}
+	sweepExtra, ok := result.BattleReport.Detail.Extra["sweep"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected sweep extra in aggregate report detail, got %+v", result.BattleReport.Detail.Extra)
+	}
+	if sweepExtra["requested"] != 2 || sweepExtra["success"] != 2 || sweepExtra["failed"] != 0 || sweepExtra["stopped"] != false {
+		t.Fatalf("unexpected sweep extra: %+v", sweepExtra)
+	}
+
+	reports, total, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: state.Player.ID, BattleType: "sweep", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("list sweep reports: %v", err)
+	}
+	if total != 1 || len(reports) != 1 || reports[0].ID != result.BattleReport.ID {
+		t.Fatalf("expected one stored sweep report, total=%d reports=%+v", total, reports)
+	}
+	attackReports, attackTotal, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: state.Player.ID, BattleType: "attack", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("list attack reports: %v", err)
+	}
+	if attackTotal != 0 || len(attackReports) != 0 {
+		t.Fatalf("expected no per-attack reports from sweep, total=%d reports=%+v", attackTotal, attackReports)
+	}
+	if len(events) != 1 || events[0].RefID != result.BattleReport.ID {
+		t.Fatalf("expected one aggregate battle event, got %+v", events)
+	}
+}
+
+func TestSweepNpcKeepsDetailReportForGeneralLevelUp(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	setTestGeneralsConfig(t, GeneralsConfig{
+		Enabled: true,
+		Common: GeneralsCommonConfig{
+			ExpCurve:   []int{0, 1, 2, 4},
+			LevelBuffs: map[int]map[string]float64{1: {}, 2: {}, 3: {}},
+		},
+		Heroes: map[string]GeneralHeroConfig{
+			"test_general": {ID: "test_general", Name: "测试将领", Faction: "wei", Enabled: true},
+		},
+	})
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_sweep_level_up", Username: "sweep_level_up", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_sweep_level_up", "SweepLevel", "wei", "test_general", now)
+	state.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	state.Resources.Capacity = map[string]int{"wood": 10000, "stone": 10000, "iron": 10000, "food": 10000}
+	state.NpcState = &NpcState{
+		Cities:          []NpcCity{testNpcCity("npc_sweep_level_up", now)},
+		LastRefreshedAt: now.UTC().Format(resourceDateLayout),
+	}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.SweepNpc(SweepNpcRequest{
+		PlayerID:   state.Player.ID,
+		NpcIDs:     []string{"npc_sweep_level_up"},
+		Mode:       "attack",
+		GeneralIDs: []string{"test_general"},
+	})
+	if err != nil {
+		t.Fatalf("SweepNpc failed: %v", err)
+	}
+	if result.BattleReport.BattleType != "sweep" || result.BattleReport.GeneralLevelAfter <= result.BattleReport.GeneralLevelBefore {
+		t.Fatalf("expected sweep aggregate to include level up, got %+v", result.BattleReport)
+	}
+
+	sweepReports, sweepTotal, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: state.Player.ID, BattleType: "sweep", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("list sweep reports: %v", err)
+	}
+	if sweepTotal != 1 || len(sweepReports) != 1 {
+		t.Fatalf("expected one sweep report, total=%d reports=%+v", sweepTotal, sweepReports)
+	}
+	attackReports, attackTotal, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: state.Player.ID, BattleType: "attack", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("list attack reports: %v", err)
+	}
+	if attackTotal != 1 || len(attackReports) != 1 {
+		t.Fatalf("expected one special detail attack report, total=%d reports=%+v", attackTotal, attackReports)
+	}
+	if attackReports[0].GeneralLevelAfter <= attackReports[0].GeneralLevelBefore {
+		t.Fatalf("expected detail report to preserve level up, got %+v", attackReports[0])
+	}
+	if attackReports[0].EventID != sweepReports[0].EventID {
+		t.Fatalf("expected detail report to share sweep event, sweep=%s detail=%s", sweepReports[0].EventID, attackReports[0].EventID)
+	}
+}
+
+func TestPlayerAssetActionsAreSerializedPerPlayer(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	loadTestItemsConfig(t)
+
+	svc := NewService()
+	baseRepo := svc.repo.(*MemoryRepository)
+	blockingRepo := &blockingAssetRepository{
+		MemoryRepository: baseRepo,
+		entered:          make(chan string, 2),
+		release:          make(chan struct{}),
+	}
+	svc.repo = blockingRepo
+
+	now := time.Now()
+	account := Account{ID: "acc_serial_assets", Username: "serial_assets", PasswordHash: "x", CreatedAt: now}
+	if err := blockingRepo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_serial_assets", "Serial", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	state.Inventory = map[string]ItemStack{
+		"test_general_exp_small": {ItemID: "test_general_exp_small", Amount: 1, UpdatedAt: now.UTC().Format(resourceDateLayout)},
+	}
+	state.InventorySlots = []ItemStack{{ItemID: "test_general_exp_small", Amount: 1, UpdatedAt: now.UTC().Format(resourceDateLayout)}}
+	state.NpcState = &NpcState{
+		Cities:          []NpcCity{testNpcCity("npc_serial_assets", now)},
+		LastRefreshedAt: now.UTC().Format(resourceDateLayout),
+	}
+	if err := blockingRepo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	errs := make(chan error, 2)
+	go func() {
+		_, err := svc.AttackNpc(AttackNpcRequest{
+			PlayerID: state.Player.ID,
+			NpcID:    "npc_serial_assets",
+			Mode:     "attack",
+			Units:    map[string]int{"weiInfantry": 10},
+		})
+		errs <- err
+	}()
+	if got := <-blockingRepo.entered; got != "combat" {
+		t.Fatalf("expected combat transaction to enter first, got %s", got)
+	}
+
+	go func() {
+		_, err := svc.UseItem(state.Player.ID, "test_general_exp_small", 1)
+		errs <- err
+	}()
+	select {
+	case got := <-blockingRepo.entered:
+		t.Fatalf("expected item transaction to wait for player lock, but %s entered concurrently", got)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	blockingRepo.release <- struct{}{}
+	if got := <-blockingRepo.entered; got != "general_exp_item" {
+		t.Fatalf("expected general exp item transaction after combat release, got %s", got)
+	}
+	blockingRepo.release <- struct{}{}
+
+	for i := 0; i < 2; i++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent asset action failed: %v", err)
+		}
+	}
+	if got := atomic.LoadInt32(&blockingRepo.maxActive); got != 1 {
+		t.Fatalf("expected at most one active player asset transaction, got %d", got)
+	}
+}
+
 func TestAttackNpcGrantsConfiguredItemDrops(t *testing.T) {
 	setTestCombatUnitsConfig(t)
 	root := filepath.Join("..", "..", "..", "config")
@@ -2498,6 +2770,36 @@ func TestUseItemPublishesItemUsedEvent(t *testing.T) {
 	}
 }
 
+func TestItemUseRewardAssetScopeIncludesConsumedAndEffectAssets(t *testing.T) {
+	scope := itemUseRewardAssetScope(ItemDefinition{
+		ID: "resource_pack_small",
+		Effects: []ItemEffect{
+			{Type: "resources", Resources: map[string]int{"wood": 100}},
+			{Type: "item", ID: "general_exp_small", Amount: 1},
+			{Type: "unit_by_faction", UnitByFaction: map[string]string{"wei": "weiInfantry", "shu": "shuInfantry"}},
+			{Type: "general_exp", Amount: 50},
+			{Type: "buff", BuffKey: "attackBonus", Amount: 1},
+		},
+	})
+	itemIDs := map[string]bool{}
+	for _, itemID := range scope.InventoryItemIDs {
+		itemIDs[itemID] = true
+	}
+	unitTypes := map[string]bool{}
+	for _, unitType := range scope.UnitTypes {
+		unitTypes[unitType] = true
+	}
+	if !scope.Resources || !scope.CurrentGeneral || !scope.Buffs {
+		t.Fatalf("expected resources/current general/buffs scope, got %+v", scope)
+	}
+	if !itemIDs["resource_pack_small"] || !itemIDs["general_exp_small"] {
+		t.Fatalf("expected consumed and rewarded item ids in scope, got %+v", scope.InventoryItemIDs)
+	}
+	if !unitTypes["weiInfantry"] || !unitTypes["shuInfantry"] {
+		t.Fatalf("expected candidate faction units in scope, got %+v", scope.UnitTypes)
+	}
+}
+
 func loadStackSplitItemsConfig(t *testing.T) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "items.json")
@@ -3289,4 +3591,41 @@ func loadTestItemsConfig(t *testing.T) {
 	t.Cleanup(func() {
 		_ = LoadItemsConfig(filepath.Join("..", "..", "..", "config", "items.json"))
 	})
+}
+
+// blockingAssetRepository 用于验证同玩家资产事务在服务层被串行化。
+type blockingAssetRepository struct {
+	*MemoryRepository
+	active    int32
+	maxActive int32
+	entered   chan string
+	release   chan struct{}
+}
+
+func (r *blockingAssetRepository) UpdateCombatState(playerID string, scope CombatAssetScope, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+	r.enterAssetTransaction("combat")
+	defer r.leaveAssetTransaction()
+	return r.MemoryRepository.UpdateCombatState(playerID, scope, updatedAt, update)
+}
+
+func (r *blockingAssetRepository) UpdateGeneralExpItemState(playerID string, itemID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
+	r.enterAssetTransaction("general_exp_item")
+	defer r.leaveAssetTransaction()
+	return r.MemoryRepository.UpdateGeneralExpItemState(playerID, itemID, updatedAt, update)
+}
+
+func (r *blockingAssetRepository) enterAssetTransaction(name string) {
+	active := atomic.AddInt32(&r.active, 1)
+	for {
+		maxActive := atomic.LoadInt32(&r.maxActive)
+		if active <= maxActive || atomic.CompareAndSwapInt32(&r.maxActive, maxActive, active) {
+			break
+		}
+	}
+	r.entered <- name
+	<-r.release
+}
+
+func (r *blockingAssetRepository) leaveAssetTransaction() {
+	atomic.AddInt32(&r.active, -1)
 }

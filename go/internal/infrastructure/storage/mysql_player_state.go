@@ -50,6 +50,12 @@ func (r *MySQLRepository) CreatePlayer(accountID string, state game.GameState, u
 	if err := syncPlayerResourcesTx(tx, state.Player.ID, state.Resources, now); err != nil {
 		return err
 	}
+	if err := syncPlayerCurrencyTx(tx, state.Player.ID, &state, now); err != nil {
+		return err
+	}
+	if err := syncPlayerNpcStateTx(tx, state.Player.ID, state.NpcState, now); err != nil {
+		return err
+	}
 	if err := syncPlayerInventoryTx(tx, state.Player.ID, state.Inventory, state.InventorySlots, now); err != nil {
 		return err
 	}
@@ -155,6 +161,12 @@ func (r *MySQLRepository) GetState(playerID string) (game.GameState, error) {
 	if err := r.overlayAuthoritativeResources(&state, playerID); err != nil {
 		return game.GameState{}, err
 	}
+	if err := r.overlayAuthoritativeCurrency(&state, playerID); err != nil {
+		return game.GameState{}, err
+	}
+	if err := r.overlayAuthoritativeNpcState(&state, playerID); err != nil {
+		return game.GameState{}, err
+	}
 	if err := r.overlayAuthoritativeInventory(&state, playerID); err != nil {
 		return game.GameState{}, err
 	}
@@ -209,6 +221,12 @@ func (r *MySQLRepository) UpdatePlayerState(playerID string, updatedAt time.Time
 	if err := overlayAuthoritativeResourcesTx(tx, &state, playerID); err != nil {
 		return game.GameState{}, err
 	}
+	if err := overlayAuthoritativeCurrencyTx(tx, &state, playerID, updatedAt); err != nil {
+		return game.GameState{}, err
+	}
+	if err := overlayAuthoritativeNpcStateTx(tx, &state, playerID, updatedAt); err != nil {
+		return game.GameState{}, err
+	}
 	if err := overlayAuthoritativeInventoryTx(tx, &state, playerID); err != nil {
 		return game.GameState{}, err
 	}
@@ -239,13 +257,18 @@ func (r *MySQLRepository) UpdatePlayerState(playerID string, updatedAt time.Time
 		return game.GameState{}, err
 	}
 	previousResourceSnapshot := resourceSnapshotsFromStorageState(state.Resources)
-	previousInventorySnapshot := inventorySnapshotsFromStorageState(state.Inventory)
+	previousCurrencySnapshot := currencySnapshotFromState(state)
+	previousInventorySnapshot := inventorySnapshotsFromStorageStateWithSlots(state.Inventory, state.InventorySlots)
 	previousResourceSlotSnapshot := resourceSlotSnapshotsFromStorageState(state.ResourceSlots)
 	previousArmySnapshot := armySnapshotsFromStorageState(state.Army)
 	previousRecruitQueueSnapshot := recruitQueueSnapshotsFromStorageState(state.RecruitQueues)
 	previousGeneralSnapshot := generalSnapshotsFromStorageState(state.Generals)
 	previousGeneralAssignmentSnapshot := generalAssignmentSnapshotsFromStorageState(state.GeneralAssignments)
 	previousBuffSnapshot := buffSnapshotsFromStorageState(state.Buffs)
+	previousNpcStateJSON, err := json.Marshal(state.NpcState)
+	if err != nil {
+		return game.GameState{}, err
+	}
 	if update != nil {
 		if err = update(&state); err != nil {
 			return game.GameState{}, err
@@ -265,8 +288,13 @@ func (r *MySQLRepository) UpdatePlayerState(playerID string, updatedAt time.Time
 			return game.GameState{}, err
 		}
 	}
-	if inventorySnapshotChanged(previousInventorySnapshot, state.Inventory) {
-		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, state.InventorySlots, updatedAt.UTC()); err != nil {
+	if currencySnapshotChanged(previousCurrencySnapshot, state) {
+		if err := syncPlayerCurrencyTx(tx, playerID, &state, updatedAt.UTC()); err != nil {
+			return game.GameState{}, err
+		}
+	}
+	if inventorySnapshotChangedWithSlots(previousInventorySnapshot, state.Inventory, state.InventorySlots) {
+		if err := syncPlayerInventoryDeltaTx(tx, playerID, previousInventorySnapshot, state.Inventory, state.InventorySlots, updatedAt.UTC()); err != nil {
 			return game.GameState{}, err
 		}
 	}
@@ -302,6 +330,15 @@ func (r *MySQLRepository) UpdatePlayerState(playerID string, updatedAt time.Time
 	}
 	if buffSnapshotChanged(previousBuffSnapshot, state.Buffs) {
 		if err := syncPlayerBuffsTx(tx, playerID, state.Buffs, updatedAt.UTC()); err != nil {
+			return game.GameState{}, err
+		}
+	}
+	nextNpcStateJSON, err := json.Marshal(state.NpcState)
+	if err != nil {
+		return game.GameState{}, err
+	}
+	if !bytes.Equal(previousNpcStateJSON, nextNpcStateJSON) {
+		if err := syncPlayerNpcStateTx(tx, playerID, state.NpcState, updatedAt.UTC()); err != nil {
 			return game.GameState{}, err
 		}
 	}
@@ -390,6 +427,12 @@ func (r *MySQLRepository) UpdateAccountPlayerState(accountID string, playerID st
 	if err := overlayAuthoritativeResourcesTx(tx, &state, playerID); err != nil {
 		return game.Account{}, game.GameState{}, err
 	}
+	if err := overlayAuthoritativeCurrencyTx(tx, &state, playerID, updatedAt); err != nil {
+		return game.Account{}, game.GameState{}, err
+	}
+	if err := overlayAuthoritativeNpcStateTx(tx, &state, playerID, updatedAt); err != nil {
+		return game.Account{}, game.GameState{}, err
+	}
 	if err := overlayAuthoritativeInventoryTx(tx, &state, playerID); err != nil {
 		return game.Account{}, game.GameState{}, err
 	}
@@ -412,7 +455,8 @@ func (r *MySQLRepository) UpdateAccountPlayerState(accountID string, playerID st
 		return game.Account{}, game.GameState{}, err
 	}
 	previousResourceSnapshot := resourceSnapshotsFromStorageState(state.Resources)
-	previousInventorySnapshot := inventorySnapshotsFromStorageState(state.Inventory)
+	previousCurrencySnapshot := currencySnapshotFromState(state)
+	previousInventorySnapshot := inventorySnapshotsFromStorageStateWithSlots(state.Inventory, state.InventorySlots)
 	previousBuildingSnapshot := buildingSnapshotsFromStorageState(state.Buildings)
 	previousResourceSlotSnapshot := resourceSlotSnapshotsFromStorageState(state.ResourceSlots)
 	previousArmySnapshot := armySnapshotsFromStorageState(state.Army)
@@ -420,6 +464,10 @@ func (r *MySQLRepository) UpdateAccountPlayerState(accountID string, playerID st
 	previousGeneralSnapshot := generalSnapshotsFromStorageState(state.Generals)
 	previousGeneralAssignmentSnapshot := generalAssignmentSnapshotsFromStorageState(state.GeneralAssignments)
 	previousBuffSnapshot := buffSnapshotsFromStorageState(state.Buffs)
+	previousNpcStateJSON, err := json.Marshal(state.NpcState)
+	if err != nil {
+		return game.Account{}, game.GameState{}, err
+	}
 
 	if update != nil {
 		if err = update(&account, &state); err != nil {
@@ -440,8 +488,13 @@ func (r *MySQLRepository) UpdateAccountPlayerState(accountID string, playerID st
 			return game.Account{}, game.GameState{}, err
 		}
 	}
-	if inventorySnapshotChanged(previousInventorySnapshot, state.Inventory) {
-		if err := syncPlayerInventoryTx(tx, playerID, state.Inventory, state.InventorySlots, updatedAt.UTC()); err != nil {
+	if currencySnapshotChanged(previousCurrencySnapshot, state) {
+		if err := syncPlayerCurrencyTx(tx, playerID, &state, updatedAt.UTC()); err != nil {
+			return game.Account{}, game.GameState{}, err
+		}
+	}
+	if inventorySnapshotChangedWithSlots(previousInventorySnapshot, state.Inventory, state.InventorySlots) {
+		if err := syncPlayerInventoryDeltaTx(tx, playerID, previousInventorySnapshot, state.Inventory, state.InventorySlots, updatedAt.UTC()); err != nil {
 			return game.Account{}, game.GameState{}, err
 		}
 	}
@@ -477,6 +530,15 @@ func (r *MySQLRepository) UpdateAccountPlayerState(accountID string, playerID st
 	}
 	if buffSnapshotChanged(previousBuffSnapshot, state.Buffs) {
 		if err := syncPlayerBuffsTx(tx, playerID, state.Buffs, updatedAt.UTC()); err != nil {
+			return game.Account{}, game.GameState{}, err
+		}
+	}
+	nextNpcStateJSON, err := json.Marshal(state.NpcState)
+	if err != nil {
+		return game.Account{}, game.GameState{}, err
+	}
+	if !bytes.Equal(previousNpcStateJSON, nextNpcStateJSON) {
+		if err := syncPlayerNpcStateTx(tx, playerID, state.NpcState, updatedAt.UTC()); err != nil {
 			return game.Account{}, game.GameState{}, err
 		}
 	}
@@ -733,8 +795,7 @@ func syncPlayerResourcesTx(tx *sql.Tx, playerID string, resources game.ResourceS
 func syncPlayerInventoryTx(tx *sql.Tx, playerID string, inventory map[string]game.ItemStack, slots []game.ItemStack, updatedAt time.Time) error {
 	slots = inventorySlotsFromStorageState(inventory, slots, updatedAt)
 	if len(slots) == 0 {
-		_, err := tx.Exec(`DELETE FROM player_inventory WHERE player_id = ?`, playerID)
-		return err
+		return deleteStalePlayerInventoryTx(tx, playerID, nil)
 	}
 
 	slotIDs := make([]string, 0, len(slots))
@@ -766,6 +827,63 @@ func syncPlayerInventoryTx(tx *sql.Tx, playerID string, inventory map[string]gam
 	return deleteStalePlayerInventoryTx(tx, playerID, slotIDs)
 }
 
+// syncPlayerInventoryDeltaTx 只写入变化后的格子，并逐个删除消失格子，避免高频事务执行玩家级全量 DELETE。
+func syncPlayerInventoryDeltaTx(tx *sql.Tx, playerID string, before map[string]storageInventorySnapshot, inventory map[string]game.ItemStack, slots []game.ItemStack, updatedAt time.Time) error {
+	if before == nil {
+		return syncPlayerInventoryTx(tx, playerID, inventory, slots, updatedAt)
+	}
+	slots = inventorySlotsFromStorageState(inventory, slots, updatedAt)
+	nextSlotSet := make(map[string]struct{}, len(slots))
+	for _, stack := range slots {
+		nextSlotSet[stack.SlotID] = struct{}{}
+		obtainedAt := parseInventoryTime(stack.ObtainedAt)
+		stackUpdatedAt := parseInventoryTime(stack.UpdatedAt)
+		if !stackUpdatedAt.Valid {
+			stackUpdatedAt = sql.NullTime{Time: updatedAt.UTC(), Valid: true}
+		}
+		next := storageInventorySnapshot{
+			SlotID:     stack.SlotID,
+			ItemID:     stack.ItemID,
+			Amount:     stack.Amount,
+			ObtainedAt: stack.ObtainedAt,
+			UpdatedAt:  stack.UpdatedAt,
+		}
+		if previous, ok := before[stack.SlotID]; ok && previous == next {
+			continue
+		}
+		if _, err := tx.Exec(
+			`INSERT INTO player_inventory (player_id, slot_id, item_id, amount, obtained_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+				item_id = VALUES(item_id),
+				amount = VALUES(amount),
+				obtained_at = VALUES(obtained_at),
+				updated_at = VALUES(updated_at)`,
+			playerID,
+			stack.SlotID,
+			stack.ItemID,
+			stack.Amount,
+			nullableTimeArg(obtainedAt),
+			nullableTimeArg(stackUpdatedAt),
+		); err != nil {
+			return err
+		}
+	}
+	for slotID := range before {
+		if _, exists := nextSlotSet[slotID]; exists {
+			continue
+		}
+		if _, err := tx.Exec(
+			`DELETE FROM player_inventory WHERE player_id = ? AND slot_id = ?`,
+			playerID,
+			slotID,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // resourceSnapshotChanged 判断资源数量或容量是否发生变化。
 func resourceSnapshotChanged(before map[string]storageResourceSnapshot, after game.ResourceState) bool {
 	return !resourceSnapshotMapsEqual(
@@ -777,6 +895,11 @@ func resourceSnapshotChanged(before map[string]storageResourceSnapshot, after ga
 // inventorySnapshotChanged 判断背包数量或时间戳是否发生变化。
 func inventorySnapshotChanged(before map[string]storageInventorySnapshot, after map[string]game.ItemStack) bool {
 	return !inventorySnapshotMapsEqual(before, inventorySnapshotsFromStorageState(after))
+}
+
+// inventorySnapshotChangedWithSlots 判断带格子明细的背包快照是否发生变化。
+func inventorySnapshotChangedWithSlots(before map[string]storageInventorySnapshot, after map[string]game.ItemStack, slots []game.ItemStack) bool {
+	return !inventorySnapshotMapsEqual(before, inventorySnapshotsFromStorageStateWithSlots(after, slots))
 }
 
 // resourceTypesFromState 合并资源数量和容量里的资源类型，保证资源注册扩展后也能同步。
@@ -845,8 +968,13 @@ func resourceSnapshotsFromStorageState(resources game.ResourceState) map[string]
 
 // inventorySnapshotsFromStorageState 从 Inventory 生成同步比较快照。
 func inventorySnapshotsFromStorageState(inventory map[string]game.ItemStack) map[string]storageInventorySnapshot {
+	return inventorySnapshotsFromStorageStateWithSlots(inventory, nil)
+}
+
+// inventorySnapshotsFromStorageStateWithSlots 从 Inventory + InventorySlots 生成同步比较快照。
+func inventorySnapshotsFromStorageStateWithSlots(inventory map[string]game.ItemStack, slots []game.ItemStack) map[string]storageInventorySnapshot {
 	snapshots := map[string]storageInventorySnapshot{}
-	for _, stack := range inventorySlotsFromStorageState(inventory, nil, time.Time{}) {
+	for _, stack := range inventorySlotsFromStorageState(inventory, slots, time.Time{}) {
 		snapshots[stack.SlotID] = storageInventorySnapshot{
 			SlotID:     stack.SlotID,
 			ItemID:     stack.ItemID,
@@ -876,7 +1004,9 @@ func inventorySlotsFromStorageState(inventory map[string]game.ItemStack, slots [
 		sort.SliceStable(normalized, func(i, j int) bool {
 			return normalized[i].SlotID < normalized[j].SlotID
 		})
-		return normalized
+		if inventorySlotsMatchInventory(inventory, normalized) {
+			return normalized
+		}
 	}
 	result := make([]game.ItemStack, 0, len(inventory))
 	for _, itemID := range itemIDsFromInventory(inventory) {
@@ -894,6 +1024,37 @@ func inventorySlotsFromStorageState(inventory map[string]game.ItemStack, slots [
 		return result[i].SlotID < result[j].SlotID
 	})
 	return result
+}
+
+// inventorySlotsMatchInventory 判断格子明细是否和聚合背包一致；不一致时以聚合背包重建存储格子。
+func inventorySlotsMatchInventory(inventory map[string]game.ItemStack, slots []game.ItemStack) bool {
+	if len(inventory) == 0 {
+		return len(slots) == 0
+	}
+	aggregated := map[string]int{}
+	for _, stack := range slots {
+		if stack.ItemID == "" || stack.Amount <= 0 {
+			continue
+		}
+		aggregated[stack.ItemID] += stack.Amount
+	}
+	for _, itemID := range itemIDsFromInventory(inventory) {
+		stack := inventory[itemID]
+		itemID = strings.TrimSpace(firstNonEmptyStorage(itemID, stack.ItemID))
+		if itemID == "" {
+			continue
+		}
+		if aggregated[itemID] != stack.Amount {
+			return false
+		}
+		delete(aggregated, itemID)
+	}
+	for _, amount := range aggregated {
+		if amount > 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // resourceSnapshotMapsEqual 比较两个资源快照集合是否一致。
@@ -940,18 +1101,41 @@ func deleteStalePlayerResourcesTx(tx *sql.Tx, playerID string, resourceTypes []s
 
 // deleteStalePlayerInventoryTx 删除兼容快照里已经不存在的背包格子。
 func deleteStalePlayerInventoryTx(tx *sql.Tx, playerID string, slotIDs []string) error {
-	placeholders := strings.TrimRight(strings.Repeat("?,", len(slotIDs)), ",")
-	args := make([]any, 0, len(slotIDs)+1)
-	args = append(args, playerID)
+	keep := make(map[string]struct{}, len(slotIDs))
 	for _, slotID := range slotIDs {
-		args = append(args, slotID)
+		slotID = strings.TrimSpace(slotID)
+		if slotID != "" {
+			keep[slotID] = struct{}{}
+		}
 	}
-	_, err := tx.Exec(
-		`DELETE FROM player_inventory
-		 WHERE player_id = ? AND slot_id NOT IN (`+placeholders+`)`,
-		args...,
-	)
-	return err
+	rows, err := tx.Query(`SELECT slot_id FROM player_inventory WHERE player_id = ?`, playerID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	staleSlotIDs := []string{}
+	for rows.Next() {
+		var slotID string
+		if err := rows.Scan(&slotID); err != nil {
+			return err
+		}
+		if _, ok := keep[slotID]; ok {
+			continue
+		}
+		staleSlotIDs = append(staleSlotIDs, slotID)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, slotID := range staleSlotIDs {
+		if _, err := tx.Exec(`DELETE FROM player_inventory WHERE player_id = ? AND slot_id = ?`, playerID, slotID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // parseInventoryTime 解析背包时间字符串为可空数据库时间。

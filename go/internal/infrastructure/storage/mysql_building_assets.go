@@ -39,6 +39,9 @@ func (r *MySQLRepository) UpdateBuildingResourceState(playerID string, updatedAt
 	if state.Player.MailCode == "" {
 		state.Player.MailCode = mailCode
 	}
+	if err := overlayAuthoritativeCurrencyTx(tx, &state, playerID, updatedAt); err != nil {
+		return game.GameState{}, err
+	}
 	if err := overlayAuthoritativeResourcesTx(tx, &state, playerID); err != nil {
 		return game.GameState{}, err
 	}
@@ -56,6 +59,7 @@ func (r *MySQLRepository) UpdateBuildingResourceState(playerID string, updatedAt
 	}
 
 	previousResourceSnapshot := resourceSnapshotsFromStorageState(state.Resources)
+	previousCurrencySnapshot := currencySnapshotFromState(state)
 	previousBuildingSnapshot := buildingSnapshotsFromStorageState(state.Buildings)
 	previousResourceSlotSnapshot := resourceSlotSnapshotsFromStorageState(state.ResourceSlots)
 
@@ -74,6 +78,11 @@ func (r *MySQLRepository) UpdateBuildingResourceState(playerID string, updatedAt
 	}
 	if resourceSnapshotChanged(previousResourceSnapshot, state.Resources) {
 		if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
+			return game.GameState{}, err
+		}
+	}
+	if currencySnapshotChanged(previousCurrencySnapshot, state) {
+		if err := syncPlayerCurrencyTx(tx, playerID, &state, updatedAt.UTC()); err != nil {
 			return game.GameState{}, err
 		}
 	}
@@ -164,6 +173,9 @@ func (r *MySQLRepository) UpdateAccountBuildingResourceState(accountID string, p
 	if state.Player.MailCode == "" {
 		state.Player.MailCode = mailCode
 	}
+	if err := overlayAuthoritativeCurrencyTx(tx, &state, playerID, updatedAt); err != nil {
+		return game.Account{}, game.GameState{}, err
+	}
 	if err := overlayAuthoritativeResourcesTx(tx, &state, playerID); err != nil {
 		return game.Account{}, game.GameState{}, err
 	}
@@ -181,6 +193,7 @@ func (r *MySQLRepository) UpdateAccountBuildingResourceState(accountID string, p
 	}
 
 	previousResourceSnapshot := resourceSnapshotsFromStorageState(state.Resources)
+	previousCurrencySnapshot := currencySnapshotFromState(state)
 	previousBuildingSnapshot := buildingSnapshotsFromStorageState(state.Buildings)
 	previousResourceSlotSnapshot := resourceSlotSnapshotsFromStorageState(state.ResourceSlots)
 
@@ -199,6 +212,11 @@ func (r *MySQLRepository) UpdateAccountBuildingResourceState(accountID string, p
 	}
 	if resourceSnapshotChanged(previousResourceSnapshot, state.Resources) {
 		if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
+			return game.Account{}, game.GameState{}, err
+		}
+	}
+	if currencySnapshotChanged(previousCurrencySnapshot, state) {
+		if err := syncPlayerCurrencyTx(tx, playerID, &state, updatedAt.UTC()); err != nil {
 			return game.Account{}, game.GameState{}, err
 		}
 	}

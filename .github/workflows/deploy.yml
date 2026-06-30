@@ -73,6 +73,7 @@ jobs:
           REPO_URL="https://github.com/${HERO3_REPOSITORY}.git"
           STAMP="$(date +%Y%m%d%H%M%S)"
           SERVER_BIN="/tmp/hero3-server.${HERO3_SHA}"
+          DBTOOL_BIN="/tmp/hero3-dbtool.${HERO3_SHA}"
 
           log() {
             printf '\n[%s] %s\n' "$(date -Is)" "$*"
@@ -126,6 +127,7 @@ jobs:
           log "Building backend"
           cd "$SOURCE_DIR/go"
           GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "$SERVER_BIN" ./cmd/server
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "$DBTOOL_BIN" ./cmd/dbtool
 
           log "Building web"
           cd "$SOURCE_DIR/web"
@@ -150,18 +152,28 @@ jobs:
 
           log "Installing release"
           install -m 755 "$SERVER_BIN" /opt/hero3/go/bin/hero3-server
+          install -m 755 "$DBTOOL_BIN" /opt/hero3/go/bin/hero3-dbtool
           rsync -a --delete "$SOURCE_DIR/go/config/" /opt/hero3/go/config/
           rsync -a --delete "$SOURCE_DIR/web/dist/" /var/www/hero3/web/
           rsync -a --delete "$SOURCE_DIR/admin/dist/" /var/www/hero3/admin/
           git -C "$SOURCE_DIR" log -1 --pretty='%h %s' > /opt/hero3/RELEASE
 
           log "Restarting services"
+          if [ -d "$SOURCE_DIR/deploy/systemd" ]; then
+            install -m 644 "$SOURCE_DIR/deploy/systemd/hero3-battle-report-cleanup.service" /etc/systemd/system/hero3-battle-report-cleanup.service
+            install -m 644 "$SOURCE_DIR/deploy/systemd/hero3-battle-report-cleanup.timer" /etc/systemd/system/hero3-battle-report-cleanup.timer
+            install -m 644 "$SOURCE_DIR/deploy/systemd/hero3-maintenance-status.service" /etc/systemd/system/hero3-maintenance-status.service
+            install -m 644 "$SOURCE_DIR/deploy/systemd/hero3-maintenance-status.timer" /etc/systemd/system/hero3-maintenance-status.timer
+            systemctl daemon-reload
+            systemctl enable --now hero3-battle-report-cleanup.timer
+            systemctl enable --now hero3-maintenance-status.timer
+          fi
           systemctl restart hero3
           nginx -t
           systemctl reload nginx
           curl --fail --show-error --silent --retry 10 --retry-delay 2 --retry-connrefused http://127.0.0.1:8081/healthz
 
-          rm -f "$SERVER_BIN"
+          rm -f "$SERVER_BIN" "$DBTOOL_BIN"
           EOF
 
       - name: Health check

@@ -139,7 +139,7 @@ func (s *Service) ExecuteEffectsWithAccount(accountID string, playerID string, e
 // executeEffectsInPlayerAssetTransaction 根据 Effect 类型选择最小可用的玩家资产事务。
 func (s *Service) executeEffectsInPlayerAssetTransaction(playerID string, now time.Time, effects []Effect, update func(state *GameState) error) (GameState, error) {
 	if effectListOnlyTouchesRewardAssets(effects) {
-		return s.repo.UpdateRewardState(playerID, now, update)
+		return s.repo.UpdateScopedRewardState(playerID, rewardAssetScopeForEffects(effects), now, update)
 	}
 	if effectListOnlyTouchesBuildingAssets(effects) {
 		return s.repo.UpdateBuildingResourceState(playerID, now, update)
@@ -150,7 +150,7 @@ func (s *Service) executeEffectsInPlayerAssetTransaction(playerID string, now ti
 // executeEffectsInAccountAssetTransaction 根据 Effect 类型选择最小可用的账号资产事务。
 func (s *Service) executeEffectsInAccountAssetTransaction(accountID string, playerID string, now time.Time, effects []Effect, update func(account *Account, state *GameState) error) (Account, GameState, error) {
 	if effectListOnlyTouchesRewardAssets(effects) {
-		return s.repo.UpdateAccountRewardState(accountID, playerID, now, update)
+		return s.repo.UpdateScopedAccountRewardState(accountID, playerID, rewardAssetScopeForEffects(effects), now, update)
 	}
 	return Account{}, GameState{}, ErrMixedEffectAssets
 }
@@ -236,6 +236,25 @@ func effectListOnlyTouchesRewardAssets(effects []Effect) bool {
 		}
 	}
 	return true
+}
+
+// rewardAssetScopeForEffects 从纯奖励效果中推导奖励资产事务作用域。
+func rewardAssetScopeForEffects(effects []Effect) RewardAssetScope {
+	rewards := []Reward{}
+	scope := RewardAssetScope{}
+	for _, effect := range effects {
+		switch coreeffect.NormalizeType(effect.Type) {
+		case EffectTypeReward:
+			rewards = append(rewards, effect.Rewards...)
+		case EffectTypeModifier:
+			scope.Buffs = true
+		}
+	}
+	rewardScope := rewardAssetScopeForRewards(rewards)
+	if scope.Buffs {
+		rewardScope.Buffs = true
+	}
+	return rewardScope
 }
 
 // effectListOnlyTouchesBuildingAssets 判断效果列表是否只影响建筑资产。

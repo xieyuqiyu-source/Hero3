@@ -3,7 +3,9 @@ package game
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,20 +17,45 @@ var (
 	ErrNpcNotFound      = errors.New("npc city not found")
 	ErrNoUnitsSelected  = errors.New("no units selected for dispatch")
 	ErrInsufficientArmy = errors.New("insufficient army for dispatch")
+	ErrNoSweepTargets   = errors.New("no npc sweep targets")
 )
 
 // AttackNpcRequest 攻击 NPC 请求
 type AttackNpcRequest struct {
-	PlayerID   string         `json:"playerId"`
-	NpcID      string         `json:"npcId"`
-	Mode       string         `json:"mode"`  // "attack" or "plunder"
-	Units      map[string]int `json:"units"` // unitType → count
-	GeneralIDs []string       `json:"generalIds,omitempty"`
+	PlayerID    string         `json:"playerId"`
+	NpcID       string         `json:"npcId"`
+	Mode        string         `json:"mode"`  // "attack" or "plunder"
+	Units       map[string]int `json:"units"` // unitType → count
+	GeneralIDs  []string       `json:"generalIds,omitempty"`
+	EffectRefID string         `json:"-"`
 }
 
 // AttackNpcResponse 攻击 NPC 响应
 type AttackNpcResponse struct {
 	BattleReport BattleReport  `json:"battleReport"`
+	Resources    ResourceState `json:"resources"`
+	Army         []ArmyUnit    `json:"army"`
+	General      *General      `json:"general,omitempty"`
+	Generals     []General     `json:"generals,omitempty"`
+	CityGold     FlexInt       `json:"cityGold"`
+	NpcState     *NpcState     `json:"npcState,omitempty"`
+	ServerTime   string        `json:"serverTime"`
+}
+
+// SweepNpcRequest 批量扫荡 NPC 请求。
+type SweepNpcRequest struct {
+	PlayerID   string   `json:"playerId"`
+	NpcIDs     []string `json:"npcIds"`
+	Mode       string   `json:"mode"`
+	GeneralIDs []string `json:"generalIds,omitempty"`
+}
+
+// SweepNpcResponse 批量扫荡 NPC 响应。
+type SweepNpcResponse struct {
+	BattleReport BattleReport  `json:"battleReport"`
+	Done         int           `json:"done"`
+	Failed       int           `json:"failed"`
+	Stopped      bool          `json:"stopped"`
 	Resources    ResourceState `json:"resources"`
 	Army         []ArmyUnit    `json:"army"`
 	General      *General      `json:"general,omitempty"`
@@ -75,6 +102,97 @@ type ScoutNpcResponse struct {
 
 // AttackNpc 攻击 NPC 城池
 func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
+	return s.attackNpc(req, true)
+}
+
+// combatScopeForUnits 从出兵请求中提取本次战斗需要锁定的兵种范围。
+func combatScopeForAttack(units map[string]int, generalIDs []string) CombatAssetScope {
+	scope := CombatAssetScope{}
+	seenUnits := map[string]struct{}{}
+	for unitType, count := range units {
+		unitType = strings.TrimSpace(unitType)
+		if unitType == "" || count <= 0 {
+			continue
+		}
+		if _, ok := seenUnits[unitType]; ok {
+			continue
+		}
+		seenUnits[unitType] = struct{}{}
+		scope.UnitTypes = append(scope.UnitTypes, unitType)
+	}
+	seenGenerals := map[string]struct{}{}
+	for _, generalID := range generalIDs {
+		generalID = strings.TrimSpace(generalID)
+		if generalID == "" {
+			continue
+		}
+		if _, ok := seenGenerals[generalID]; ok {
+			continue
+		}
+		seenGenerals[generalID] = struct{}{}
+		scope.GeneralIDs = append(scope.GeneralIDs, generalID)
+	}
+	scope.InventoryItemIDs = npcBattleDropCandidateItemIDs()
+	if len(scope.InventoryItemIDs) == 0 {
+		scope.SkipInventory = true
+	}
+	return scope
+}
+
+// combatScopeForScoutFaction 从玩家阵营推导侦查事务需要锁定的侦察兵种。
+func combatScopeForScoutFaction(faction string) (CombatAssetScope, error) {
+	scoutUnitID := findScoutUnit(faction)
+	if scoutUnitID == "" {
+		return CombatAssetScope{}, ErrNoUnitsSelected
+	}
+	return CombatAssetScope{UnitTypes: []string{scoutUnitID}, SkipInventory: true}, nil
+}
+
+// npcBattleDropCandidateItemIDs 汇总当前 NPC 配置可能产出的道具，用于把战斗背包锁收窄到候选掉落物。
+func npcBattleDropCandidateItemIDs() []string {
+	cfg := GetNpcConfig()
+	seenPools := map[string]struct{}{}
+	seenItems := map[string]struct{}{}
+	for _, tier := range cfg.Tiers {
+		collectDropPoolItemIDs(tier.DropPoolID, seenPools, seenItems)
+	}
+	itemIDs := make([]string, 0, len(seenItems))
+	for itemID := range seenItems {
+		itemIDs = append(itemIDs, itemID)
+	}
+	sort.Strings(itemIDs)
+	return itemIDs
+}
+
+// collectDropPoolItemIDs 递归收集掉落池中的道具 ID，并防止配置递归导致无限循环。
+func collectDropPoolItemIDs(poolID string, seenPools map[string]struct{}, seenItems map[string]struct{}) {
+	poolID = strings.TrimSpace(poolID)
+	if poolID == "" {
+		return
+	}
+	if _, ok := seenPools[poolID]; ok {
+		return
+	}
+	seenPools[poolID] = struct{}{}
+	pool, ok := GetDropPoolDefinition(poolID)
+	if !ok {
+		return
+	}
+	for _, reward := range dropPoolCycleItems(pool) {
+		switch strings.TrimSpace(reward.Type) {
+		case RewardTypeItem:
+			itemID := strings.TrimSpace(reward.ID)
+			if itemID != "" {
+				seenItems[itemID] = struct{}{}
+			}
+		case "drop_pool":
+			collectDropPoolItemIDs(reward.DropPoolID, seenPools, seenItems)
+		}
+	}
+}
+
+// attackNpc 结算一次 NPC 战斗；saveReport 控制是否保存单场战报和发布战斗事件。
+func (s *Service) attackNpc(req AttackNpcRequest, saveReport bool) (AttackNpcResponse, error) {
 	playerID := strings.TrimSpace(req.PlayerID)
 	npcID := strings.TrimSpace(req.NpcID)
 	mode := strings.TrimSpace(req.Mode)
@@ -108,7 +226,7 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 		rewardApply = RewardApplyResult{}
 		capturedToGarrison = map[string]int{}
 		capturedSourceFaction = ""
-		state, err = s.repo.UpdateCombatState(playerID, now, func(state *GameState) error {
+		state, err = s.repo.UpdateCombatState(playerID, combatScopeForAttack(req.Units, req.GeneralIDs), now, func(state *GameState) error {
 			if state.General != nil {
 				applyHeroConfigToGeneral(state.General)
 			}
@@ -217,6 +335,10 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 				report.GeneralLevelBefore = expResult.LevelBefore
 				report.GeneralLevelAfter = expResult.LevelAfter
 			}
+			effectRefID := strings.TrimSpace(req.EffectRefID)
+			if effectRefID == "" {
+				effectRefID = report.ID
+			}
 			dropRewards, dropSnapshots, err := rollNpcBattleDrops(npc, report)
 			if err != nil {
 				return err
@@ -225,7 +347,7 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 				apply, err := ApplyRewardsToStateWithContext(state, dropRewards, RewardGrantContext{
 					PlayerID: state.Player.ID,
 					RefType:  LedgerRefBattleReward,
-					RefID:    report.ID,
+					RefID:    effectRefID,
 					Reason:   "npc_battle_drop",
 				}, now)
 				if err != nil {
@@ -255,19 +377,27 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 	if err != nil {
 		return AttackNpcResponse{}, err
 	}
-	s.flushRewardSideEffects(rewardApply)
+	if saveReport {
+		s.flushRewardSideEffects(rewardApply)
+	} else {
+		s.flushRewardSideEffectsWithoutEvents(rewardApply)
+	}
 
 	if len(capturedToGarrison) > 0 {
+		effectRefID := strings.TrimSpace(req.EffectRefID)
+		if effectRefID == "" {
+			effectRefID = report.ID
+		}
 		result, err := s.CreateGarrisonDetachment(CreateGarrisonDetachmentRequest{
 			OwnerPlayerID: state.Player.ID,
 			HostPlayerID:  state.Player.ID,
 			SourceType:    GarrisonSourceCaptured,
-			SourceID:      report.ID,
+			SourceID:      effectRefID,
 			SourceFaction: capturedSourceFaction,
 			Troops:        capturedToGarrison,
 			Metadata: map[string]any{
 				"reason":   "beauty_trap_capture",
-				"reportId": report.ID,
+				"reportId": effectRefID,
 				"npcId":    npcID,
 			},
 		})
@@ -279,36 +409,38 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 		}
 	}
 
-	if report.OverflowCityGold > 0 {
-		s.recordLedger(GoldLedgerEntry{
-			PlayerID:     state.Player.ID,
-			Currency:     LedgerCurrencyCityGold,
-			Direction:    LedgerDirectionCredit,
-			Amount:       report.OverflowCityGold,
-			BalanceAfter: int(state.CityGold),
-			RefType:      LedgerRefBattleOverflow,
-			RefID:        report.ID,
+	if saveReport {
+		if report.OverflowCityGold > 0 {
+			s.recordLedger(GoldLedgerEntry{
+				PlayerID:     state.Player.ID,
+				Currency:     LedgerCurrencyCityGold,
+				Direction:    LedgerDirectionCredit,
+				Amount:       report.OverflowCityGold,
+				BalanceAfter: int(state.CityGold),
+				RefType:      LedgerRefBattleOverflow,
+				RefID:        report.ID,
+			})
+		}
+
+		createResult, err := s.CreateBattleReports(BattleReportCreateInput{
+			EventID:    report.EventID,
+			SourceType: report.SourceType,
+			SourceID:   report.TargetID,
+			BattleType: report.BattleType,
+			Result:     report.Result,
+			OccurredAt: report.CreatedAt,
+			Reports:    []BattleReport{report},
 		})
-	}
+		if err != nil {
+			slog.Warn("battle report save failed", "error", err, "reportId", report.ID)
+		} else if len(createResult.Reports) > 0 {
+			report = createResult.Reports[0]
+		}
+		s.publishBattleRewardEvents(state.Player.ID, report)
+		s.publishBattleFinished(state.Player.ID, report)
 
-	createResult, err := s.CreateBattleReports(BattleReportCreateInput{
-		EventID:    report.EventID,
-		SourceType: report.SourceType,
-		SourceID:   report.TargetID,
-		BattleType: report.BattleType,
-		Result:     report.Result,
-		OccurredAt: report.CreatedAt,
-		Reports:    []BattleReport{report},
-	})
-	if err != nil {
-		slog.Warn("battle report save failed", "error", err, "reportId", report.ID)
-	} else if len(createResult.Reports) > 0 {
-		report = createResult.Reports[0]
+		s.attachReportSummary(&state, state.Player.ID)
 	}
-	s.publishBattleRewardEvents(state.Player.ID, report)
-	s.publishBattleFinished(state.Player.ID, report)
-
-	s.attachReportSummary(&state, state.Player.ID)
 
 	return AttackNpcResponse{
 		BattleReport: report,
@@ -320,6 +452,320 @@ func (s *Service) AttackNpc(req AttackNpcRequest) (AttackNpcResponse, error) {
 		NpcState:     state.NpcState,
 		ServerTime:   state.ServerTime,
 	}, nil
+}
+
+const maxNpcSweepTargets = 100
+
+// SweepNpc 批量扫荡 NPC 城池，并把多场扫荡合并为一条战报。
+func (s *Service) SweepNpc(req SweepNpcRequest) (SweepNpcResponse, error) {
+	playerID := strings.TrimSpace(req.PlayerID)
+	if playerID == "" {
+		return SweepNpcResponse{}, ErrPlayerNotFound
+	}
+	npcIDs := normalizeSweepNpcIDs(req.NpcIDs)
+	if len(npcIDs) == 0 {
+		return SweepNpcResponse{}, ErrNoSweepTargets
+	}
+	if len(npcIDs) > maxNpcSweepTargets {
+		npcIDs = npcIDs[:maxNpcSweepTargets]
+	}
+
+	mode := strings.TrimSpace(req.Mode)
+	if mode != "attack" && mode != "plunder" {
+		mode = "attack"
+	}
+
+	state, err := s.repo.GetState(playerID)
+	if err != nil {
+		return SweepNpcResponse{}, err
+	}
+	currentArmy := state.Army
+	if len(sweepUnitsFromArmy(currentArmy)) == 0 {
+		return SweepNpcResponse{}, ErrNoUnitsSelected
+	}
+	sweepReportID := "br_" + randomID(8)
+	response := SweepNpcResponse{
+		Resources:  state.Resources,
+		Army:       state.Army,
+		General:    state.General,
+		Generals:   state.Generals,
+		CityGold:   state.CityGold,
+		NpcState:   state.NpcState,
+		ServerTime: state.ServerTime,
+	}
+
+	reports := make([]BattleReport, 0, len(npcIDs))
+	detailReports := make([]BattleReport, 0, len(npcIDs))
+	for _, npcID := range npcIDs {
+		units := sweepUnitsFromArmy(currentArmy)
+		if len(units) == 0 {
+			response.Stopped = true
+			break
+		}
+
+		result, err := s.attackNpc(AttackNpcRequest{
+			PlayerID:    playerID,
+			NpcID:       npcID,
+			Mode:        mode,
+			Units:       units,
+			GeneralIDs:  req.GeneralIDs,
+			EffectRefID: sweepReportID,
+		}, false)
+		if err != nil {
+			if errors.Is(err, ErrGeneralNotFound) || errors.Is(err, ErrGeneralBusy) {
+				return SweepNpcResponse{}, err
+			}
+			if errors.Is(err, ErrNoUnitsSelected) || errors.Is(err, ErrInsufficientArmy) {
+				response.Stopped = true
+				break
+			}
+			response.Failed++
+			continue
+		}
+
+		response.Done++
+		reports = append(reports, result.BattleReport)
+		if shouldKeepSweepDetailReport(result.BattleReport) {
+			detailReports = append(detailReports, prepareSweepDetailReport(result.BattleReport))
+		}
+		currentArmy = result.Army
+		response.Resources = result.Resources
+		response.Army = result.Army
+		response.General = result.General
+		response.Generals = result.Generals
+		response.CityGold = result.CityGold
+		response.NpcState = result.NpcState
+		response.ServerTime = result.ServerTime
+	}
+
+	if len(reports) == 0 {
+		return response, nil
+	}
+
+	report := buildNpcSweepReport(sweepReportID, reports, mode, len(npcIDs), response.Failed, response.Stopped)
+	reportsToSave := make([]BattleReport, 0, 1+len(detailReports))
+	reportsToSave = append(reportsToSave, report)
+	reportsToSave = append(reportsToSave, detailReports...)
+	createResult, err := s.CreateBattleReports(BattleReportCreateInput{
+		EventID:    report.EventID,
+		SourceType: report.SourceType,
+		SourceID:   report.TargetID,
+		BattleType: report.BattleType,
+		Result:     report.Result,
+		OccurredAt: report.CreatedAt,
+		Reports:    reportsToSave,
+		Extra: map[string]interface{}{
+			"requested": len(npcIDs),
+			"success":   response.Done,
+			"failed":    response.Failed,
+			"stopped":   response.Stopped,
+		},
+	})
+	if err != nil {
+		slog.Warn("npc sweep report save failed", "error", err, "playerId", playerID)
+	} else if len(createResult.Reports) > 0 {
+		for _, savedReport := range createResult.Reports {
+			if savedReport.ID == report.ID {
+				report = savedReport
+				break
+			}
+		}
+	}
+
+	if report.OverflowCityGold > 0 {
+		s.recordLedger(GoldLedgerEntry{
+			PlayerID:     playerID,
+			Currency:     LedgerCurrencyCityGold,
+			Direction:    LedgerDirectionCredit,
+			Amount:       report.OverflowCityGold,
+			BalanceAfter: int(response.CityGold),
+			RefType:      LedgerRefBattleOverflow,
+			RefID:        report.ID,
+		})
+	}
+	s.publishBattleRewardEvents(playerID, report)
+	s.publishBattleFinished(playerID, report)
+	response.BattleReport = report
+	return response, nil
+}
+
+// shouldKeepSweepDetailReport 判断扫荡中的单场战斗是否需要额外保留完整战报。
+func shouldKeepSweepDetailReport(report BattleReport) bool {
+	if report.Result != "" && report.Result != "attacker_victory" {
+		return true
+	}
+	if report.GeneralLevelAfter > report.GeneralLevelBefore && report.GeneralLevelBefore > 0 {
+		return true
+	}
+	if hasHighQualityBattleDrop(report.Drops) {
+		return true
+	}
+	if len(report.TraitTriggered) > 0 || len(report.TraitOutcomes) > 0 {
+		return true
+	}
+	if hasPositiveTroopMap(report.CapturedUnits) || hasPositiveTroopMap(report.CapturedToGarrison) || hasPositiveTroopMap(report.RevivedUnits) {
+		return true
+	}
+	if report.OverflowCityGold > 0 {
+		return true
+	}
+	return false
+}
+
+// prepareSweepDetailReport 为扫荡特殊明细补齐分类字段，避免被汇总战报类型覆盖。
+func prepareSweepDetailReport(report BattleReport) BattleReport {
+	report.ViewType = ReportViewAttack
+	report.SourceType = ReportSourceNPCCity
+	report.BattleType = valueOrDefault(report.BattleType, report.Type)
+	report.OwnerPlayerID = valueOrDefault(report.OwnerPlayerID, report.PlayerID)
+	return report
+}
+
+// hasHighQualityBattleDrop 判断战斗掉落里是否包含需要保留单场明细的高品质道具。
+func hasHighQualityBattleDrop(drops []BattleReportDrop) bool {
+	for _, drop := range drops {
+		if itemQualityRank(drop.Quality) >= itemQualityRank(ItemQualityEpic) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasPositiveTroopMap 判断兵力 map 是否包含正数变化。
+func hasPositiveTroopMap(values map[string]int) bool {
+	for _, amount := range values {
+		if amount > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// normalizeSweepNpcIDs 去重并过滤空 NPC ID，避免一次扫荡重复打同一个目标。
+func normalizeSweepNpcIDs(values []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		id := strings.TrimSpace(value)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
+}
+
+// sweepUnitsFromArmy 使用当前剩余全部兵力作为下一场扫荡出征兵力。
+func sweepUnitsFromArmy(army []ArmyUnit) map[string]int {
+	units := map[string]int{}
+	for _, unit := range army {
+		if unit.UnitType != "" && unit.Amount > 0 {
+			units[unit.UnitType] = unit.Amount
+		}
+	}
+	return units
+}
+
+// buildNpcSweepReport 把多场 NPC 战斗结果合并为一条扫荡战报。
+func buildNpcSweepReport(reportID string, reports []BattleReport, mode string, requested int, failed int, stopped bool) BattleReport {
+	first := reports[0]
+	last := reports[len(reports)-1]
+	aggregate := BattleReport{
+		ID:               reportID,
+		PlayerID:         first.PlayerID,
+		OwnerPlayerID:    first.PlayerID,
+		ViewType:         ReportViewAttack,
+		SourceType:       ReportSourceNPCCity,
+		BattleType:       "sweep",
+		Title:            "NPC 扫荡",
+		PlayerFaction:    first.PlayerFaction,
+		PlayerName:       first.PlayerName,
+		TargetID:         "npc_sweep",
+		TargetName:       "NPC 扫荡",
+		Type:             mode,
+		Result:           "attacker_victory",
+		DefenderFaction:  first.DefenderFaction,
+		DefenderRevealed: true,
+		Read:             false,
+		CreatedAt:        last.CreatedAt,
+	}
+
+	levelBeforeSet := false
+	for _, report := range reports {
+		aggregate.PlayerPower += report.PlayerPower
+		aggregate.EnemyPower += report.EnemyPower
+		aggregate.DispatchedUnits = mergeTroopMaps(aggregate.DispatchedUnits, report.DispatchedUnits)
+		aggregate.LostUnits = mergeTroopMaps(aggregate.LostUnits, report.LostUnits)
+		aggregate.DefenderUnits = mergeTroopMaps(aggregate.DefenderUnits, report.DefenderUnits)
+		aggregate.DefenderLostUnits = mergeTroopMaps(aggregate.DefenderLostUnits, report.DefenderLostUnits)
+		aggregate.DefenderResources = mergeTroopMaps(aggregate.DefenderResources, report.DefenderResources)
+		aggregate.Rewards = mergeTroopMaps(aggregate.Rewards, report.Rewards)
+		aggregate.Overflow = mergeTroopMaps(aggregate.Overflow, report.Overflow)
+		aggregate.CapturedUnits = mergeTroopMaps(aggregate.CapturedUnits, report.CapturedUnits)
+		aggregate.CapturedToGarrison = mergeTroopMaps(aggregate.CapturedToGarrison, report.CapturedToGarrison)
+		aggregate.RevivedUnits = mergeTroopMaps(aggregate.RevivedUnits, report.RevivedUnits)
+		aggregate.OverflowCityGold += report.OverflowCityGold
+		aggregate.GeneralExpGained += report.GeneralExpGained
+		if report.GeneralExpGained > 0 {
+			if !levelBeforeSet {
+				aggregate.GeneralLevelBefore = report.GeneralLevelBefore
+				levelBeforeSet = true
+			}
+			aggregate.GeneralLevelAfter = report.GeneralLevelAfter
+		}
+		aggregate.Drops = append(aggregate.Drops, report.Drops...)
+		aggregate.PvpAttackerGenerals = latestPvpGeneralSnapshots(aggregate.PvpAttackerGenerals, report.PvpAttackerGenerals)
+		mergeReportTraitOutcomes(&aggregate, report)
+	}
+	aggregate.GrantedRewards = buildBattleGrantedRewards(aggregate)
+	aggregate.Summary = fmt.Sprintf("扫荡 %d 城，成功 %d 场，失败 %d 场，获得 %d 城金，武将经验 +%d。", requested, len(reports), failed, aggregate.OverflowCityGold, aggregate.GeneralExpGained)
+	detail := BuildBattleReportDetail(aggregate)
+	if detail.Extra == nil {
+		detail.Extra = map[string]interface{}{}
+	}
+	detail.Extra["sweep"] = map[string]interface{}{
+		"requested": requested,
+		"success":   len(reports),
+		"failed":    failed,
+		"stopped":   stopped,
+		"mode":      mode,
+	}
+	aggregate.Detail = &detail
+	return aggregate
+}
+
+// latestPvpGeneralSnapshots 保留最新的武将快照，确保聚合战报展示扫荡结束后的等级。
+func latestPvpGeneralSnapshots(current []PvpGeneralSnapshot, next []PvpGeneralSnapshot) []PvpGeneralSnapshot {
+	if len(next) == 0 {
+		return current
+	}
+	return append([]PvpGeneralSnapshot(nil), next...)
+}
+
+// mergeReportTraitOutcomes 合并单场战报中的特性触发信息。
+func mergeReportTraitOutcomes(target *BattleReport, source BattleReport) {
+	if target == nil {
+		return
+	}
+	if len(source.TraitOutcomes) > 0 && target.TraitOutcomes == nil {
+		target.TraitOutcomes = map[string]TraitOutcomeReport{}
+	}
+	for _, traitID := range source.TraitTriggered {
+		alreadyIn := false
+		for _, existing := range target.TraitTriggered {
+			if existing == traitID {
+				alreadyIn = true
+				break
+			}
+		}
+		if !alreadyIn {
+			target.TraitTriggered = append(target.TraitTriggered, traitID)
+		}
+		if outcome, ok := source.TraitOutcomes[traitID]; ok {
+			target.TraitOutcomes[traitID] = outcome
+		}
+	}
 }
 
 // isRetryableStorageConflict 判断数据库事务冲突是否适合立即重试。
@@ -419,7 +865,15 @@ func (s *Service) ScoutNpc(req ScoutNpcRequest) (ScoutNpcResponse, error) {
 	var report BattleReport
 	var scoutSuccess bool
 	var revealedNpc *NpcCity
-	state, err := s.repo.UpdateCombatState(playerID, now, func(state *GameState) error {
+	summary, err := s.repo.GetPlayerSummaryView(playerID)
+	if err != nil {
+		return ScoutNpcResponse{}, err
+	}
+	scoutScope, err := combatScopeForScoutFaction(summary.Player.Faction)
+	if err != nil {
+		return ScoutNpcResponse{}, err
+	}
+	state, err := s.repo.UpdateCombatState(playerID, scoutScope, now, func(state *GameState) error {
 		nextState, _ := settleResources(*state, now)
 		*state = nextState
 

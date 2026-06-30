@@ -1,0 +1,13 @@
+# 本文件定义 Hero3 维护巡检的一次性 systemd 任务。
+[Unit]
+Description=Hero3 maintenance status snapshot
+After=network.target mysql.service mariadb.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/hero3/go
+EnvironmentFile=/etc/hero3/hero3.env
+ExecStart=/opt/hero3/go/bin/hero3-dbtool maintenance-status
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

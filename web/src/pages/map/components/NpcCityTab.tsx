@@ -73,15 +73,6 @@ const NpcCityTab: FC = () => {
     setSelectedTiers((prev) => ({ ...prev, [tier]: !prev[tier] }))
   }
 
-  const buildAllArmyUnits = () => {
-    const army = useGameStore.getState().state?.army ?? []
-    const units: Record<string, number> = {}
-    for (const unit of army) {
-      if (unit.amount > 0) units[unit.unitType] = unit.amount
-    }
-    return units
-  }
-
   const handleSweep = async () => {
     if (!activePlayerId || sweeping || selectedSweepTargets.length === 0) return
 
@@ -90,47 +81,47 @@ const NpcCityTab: FC = () => {
     setLastSweepSummary(null)
     setSweepProgress({ done: 0, total: selectedSweepTargets.length, failed: 0, current: '', cityGold: 0 })
 
-    let done = 0
-    let failed = 0
-    let totalCityGold = 0
-
-    for (const city of selectedSweepTargets) {
-      const units = buildAllArmyUnits()
+    try {
+      const npcIds = selectedSweepTargets.map((city) => city.id)
       const generalIds = getNpcQuickBattleGeneralIds(useGameStore.getState().state)
-      if (Object.keys(units).length === 0) {
-        toast.info('当前没有可出征兵力，扫荡已停止')
-        break
+      const result = await gameApi.sweepNpc(activePlayerId, npcIds, 'attack', generalIds)
+      useGameStore.getState().patchState({
+        resources: result.resources,
+        army: result.army,
+        general: result.general,
+        generals: result.generals,
+        cityGold: result.cityGold,
+        npcState: result.npcState,
+        serverTime: result.serverTime,
+      })
+      if (result.npcState?.cities) {
+        setCities(result.npcState.cities)
       }
-
-      setSweepProgress({ done, total: selectedSweepTargets.length, failed, current: city.name, cityGold: totalCityGold })
-      try {
-        const result = await gameApi.attackNpc(activePlayerId, city.id, 'attack', units, generalIds)
-        useGameStore.getState().patchState({
-          resources: result.resources,
-          army: result.army,
-          general: result.general,
-          generals: result.generals,
-          cityGold: result.cityGold,
-          npcState: result.npcState,
-          serverTime: result.serverTime,
-        })
-        if (result.npcState?.cities) {
-          setCities(result.npcState.cities)
-        }
-        totalCityGold += result.battleReport.overflowCityGold ?? 0
-        done += 1
-      } catch {
-        failed += 1
+      const totalCityGold = result.battleReport?.overflowCityGold ?? 0
+      if (result.battleReport?.id) {
+        setBattleReport(result.battleReport)
       }
-      setSweepProgress({ done, total: selectedSweepTargets.length, failed, current: city.name, cityGold: totalCityGold })
+      setSweepProgress({
+        done: result.done,
+        total: selectedSweepTargets.length,
+        failed: result.failed,
+        current: '',
+        cityGold: totalCityGold,
+      })
+      setLastSweepSummary({ done: result.done, failed: result.failed, cityGold: totalCityGold })
+      await loadCities()
+      void useGameStore.getState().loadMilitaryView()
+      void useGameStore.getState().loadResourceView()
+      if (result.stopped) {
+        toast.info(`扫荡已停止：成功 ${result.done} 场，失败 ${result.failed} 场，获得 ${totalCityGold.toLocaleString()} 城金。`)
+      } else {
+        toast.success(`扫荡完成：成功 ${result.done} 场，失败 ${result.failed} 场，获得 ${totalCityGold.toLocaleString()} 城金。可前往军情查看战报。`)
+      }
+    } catch {
+      toast.error('扫荡失败，请稍后重试')
+    } finally {
+      setSweeping(false)
     }
-
-    setSweeping(false)
-    setLastSweepSummary({ done, failed, cityGold: totalCityGold })
-    await loadCities()
-    void useGameStore.getState().loadMilitaryView()
-    void useGameStore.getState().loadResourceView()
-    toast.success(`扫荡完成：成功 ${done} 场，失败 ${failed} 场，获得 ${totalCityGold.toLocaleString()} 城金。可前往军情查看战报。`)
   }
 
   const handleAttackComplete = () => {

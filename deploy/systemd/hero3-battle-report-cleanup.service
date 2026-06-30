@@ -1,0 +1,13 @@
+# 本文件定义 Hero3 战报物理清理的一次性 systemd 任务。
+[Unit]
+Description=Hero3 battle report cleanup
+After=network.target mysql.service mariadb.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/hero3/go
+EnvironmentFile=/etc/hero3/hero3.env
+ExecStart=/opt/hero3/go/bin/hero3-dbtool cleanup-battle-reports --execute --allow-non-test --batch-size 500 --max-batches 4 --retention-hours 72 --pvp-retention-hours 168 --defense-retention-hours 168 --scout-retention-hours 168 --deleted-retention-hours 24
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

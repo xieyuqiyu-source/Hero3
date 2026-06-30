@@ -44,6 +44,9 @@ func (r *MySQLRepository) UpdateRecruitState(playerID string, updatedAt time.Tim
 	if state.Player.MailCode == "" {
 		state.Player.MailCode = mailCode
 	}
+	if err := overlayAuthoritativeCurrencyTx(tx, &state, playerID, updatedAt); err != nil {
+		return game.GameState{}, err
+	}
 	if err := overlayAuthoritativeResourcesTx(tx, &state, playerID); err != nil {
 		return game.GameState{}, err
 	}
@@ -67,6 +70,7 @@ func (r *MySQLRepository) UpdateRecruitState(playerID string, updatedAt time.Tim
 	}
 
 	previousResourceSnapshot := resourceSnapshotsFromStorageState(state.Resources)
+	previousCurrencySnapshot := currencySnapshotFromState(state)
 	previousBuildingSnapshot := buildingSnapshotsFromStorageState(state.Buildings)
 	previousResourceSlotSnapshot := resourceSlotSnapshotsFromStorageState(state.ResourceSlots)
 	previousArmySnapshot := armySnapshotsFromStorageState(state.Army)
@@ -87,6 +91,11 @@ func (r *MySQLRepository) UpdateRecruitState(playerID string, updatedAt time.Tim
 	}
 	if resourceSnapshotChanged(previousResourceSnapshot, state.Resources) {
 		if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
+			return game.GameState{}, err
+		}
+	}
+	if currencySnapshotChanged(previousCurrencySnapshot, state) {
+		if err := syncPlayerCurrencyTx(tx, playerID, &state, updatedAt.UTC()); err != nil {
 			return game.GameState{}, err
 		}
 	}

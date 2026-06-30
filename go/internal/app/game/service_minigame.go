@@ -116,7 +116,7 @@ func (s *Service) UseFishingBait(playerID string, baitID string) (FishingBaitUse
 	var cityGoldRemain *int
 	if cost > 0 {
 		var err error
-		state, err = s.repo.UpdateRewardState(playerID, now, func(state *GameState) error {
+		state, err = s.repo.UpdateScopedRewardState(playerID, RewardAssetScope{Currency: true}, now, func(state *GameState) error {
 			if int(state.CityGold) < cost {
 				return ErrInsufficientCityGold
 			}

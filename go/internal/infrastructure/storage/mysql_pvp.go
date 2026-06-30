@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"hero3/internal/app/game"
@@ -509,6 +510,9 @@ func loadPvpPlayerStateTx(tx *sql.Tx, playerID string) (game.GameState, []byte, 
 	if err := overlayAuthoritativeResourcesTx(tx, &state, playerID); err != nil {
 		return game.GameState{}, nil, err
 	}
+	if err := overlayAuthoritativeCurrencyTx(tx, &state, playerID, time.Now()); err != nil {
+		return game.GameState{}, nil, err
+	}
 	if err := overlayAuthoritativeBuildingsTx(tx, &state, playerID); err != nil {
 		return game.GameState{}, nil, err
 	}
@@ -526,6 +530,9 @@ func loadPvpPlayerStateTx(tx *sql.Tx, playerID string) (game.GameState, []byte, 
 
 func savePvpPlayerStateTx(tx *sql.Tx, playerID string, state game.GameState, previousJSON []byte, updatedAt time.Time, previousArmy map[string]storageArmySnapshot, previousAssignments map[string]storageGeneralAssignmentSnapshot) error {
 	if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
+		return err
+	}
+	if err := syncPlayerCurrencyTx(tx, playerID, &state, updatedAt.UTC()); err != nil {
 		return err
 	}
 	if err := saveReinforcementPlayerStateTx(tx, playerID, state, previousJSON, updatedAt, previousArmy, previousAssignments); err != nil {
@@ -765,7 +772,82 @@ func insertBattleReportTx(tx *sql.Tx, report game.BattleReport) error {
 		 ON DUPLICATE KEY UPDATE is_read = VALUES(is_read), updated_at = VALUES(updated_at)`,
 		battleReportStateID(report.ID, report.PlayerID), report.ID, report.PlayerID, report.Read, createdAt.UTC(), createdAt.UTC(),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	return enforceBattleReportVisibleCapTx(tx, report.PlayerID, report.ViewType, time.Now().UTC())
+}
+
+// enforceBattleReportVisibleCapTx 软删除同玩家同视角超过上限的旧可见战报，保护有效分享链接。
+func enforceBattleReportVisibleCapTx(tx *sql.Tx, playerID string, viewType string, now time.Time) error {
+	playerID = strings.TrimSpace(playerID)
+	viewType = strings.TrimSpace(viewType)
+	if playerID == "" || viewType == "" {
+		return nil
+	}
+	rows, err := tx.Query(
+		`SELECT br.id
+		 FROM battle_reports br
+		 LEFT JOIN battle_report_links l
+		   ON l.report_id = br.id AND (l.expires_at IS NULL OR l.expires_at > ?)
+		 WHERE br.player_id = ? AND br.view_type = ? AND br.deleted_by_player = 0 AND l.report_id IS NULL
+		 ORDER BY br.created_at DESC, br.id DESC
+		 LIMIT ? OFFSET ?`,
+		now.UTC(),
+		playerID,
+		viewType,
+		battleReportCapDeleteBatchLimit,
+		battleReportVisibleCapPerView,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	reportIDs := []string{}
+	for rows.Next() {
+		var reportID string
+		if err := rows.Scan(&reportID); err != nil {
+			return err
+		}
+		if strings.TrimSpace(reportID) != "" {
+			reportIDs = append(reportIDs, reportID)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(reportIDs) == 0 {
+		return nil
+	}
+
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(reportIDs)), ",")
+	if _, err := tx.Exec(
+		`UPDATE battle_reports
+		 SET deleted_by_player = 1
+		 WHERE player_id = ? AND view_type = ? AND id IN (`+placeholders+`)`,
+		append([]any{playerID, viewType}, reportIDsToAny(reportIDs)...)...,
+	); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(
+		`UPDATE battle_report_states
+		 SET is_deleted = 1, deleted_at = ?, updated_at = ?
+		 WHERE player_id = ? AND report_id IN (`+placeholders+`)`,
+		append([]any{now.UTC(), now.UTC(), playerID}, reportIDsToAny(reportIDs)...)...,
+	); err != nil {
+		return err
+	}
+	return nil
+}
+
+// reportIDsToAny 把 report_id 列表转换为 SQL 参数。
+func reportIDsToAny(reportIDs []string) []any {
+	args := make([]any, 0, len(reportIDs))
+	for _, reportID := range reportIDs {
+		args = append(args, reportID)
+	}
+	return args
 }
 
 func savePvpPlayerJSONTx(tx *sql.Tx, playerID string, state game.GameState, previousJSON []byte, updatedAt time.Time) error {

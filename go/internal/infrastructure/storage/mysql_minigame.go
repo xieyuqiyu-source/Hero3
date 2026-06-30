@@ -117,9 +117,13 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 	if state.Player.MailCode == "" {
 		state.Player.MailCode = mailCode
 	}
+	if err := overlayAuthoritativeCurrencyTx(tx, &state, playerID, updatedAt); err != nil {
+		return game.GameState{}, nil, err
+	}
 	if err := overlayAuthoritativeArmyTx(tx, &state, playerID); err != nil {
 		return game.GameState{}, nil, err
 	}
+	previousCurrencySnapshot := currencySnapshotFromState(state)
 	previousArmySnapshot := armySnapshotsFromStorageState(state.Army)
 
 	rows, err := tx.Query(
@@ -187,6 +191,11 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 	}
 	if armySnapshotChanged(previousArmySnapshot, state.Army) {
 		if err := syncPlayerArmyTx(tx, playerID, state.Army, updatedAt.UTC()); err != nil {
+			return game.GameState{}, nil, err
+		}
+	}
+	if currencySnapshotChanged(previousCurrencySnapshot, state) {
+		if err := syncPlayerCurrencyTx(tx, playerID, &state, updatedAt.UTC()); err != nil {
 			return game.GameState{}, nil, err
 		}
 	}

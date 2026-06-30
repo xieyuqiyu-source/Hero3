@@ -122,7 +122,7 @@ type ReportActionResult struct {
 type ItemActionResult struct {
 	Inventory          map[string]ItemStack    `json:"inventory,omitempty"`
 	InventorySlots     []ItemStack             `json:"inventorySlots,omitempty"`
-	Resources          ResourceState           `json:"resources,omitempty"`
+	Resources          *ResourceState          `json:"resources,omitempty"`
 	Army               []ArmyUnit              `json:"army,omitempty"`
 	General            *General                `json:"general,omitempty"`
 	Generals           []General               `json:"generals,omitempty"`
@@ -265,16 +265,33 @@ func BuildItemActionResult(state GameState) ItemActionResult {
 	if state.Inventory == nil {
 		state.Inventory = map[string]ItemStack{}
 	}
+	resources := state.Resources
 	return ItemActionResult{
 		Inventory:          state.Inventory,
 		InventorySlots:     state.InventorySlots,
-		Resources:          state.Resources,
+		Resources:          &resources,
 		Army:               state.Army,
 		General:            state.General,
 		Generals:           state.Generals,
 		GeneralAssignments: state.GeneralAssignments,
 		ActiveModifiers:    state.ActiveModifiers,
 		Buffs:              state.Buffs,
+		CityGold:           state.CityGold,
+		ServerTime:         state.ServerTime,
+	}
+}
+
+// BuildGeneralExpItemActionResult 从经验包小事务状态中裁剪背包和武将字段。
+func BuildGeneralExpItemActionResult(state GameState) ItemActionResult {
+	if state.Inventory == nil {
+		state.Inventory = map[string]ItemStack{}
+	}
+	return ItemActionResult{
+		Inventory:          state.Inventory,
+		InventorySlots:     state.InventorySlots,
+		General:            state.General,
+		Generals:           state.Generals,
+		GeneralAssignments: state.GeneralAssignments,
 		CityGold:           state.CityGold,
 		ServerTime:         state.ServerTime,
 	}

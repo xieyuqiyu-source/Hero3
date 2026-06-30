@@ -4,6 +4,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -247,4 +248,100 @@ func TestMySQLBattleReportStateIDUsesSafeLength(t *testing.T) {
 	if len(stateID) > 64 {
 		t.Fatalf("expected state id length <= 64, got %d: %s", len(stateID), stateID)
 	}
+}
+
+// TestMySQLBattleReportVisibleCapSoftDeletesOldReports 验证同玩家同视角战报超过上限后会软删除旧普通战报并保护有效分享。
+func TestMySQLBattleReportVisibleCapSoftDeletesOldReports(t *testing.T) {
+	repo, db := openReportTestRepository(t)
+	now := time.Now().UTC()
+	suffix := strings.NewReplacer(".", "_").Replace(now.Format("150405.000000"))
+	playerID := "it_cap_player_" + suffix
+	sharedReportID := "it_cap_shared_" + suffix
+	prefix := "it_cap_" + suffix + "_"
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM battle_report_links WHERE report_id = ? OR report_id LIKE ?`, sharedReportID, prefix+"%")
+		_, _ = db.Exec(`DELETE FROM battle_report_participants WHERE report_id = ? OR report_id LIKE ?`, sharedReportID, prefix+"%")
+		_, _ = db.Exec(`DELETE FROM battle_report_states WHERE report_id = ? OR report_id LIKE ?`, sharedReportID, prefix+"%")
+		_, _ = db.Exec(`DELETE FROM battle_reports WHERE id = ? OR id LIKE ?`, sharedReportID, prefix+"%")
+		_, _ = db.Exec(`DELETE FROM battle_events WHERE id = ? OR id LIKE ?`, "event_"+sharedReportID, "event_"+prefix+"%")
+	})
+
+	shared := reportCapTestReport(sharedReportID, playerID, now.Add(-2*time.Hour))
+	if err := repo.SaveReport(shared); err != nil {
+		t.Fatalf("save shared report: %v", err)
+	}
+	if _, err := repo.CreateBattleReportShareLink(playerID, sharedReportID, "public", time.Time{}); err != nil {
+		t.Fatalf("create share link: %v", err)
+	}
+
+	reports := make([]game.BattleReport, 0, battleReportVisibleCapPerView+2)
+	for i := 0; i < battleReportVisibleCapPerView+2; i++ {
+		reportID := fmt.Sprintf("%s%05d", prefix, i)
+		reports = append(reports, reportCapTestReport(reportID, playerID, now.Add(time.Duration(i)*time.Second)))
+	}
+	if err := repo.SaveReports(reports); err != nil {
+		t.Fatalf("save capped reports: %v", err)
+	}
+
+	var nonSharedVisible int
+	if err := db.QueryRow(
+		`SELECT COUNT(*)
+		 FROM battle_reports
+		 WHERE player_id = ? AND view_type = ? AND deleted_by_player = 0 AND id <> ?`,
+		playerID,
+		game.ReportViewAttack,
+		sharedReportID,
+	).Scan(&nonSharedVisible); err != nil {
+		t.Fatalf("count visible non-shared reports: %v", err)
+	}
+	if nonSharedVisible != battleReportVisibleCapPerView {
+		t.Fatalf("expected non-shared visible reports capped at %d, got %d", battleReportVisibleCapPerView, nonSharedVisible)
+	}
+
+	var sharedDeleted bool
+	if err := db.QueryRow(`SELECT deleted_by_player FROM battle_reports WHERE id = ?`, sharedReportID).Scan(&sharedDeleted); err != nil {
+		t.Fatalf("read shared report deleted flag: %v", err)
+	}
+	if sharedDeleted {
+		t.Fatal("expected active shared report to be protected from visible cap")
+	}
+
+	oldestDeletedID := reports[0].ID
+	var reportDeleted bool
+	if err := db.QueryRow(`SELECT deleted_by_player FROM battle_reports WHERE id = ?`, oldestDeletedID).Scan(&reportDeleted); err != nil {
+		t.Fatalf("read old capped report: %v", err)
+	}
+	if !reportDeleted {
+		t.Fatalf("expected oldest non-shared report %s to be soft deleted", oldestDeletedID)
+	}
+	var stateDeleted bool
+	if err := db.QueryRow(`SELECT is_deleted FROM battle_report_states WHERE report_id = ? AND player_id = ?`, oldestDeletedID, playerID).Scan(&stateDeleted); err != nil {
+		t.Fatalf("read old capped report state: %v", err)
+	}
+	if !stateDeleted {
+		t.Fatalf("expected oldest non-shared report state %s to be soft deleted", oldestDeletedID)
+	}
+}
+
+// reportCapTestReport 构造战报上限测试用标准战报。
+func reportCapTestReport(reportID string, playerID string, createdAt time.Time) game.BattleReport {
+	return game.NormalizeBattleReport(game.BattleReport{
+		ID:              reportID,
+		EventID:         "event_" + reportID,
+		PlayerID:        playerID,
+		OwnerPlayerID:   playerID,
+		PlayerName:      "上限测试城",
+		PlayerFaction:   "wei",
+		TargetID:        "npc_cap",
+		TargetName:      "上限测试营地",
+		Type:            "attack",
+		ViewType:        game.ReportViewAttack,
+		SourceType:      game.ReportSourceNPCCity,
+		BattleType:      "attack",
+		Result:          "attacker_victory",
+		DispatchedUnits: map[string]int{"weiInfantry": 1},
+		DefenderFaction: "shu",
+		DefenderUnits:   map[string]int{"shuInfantry": 1},
+		CreatedAt:       createdAt.UTC().Format(time.RFC3339),
+	})
 }

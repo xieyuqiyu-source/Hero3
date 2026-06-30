@@ -45,8 +45,10 @@ func TestCompactPlayerStateSnapshotDropsAuthoritativeAssets(t *testing.T) {
 		Army:               []game.ArmyUnit{{UnitType: "weiInfantry", Amount: 10}},
 		RecruitQueues:      []game.RecruitQueue{{ID: "queue_1", UnitType: "weiInfantry", Amount: 5}},
 		Buffs:              []game.Buff{{ID: "buff_1", Key: "woodProductionBonus", Mode: "add", Value: 10}},
+		NpcState:           &game.NpcState{Cities: []game.NpcCity{{ID: "npc_1", Name: "NPC 1"}}},
 		ResourceSettledAt:  "2026-06-26T00:00:00Z",
 		CityGold:           12,
+		LastExchangeAt:     "2026-06-26T01:00:00Z",
 		ProductionBoost:    2,
 		ProductionBoostEnd: "2026-06-27T00:00:00Z",
 		ServerTime:         "2026-06-26T00:00:00Z",
@@ -62,16 +64,13 @@ func TestCompactPlayerStateSnapshotDropsAuthoritativeAssets(t *testing.T) {
 		t.Fatalf("unmarshal compact snapshot: %v", err)
 	}
 
-	for _, key := range []string{"resources", "inventory", "buildings", "resourceSlots", "generals", "generalAssignments", "army", "recruitQueues", "buffs"} {
+	for _, key := range []string{"resources", "inventory", "buildings", "resourceSlots", "generals", "generalAssignments", "army", "recruitQueues", "buffs", "npcState", "serverTime", "cityGold", "lastExchangeAt"} {
 		if _, exists := snapshot[key]; exists {
 			t.Fatalf("expected %s to be omitted from compact state_json", key)
 		}
 	}
 	if snapshot["resourceSettledAt"] != state.ResourceSettledAt {
 		t.Fatalf("expected resourceSettledAt to be preserved")
-	}
-	if snapshot["cityGold"].(float64) != float64(state.CityGold) {
-		t.Fatalf("expected cityGold to be preserved")
 	}
 }
 

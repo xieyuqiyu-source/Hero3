@@ -1,0 +1,13 @@
+# 本文件定义 Hero3 维护巡检的定时触发器。
+[Unit]
+Description=Run Hero3 maintenance status snapshot periodically
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+Persistent=true
+Unit=hero3-maintenance-status.service
+
+[Install]
+WantedBy=timers.target

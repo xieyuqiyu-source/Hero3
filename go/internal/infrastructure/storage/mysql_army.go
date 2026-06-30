@@ -124,6 +124,46 @@ func loadPlayerArmyWithQuery(queryer resourceQueryer, playerID string, lockClaus
 	return army, len(army) > 0, nil
 }
 
+// loadPlayerArmyUnitRowsTx 在事务内只锁定指定兵种行。
+func loadPlayerArmyUnitRowsTx(tx *sql.Tx, playerID string, unitTypes []string) ([]game.ArmyUnit, error) {
+	unitTypes = normalizeArmyUnitTypes(unitTypes)
+	if len(unitTypes) == 0 {
+		return []game.ArmyUnit{}, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(unitTypes)), ",")
+	args := make([]any, 0, len(unitTypes)+1)
+	args = append(args, playerID)
+	for _, unitType := range unitTypes {
+		args = append(args, unitType)
+	}
+	rows, err := tx.Query(
+		`SELECT unit_type, amount
+		 FROM player_army_units
+		 WHERE player_id = ? AND unit_type IN (`+placeholders+`)
+		 ORDER BY unit_type
+		 FOR UPDATE`,
+		args...,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	army := []game.ArmyUnit{}
+	for rows.Next() {
+		var unit game.ArmyUnit
+		if err := rows.Scan(&unit.UnitType, &unit.Amount); err != nil {
+			return nil, err
+		}
+		unit.UnitType = strings.TrimSpace(unit.UnitType)
+		if unit.UnitType == "" || unit.Amount <= 0 {
+			continue
+		}
+		army = append(army, unit)
+	}
+	return army, rows.Err()
+}
+
 // loadPlayerRecruitQueues 从 player_recruit_queues 读取玩家征兵队列权威状态。
 func loadPlayerRecruitQueues(queryer resourceQueryer, playerID string) ([]game.RecruitQueue, bool, error) {
 	return loadPlayerRecruitQueuesWithQuery(queryer, playerID, "")
@@ -193,6 +233,53 @@ func syncPlayerArmyTx(tx *sql.Tx, playerID string, army []game.ArmyUnit, updated
 		}
 	}
 	return deleteStalePlayerArmyTx(tx, playerID, unitTypes)
+}
+
+// syncPlayerArmyDeltaTx 只写入变化后的兵种，并逐个删除消失兵种，避免高频战斗事务执行玩家级全量 DELETE。
+func syncPlayerArmyDeltaTx(tx *sql.Tx, playerID string, before map[string]storageArmySnapshot, army []game.ArmyUnit, updatedAt time.Time) error {
+	if before == nil {
+		return syncPlayerArmyTx(tx, playerID, army, updatedAt)
+	}
+	next := armySnapshotsFromStorageState(army)
+	nextTypes := make([]string, 0, len(next))
+	for unitType := range next {
+		nextTypes = append(nextTypes, unitType)
+	}
+	sort.Strings(nextTypes)
+	byType := armyByUnitType(army)
+	for _, unitType := range nextTypes {
+		nextSnapshot := next[unitType]
+		if beforeSnapshot, exists := before[unitType]; exists && beforeSnapshot == nextSnapshot {
+			continue
+		}
+		unit := byType[unitType]
+		if _, err := tx.Exec(
+			`INSERT INTO player_army_units (player_id, unit_type, amount, updated_at)
+			 VALUES (?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+				amount = VALUES(amount),
+				updated_at = VALUES(updated_at)`,
+			playerID,
+			unitType,
+			unit.Amount,
+			updatedAt.UTC(),
+		); err != nil {
+			return err
+		}
+	}
+	for unitType := range before {
+		if _, exists := next[unitType]; exists {
+			continue
+		}
+		if _, err := tx.Exec(
+			`DELETE FROM player_army_units WHERE player_id = ? AND unit_type = ?`,
+			playerID,
+			unitType,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // syncPlayerRecruitQueuesTx 把事务内征兵队列快照同步到 player_recruit_queues 权威表。
@@ -328,6 +415,24 @@ func armyUnitsFromState(army []game.ArmyUnit) []string {
 	}
 	sort.Strings(unitTypes)
 	return unitTypes
+}
+
+// normalizeArmyUnitTypes 清理兵种 ID 列表。
+func normalizeArmyUnitTypes(unitTypes []string) []string {
+	unitSet := map[string]struct{}{}
+	for _, unitType := range unitTypes {
+		unitType = strings.TrimSpace(unitType)
+		if unitType == "" {
+			continue
+		}
+		unitSet[unitType] = struct{}{}
+	}
+	result := make([]string, 0, len(unitSet))
+	for unitType := range unitSet {
+		result = append(result, unitType)
+	}
+	sort.Strings(result)
+	return result
 }
 
 // recruitQueueIDsFromState 提取有效征兵队列 ID。

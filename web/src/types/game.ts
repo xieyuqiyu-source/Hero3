@@ -376,9 +376,22 @@ export interface BattleReportDetailData {
   rewards: BattleReportRewards
   traits?: BattleReportTrait[]
   visibility: BattleReportVisibility
-  extra?: Record<string, unknown>
+  extra?: BattleReportExtra
   read: boolean
   share?: BattleReportShare
+}
+
+export interface BattleReportExtra {
+  sweep?: BattleReportSweepExtra
+  [key: string]: unknown
+}
+
+export interface BattleReportSweepExtra {
+  requested?: number
+  success?: number
+  failed?: number
+  stopped?: boolean
+  mode?: string
 }
 
 export interface BattleReportSide {

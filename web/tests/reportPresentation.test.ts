@@ -14,14 +14,15 @@ import {
   shouldShowEmptyReports,
 } from '../src/pages/news/reportPresentation.ts'
 
-test('军情页固定展示进攻、防守、增援三个主 Tab', () => {
-  assert.deepEqual(REPORT_VIEW_TABS.map((tab) => tab.key), ['attack', 'defense', 'reinforcement'])
+test('军情页固定展示全部、进攻、防守、增援、侦查 Tab', () => {
+  assert.deepEqual(REPORT_VIEW_TABS.map((tab) => tab.key), ['all', 'attack', 'defense', 'reinforcement', 'scout'])
 })
 
 test('来源和视角标签使用不同颜色配置', () => {
   assert.match(REPORT_VIEW_CONFIG.attack.color, /red/)
   assert.match(REPORT_VIEW_CONFIG.defense.color, /blue/)
   assert.match(REPORT_VIEW_CONFIG.reinforcement.color, /green/)
+  assert.match(REPORT_VIEW_CONFIG.scout.color, /yellow/)
   assert.match(REPORT_SOURCE_CONFIG.npc_city.color, /cyan/)
   assert.match(REPORT_SOURCE_CONFIG.player_city.color, /pink/)
   assert.match(REPORT_SOURCE_CONFIG.stronghold.color, /amber/)

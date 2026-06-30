@@ -86,6 +86,37 @@ func (h *Handlers) AttackNpc(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *Handlers) SweepNpc(w http.ResponseWriter, r *http.Request) {
+	var payload game.SweepNpcRequest
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+
+	result, err := h.gameService.SweepNpc(payload)
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrNoSweepTargets):
+			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrNoUnitsSelected):
+			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrInsufficientArmy):
+			status = http.StatusUnprocessableEntity
+		case errors.Is(err, game.ErrGeneralNotFound), errors.Is(err, game.ErrGeneralBusy):
+			status = http.StatusBadRequest
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *Handlers) SimulateBattle(w http.ResponseWriter, r *http.Request) {
 	var payload game.BattleSimulationRequest
 	if !decodeJSON(w, r, &payload) {

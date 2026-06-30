@@ -133,6 +133,38 @@ func readPlayerStorageSnapshot(t *testing.T, db *sql.DB, playerID string) ([]byt
 	return append([]byte(nil), stateJSON...), updatedAt
 }
 
+// readNpcStateRow 读取 player_npc_states 中的玩家 NPC 城池状态。
+func readNpcStateRow(t *testing.T, db *sql.DB, playerID string) (game.NpcState, time.Time, bool) {
+	t.Helper()
+	var stateJSON []byte
+	var updatedAt time.Time
+	err := db.QueryRow(
+		`SELECT npc_state_json, updated_at FROM player_npc_states WHERE player_id = ? LIMIT 1`,
+		playerID,
+	).Scan(&stateJSON, &updatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return game.NpcState{}, time.Time{}, false
+	}
+	if err != nil {
+		t.Fatalf("read player_npc_states: %v", err)
+	}
+	var npcState game.NpcState
+	if err := json.Unmarshal(stateJSON, &npcState); err != nil {
+		t.Fatalf("unmarshal player_npc_states: %v", err)
+	}
+	return npcState, updatedAt, true
+}
+
+// readAccountGold 读取账号金币。
+func readAccountGold(t *testing.T, db *sql.DB, accountID string) int {
+	t.Helper()
+	var gold int
+	if err := db.QueryRow(`SELECT gold FROM accounts WHERE id = ?`, accountID).Scan(&gold); err != nil {
+		t.Fatalf("read account gold: %v", err)
+	}
+	return gold
+}
+
 // readSnapshotResource 读取 players.state_json 兼容快照中的单项资源。
 func readSnapshotResource(t *testing.T, db *sql.DB, playerID string, resourceType string) int {
 	t.Helper()
@@ -165,6 +197,24 @@ func readInventoryRow(t *testing.T, db *sql.DB, playerID string, itemID string) 
 	return amount, true
 }
 
+// readInventoryUpdatedAt 读取 player_inventory 中单项道具更新时间。
+func readInventoryUpdatedAt(t *testing.T, db *sql.DB, playerID string, itemID string) (time.Time, bool) {
+	t.Helper()
+	var updatedAt time.Time
+	err := db.QueryRow(
+		`SELECT updated_at FROM player_inventory WHERE player_id = ? AND item_id = ?`,
+		playerID,
+		itemID,
+	).Scan(&updatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, false
+	}
+	if err != nil {
+		t.Fatalf("read player_inventory updated_at: %v", err)
+	}
+	return updatedAt.UTC(), true
+}
+
 // readSnapshotItem 读取 players.state_json 兼容快照中的单项道具。
 func readSnapshotItem(t *testing.T, db *sql.DB, playerID string, itemID string) (int, bool) {
 	t.Helper()
@@ -178,6 +228,27 @@ func readSnapshotItem(t *testing.T, db *sql.DB, playerID string, itemID string) 
 	}
 	stack, ok := state.Inventory[itemID]
 	return stack.Amount, ok
+}
+
+// indexExists 判断指定索引是否存在。
+func indexExists(t *testing.T, db *sql.DB, tableName string, indexName string) bool {
+	t.Helper()
+	var found string
+	err := db.QueryRow(
+		`SELECT INDEX_NAME
+		 FROM information_schema.STATISTICS
+		 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?
+		 LIMIT 1`,
+		tableName,
+		indexName,
+	).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false
+	}
+	if err != nil {
+		t.Fatalf("read index %s.%s: %v", tableName, indexName, err)
+	}
+	return found == indexName
 }
 
 // readBuildingRow 读取 player_buildings 中的单个建筑。
@@ -250,6 +321,24 @@ func readArmyRow(t *testing.T, db *sql.DB, playerID string, unitType string) (in
 	return amount, true
 }
 
+// readArmyUpdatedAt 读取 player_army_units 中的单项兵力更新时间。
+func readArmyUpdatedAt(t *testing.T, db *sql.DB, playerID string, unitType string) (time.Time, bool) {
+	t.Helper()
+	var updatedAt time.Time
+	err := db.QueryRow(
+		`SELECT updated_at FROM player_army_units WHERE player_id = ? AND unit_type = ?`,
+		playerID,
+		unitType,
+	).Scan(&updatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, false
+	}
+	if err != nil {
+		t.Fatalf("read player_army_units updated_at: %v", err)
+	}
+	return updatedAt.UTC(), true
+}
+
 // readRecruitQueueRow 读取 player_recruit_queues 中的单项征兵队列。
 func readRecruitQueueRow(t *testing.T, db *sql.DB, playerID string, queueID string) (game.RecruitQueue, bool) {
 	t.Helper()
@@ -289,6 +378,24 @@ func readGeneralRow(t *testing.T, db *sql.DB, playerID string, generalID string)
 	return level, exp, true
 }
 
+// readGeneralUpdatedAt 读取 player_generals 中的单个武将更新时间。
+func readGeneralUpdatedAt(t *testing.T, db *sql.DB, playerID string, generalID string) (time.Time, bool) {
+	t.Helper()
+	var updatedAt time.Time
+	err := db.QueryRow(
+		`SELECT updated_at FROM player_generals WHERE player_id = ? AND general_id = ?`,
+		playerID,
+		generalID,
+	).Scan(&updatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, false
+	}
+	if err != nil {
+		t.Fatalf("read player_generals updated_at: %v", err)
+	}
+	return updatedAt.UTC(), true
+}
+
 // readGeneralAssignmentCount 读取玩家武将占用记录数量。
 func readGeneralAssignmentCount(t *testing.T, db *sql.DB, playerID string) int {
 	t.Helper()
@@ -315,18 +422,42 @@ func readBuffCount(t *testing.T, db *sql.DB, playerID string) int {
 	return count
 }
 
-// readSnapshotCityGold 读取 players.state_json 兼容快照中的城内金币。
-func readSnapshotCityGold(t *testing.T, db *sql.DB, playerID string) int {
+// readBuffValue 读取玩家 Buff 权威表中的单条加成值。
+func readBuffValue(t *testing.T, db *sql.DB, playerID string, buffID string) (float64, bool) {
 	t.Helper()
-	var stateJSON []byte
-	if err := db.QueryRow(`SELECT state_json FROM players WHERE id = ?`, playerID).Scan(&stateJSON); err != nil {
-		t.Fatalf("read state_json: %v", err)
+	var value float64
+	err := db.QueryRow(
+		`SELECT modifier_value FROM player_buffs WHERE player_id = ? AND buff_id = ?`,
+		playerID,
+		buffID,
+	).Scan(&value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false
 	}
-	var state game.GameState
-	if err := json.Unmarshal(stateJSON, &state); err != nil {
-		t.Fatalf("unmarshal state_json: %v", err)
+	if err != nil {
+		t.Fatalf("read player_buffs value: %v", err)
 	}
-	return int(state.CityGold)
+	return value, true
+}
+
+// readCurrencyCityGold 读取 player_currencies 中的城金余额。
+func readCurrencyCityGold(t *testing.T, db *sql.DB, playerID string) int {
+	t.Helper()
+	var cityGold int
+	if err := db.QueryRow(`SELECT city_gold FROM player_currencies WHERE player_id = ?`, playerID).Scan(&cityGold); err != nil {
+		t.Fatalf("read player_currencies: %v", err)
+	}
+	return cityGold
+}
+
+// readCurrencyUpdatedAt 读取 player_currencies 的更新时间。
+func readCurrencyUpdatedAt(t *testing.T, db *sql.DB, playerID string) time.Time {
+	t.Helper()
+	var updatedAt time.Time
+	if err := db.QueryRow(`SELECT updated_at FROM player_currencies WHERE player_id = ?`, playerID).Scan(&updatedAt); err != nil {
+		t.Fatalf("read player_currencies updated_at: %v", err)
+	}
+	return updatedAt.UTC()
 }
 
 // overwriteSnapshotGeneral 手动篡改兼容快照，用于验证读取时不再相信 state_json.general。
@@ -710,8 +841,8 @@ func TestMySQLGrantRewardsRefreshesRewardAssetAuthorities(t *testing.T) {
 	if !unitOK || unitAmount != 3 {
 		t.Fatalf("expected army authority qingZhouArmy=3, table=%d/%v", unitAmount, unitOK)
 	}
-	if int(got.CityGold) != 7 || readSnapshotCityGold(t, db, state.Player.ID) != 7 {
-		t.Fatalf("expected city gold snapshot/state=7, state=%d", got.CityGold)
+	if int(got.CityGold) != 7 || readCurrencyCityGold(t, db, state.Player.ID) != 7 {
+		t.Fatalf("expected city gold authority/state=7, state=%d", got.CityGold)
 	}
 	if len(got.Buffs) != 1 || buffCount != 1 {
 		t.Fatalf("expected one buff in state/table, state=%+v table=%d", got.Buffs, buffCount)
@@ -724,6 +855,186 @@ func TestMySQLGrantRewardsRefreshesRewardAssetAuthorities(t *testing.T) {
 	}
 	if amount, ok := readSnapshotArmy(t, db, state.Player.ID, "qingZhouArmy"); ok || amount != 0 {
 		t.Fatalf("expected no state_json army snapshot, got %d/%v", amount, ok)
+	}
+}
+
+// TestMySQLGrantResourceRewardScopesAssets 验证纯资源奖励不会触碰背包、兵力和武将权威表。
+func TestMySQLGrantResourceRewardScopesAssets(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	_, state := createResourceAuthorityPlayer(t, repo, "reward_resource_scope")
+	now := time.Now().UTC()
+	seedUpdatedAt := now.Add(-time.Hour)
+	if _, err := db.Exec(
+		`INSERT INTO player_inventory (player_id, slot_id, item_id, amount, obtained_at, updated_at)
+		 VALUES (?, 'slot_0001', 'resource_pack_small', 2, ?, ?)
+		 ON DUPLICATE KEY UPDATE item_id = VALUES(item_id), amount = VALUES(amount), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+		seedUpdatedAt,
+		seedUpdatedAt,
+	); err != nil {
+		t.Fatalf("seed inventory: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO player_army_units (player_id, unit_type, amount, updated_at)
+		 VALUES (?, 'weiInfantry', 12, ?)
+		 ON DUPLICATE KEY UPDATE amount = VALUES(amount), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+		seedUpdatedAt,
+	); err != nil {
+		t.Fatalf("seed army: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO player_generals (player_id, general_id, faction, level, exp, stats_json, acquired_at, updated_at)
+		 VALUES (?, 'caocao', 'wei', 1, 0, JSON_OBJECT(), ?, ?)
+		 ON DUPLICATE KEY UPDATE exp = VALUES(exp), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+		seedUpdatedAt,
+		seedUpdatedAt,
+	); err != nil {
+		t.Fatalf("seed general: %v", err)
+	}
+	beforeInventoryUpdatedAt, ok := readInventoryUpdatedAt(t, db, state.Player.ID, "resource_pack_small")
+	if !ok {
+		t.Fatalf("expected inventory row")
+	}
+	beforeArmyUpdatedAt, ok := readArmyUpdatedAt(t, db, state.Player.ID, "weiInfantry")
+	if !ok {
+		t.Fatalf("expected army row")
+	}
+	beforeGeneralUpdatedAt, ok := readGeneralUpdatedAt(t, db, state.Player.ID, "caocao")
+	if !ok {
+		t.Fatalf("expected general row")
+	}
+	beforeCurrencyUpdatedAt := readCurrencyUpdatedAt(t, db, state.Player.ID)
+	service := game.NewServiceWithRepository(repo)
+
+	result, err := service.GrantRewards(state.Player.ID, []game.Reward{
+		{Type: game.RewardTypeResource, ID: "wood", Amount: 25},
+	}, game.RewardGrantContext{RefType: "test_reward_scope", RefID: "resource_only"})
+	if err != nil {
+		t.Fatalf("grant resource reward: %v", err)
+	}
+	wood, _ := readResourceRow(t, db, state.Player.ID, "wood")
+	if wood != 1225 || result.State.Resources.Items["wood"] != 1225 {
+		t.Fatalf("expected wood updated to 1225, state=%d table=%d", result.State.Resources.Items["wood"], wood)
+	}
+	if amount, ok := readInventoryRow(t, db, state.Player.ID, "resource_pack_small"); !ok || amount != 2 {
+		t.Fatalf("expected inventory row preserved, amount=%d ok=%v", amount, ok)
+	}
+	afterInventoryUpdatedAt, ok := readInventoryUpdatedAt(t, db, state.Player.ID, "resource_pack_small")
+	if !ok || !afterInventoryUpdatedAt.Equal(beforeInventoryUpdatedAt) {
+		t.Fatalf("expected inventory row not rewritten, before=%s after=%s ok=%v", beforeInventoryUpdatedAt, afterInventoryUpdatedAt, ok)
+	}
+	if amount, ok := readArmyRow(t, db, state.Player.ID, "weiInfantry"); !ok || amount != 12 {
+		t.Fatalf("expected army row preserved, amount=%d ok=%v", amount, ok)
+	}
+	afterArmyUpdatedAt, ok := readArmyUpdatedAt(t, db, state.Player.ID, "weiInfantry")
+	if !ok || !afterArmyUpdatedAt.Equal(beforeArmyUpdatedAt) {
+		t.Fatalf("expected army row not rewritten, before=%s after=%s ok=%v", beforeArmyUpdatedAt, afterArmyUpdatedAt, ok)
+	}
+	_, exp, ok := readGeneralRow(t, db, state.Player.ID, "caocao")
+	if !ok || exp != 0 {
+		t.Fatalf("expected general row preserved, exp=%d ok=%v", exp, ok)
+	}
+	afterGeneralUpdatedAt, ok := readGeneralUpdatedAt(t, db, state.Player.ID, "caocao")
+	if !ok || !afterGeneralUpdatedAt.Equal(beforeGeneralUpdatedAt) {
+		t.Fatalf("expected general row not rewritten, before=%s after=%s ok=%v", beforeGeneralUpdatedAt, afterGeneralUpdatedAt, ok)
+	}
+	afterCurrencyUpdatedAt := readCurrencyUpdatedAt(t, db, state.Player.ID)
+	if !afterCurrencyUpdatedAt.Equal(beforeCurrencyUpdatedAt) {
+		t.Fatalf("expected currency row not rewritten, before=%s after=%s", beforeCurrencyUpdatedAt, afterCurrencyUpdatedAt)
+	}
+}
+
+// TestMySQLGrantAccountRewardScopesPlayerAssets 验证账号奖励事务不会刷新无关玩家资产。
+func TestMySQLGrantAccountRewardScopesPlayerAssets(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	account, state := createResourceAuthorityPlayer(t, repo, "reward_account_scope")
+	now := time.Now().UTC()
+	seedUpdatedAt := now.Add(-time.Hour)
+	if _, err := db.Exec(
+		`INSERT INTO player_inventory (player_id, slot_id, item_id, amount, obtained_at, updated_at)
+		 VALUES (?, 'slot_0001', 'resource_pack_small', 2, ?, ?)
+		 ON DUPLICATE KEY UPDATE item_id = VALUES(item_id), amount = VALUES(amount), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+		seedUpdatedAt,
+		seedUpdatedAt,
+	); err != nil {
+		t.Fatalf("seed inventory: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO player_army_units (player_id, unit_type, amount, updated_at)
+		 VALUES (?, 'weiInfantry', 12, ?)
+		 ON DUPLICATE KEY UPDATE amount = VALUES(amount), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+		seedUpdatedAt,
+	); err != nil {
+		t.Fatalf("seed army: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO player_generals (player_id, general_id, faction, level, exp, stats_json, acquired_at, updated_at)
+		 VALUES (?, 'caocao', 'wei', 1, 0, JSON_OBJECT(), ?, ?)
+		 ON DUPLICATE KEY UPDATE exp = VALUES(exp), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+		seedUpdatedAt,
+		seedUpdatedAt,
+	); err != nil {
+		t.Fatalf("seed general: %v", err)
+	}
+	beforeInventoryUpdatedAt, ok := readInventoryUpdatedAt(t, db, state.Player.ID, "resource_pack_small")
+	if !ok {
+		t.Fatalf("expected inventory row")
+	}
+	beforeArmyUpdatedAt, ok := readArmyUpdatedAt(t, db, state.Player.ID, "weiInfantry")
+	if !ok {
+		t.Fatalf("expected army row")
+	}
+	beforeGeneralUpdatedAt, ok := readGeneralUpdatedAt(t, db, state.Player.ID, "caocao")
+	if !ok {
+		t.Fatalf("expected general row")
+	}
+	beforeCurrencyUpdatedAt := readCurrencyUpdatedAt(t, db, state.Player.ID)
+	service := game.NewServiceWithRepository(repo)
+
+	result, err := service.GrantRewards(state.Player.ID, []game.Reward{
+		{Type: game.RewardTypeGold, ID: game.RewardTypeGold, Amount: 5},
+		{Type: game.RewardTypeResource, ID: "wood", Amount: 25},
+	}, game.RewardGrantContext{AccountID: account.ID, RefType: "test_reward_scope", RefID: "account_resource"})
+	if err != nil {
+		t.Fatalf("grant account reward: %v", err)
+	}
+	if result.Account.Gold != 5 || readAccountGold(t, db, account.ID) != 5 {
+		t.Fatalf("expected account gold=5, result=%d table=%d", result.Account.Gold, readAccountGold(t, db, account.ID))
+	}
+	wood, _ := readResourceRow(t, db, state.Player.ID, "wood")
+	if wood != 1225 || result.State.Resources.Items["wood"] != 1225 {
+		t.Fatalf("expected wood updated to 1225, state=%d table=%d", result.State.Resources.Items["wood"], wood)
+	}
+	if amount, ok := readInventoryRow(t, db, state.Player.ID, "resource_pack_small"); !ok || amount != 2 {
+		t.Fatalf("expected inventory row preserved, amount=%d ok=%v", amount, ok)
+	}
+	afterInventoryUpdatedAt, ok := readInventoryUpdatedAt(t, db, state.Player.ID, "resource_pack_small")
+	if !ok || !afterInventoryUpdatedAt.Equal(beforeInventoryUpdatedAt) {
+		t.Fatalf("expected inventory row not rewritten, before=%s after=%s ok=%v", beforeInventoryUpdatedAt, afterInventoryUpdatedAt, ok)
+	}
+	if amount, ok := readArmyRow(t, db, state.Player.ID, "weiInfantry"); !ok || amount != 12 {
+		t.Fatalf("expected army row preserved, amount=%d ok=%v", amount, ok)
+	}
+	afterArmyUpdatedAt, ok := readArmyUpdatedAt(t, db, state.Player.ID, "weiInfantry")
+	if !ok || !afterArmyUpdatedAt.Equal(beforeArmyUpdatedAt) {
+		t.Fatalf("expected army row not rewritten, before=%s after=%s ok=%v", beforeArmyUpdatedAt, afterArmyUpdatedAt, ok)
+	}
+	_, exp, ok := readGeneralRow(t, db, state.Player.ID, "caocao")
+	if !ok || exp != 0 {
+		t.Fatalf("expected general row preserved, exp=%d ok=%v", exp, ok)
+	}
+	afterGeneralUpdatedAt, ok := readGeneralUpdatedAt(t, db, state.Player.ID, "caocao")
+	if !ok || !afterGeneralUpdatedAt.Equal(beforeGeneralUpdatedAt) {
+		t.Fatalf("expected general row not rewritten, before=%s after=%s ok=%v", beforeGeneralUpdatedAt, afterGeneralUpdatedAt, ok)
+	}
+	afterCurrencyUpdatedAt := readCurrencyUpdatedAt(t, db, state.Player.ID)
+	if !afterCurrencyUpdatedAt.Equal(beforeCurrencyUpdatedAt) {
+		t.Fatalf("expected currency row not rewritten, before=%s after=%s", beforeCurrencyUpdatedAt, afterCurrencyUpdatedAt)
 	}
 }
 
@@ -775,6 +1086,109 @@ func TestMySQLUseItemSpendsInventoryAuthority(t *testing.T) {
 	}
 	if amount, ok := readSnapshotItem(t, db, state.Player.ID, "resource_pack_small"); ok || amount != 0 {
 		t.Fatalf("expected resource_pack_small removed from state_json snapshot, amount=%d ok=%v", amount, ok)
+	}
+}
+
+// TestMySQLGeneralExpItemStateOnlySyncsInventoryAndGenerals 验证经验包小事务只写背包和武将。
+func TestMySQLGeneralExpItemStateOnlySyncsInventoryAndGenerals(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	_, state := createResourceAuthorityPlayer(t, repo, "general_exp_item_scope")
+	if !indexExists(t, db, "player_inventory", "idx_player_inventory_player_item") {
+		t.Fatalf("expected player_inventory(player_id, item_id) index for scoped item locks")
+	}
+	if err := game.LoadItemsConfig("../../../config/items.json"); err != nil {
+		t.Fatalf("load items config: %v", err)
+	}
+	service := game.NewServiceWithRepository(repo)
+	if _, err := service.GrantItem(state.Player.ID, "general_exp_small", 1); err != nil {
+		t.Fatalf("grant item: %v", err)
+	}
+	if _, err := service.GrantItem(state.Player.ID, "resource_pack_small", 2); err != nil {
+		t.Fatalf("grant unrelated item: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO player_generals (player_id, general_id, faction, level, exp, stats_json, acquired_at, updated_at)
+		 VALUES (?, 'caocao', 'wei', 1, 0, JSON_OBJECT(), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+		 ON DUPLICATE KEY UPDATE exp = VALUES(exp), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+	); err != nil {
+		t.Fatalf("seed general: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO player_generals (player_id, general_id, faction, level, exp, stats_json, acquired_at, updated_at)
+		 VALUES (?, 'xuchu', 'wei', 1, 77, JSON_OBJECT(), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+		 ON DUPLICATE KEY UPDATE exp = VALUES(exp), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+	); err != nil {
+		t.Fatalf("seed unrelated general: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO player_general_assignments (player_id, assignment_id, general_id, assignment_slot, module_id, status, assigned_at, updated_at)
+		 VALUES (?, 'main', 'caocao', 'main', '', 'active', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+		 ON DUPLICATE KEY UPDATE general_id = VALUES(general_id), assignment_slot = VALUES(assignment_slot), status = VALUES(status), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+	); err != nil {
+		t.Fatalf("seed general assignment: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO player_army_units (player_id, unit_type, amount, updated_at)
+		 VALUES (?, 'weiInfantry', 5, UTC_TIMESTAMP(6))
+		 ON DUPLICATE KEY UPDATE amount = VALUES(amount), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+	); err != nil {
+		t.Fatalf("seed army: %v", err)
+	}
+	beforeWood, _ := readResourceRow(t, db, state.Player.ID, "wood")
+
+	result, err := repo.UpdateGeneralExpItemState(state.Player.ID, "general_exp_small", time.Now(), func(state *game.GameState) error {
+		state.Inventory = map[string]game.ItemStack{}
+		state.InventorySlots = nil
+		if state.General == nil {
+			t.Fatalf("expected current general in scoped transaction")
+		}
+		state.General.Exp += 123
+		for index := range state.Generals {
+			if state.Generals[index].ID == state.General.ID {
+				state.Generals[index].Exp = state.General.Exp
+			}
+		}
+		if state.Resources.Items == nil {
+			state.Resources.Items = map[string]int{}
+		}
+		state.Resources.Items["wood"] += 999
+		state.Army = append(state.Army, game.ArmyUnit{UnitType: "weiInfantry", Amount: 99})
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("update general exp item state: %v", err)
+	}
+
+	if amount, ok := readInventoryRow(t, db, state.Player.ID, "general_exp_small"); ok || amount != 0 {
+		t.Fatalf("expected scoped transaction to remove inventory item, amount=%d ok=%v", amount, ok)
+	}
+	if amount, ok := readInventoryRow(t, db, state.Player.ID, "resource_pack_small"); !ok || amount != 2 {
+		t.Fatalf("expected scoped transaction not to touch unrelated item, amount=%d ok=%v", amount, ok)
+	}
+	if got := result.Inventory["resource_pack_small"].Amount; got != 2 {
+		t.Fatalf("expected response to include full inventory after scoped commit, got resource_pack_small=%d", got)
+	}
+	_, exp, ok := readGeneralRow(t, db, state.Player.ID, "caocao")
+	if !ok || exp != 123 {
+		t.Fatalf("expected scoped transaction to update general exp=123, exp=%d ok=%v", exp, ok)
+	}
+	_, unrelatedExp, ok := readGeneralRow(t, db, state.Player.ID, "xuchu")
+	if !ok || unrelatedExp != 77 {
+		t.Fatalf("expected scoped transaction not to touch unrelated general, exp=%d ok=%v", unrelatedExp, ok)
+	}
+	if len(result.Generals) < 2 {
+		t.Fatalf("expected response to include full general roster after scoped commit, got %+v", result.Generals)
+	}
+	afterWood, _ := readResourceRow(t, db, state.Player.ID, "wood")
+	if afterWood != beforeWood {
+		t.Fatalf("expected scoped transaction not to sync resources, before=%d after=%d", beforeWood, afterWood)
+	}
+	if amount, ok := readArmyRow(t, db, state.Player.ID, "weiInfantry"); !ok || amount != 5 {
+		t.Fatalf("expected scoped transaction not to sync army, amount=%d ok=%v", amount, ok)
 	}
 }
 
@@ -952,19 +1366,45 @@ func TestMySQLResourcePackItemGrantsPlayerResources(t *testing.T) {
 			ObtainedAt: now,
 			UpdatedAt:  now,
 		}
+		state.Inventory["general_exp_small"] = game.ItemStack{
+			ItemID:     "general_exp_small",
+			Amount:     2,
+			ObtainedAt: now,
+			UpdatedAt:  now,
+		}
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("seed item: %v", err)
 	}
 	service := game.NewServiceWithRepository(repo)
+	beforeWood, _ := readResourceRow(t, db, state.Player.ID, "wood")
+	beforeUnrelatedUpdatedAt, ok := readInventoryUpdatedAt(t, db, state.Player.ID, "general_exp_small")
+	if !ok {
+		t.Fatalf("expected unrelated item row before use")
+	}
 
 	if _, err := service.UseItem(state.Player.ID, "resource_pack_small", 1); err != nil {
 		t.Fatalf("use resource pack: %v", err)
 	}
-	amount, _ := readResourceRow(t, db, state.Player.ID, "wood")
-	if amount != 2200 {
-		t.Fatalf("expected wood=2200 after resource pack, got %d", amount)
+	amount, afterCapacity := readResourceRow(t, db, state.Player.ID, "wood")
+	item, ok := game.GetItemDefinition("resource_pack_small")
+	if !ok || len(item.Effects) == 0 {
+		t.Fatalf("resource_pack_small item config missing")
+	}
+	expectedWood := beforeWood + item.Effects[0].Resources["wood"]
+	if expectedWood > afterCapacity {
+		expectedWood = afterCapacity
+	}
+	if amount != expectedWood {
+		t.Fatalf("expected wood=%d after resource pack, got %d", expectedWood, amount)
+	}
+	if amount, ok := readInventoryRow(t, db, state.Player.ID, "general_exp_small"); !ok || amount != 2 {
+		t.Fatalf("expected unrelated item preserved, amount=%d ok=%v", amount, ok)
+	}
+	afterUnrelatedUpdatedAt, ok := readInventoryUpdatedAt(t, db, state.Player.ID, "general_exp_small")
+	if !ok || !afterUnrelatedUpdatedAt.Equal(beforeUnrelatedUpdatedAt) {
+		t.Fatalf("expected unrelated item not to be refreshed, before=%s after=%s ok=%v", beforeUnrelatedUpdatedAt, afterUnrelatedUpdatedAt, ok)
 	}
 }
 
@@ -1121,6 +1561,502 @@ func TestMySQLBuildingUpgradeRefreshesBuildingAuthority(t *testing.T) {
 	}
 	if slot.ResourceType != "wood" || slot.BuildingID != "wood_camp-1" {
 		t.Fatalf("expected wood resource slot bound to wood_camp-1, got %+v", slot)
+	}
+}
+
+// TestMySQLCombatStateDoesNotSyncNonCombatAssets 验证战斗事务不再写回建筑、资源田、征兵队列和 Buff。
+func TestMySQLCombatStateDoesNotSyncNonCombatAssets(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	_, state := createResourceAuthorityPlayer(t, repo, "combat_scope")
+	service := game.NewServiceWithRepository(repo)
+	now := time.Now().UTC()
+	buffResult, err := service.GrantBuff(state.Player.ID, game.StatAttackBonus, 0.25, "percentAdd", 1, "combat readonly buff")
+	if err != nil {
+		t.Fatalf("seed buff: %v", err)
+	}
+	if len(buffResult.Buffs) != 1 {
+		t.Fatalf("expected seeded buff, got %+v", buffResult.Buffs)
+	}
+	buffID := buffResult.Buffs[0].ID
+	if _, err := db.Exec(
+		`INSERT INTO player_resource_slots (player_id, slot_id, resource_type, building_id, unlocked_by, unlocked_at, updated_at)
+		 VALUES (?, 'combat_slot', 'wood', 'wood_camp-1', 'test', ?, ?)`,
+		state.Player.ID,
+		now,
+		now,
+	); err != nil {
+		t.Fatalf("seed resource slot: %v", err)
+	}
+	queueEndsAt := now.Add(time.Hour)
+	if _, err := db.Exec(
+		`INSERT INTO player_recruit_queues (player_id, queue_id, unit_type, amount, ends_at, updated_at)
+		 VALUES (?, 'combat_queue', 'qingZhouArmy', 1, ?, ?)`,
+		state.Player.ID,
+		queueEndsAt,
+		now,
+	); err != nil {
+		t.Fatalf("seed recruit queue: %v", err)
+	}
+	stableArmyUpdatedAt := now.Add(-time.Hour)
+	if _, err := db.Exec(
+		`INSERT INTO player_army_units (player_id, unit_type, amount, updated_at)
+		 VALUES (?, 'weiInfantry', 5, ?), (?, 'qingZhouArmy', 9, ?)
+		 ON DUPLICATE KEY UPDATE amount = VALUES(amount), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+		stableArmyUpdatedAt,
+		state.Player.ID,
+		stableArmyUpdatedAt,
+	); err != nil {
+		t.Fatalf("seed army: %v", err)
+	}
+	beforeUnchangedArmyUpdatedAt, ok := readArmyUpdatedAt(t, db, state.Player.ID, "qingZhouArmy")
+	if !ok {
+		t.Fatalf("expected seeded unchanged army row")
+	}
+
+	beforeWood, _ := readResourceRow(t, db, state.Player.ID, "wood")
+	_, err = repo.UpdateCombatState(state.Player.ID, game.CombatAssetScope{}, time.Now(), func(state *game.GameState) error {
+		state.Resources.Items["wood"] += 10
+		for index := range state.Army {
+			if state.Army[index].UnitType == "weiInfantry" {
+				state.Army[index].Amount = 3
+			}
+		}
+		for index := range state.Buildings {
+			if state.Buildings[index].ID == "wood_camp-1" {
+				state.Buildings[index].Level = 9
+			}
+		}
+		for index := range state.ResourceSlots {
+			if state.ResourceSlots[index].ID == "combat_slot" {
+				state.ResourceSlots[index].ResourceType = "iron"
+			}
+		}
+		state.RecruitQueues = append(state.RecruitQueues, game.RecruitQueue{
+			ID:       "combat_queue_new",
+			UnitType: "qingZhouArmy",
+			Amount:   99,
+			EndsAt:   queueEndsAt.Add(time.Hour).Format(time.RFC3339),
+		})
+		state.Buffs = []game.Buff{{ID: "combat_buff_new", Key: game.StatAttackBonus, Value: 0.99, Mode: "percentAdd"}}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("update combat state: %v", err)
+	}
+
+	afterWood, _ := readResourceRow(t, db, state.Player.ID, "wood")
+	if afterWood != beforeWood+10 {
+		t.Fatalf("expected combat resource writeback, before=%d after=%d", beforeWood, afterWood)
+	}
+	if amount, ok := readArmyRow(t, db, state.Player.ID, "weiInfantry"); !ok || amount != 3 {
+		t.Fatalf("expected changed army row amount=3, amount=%d ok=%v", amount, ok)
+	}
+	if amount, ok := readArmyRow(t, db, state.Player.ID, "qingZhouArmy"); !ok || amount != 9 {
+		t.Fatalf("expected unchanged army row preserved, amount=%d ok=%v", amount, ok)
+	}
+	afterUnchangedArmyUpdatedAt, ok := readArmyUpdatedAt(t, db, state.Player.ID, "qingZhouArmy")
+	if !ok || !afterUnchangedArmyUpdatedAt.Equal(beforeUnchangedArmyUpdatedAt) {
+		t.Fatalf("expected unchanged army row not to be rewritten, before=%s after=%s ok=%v", beforeUnchangedArmyUpdatedAt, afterUnchangedArmyUpdatedAt, ok)
+	}
+	building, ok := readBuildingRow(t, db, state.Player.ID, "wood_camp-1")
+	if !ok || building.Level != 1 {
+		t.Fatalf("expected combat transaction not to sync building, got %+v ok=%v", building, ok)
+	}
+	slot, ok := readResourceSlotRow(t, db, state.Player.ID, "combat_slot")
+	if !ok || slot.ResourceType != "wood" {
+		t.Fatalf("expected combat transaction not to sync resource slot, got %+v ok=%v", slot, ok)
+	}
+	if _, ok := readRecruitQueueRow(t, db, state.Player.ID, "combat_queue_new"); ok {
+		t.Fatalf("expected combat transaction not to insert recruit queue")
+	}
+	if queue, ok := readRecruitQueueRow(t, db, state.Player.ID, "combat_queue"); !ok || queue.Amount != 1 {
+		t.Fatalf("expected original recruit queue unchanged, got %+v ok=%v", queue, ok)
+	}
+	if count := readBuffCount(t, db, state.Player.ID); count != 1 {
+		t.Fatalf("expected combat transaction not to insert/delete buffs, count=%d", count)
+	}
+	if value, ok := readBuffValue(t, db, state.Player.ID, buffID); !ok || value != 0.25 {
+		t.Fatalf("expected combat transaction not to sync buff value, value=%f ok=%v", value, ok)
+	}
+}
+
+// TestMySQLCombatStateStoresNpcStateOutsidePlayerSnapshot 验证 NPC 战斗状态写入独立权威表，不再刷新 players 主行。
+func TestMySQLCombatStateStoresNpcStateOutsidePlayerSnapshot(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	_, state := createResourceAuthorityPlayer(t, repo, "combat_npc_state")
+	now := time.Now().UTC()
+	seedNpcState := &game.NpcState{
+		LastRefreshedAt: now.Format(time.RFC3339),
+		Cities: []game.NpcCity{{
+			ID:                "npc_state_1",
+			Name:              "NPC 状态测试",
+			Faction:           "wei",
+			Resources:         map[string]int{"wood": 100},
+			StorageCapacity:   map[string]int{"wood": 1000},
+			ProductionPerHour: map[string]int{"wood": 0},
+			Army:              []game.ArmyUnit{{UnitType: "weiInfantry", Amount: 10}},
+			MaxArmy:           []game.ArmyUnit{{UnitType: "weiInfantry", Amount: 10}},
+			ResourceSettledAt: now.Format(time.RFC3339),
+			ArmySettledAt:     now.Format(time.RFC3339),
+			GeneratedAt:       now.Format(time.RFC3339),
+		}},
+	}
+	if _, err := repo.UpdatePlayerState(state.Player.ID, now, func(state *game.GameState) error {
+		state.NpcState = seedNpcState
+		state.ServerTime = now.Format(time.RFC3339)
+		return nil
+	}); err != nil {
+		t.Fatalf("seed npc state: %v", err)
+	}
+	if npcState, _, ok := readNpcStateRow(t, db, state.Player.ID); !ok || len(npcState.Cities) != 1 {
+		t.Fatalf("expected npc state authority row after seed, ok=%v state=%+v", ok, npcState)
+	}
+
+	beforeJSON, beforeUpdatedAt := readPlayerStorageSnapshot(t, db, state.Player.ID)
+	if strings.Contains(string(beforeJSON), "npcState") || strings.Contains(string(beforeJSON), "serverTime") {
+		t.Fatalf("expected player snapshot to omit npcState/serverTime, json=%s", string(beforeJSON))
+	}
+	if _, err := repo.UpdateCombatState(state.Player.ID, game.CombatAssetScope{SkipInventory: true}, now.Add(time.Second), func(state *game.GameState) error {
+		if state.NpcState == nil || len(state.NpcState.Cities) != 1 {
+			return errors.New("npc state missing in combat transaction")
+		}
+		state.NpcState.Cities[0].Resources["wood"] = 55
+		state.ServerTime = now.Add(time.Second).Format(time.RFC3339)
+		return nil
+	}); err != nil {
+		t.Fatalf("update combat npc state: %v", err)
+	}
+
+	afterJSON, afterUpdatedAt := readPlayerStorageSnapshot(t, db, state.Player.ID)
+	if !beforeUpdatedAt.Equal(afterUpdatedAt) || string(beforeJSON) != string(afterJSON) {
+		t.Fatalf("expected combat npc update not to refresh players row, before=%s/%s after=%s/%s", beforeUpdatedAt, beforeJSON, afterUpdatedAt, afterJSON)
+	}
+	npcState, _, ok := readNpcStateRow(t, db, state.Player.ID)
+	if !ok || len(npcState.Cities) != 1 || npcState.Cities[0].Resources["wood"] != 55 {
+		t.Fatalf("expected npc state authority row to update wood=55, ok=%v state=%+v", ok, npcState)
+	}
+	got, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("get state: %v", err)
+	}
+	if got.NpcState == nil || got.NpcState.Cities[0].Resources["wood"] != 55 {
+		t.Fatalf("expected GetState to overlay npc authority, got %+v", got.NpcState)
+	}
+}
+
+// TestMySQLCombatStateStoresCityGoldOutsidePlayerSnapshot 验证 NPC 战斗溢出城金只写货币权威表，不刷新 players 主行。
+func TestMySQLCombatStateStoresCityGoldOutsidePlayerSnapshot(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	_, state := createResourceAuthorityPlayer(t, repo, "combat_city_gold")
+	beforeJSON, beforeUpdatedAt := readPlayerStorageSnapshot(t, db, state.Player.ID)
+
+	if _, err := repo.UpdateCombatState(state.Player.ID, game.CombatAssetScope{SkipInventory: true}, time.Now(), func(state *game.GameState) error {
+		state.CityGold += 9
+		return nil
+	}); err != nil {
+		t.Fatalf("update combat city gold: %v", err)
+	}
+
+	afterJSON, afterUpdatedAt := readPlayerStorageSnapshot(t, db, state.Player.ID)
+	if !beforeUpdatedAt.Equal(afterUpdatedAt) || string(beforeJSON) != string(afterJSON) {
+		t.Fatalf("expected combat city gold update not to refresh players row, before=%s/%s after=%s/%s", beforeUpdatedAt, beforeJSON, afterUpdatedAt, afterJSON)
+	}
+	if got := readCurrencyCityGold(t, db, state.Player.ID); got != 9 {
+		t.Fatalf("expected city gold authority=9, got %d", got)
+	}
+	got, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("get state: %v", err)
+	}
+	if int(got.CityGold) != 9 {
+		t.Fatalf("expected GetState city gold=9, got %d", got.CityGold)
+	}
+}
+
+// TestMySQLGrantCityGoldRewardDoesNotRefreshPlayerSnapshot 验证纯城金奖励只写货币权威表，不刷新 players 主行。
+func TestMySQLGrantCityGoldRewardDoesNotRefreshPlayerSnapshot(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	_, state := createResourceAuthorityPlayer(t, repo, "reward_city_gold")
+	service := game.NewServiceWithRepository(repo)
+	beforeJSON, beforeUpdatedAt := readPlayerStorageSnapshot(t, db, state.Player.ID)
+
+	result, err := service.GrantRewards(state.Player.ID, []game.Reward{
+		{Type: game.RewardTypeCityGold, ID: game.RewardTypeCityGold, Amount: 13},
+	}, game.RewardGrantContext{RefType: "test_city_gold", RefID: "grant_1"})
+	if err != nil {
+		t.Fatalf("grant city gold: %v", err)
+	}
+	if int(result.State.CityGold) != 13 || readCurrencyCityGold(t, db, state.Player.ID) != 13 {
+		t.Fatalf("expected city gold authority/state=13, state=%d", result.State.CityGold)
+	}
+	afterJSON, afterUpdatedAt := readPlayerStorageSnapshot(t, db, state.Player.ID)
+	if !beforeUpdatedAt.Equal(afterUpdatedAt) || string(beforeJSON) != string(afterJSON) {
+		t.Fatalf("expected city gold reward not to refresh players row, before=%s/%s after=%s/%s", beforeUpdatedAt, beforeJSON, afterUpdatedAt, afterJSON)
+	}
+}
+
+// TestMySQLGetNpcCitiesDoesNotRefreshPlayerSnapshot 验证 NPC 列表刷新只写 NPC 状态权威表，不刷新 players 主行。
+func TestMySQLGetNpcCitiesDoesNotRefreshPlayerSnapshot(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	_, state := createResourceAuthorityPlayer(t, repo, "npc_state_service")
+	service := game.NewServiceWithRepository(repo)
+
+	beforeJSON, beforeUpdatedAt := readPlayerStorageSnapshot(t, db, state.Player.ID)
+	npcState, err := service.GetNpcCities(state.Player.ID)
+	if err != nil {
+		t.Fatalf("GetNpcCities: %v", err)
+	}
+	if len(npcState.Cities) == 0 {
+		t.Fatalf("expected generated npc cities, got %+v", npcState)
+	}
+	afterJSON, afterUpdatedAt := readPlayerStorageSnapshot(t, db, state.Player.ID)
+	if !beforeUpdatedAt.Equal(afterUpdatedAt) || string(beforeJSON) != string(afterJSON) {
+		t.Fatalf("expected GetNpcCities not to refresh players row, before=%s/%s after=%s/%s", beforeUpdatedAt, beforeJSON, afterUpdatedAt, afterJSON)
+	}
+	storedNpcState, _, ok := readNpcStateRow(t, db, state.Player.ID)
+	if !ok || len(storedNpcState.Cities) != len(npcState.Cities) {
+		t.Fatalf("expected npc state authority row, ok=%v stored=%+v result=%+v", ok, storedNpcState, npcState)
+	}
+}
+
+// TestMySQLCombatStateScopesArmyToRequestedUnits 验证战斗事务只加载并锁定作用域内兵种。
+func TestMySQLCombatStateScopesArmyToRequestedUnits(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	_, state := createResourceAuthorityPlayer(t, repo, "combat_army_scope")
+	now := time.Now().UTC()
+	seedUpdatedAt := now.Add(-time.Hour)
+	if _, err := db.Exec(
+		`INSERT INTO player_army_units (player_id, unit_type, amount, updated_at)
+		 VALUES (?, 'weiInfantry', 10, ?), (?, 'qingZhouArmy', 20, ?)
+		 ON DUPLICATE KEY UPDATE amount = VALUES(amount), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+		seedUpdatedAt,
+		state.Player.ID,
+		seedUpdatedAt,
+	); err != nil {
+		t.Fatalf("seed army: %v", err)
+	}
+	beforeUnscopedUpdatedAt, ok := readArmyUpdatedAt(t, db, state.Player.ID, "qingZhouArmy")
+	if !ok {
+		t.Fatalf("expected unscoped army row")
+	}
+	sawUnscoped := false
+	result, err := repo.UpdateCombatState(state.Player.ID, game.CombatAssetScope{UnitTypes: []string{"weiInfantry"}}, time.Now(), func(state *game.GameState) error {
+		for index := range state.Army {
+			switch state.Army[index].UnitType {
+			case "weiInfantry":
+				state.Army[index].Amount = 7
+			case "qingZhouArmy":
+				sawUnscoped = true
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("update scoped combat state: %v", err)
+	}
+	if sawUnscoped {
+		t.Fatalf("expected scoped combat transaction not to load unrequested army unit")
+	}
+	if amount, ok := readArmyRow(t, db, state.Player.ID, "weiInfantry"); !ok || amount != 7 {
+		t.Fatalf("expected scoped army row updated, amount=%d ok=%v", amount, ok)
+	}
+	if amount, ok := readArmyRow(t, db, state.Player.ID, "qingZhouArmy"); !ok || amount != 20 {
+		t.Fatalf("expected unscoped army row preserved, amount=%d ok=%v", amount, ok)
+	}
+	afterUnscopedUpdatedAt, ok := readArmyUpdatedAt(t, db, state.Player.ID, "qingZhouArmy")
+	if !ok || !afterUnscopedUpdatedAt.Equal(beforeUnscopedUpdatedAt) {
+		t.Fatalf("expected unscoped army row not to be rewritten, before=%s after=%s ok=%v", beforeUnscopedUpdatedAt, afterUnscopedUpdatedAt, ok)
+	}
+	if len(result.Army) < 2 {
+		t.Fatalf("expected response state to reload full army after scoped commit, got %+v", result.Army)
+	}
+}
+
+// TestMySQLCombatStateCanSkipInventoryForScopedScout 验证侦查类战斗可跳过事务内背包锁，提交后仍返回权威背包。
+func TestMySQLCombatStateCanSkipInventoryForScopedScout(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	_, state := createResourceAuthorityPlayer(t, repo, "combat_skip_inventory")
+	now := time.Now().UTC()
+	if _, err := db.Exec(
+		`INSERT INTO player_inventory (player_id, slot_id, item_id, amount, obtained_at, updated_at)
+		 VALUES (?, 'slot_0001', 'general_exp_small', 3, ?, ?)
+		 ON DUPLICATE KEY UPDATE item_id = VALUES(item_id), amount = VALUES(amount), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+		now,
+		now,
+	); err != nil {
+		t.Fatalf("seed inventory: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO player_army_units (player_id, unit_type, amount, updated_at)
+		 VALUES (?, 'weiScout', 5, ?)
+		 ON DUPLICATE KEY UPDATE amount = VALUES(amount), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+		now,
+	); err != nil {
+		t.Fatalf("seed scout army: %v", err)
+	}
+
+	sawInventory := false
+	result, err := repo.UpdateCombatState(state.Player.ID, game.CombatAssetScope{UnitTypes: []string{"weiScout"}, SkipInventory: true}, time.Now(), func(state *game.GameState) error {
+		if len(state.Inventory) > 0 || len(state.InventorySlots) > 0 {
+			sawInventory = true
+		}
+		state.Inventory = map[string]game.ItemStack{
+			"resource_pack_small": {ItemID: "resource_pack_small", Amount: 99},
+		}
+		state.InventorySlots = []game.ItemStack{{SlotID: "slot_0002", ItemID: "resource_pack_small", Amount: 99}}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("update combat state skip inventory: %v", err)
+	}
+	if sawInventory {
+		t.Fatalf("expected skip inventory scope not to load inventory in transaction")
+	}
+	if amount, ok := readInventoryRow(t, db, state.Player.ID, "general_exp_small"); !ok || amount != 3 {
+		t.Fatalf("expected original inventory row preserved, amount=%d ok=%v", amount, ok)
+	}
+	if amount, ok := readInventoryRow(t, db, state.Player.ID, "resource_pack_small"); ok || amount != 0 {
+		t.Fatalf("expected skipped inventory mutation not to be written, amount=%d ok=%v", amount, ok)
+	}
+	if got := result.Inventory["general_exp_small"].Amount; got != 3 {
+		t.Fatalf("expected response to reload full inventory after skipped transaction, got %d", got)
+	}
+	if got := result.Inventory["resource_pack_small"].Amount; got != 0 {
+		t.Fatalf("expected response not to expose skipped inventory mutation, got %d", got)
+	}
+}
+
+// TestMySQLCombatStateScopesInventoryToCandidateItems 验证 NPC 战斗背包写入只触碰候选掉落物品。
+func TestMySQLCombatStateScopesInventoryToCandidateItems(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	_, state := createResourceAuthorityPlayer(t, repo, "combat_inventory_scope")
+	now := time.Now().UTC()
+	seedUpdatedAt := now.Add(-time.Hour)
+	if _, err := db.Exec(
+		`INSERT INTO player_inventory (player_id, slot_id, item_id, amount, obtained_at, updated_at)
+		 VALUES (?, 'slot_0001', 'general_exp_small', 1, ?, ?),
+		        (?, 'slot_0002', 'resource_pack_small', 2, ?, ?)
+		 ON DUPLICATE KEY UPDATE item_id = VALUES(item_id), amount = VALUES(amount), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+		seedUpdatedAt,
+		seedUpdatedAt,
+		state.Player.ID,
+		seedUpdatedAt,
+		seedUpdatedAt,
+	); err != nil {
+		t.Fatalf("seed inventory: %v", err)
+	}
+	beforeUnscopedUpdatedAt, ok := readInventoryUpdatedAt(t, db, state.Player.ID, "resource_pack_small")
+	if !ok {
+		t.Fatalf("expected unscoped inventory row")
+	}
+
+	result, err := repo.UpdateCombatState(state.Player.ID, game.CombatAssetScope{InventoryItemIDs: []string{"general_exp_small"}}, time.Now(), func(state *game.GameState) error {
+		for index := range state.InventorySlots {
+			switch state.InventorySlots[index].ItemID {
+			case "general_exp_small":
+				state.InventorySlots[index].Amount = 3
+			case "resource_pack_small":
+				state.InventorySlots[index].Amount = 99
+			}
+		}
+		state.Inventory = map[string]game.ItemStack{
+			"general_exp_small":   {ItemID: "general_exp_small", Amount: 3},
+			"resource_pack_small": {ItemID: "resource_pack_small", Amount: 99},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("update combat state scoped inventory: %v", err)
+	}
+	if amount, ok := readInventoryRow(t, db, state.Player.ID, "general_exp_small"); !ok || amount != 3 {
+		t.Fatalf("expected scoped inventory item updated, amount=%d ok=%v", amount, ok)
+	}
+	if amount, ok := readInventoryRow(t, db, state.Player.ID, "resource_pack_small"); !ok || amount != 2 {
+		t.Fatalf("expected unscoped inventory item preserved, amount=%d ok=%v", amount, ok)
+	}
+	afterUnscopedUpdatedAt, ok := readInventoryUpdatedAt(t, db, state.Player.ID, "resource_pack_small")
+	if !ok || !afterUnscopedUpdatedAt.Equal(beforeUnscopedUpdatedAt) {
+		t.Fatalf("expected unscoped inventory row not to be rewritten, before=%s after=%s ok=%v", beforeUnscopedUpdatedAt, afterUnscopedUpdatedAt, ok)
+	}
+	if got := result.Inventory["general_exp_small"].Amount; got != 3 {
+		t.Fatalf("expected response to reload scoped inventory item amount=3, got %d", got)
+	}
+	if got := result.Inventory["resource_pack_small"].Amount; got != 2 {
+		t.Fatalf("expected response to reload unscoped inventory item amount=2, got %d", got)
+	}
+}
+
+// TestMySQLCombatStateScopesGeneralsToRequestedIDs 验证战斗事务只加载并锁定参战武将。
+func TestMySQLCombatStateScopesGeneralsToRequestedIDs(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	_, state := createResourceAuthorityPlayer(t, repo, "combat_general_scope")
+	now := time.Now().UTC()
+	seedUpdatedAt := now.Add(-time.Hour)
+	if _, err := db.Exec(
+		`INSERT INTO player_generals (player_id, general_id, faction, level, exp, stats_json, acquired_at, updated_at)
+		 VALUES (?, 'caocao', 'wei', 1, 0, JSON_OBJECT(), ?, ?),
+		        (?, 'xuchu', 'wei', 1, 77, JSON_OBJECT(), ?, ?)
+		 ON DUPLICATE KEY UPDATE exp = VALUES(exp), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+		seedUpdatedAt,
+		seedUpdatedAt,
+		state.Player.ID,
+		seedUpdatedAt,
+		seedUpdatedAt,
+	); err != nil {
+		t.Fatalf("seed generals: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO player_general_assignments (player_id, assignment_id, general_id, assignment_slot, module_id, status, assigned_at, updated_at)
+		 VALUES (?, 'main', 'caocao', 'main', '', 'active', ?, ?)
+		 ON DUPLICATE KEY UPDATE general_id = VALUES(general_id), assignment_slot = VALUES(assignment_slot), status = VALUES(status), updated_at = VALUES(updated_at)`,
+		state.Player.ID,
+		seedUpdatedAt,
+		seedUpdatedAt,
+	); err != nil {
+		t.Fatalf("seed general assignment: %v", err)
+	}
+	beforeUnscopedUpdatedAt, ok := readGeneralUpdatedAt(t, db, state.Player.ID, "xuchu")
+	if !ok {
+		t.Fatalf("expected unscoped general row")
+	}
+	sawUnscoped := false
+	result, err := repo.UpdateCombatState(state.Player.ID, game.CombatAssetScope{GeneralIDs: []string{"caocao"}}, time.Now(), func(state *game.GameState) error {
+		for index := range state.Generals {
+			switch state.Generals[index].ID {
+			case "caocao":
+				state.Generals[index].Exp = 123
+			case "xuchu":
+				sawUnscoped = true
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("update scoped combat generals: %v", err)
+	}
+	if sawUnscoped {
+		t.Fatalf("expected scoped combat transaction not to load unrequested general")
+	}
+	_, exp, ok := readGeneralRow(t, db, state.Player.ID, "caocao")
+	if !ok || exp != 123 {
+		t.Fatalf("expected scoped general row updated, exp=%d ok=%v", exp, ok)
+	}
+	_, unscopedExp, ok := readGeneralRow(t, db, state.Player.ID, "xuchu")
+	if !ok || unscopedExp != 77 {
+		t.Fatalf("expected unscoped general row preserved, exp=%d ok=%v", unscopedExp, ok)
+	}
+	afterUnscopedUpdatedAt, ok := readGeneralUpdatedAt(t, db, state.Player.ID, "xuchu")
+	if !ok || !afterUnscopedUpdatedAt.Equal(beforeUnscopedUpdatedAt) {
+		t.Fatalf("expected unscoped general row not to be rewritten, before=%s after=%s ok=%v", beforeUnscopedUpdatedAt, afterUnscopedUpdatedAt, ok)
+	}
+	if len(result.Generals) < 2 {
+		t.Fatalf("expected response state to reload full general roster after scoped commit, got %+v", result.Generals)
 	}
 }
 

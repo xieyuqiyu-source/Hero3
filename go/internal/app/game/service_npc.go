@@ -21,7 +21,7 @@ func (s *Service) GetNpcCities(playerID string) (NpcState, error) {
 
 	now := time.Now()
 	var npcState *NpcState
-	_, err := s.repo.UpdatePlayerMetaState(playerID, now, func(state *GameState) error {
+	_, err := s.repo.UpdateNpcState(playerID, now, func(state *GameState) error {
 		npcState = state.NpcState
 
 		if npcState == nil || needsNpcRefresh(npcState, now) {
@@ -53,7 +53,7 @@ func (s *Service) RefreshNpcCities(playerID string) (NpcState, error) {
 
 	now := time.Now()
 	var npcState *NpcState
-	_, err := s.repo.UpdatePlayerMetaState(playerID, now, func(state *GameState) error {
+	_, err := s.repo.UpdateNpcState(playerID, now, func(state *GameState) error {
 		npcState = generateNpcState(now)
 		state.NpcState = npcState
 		return nil
