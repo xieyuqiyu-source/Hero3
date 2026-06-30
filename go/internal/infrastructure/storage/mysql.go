@@ -19,6 +19,7 @@ type MySQLRepository struct {
 const (
 	mysqlSchemaMigrationID          = "2026-06-26-core-schema"
 	mysqlSchemaMigrationDescription = "core schema bootstrap and compatibility migrations"
+	battleReportBackfillBatchSize   = 500
 )
 
 // NewMySQLRepository 创建 MySQL 仓储实例。
@@ -251,6 +252,37 @@ func recordMySQLMigration(ctx context.Context, db *sql.DB, migrationID string, d
 		ON DUPLICATE KEY UPDATE description = VALUES(description)
 	`, migrationID, description)
 	return err
+}
+
+// backfillBattleReportCompatibility 分批修复旧版战报索引字段，避免启动迁移产生长事务。
+func backfillBattleReportCompatibility(ctx context.Context, db *sql.DB) error {
+	if err := runMySQLBackfillBatches(ctx, db,
+		`UPDATE battle_reports SET owner_player_id = player_id WHERE owner_player_id = '' AND player_id <> '' LIMIT ?`,
+		battleReportBackfillBatchSize,
+	); err != nil {
+		return err
+	}
+	return runMySQLBackfillBatches(ctx, db,
+		`UPDATE battle_reports SET view_type = type WHERE (view_type = '' OR view_type = 'attack') AND type <> '' AND type <> view_type LIMIT ?`,
+		battleReportBackfillBatchSize,
+	)
+}
+
+// runMySQLBackfillBatches 按固定批次执行兼容数据回填，直到没有待修记录。
+func runMySQLBackfillBatches(ctx context.Context, db *sql.DB, statement string, batchSize int) error {
+	for {
+		result, err := db.ExecContext(ctx, statement, batchSize)
+		if err != nil {
+			return err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected == 0 || affected < int64(batchSize) {
+			return nil
+		}
+	}
 }
 
 // MigrateMySQL 执行 MySQL 表结构初始化和轻量兼容迁移。
@@ -977,10 +1009,7 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 	if err := addColumnIfMissing(ctx, db, `ALTER TABLE battle_reports ADD COLUMN detail_json JSON NULL AFTER target_name`); err != nil {
 		return err
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE battle_reports SET owner_player_id = player_id WHERE owner_player_id = ''`); err != nil {
-		return err
-	}
-	if _, err := db.ExecContext(ctx, `UPDATE battle_reports SET view_type = type WHERE view_type = '' OR view_type = 'attack'`); err != nil {
+	if err := backfillBattleReportCompatibility(ctx, db); err != nil {
 		return err
 	}
 	if _, err := db.ExecContext(ctx, `CREATE INDEX idx_battle_reports_owner ON battle_reports (owner_player_id, view_type, created_at)`); err != nil && !isDuplicateKeyName(err) {
