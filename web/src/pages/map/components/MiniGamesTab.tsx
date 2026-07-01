@@ -1,3 +1,4 @@
+// 本文件实现万象幻境小游戏入口和各小游戏视图切换。
 import { useState, type FC } from 'react'
 import { Fish, Dice5, ArrowLeft } from 'lucide-react'
 import FishingGame from './minigames/FishingGame'
@@ -87,7 +88,7 @@ const MiniGamesTab: FC = () => {
             </p>
             <div className="mt-3 flex flex-wrap gap-1.5">
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 font-medium">押注兵力</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 font-medium">高风险高回报</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 font-medium">可兑换兵种</span>
             </div>
           </div>
         </button>

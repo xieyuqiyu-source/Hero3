@@ -1,8 +1,12 @@
-import { useState, useEffect, useRef, type FC } from 'react'
-import { Dice5, Trophy, Skull, X, TrendingDown, Flame, History } from 'lucide-react'
+// 本文件实现军营豪赌小游戏，并接入后端赌场记录与库存兑换。
+import { useCallback, useState, useEffect, useRef, type FC } from 'react'
+import { Dice5, Trophy, Skull, X, TrendingDown, Flame, History, PackageCheck } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
 import { gameApi } from '@/api/game'
+import { toast } from '@/components/ui'
+import type { ArmyUnit, GamblingRoundResult, MiniGameRecord } from '@/types/game'
+import { GamblingInventoryModal } from './GamblingInventoryModal'
 
 /* ---------- Bet Types ---------- */
 interface BetOption {
@@ -31,6 +35,8 @@ const EXACT_ODDS: Record<number, number> = {
 }
 
 const BET_AMOUNTS = [5000, 10000, 30000, 50000, 100000]
+const RECORD_PAGE_SIZE = 100
+const BULK_REDEEM_ID = '__all__'
 
 type GamePhase = 'betting' | 'rolling' | 'result'
 
@@ -73,6 +79,7 @@ interface PlayerUnit {
 
 const GamblingGame: FC = () => {
   const gameState = useGameStore((s) => s.state)
+  const patchState = useGameStore((s) => s.patchState)
   const faction = gameState?.player.faction ?? 'wei'
   const units = useConfigStore((s) => s.units)
   const factionUnits = units?.[faction] ?? {}
@@ -103,27 +110,148 @@ const GamblingGame: FC = () => {
   const [, setRolling] = useState(false)
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [records, setRecords] = useState<MiniGameRecord[]>([])
+  const [recordsLoading, setRecordsLoading] = useState(false)
+  const [recordsTotal, setRecordsTotal] = useState(0)
+  const [recordsHasMore, setRecordsHasMore] = useState(false)
+  const [recordsOffset, setRecordsOffset] = useState(0)
+  const [redeemingId, setRedeemingId] = useState('')
+  const [showInventory, setShowInventory] = useState(false)
+  const [resolvingRound, setResolvingRound] = useState(false)
   const [stats, setStats] = useState<GambleStats>({
     totalGames: 0, wins: 0, losses: 0, streak: 0, bestStreak: 0, biggestWin: 0, totalWon: 0, totalLost: 0,
   })
   const rollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const finalDice = useRef<[number, number, number]>([1, 1, 1])
+  const pendingRoundRef = useRef<GamblingRoundResult | null>(null)
 
   const actualBet = customBet ? parseInt(customBet) || betAmount : betAmount
   const currentOdds = selectedBet.id === 'exact' ? (EXACT_ODDS[exactNumber] ?? 6) : selectedBet.odds
 
-  const roll = () => {
-    if (!selectedUnit) return
-    setPhase('rolling')
-    setRolling(true)
-    setRevealedCount(0)
+  const loadRecords = useCallback(async (offset = 0) => {
+    if (!activePlayerId) return
+    setRecordsLoading(true)
+    try {
+      const result = await gameApi.listMiniGameRecords(activePlayerId, RECORD_PAGE_SIZE, offset, 'gambling')
+      setRecords(Array.isArray(result.records) ? result.records : [])
+      setRecordsTotal(result.totalRecords)
+      setRecordsHasMore(result.hasMore)
+      setRecordsOffset(result.offset)
+    } finally {
+      setRecordsLoading(false)
+    }
+  }, [activePlayerId])
 
-    // Pre-determine final dice values
-    finalDice.current = [
-      Math.ceil(Math.random() * 6),
-      Math.ceil(Math.random() * 6),
-      Math.ceil(Math.random() * 6),
-    ]
+  useEffect(() => {
+    void loadRecords()
+  }, [loadRecords])
+
+  const isFactionUnit = (unitName: string): boolean => {
+    if (!faction || !units?.[faction]) return false
+    return Object.values(units[faction]).some(config => config.name === unitName)
+  }
+
+  const handleRedeemGroup = async (unitName: string, groupRecords: MiniGameRecord[]) => {
+    if (!activePlayerId || redeemingId) return
+    const targets = groupRecords.filter(record => record.remainingAmount > 0)
+    const totalAmount = targets.reduce((sum, record) => sum + record.remainingAmount, 0)
+    if (targets.length === 0 || totalAmount <= 0) {
+      toast.error('没有可兑换库存')
+      return
+    }
+    setRedeemingId(unitName)
+    try {
+      let redeemed = 0
+      let latestArmy: ArmyUnit[] | null = null
+      let latestServerTime = ''
+      let armyAmount = 0
+      let garrisonAmount = 0
+      for (const record of targets) {
+        const result = await gameApi.redeemMiniGameReward(activePlayerId, record.id, record.remainingAmount)
+        redeemed += result.redeemedAmount
+        if (result.redeemedTarget === 'garrison') garrisonAmount += result.redeemedAmount
+        else armyAmount += result.redeemedAmount
+        latestArmy = result.army ?? latestArmy
+        latestServerTime = result.serverTime || latestServerTime
+        setRecords(prev => prev.map(item => item.id === result.record.id ? result.record : item))
+      }
+      if (latestArmy) {
+        patchState({ army: latestArmy, serverTime: latestServerTime })
+      }
+      if (garrisonAmount > 0) window.dispatchEvent(new Event('hero3:garrison-updated'))
+      const targetText = garrisonAmount > 0 && armyAmount === 0 ? '已加入驻防队伍' : garrisonAmount > 0 ? '已兑换，部分加入驻防队伍' : '已加入军队'
+      toast.success(`${unitName} ×${redeemed.toLocaleString()} ${targetText}`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '兑换失败')
+    } finally {
+      setRedeemingId('')
+    }
+  }
+
+  const handleRedeemAllGamblingInventory = async () => {
+    if (!activePlayerId || redeemingId) return
+    setRedeemingId(BULK_REDEEM_ID)
+    try {
+      const result = await gameApi.redeemAllMiniGameRewards(activePlayerId, 'gambling')
+      if (result.redeemedAmount <= 0) {
+        toast.error('没有可兑换库存')
+        return
+      }
+
+      patchState({ army: result.army, serverTime: result.serverTime })
+      if ((result.garrisonRecords ?? 0) > 0) window.dispatchEvent(new Event('hero3:garrison-updated'))
+      await loadRecords(0)
+
+      const summary = Object.entries(result.redeemedUnits)
+        .slice(0, 3)
+        .map(([unitName, amount]) => `${unitName} ×${amount.toLocaleString()}`)
+        .join('、')
+      const garrisonSummary = Object.entries(result.garrisonedUnits ?? {})
+        .slice(0, 3)
+        .map(([unitName, amount]) => `${unitName} ×${amount.toLocaleString()}`)
+        .join('、')
+      const detail = [summary ? `军队：${summary}` : '', garrisonSummary ? `驻防：${garrisonSummary}` : ''].filter(Boolean).join('；')
+      toast.success(`已兑换 ${result.redeemedAmount.toLocaleString()} 兵力${detail ? `，${detail}` : ''}`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '兑换失败')
+    } finally {
+      setRedeemingId('')
+    }
+  }
+
+  const roll = async () => {
+    if (!selectedUnit || resolvingRound || phase !== 'betting') return
+    if (!activePlayerId) {
+      toast.error('请先选择存档')
+      return
+    }
+    if (actualBet <= 0 || actualBet > selectedUnit.amount) {
+      toast.error('押注兵力不足')
+      return
+    }
+    setResolvingRound(true)
+    try {
+      const round = await gameApi.resolveGamblingRound(activePlayerId, selectedUnit.unitType, actualBet, selectedBet.id, exactNumber)
+      pendingRoundRef.current = round
+      const diceValues: [number, number, number] = [
+        round.diceValues[0] ?? 1,
+        round.diceValues[1] ?? 1,
+        round.diceValues[2] ?? 1,
+      ]
+      finalDice.current = diceValues
+      if (round.army) {
+        patchState({ army: round.army, serverTime: round.serverTime })
+      }
+      setRecords(prev => [round.record, ...prev].slice(0, 200))
+      setRecordsTotal(prev => prev + 1)
+      setPhase('rolling')
+      setRolling(true)
+      setRevealedCount(0)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '赌场结算失败')
+      setResolvingRound(false)
+      return
+    }
 
     // Phase 1: All dice spinning together (1s)
     let count = 0
@@ -176,66 +304,57 @@ const GamblingGame: FC = () => {
   }
 
   const resolveResult = () => {
-    const [d1, d2, d3] = finalDice.current
-    const total = d1 + d2 + d3
-    const isTriple = d1 === d2 && d2 === d3
-
-    // Determine win
-    let won = false
-    switch (selectedBet.id) {
-      case 'big': won = total >= 11 && !isTriple; break
-      case 'small': won = total <= 10 && !isTriple; break
-      case 'odd': won = total % 2 === 1 && !isTriple; break
-      case 'even': won = total % 2 === 0 && !isTriple; break
-      case 'triple': won = isTriple; break
-      case 'exact': won = total === exactNumber; break
+    const round = pendingRoundRef.current
+    if (!round) {
+      setResolvingRound(false)
+      setPhase('betting')
+      return
     }
 
-    const multiplier = currentOdds
-    const winAmount = won ? actualBet * multiplier : 0
-    const betLabel = selectedBet.id === 'exact' ? `猜${exactNumber}点` : selectedBet.label
-
     const gameResult: GameResult = {
-      won, multiplier, unitName: selectedUnit!.name, betAmount: actualBet, winAmount, diceTotal: total, betLabel,
+      won: round.won,
+      multiplier: round.multiplier,
+      unitName: round.betUnit,
+      betAmount: round.betAmount,
+      winAmount: round.winAmount,
+      diceTotal: round.diceTotal,
+      betLabel: round.betLabel,
     }
     setResult(gameResult)
 
     // History
-    setHistory(prev => [{ ...gameResult, unitName: selectedUnit!.name }, ...prev].slice(0, 20))
+    setHistory(prev => [{ ...gameResult, unitName: round.betUnit }, ...prev].slice(0, 20))
 
     // Stats
     setStats(s => {
-      const newStreak = won ? (s.streak > 0 ? s.streak + 1 : 1) : (s.streak < 0 ? s.streak - 1 : -1)
+      const newStreak = round.won ? (s.streak > 0 ? s.streak + 1 : 1) : (s.streak < 0 ? s.streak - 1 : -1)
       return {
         totalGames: s.totalGames + 1,
-        wins: s.wins + (won ? 1 : 0),
-        losses: s.losses + (won ? 0 : 1),
+        wins: s.wins + (round.won ? 1 : 0),
+        losses: s.losses + (round.won ? 0 : 1),
         streak: newStreak,
         bestStreak: Math.max(s.bestStreak, newStreak),
-        biggestWin: Math.max(s.biggestWin, winAmount),
-        totalWon: s.totalWon + winAmount,
-        totalLost: s.totalLost + (won ? 0 : actualBet),
+        biggestWin: Math.max(s.biggestWin, round.winAmount),
+        totalWon: s.totalWon + round.winAmount,
+        totalLost: s.totalLost + (round.won ? 0 : round.betAmount),
       }
     })
 
-    // 上报赌博记录到后端
-    if (activePlayerId) {
-      const resultName = won ? `${betLabel} 赢 ×${multiplier}` : `${betLabel} 输`
-      const rarity = won && multiplier >= 30 ? 'legendary' : won && multiplier >= 10 ? 'epic' : won ? 'rare' : 'common'
-      gameApi.saveMiniGameRecord(activePlayerId, 'gambling', resultName, rarity, won ? selectedUnit!.name : '', winAmount, selectedUnit!.name, actualBet).catch(() => {})
-    }
-
+    setResolvingRound(false)
     setPhase('result')
   }
+
+  const inventoryRecords = records.filter(record => record.remainingAmount > 0)
 
   const reset = () => {
     setPhase('betting')
     setResult(null)
+    pendingRoundRef.current = null
     setDiceValues([1, 1, 1])
   }
 
   // No units available
-  if (playerUnits.length === 0) {
+  if (playerUnits.length === 0 && phase === 'betting') {
     return (
       <div className="max-w-md mx-auto text-center py-12">
         <Dice5 size={40} className="text-[var(--color-text-muted)] mx-auto mb-4" />
@@ -273,8 +392,22 @@ const GamblingGame: FC = () => {
             type="button"
             onClick={() => setShowHistory(!showHistory)}
             className="p-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] cursor-pointer hover:border-[var(--color-accent)]/40 transition-colors"
+            aria-label="查看赌场历史"
           >
             <History size={14} className="text-[var(--color-text-muted)]" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowInventory(true)}
+            className="relative p-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] cursor-pointer hover:border-amber-500/40 transition-colors"
+            aria-label="打开赌场库存"
+          >
+            <PackageCheck size={14} className="text-amber-600" />
+            {inventoryRecords.length > 0 && (
+              <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-emerald-500 px-1 text-center text-[8px] font-bold leading-[14px] text-white">
+                {inventoryRecords.length > 99 ? '99+' : inventoryRecords.length}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -458,12 +591,12 @@ const GamblingGame: FC = () => {
             <button
               type="button"
               onClick={roll}
-              disabled={!selectedUnit || actualBet <= 0 || (selectedUnit && actualBet > selectedUnit.amount)}
+              disabled={resolvingRound || !selectedUnit || actualBet <= 0 || (selectedUnit && actualBet > selectedUnit.amount)}
               className="px-8 py-3 rounded-xl bg-amber-500 text-white text-sm font-bold hover:bg-amber-600 cursor-pointer transition-colors shadow-lg shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span className="flex items-center justify-center gap-2">
                 <Dice5 size={16} />
-                掷骰子
+                {resolvingRound ? '结算中...' : '掷骰子'}
               </span>
             </button>
           </div>
@@ -503,6 +636,25 @@ const GamblingGame: FC = () => {
       {/* Result */}
       {phase === 'result' && result && (
         <GamblingResultModal result={result} onClose={reset} streak={stats.streak} />
+      )}
+
+      {showInventory && (
+        <GamblingInventoryModal
+          records={records}
+          recordsLoading={recordsLoading}
+          recordsTotal={recordsTotal}
+          recordsHasMore={recordsHasMore}
+          recordsOffset={recordsOffset}
+          recordsPageSize={RECORD_PAGE_SIZE}
+          redeemingId={redeemingId}
+          redeemingAll={redeemingId === BULK_REDEEM_ID}
+          isFactionUnit={isFactionUnit}
+          onClose={() => setShowInventory(false)}
+          onRefresh={() => void loadRecords(0)}
+          onPageChange={(nextOffset) => void loadRecords(nextOffset)}
+          onRedeemAll={() => void handleRedeemAllGamblingInventory()}
+          onRedeemGroup={(unitName, groupRecords) => void handleRedeemGroup(unitName, groupRecords)}
+        />
       )}
     </div>
   )
@@ -633,7 +785,7 @@ const GamblingResultModal: FC<GamblingResultModalProps> = ({ result, onClose, st
           )}
 
           <p className="text-[10px] text-[var(--color-text-muted)]">
-            * 奖励/扣除将在系统对接后生效
+            * 押注兵力已扣除，胜利奖励已进入赌场库存
           </p>
         </div>
 

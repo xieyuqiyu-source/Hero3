@@ -92,7 +92,7 @@ export interface CityActionResult {
   resourceSlots?: ResourceSlot[]
   resources: ResourceState
   resourceProduction: ResourceProduction
-  cityGold: number
+  cityGold?: number
   activeModifiers?: ModifierBreakdownItem[]
   upgraded?: number
   cost?: number
@@ -547,6 +547,22 @@ export interface MiniGameRedeemResult {
   redeemedAmount: number
   redeemedTarget: 'army' | 'garrison'
   garrison?: Reinforcement
+}
+
+export interface GamblingRoundResult {
+  record: MiniGameRecord
+  army?: ArmyUnit[]
+  serverTime: string
+  won: boolean
+  multiplier: number
+  betUnitId: string
+  betUnit: string
+  betAmount: number
+  winAmount: number
+  diceTotal: number
+  diceValues: number[]
+  betLabel: string
+  rewardRarity: string
 }
 
 export interface MiniGameRedeemAllResult {

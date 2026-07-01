@@ -25,6 +25,10 @@ func (h *Handlers) SaveMiniGameRecord(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "playerId, gameType, and resultName are required")
 		return
 	}
+	if payload.GameType == "gambling" {
+		writeError(w, http.StatusUnprocessableEntity, "赌场记录必须通过结算接口生成")
+		return
+	}
 	if !h.requireOwnership(w, r, payload.PlayerID) {
 		return
 	}
@@ -81,6 +85,45 @@ func (h *Handlers) UseFishingBait(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusUnprocessableEntity
 		}
 		writeError(w, status, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handlers) ResolveGamblingRound(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID    string `json:"playerId"`
+		BetUnitType string `json:"betUnitType"`
+		BetAmount   int    `json:"betAmount"`
+		BetID       string `json:"betId"`
+		ExactNumber int    `json:"exactNumber"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+	result, err := h.gameService.ResolveGamblingRound(payload.PlayerID, payload.BetUnitType, payload.BetAmount, payload.BetID, payload.ExactNumber)
+	if err != nil {
+		status := http.StatusBadRequest
+		message := err.Error()
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrInsufficientArmy):
+			status = http.StatusUnprocessableEntity
+			message = "押注兵力不足"
+		case errors.Is(err, game.ErrUnitNotFound):
+			status = http.StatusUnprocessableEntity
+			message = "押注兵种不存在"
+		case errors.Is(err, game.ErrNonCombatUnit):
+			status = http.StatusUnprocessableEntity
+			message = "该兵种不能押注"
+		case errors.Is(err, game.ErrInvalidAmount), errors.Is(err, game.ErrInvalidMiniGame):
+			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, message)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)

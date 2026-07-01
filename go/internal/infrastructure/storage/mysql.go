@@ -19,6 +19,8 @@ type MySQLRepository struct {
 const (
 	mysqlSchemaMigrationID          = "2026-06-26-core-schema"
 	mysqlSchemaMigrationDescription = "core schema bootstrap and compatibility migrations"
+	gamblingStockMigrationID        = "2026-07-01-gambling-minigame-stock"
+	gamblingStockMigrationDesc      = "backfill gambling minigame redeemable stock"
 	battleReportBackfillBatchSize   = 500
 )
 
@@ -252,6 +254,22 @@ func recordMySQLMigration(ctx context.Context, db *sql.DB, migrationID string, d
 		ON DUPLICATE KEY UPDATE description = VALUES(description)
 	`, migrationID, description)
 	return err
+}
+
+// runMySQLMigrationOnce 只执行一次带数据影响的兼容迁移，避免后续重启重复回填已消耗库存。
+func runMySQLMigrationOnce(ctx context.Context, db *sql.DB, migrationID string, description string, migrate func() error) error {
+	var existingID string
+	err := db.QueryRowContext(ctx, `SELECT id FROM schema_migrations WHERE id = ? LIMIT 1`, migrationID).Scan(&existingID)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if err := migrate(); err != nil {
+		return err
+	}
+	return recordMySQLMigration(ctx, db, migrationID, description)
 }
 
 // backfillBattleReportCompatibility 分批修复旧版战报索引字段，避免启动迁移产生长事务。
@@ -1097,6 +1115,14 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if _, err := db.ExecContext(ctx, `UPDATE minigame_records SET remaining_amount = 0 WHERE remaining_amount = -1`); err != nil {
+		return err
+	}
+	if err := runMySQLMigrationOnce(ctx, db, gamblingStockMigrationID, gamblingStockMigrationDesc, func() error {
+		return runMySQLBackfillBatches(ctx, db,
+			`UPDATE minigame_records SET remaining_amount = reward_amount WHERE game_type = 'gambling' AND reward_amount > 0 AND remaining_amount = 0 LIMIT ?`,
+			battleReportBackfillBatchSize,
+		)
+	}); err != nil {
 		return err
 	}
 

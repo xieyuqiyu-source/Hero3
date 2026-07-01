@@ -1396,7 +1396,7 @@ func (r *MemoryRepository) UpdateMailPlayerState(playerID string, mailID string,
 func (r *MemoryRepository) SaveMiniGameRecord(record MiniGameRecord) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if record.GameType == "fishing" && record.RemainingAmount == 0 && record.RewardAmount > 0 {
+	if miniGameRecordHasRedeemableReward(record.GameType) && record.RemainingAmount == 0 && record.RewardAmount > 0 {
 		record.RemainingAmount = record.RewardAmount
 	}
 

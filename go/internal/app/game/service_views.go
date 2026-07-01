@@ -129,7 +129,7 @@ type ItemActionResult struct {
 	GeneralAssignments []GeneralAssignment     `json:"generalAssignments,omitempty"`
 	ActiveModifiers    []ModifierBreakdownItem `json:"activeModifiers,omitempty"`
 	Buffs              []Buff                  `json:"buffs,omitempty"`
-	CityGold           FlexInt                 `json:"cityGold"`
+	CityGold           *FlexInt                `json:"cityGold,omitempty"`
 	ServerTime         string                  `json:"serverTime"`
 }
 
@@ -266,6 +266,7 @@ func BuildItemActionResult(state GameState) ItemActionResult {
 		state.Inventory = map[string]ItemStack{}
 	}
 	resources := state.Resources
+	cityGold := state.CityGold
 	return ItemActionResult{
 		Inventory:          state.Inventory,
 		InventorySlots:     state.InventorySlots,
@@ -276,7 +277,7 @@ func BuildItemActionResult(state GameState) ItemActionResult {
 		GeneralAssignments: state.GeneralAssignments,
 		ActiveModifiers:    state.ActiveModifiers,
 		Buffs:              state.Buffs,
-		CityGold:           state.CityGold,
+		CityGold:           &cityGold,
 		ServerTime:         state.ServerTime,
 	}
 }
@@ -292,7 +293,6 @@ func BuildGeneralExpItemActionResult(state GameState) ItemActionResult {
 		General:            state.General,
 		Generals:           state.Generals,
 		GeneralAssignments: state.GeneralAssignments,
-		CityGold:           state.CityGold,
 		ServerTime:         state.ServerTime,
 	}
 }

@@ -526,6 +526,33 @@ func TestListPlayersPurgesDueDeletedPlayers(t *testing.T) {
 	}
 }
 
+func TestDeletePlayerHardDeletesAfterDelay(t *testing.T) {
+	service := NewService()
+	repo := service.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_delete_due_click", Username: "delete_due_click", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_delete_due_click", "到期点击删除", "wei", "caocao", now)
+	state.DeleteRequestedAt = now.Add(-2 * time.Hour).UTC().Format(resourceDateLayout)
+	state.DeleteScheduledAt = now.Add(-time.Hour).UTC().Format(resourceDateLayout)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := service.DeletePlayer(state.Player.ID)
+	if err != nil {
+		t.Fatalf("DeletePlayer hard delete failed: %v", err)
+	}
+	if result.Status != "deleted" {
+		t.Fatalf("expected deleted result, got %+v", result)
+	}
+	if _, err := repo.GetState(state.Player.ID); !errors.Is(err, ErrPlayerNotFound) {
+		t.Fatalf("expected player hard deleted after second delete, got %v", err)
+	}
+}
+
 func TestAdjustResourcesPublishesResourceChangedEvent(t *testing.T) {
 	service := NewService()
 	repo := service.repo.(*MemoryRepository)
@@ -2614,6 +2641,195 @@ func TestRedeemMiniGameRewardPartialAddsFactionArmy(t *testing.T) {
 	}
 }
 
+func TestGamblingMiniGameRecordCreatesRedeemableStock(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_gambling_stock", Username: "gambling_stock", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_gambling_stock", "Gambler", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	record, err := svc.SaveMiniGameRecord(state.Player.ID, "gambling", "猜18点 赢 ×150", "legendary", "骁骑营", 150000, "骁骑营", 1000)
+	if err != nil {
+		t.Fatalf("SaveMiniGameRecord failed: %v", err)
+	}
+	if record.RemainingAmount != 150000 {
+		t.Fatalf("expected gambling stock 150000, got %d", record.RemainingAmount)
+	}
+}
+
+func TestRedeemGamblingMiniGameRewardAddsFactionArmy(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_gambling_redeem", Username: "gambling_redeem", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_gambling_redeem", "Gambler", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+	record, err := svc.SaveMiniGameRecord(state.Player.ID, "gambling", "猜18点 赢 ×150", "legendary", "骁骑营", 150000, "骁骑营", 1000)
+	if err != nil {
+		t.Fatalf("save gambling record: %v", err)
+	}
+
+	result, err := svc.RedeemMiniGameReward(state.Player.ID, record.ID, 50000)
+	if err != nil {
+		t.Fatalf("RedeemMiniGameReward failed: %v", err)
+	}
+	if result.Record.GameType != "gambling" || result.Record.RemainingAmount != 100000 {
+		t.Fatalf("unexpected redeemed gambling record: %+v", result.Record)
+	}
+	if result.RedeemedTarget != "army" || result.RedeemedUnitID != "qiQiYing" || result.RedeemedAmount != 50000 {
+		t.Fatalf("unexpected gambling redeem result: %+v", result)
+	}
+	found := false
+	for _, unit := range result.Army {
+		if unit.UnitType == "qiQiYing" && unit.Amount == 50000 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected redeemed gambling unit in army, got %+v", result.Army)
+	}
+}
+
+func TestResolveGamblingRoundDeductsBetArmyAndWritesRecord(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_gambling_resolve", Username: "gambling_resolve", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_gambling_resolve", "Gambler", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 100000}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.ResolveGamblingRound(state.Player.ID, "qiQiYing", 10000, "big", 10)
+	if err != nil {
+		t.Fatalf("ResolveGamblingRound failed: %v", err)
+	}
+	if result.BetUnitID != "qiQiYing" || result.BetUnit != "骁骑营" || result.BetAmount != 10000 {
+		t.Fatalf("unexpected gambling round bet: %+v", result)
+	}
+	if result.DiceTotal < 3 || result.DiceTotal > 18 || len(result.DiceValues) != 3 {
+		t.Fatalf("unexpected dice result: %+v", result)
+	}
+	if armySliceToMap(result.Army)["qiQiYing"] != 90000 {
+		t.Fatalf("expected bet army deducted to 90000, got %+v", result.Army)
+	}
+	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "gambling", 10, 0)
+	if err != nil {
+		t.Fatalf("list gambling records: %v", err)
+	}
+	if len(records) != 1 || records[0].ID != result.Record.ID || records[0].BetAmount != 10000 {
+		t.Fatalf("expected gambling record persisted, got %+v", records)
+	}
+	if result.Won && (records[0].RemainingAmount <= 0 || records[0].RewardUnit != "骁骑营") {
+		t.Fatalf("winning gambling record should be redeemable, got %+v", records[0])
+	}
+	if !result.Won && records[0].RemainingAmount != 0 {
+		t.Fatalf("losing gambling record should not be redeemable, got %+v", records[0])
+	}
+}
+
+func TestResolveGamblingRoundRejectsInsufficientArmyWithoutRecord(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_gambling_short", Username: "gambling_short", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_gambling_short", "Gambler", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 999}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	if _, err := svc.ResolveGamblingRound(state.Player.ID, "qiQiYing", 1000, "big", 10); !errors.Is(err, ErrInsufficientArmy) {
+		t.Fatalf("expected ErrInsufficientArmy, got %v", err)
+	}
+	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "gambling", 10, 0)
+	if err != nil {
+		t.Fatalf("list gambling records: %v", err)
+	}
+	if len(records) != 0 {
+		t.Fatalf("insufficient bet should not write record, got %+v", records)
+	}
+	stored, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState failed: %v", err)
+	}
+	if armySliceToMap(stored.Army)["qiQiYing"] != 999 {
+		t.Fatalf("insufficient bet should not deduct army, got %+v", stored.Army)
+	}
+}
+
+func TestRedeemAllGamblingMiniGameRewardsOnlyRedeemsGambling(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_gambling_redeem_all", Username: "gambling_redeem_all", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_gambling_redeem_all", "Gambler", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+	if _, err := svc.SaveMiniGameRecord(state.Player.ID, "gambling", "大 赢 ×2", "rare", "骁骑营", 20000, "骁骑营", 10000); err != nil {
+		t.Fatalf("save gambling record: %v", err)
+	}
+	if _, err := svc.SaveMiniGameRecord(state.Player.ID, "fishing", "金龙鱼", "rare", "骁骑营", 5000, "", 0); err != nil {
+		t.Fatalf("save fishing record: %v", err)
+	}
+
+	result, err := svc.RedeemAllFactionMiniGameRewards(state.Player.ID, "gambling")
+	if err != nil {
+		t.Fatalf("RedeemAllFactionMiniGameRewards failed: %v", err)
+	}
+	if result.RedeemedAmount != 20000 || result.RedeemedRecords != 1 || result.RedeemedUnits["骁骑营"] != 20000 {
+		t.Fatalf("unexpected gambling redeem all result: %+v", result)
+	}
+	gamblingRecords, _, err := repo.ListMiniGameRecords(state.Player.ID, "gambling", 10, 0)
+	if err != nil {
+		t.Fatalf("list gambling records: %v", err)
+	}
+	if len(gamblingRecords) != 1 || gamblingRecords[0].RemainingAmount != 0 {
+		t.Fatalf("expected gambling stock redeemed, got %+v", gamblingRecords)
+	}
+	fishingRecords, _, err := repo.ListMiniGameRecords(state.Player.ID, "fishing", 10, 0)
+	if err != nil {
+		t.Fatalf("list fishing records: %v", err)
+	}
+	if len(fishingRecords) != 1 || fishingRecords[0].RemainingAmount != 5000 {
+		t.Fatalf("expected fishing stock untouched, got %+v", fishingRecords)
+	}
+}
+
 func TestUseFishingBaitDeductsCityGoldAndWritesLedger(t *testing.T) {
 	svc := NewService()
 	repo := svc.repo.(*MemoryRepository)
@@ -2844,6 +3060,13 @@ func TestUseItemConsumesInventoryAndAppliesGeneralExp(t *testing.T) {
 	}
 	if result.Patch.General.Exp != 100 {
 		t.Fatalf("expected general exp 100, got %d", result.Patch.General.Exp)
+	}
+	payload, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal use item result: %v", err)
+	}
+	if strings.Contains(string(payload), `"cityGold"`) {
+		t.Fatalf("general exp item patch must not include cityGold, got %s", string(payload))
 	}
 }
 

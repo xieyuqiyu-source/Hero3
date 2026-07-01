@@ -5,7 +5,7 @@ import { Modal } from '@/components/ui'
 import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
 import type { PlayerSummary } from '@/types/game'
-import { deletionRemainingMs, formatDeletionCountdown, isPlayerDeletionPending } from '@/utils/playerDeletion'
+import { deletionRemainingMs, formatDeletionCountdown, isPlayerDeletionDue, isPlayerDeletionPending } from '@/utils/playerDeletion'
 
 type View = 'login' | 'register' | 'saves'
 
@@ -21,6 +21,7 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
 
   const [view, setView] = useState<View>(account ? 'saves' : 'login')
   const [now, setNow] = useState(() => Date.now())
+  const [nextDeletionRefreshAt, setNextDeletionRefreshAt] = useState(0)
 
   useEffect(() => {
     if (open && account) {
@@ -33,6 +34,30 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
   }, [open])
+
+  useEffect(() => {
+    if (!open || players.length === 0) return
+    const current = Date.now()
+    const due = players.some((player) => isPlayerDeletionDue(player, current))
+    if (due) {
+      if (current >= nextDeletionRefreshAt) {
+        setNextDeletionRefreshAt(current + 5000)
+        void loadPlayers()
+      }
+      return
+    }
+
+    const nextRemaining = players
+      .filter(isPlayerDeletionPending)
+      .map((player) => deletionRemainingMs(player, current))
+      .filter((remaining) => remaining > 0)
+      .sort((a, b) => a - b)[0]
+    if (!Number.isFinite(nextRemaining)) return
+    const timer = window.setTimeout(() => {
+      void loadPlayers()
+    }, nextRemaining + 500)
+    return () => window.clearTimeout(timer)
+  }, [open, players, loadPlayers, nextDeletionRefreshAt])
 
   const activeView: View = account ? 'saves' : (view === 'saves' ? 'login' : view)
   const [username, setUsername] = useState('')
@@ -87,6 +112,16 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
     e.stopPropagation()
     if (!confirm(`确定申请删除存档「${player.nickname}」吗？\n\n确认后会进入 1 小时冷静期，期间可以恢复。`)) return
     if (!confirm(`请再次确认：存档「${player.nickname}」将在 1 小时后删除。\n\n冷静期结束后刷新列表会自动删除。`)) return
+    try {
+      await deletePlayer(player.id)
+    } catch {
+      // silently fail
+    }
+  }
+
+  const handleHardDeletePlayer = async (e: React.MouseEvent, player: PlayerSummary) => {
+    e.stopPropagation()
+    if (!confirm(`冷静期已结束，确定永久删除存档「${player.nickname}」吗？`)) return
     try {
       await deletePlayer(player.id)
     } catch {
@@ -317,6 +352,7 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
               {players.map((player) => {
                 const pendingDelete = isPlayerDeletionPending(player)
                 const remaining = deletionRemainingMs(player, now)
+                const deletionDue = isPlayerDeletionDue(player, now)
                 return (
                 <div
                   key={player.id}
@@ -339,7 +375,7 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
                       </span>
                       {pendingDelete && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 font-medium">
-                          删除倒计时 {formatDeletionCountdown(remaining)}
+                          {deletionDue ? '冷静期已结束' : `删除倒计时 ${formatDeletionCountdown(remaining)}`}
                         </span>
                       )}
                     </div>
@@ -348,6 +384,15 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
                     </div>
                   </div>
                   {pendingDelete ? (
+                    deletionDue ? (
+                      <button
+                        type="button"
+                        onClick={(e) => handleHardDeletePlayer(e, player)}
+                        className="px-2.5 py-1.5 rounded-lg flex-shrink-0 text-[10px] font-semibold text-red-600 bg-red-500/10 hover:bg-red-500/20 cursor-pointer transition-colors"
+                      >
+                        删除
+                      </button>
+                    ) : (
                     <button
                       type="button"
                       onClick={(e) => handleRestorePlayer(e, player)}
@@ -355,6 +400,7 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
                     >
                       恢复
                     </button>
+                    )
                   ) : (
                     <div
                       role="button"

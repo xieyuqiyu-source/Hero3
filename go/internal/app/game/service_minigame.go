@@ -1,6 +1,9 @@
 package game
 
 import (
+	cryptorand "crypto/rand"
+	"math/big"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -55,6 +58,22 @@ type MiniGameRedeemAllResult struct {
 	GrantedRewards  []Reward       `json:"grantedRewards,omitempty"`
 }
 
+type GamblingRoundResult struct {
+	Record       MiniGameRecord `json:"record"`
+	Army         []ArmyUnit     `json:"army,omitempty"`
+	ServerTime   string         `json:"serverTime"`
+	Won          bool           `json:"won"`
+	Multiplier   int            `json:"multiplier"`
+	BetUnitID    string         `json:"betUnitId"`
+	BetUnit      string         `json:"betUnit"`
+	BetAmount    int            `json:"betAmount"`
+	WinAmount    int            `json:"winAmount"`
+	DiceTotal    int            `json:"diceTotal"`
+	DiceValues   []int          `json:"diceValues"`
+	BetLabel     string         `json:"betLabel"`
+	RewardRarity string         `json:"rewardRarity"`
+}
+
 type FishingBaitUseResult struct {
 	BaitID         string   `json:"baitId"`
 	CityGold       *FlexInt `json:"cityGold,omitempty"`
@@ -65,6 +84,174 @@ type FishingBaitUseResult struct {
 
 func fishingBaitCost(baitID string) (int, bool) {
 	return GetFishingBaitCost(baitID)
+}
+
+// miniGameRecordHasRedeemableReward 判断小游戏记录是否允许沉淀为可兑换库存。
+func miniGameRecordHasRedeemableReward(gameType string) bool {
+	switch strings.TrimSpace(gameType) {
+	case "fishing", "gambling":
+		return true
+	default:
+		return false
+	}
+}
+
+var gamblingExactOdds = map[int]int{
+	3: 150, 4: 60, 5: 30, 6: 18, 7: 12, 8: 8, 9: 6, 10: 6,
+	11: 6, 12: 6, 13: 8, 14: 12, 15: 18, 16: 30, 17: 60, 18: 150,
+}
+
+// ResolveGamblingRound 由后端完成赌场一局结算：扣押注、掷骰、写记录并返回最新军队。
+func (s *Service) ResolveGamblingRound(playerID string, betUnitType string, betAmount int, betID string, exactNumber int) (GamblingRoundResult, error) {
+	playerID = strings.TrimSpace(playerID)
+	betUnitType = strings.TrimSpace(betUnitType)
+	betID = strings.TrimSpace(betID)
+	if playerID == "" {
+		return GamblingRoundResult{}, ErrPlayerNotFound
+	}
+	if betUnitType == "" {
+		return GamblingRoundResult{}, ErrUnitNotFound
+	}
+	if betAmount <= 0 {
+		return GamblingRoundResult{}, ErrInvalidAmount
+	}
+
+	unlock := s.getPlayerLock(playerID)
+	unlock.Lock()
+	defer unlock.Unlock()
+
+	now := time.Now()
+	nowText := now.UTC().Format(resourceDateLayout)
+	var result GamblingRoundResult
+	state, _, err := s.repo.UpdateMiniGamePlayerState(playerID, now, func(state *GameState, records []MiniGameRecord) ([]MiniGameRecord, error) {
+		unitCfg, exists := GetUnitConfig(state.Player.Faction, betUnitType)
+		if !exists {
+			return nil, ErrUnitNotFound
+		}
+		if isNonCombatUnit(unitCfg) {
+			return nil, ErrNonCombatUnit
+		}
+		if _, err := validateAndConsumeArmy(state, map[string]int{betUnitType: betAmount}); err != nil {
+			return nil, err
+		}
+
+		dice, err := rollGamblingDice()
+		if err != nil {
+			return nil, err
+		}
+		won, multiplier, betLabel, err := evaluateGamblingBet(betID, exactNumber, dice)
+		if err != nil {
+			return nil, err
+		}
+		winAmount := 0
+		rewardUnit := ""
+		if won {
+			winAmount = betAmount * multiplier
+			rewardUnit = unitCfg.Name
+		}
+		rarity := gamblingRewardRarity(won, multiplier)
+		resultName := gamblingResultName(betLabel, won, multiplier)
+		record := MiniGameRecord{
+			ID:              "mg_" + randomID(10),
+			PlayerID:        playerID,
+			GameType:        "gambling",
+			ResultName:      resultName,
+			Rarity:          rarity,
+			RewardUnit:      rewardUnit,
+			RewardAmount:    winAmount,
+			RemainingAmount: winAmount,
+			BetUnit:         unitCfg.Name,
+			BetAmount:       betAmount,
+			CreatedAt:       nowText,
+		}
+		if !won {
+			record.RemainingAmount = 0
+		}
+		state.ServerTime = nowText
+		records = append([]MiniGameRecord{record}, records...)
+		result = GamblingRoundResult{
+			Record:       record,
+			ServerTime:   nowText,
+			Won:          won,
+			Multiplier:   multiplier,
+			BetUnitID:    betUnitType,
+			BetUnit:      unitCfg.Name,
+			BetAmount:    betAmount,
+			WinAmount:    winAmount,
+			DiceTotal:    dice[0] + dice[1] + dice[2],
+			DiceValues:   []int{dice[0], dice[1], dice[2]},
+			BetLabel:     betLabel,
+			RewardRarity: rarity,
+		}
+		return records, nil
+	})
+	if err != nil {
+		return GamblingRoundResult{}, err
+	}
+	result.Army = state.Army
+	result.ServerTime = state.ServerTime
+	return result, nil
+}
+
+// rollGamblingDice 生成三颗 1-6 的服务器骰子。
+func rollGamblingDice() ([3]int, error) {
+	var dice [3]int
+	for i := range dice {
+		n, err := cryptorand.Int(cryptorand.Reader, big.NewInt(6))
+		if err != nil {
+			return dice, err
+		}
+		dice[i] = int(n.Int64()) + 1
+	}
+	return dice, nil
+}
+
+// evaluateGamblingBet 根据押注玩法和骰子判断输赢、赔率和展示标签。
+func evaluateGamblingBet(betID string, exactNumber int, dice [3]int) (bool, int, string, error) {
+	total := dice[0] + dice[1] + dice[2]
+	isTriple := dice[0] == dice[1] && dice[1] == dice[2]
+	switch betID {
+	case "big":
+		return total >= 11 && !isTriple, 2, "大", nil
+	case "small":
+		return total <= 10 && !isTriple, 2, "小", nil
+	case "odd":
+		return total%2 == 1 && !isTriple, 2, "单", nil
+	case "even":
+		return total%2 == 0 && !isTriple, 2, "双", nil
+	case "triple":
+		return isTriple, 30, "豹子", nil
+	case "exact":
+		odds, ok := gamblingExactOdds[exactNumber]
+		if !ok {
+			return false, 0, "", ErrInvalidMiniGame
+		}
+		return total == exactNumber, odds, "猜" + strconv.Itoa(exactNumber) + "点", nil
+	default:
+		return false, 0, "", ErrInvalidMiniGame
+	}
+}
+
+// gamblingRewardRarity 根据赔率转换赌场记录稀有度。
+func gamblingRewardRarity(won bool, multiplier int) string {
+	if !won {
+		return "common"
+	}
+	if multiplier >= 30 {
+		return "legendary"
+	}
+	if multiplier >= 10 {
+		return "epic"
+	}
+	return "rare"
+}
+
+// gamblingResultName 生成赌场记录展示名称。
+func gamblingResultName(betLabel string, won bool, multiplier int) string {
+	if won {
+		return betLabel + " 赢 ×" + strconv.Itoa(multiplier)
+	}
+	return betLabel + " 输"
 }
 
 // SaveMiniGameRecord 保存一条小游戏记录
@@ -87,7 +274,7 @@ func (s *Service) SaveMiniGameRecord(playerID string, gameType string, resultNam
 		BetAmount:    betAmount,
 		CreatedAt:    now.UTC().Format(resourceDateLayout),
 	}
-	if record.GameType == "fishing" && record.RewardAmount > 0 {
+	if miniGameRecordHasRedeemableReward(record.GameType) && record.RewardAmount > 0 {
 		record.RemainingAmount = record.RewardAmount
 	}
 
@@ -181,7 +368,7 @@ func (s *Service) RedeemMiniGameReward(playerID string, recordID string, amount 
 			if record.ID != recordID {
 				continue
 			}
-			if record.GameType != "fishing" || record.RewardUnit == "" || record.RewardAmount <= 0 {
+			if !miniGameRecordHasRedeemableReward(record.GameType) || record.RewardUnit == "" || record.RewardAmount <= 0 {
 				return nil, ErrInvalidMiniGame
 			}
 			if record.RemainingAmount <= 0 || amount > record.RemainingAmount {

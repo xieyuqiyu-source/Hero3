@@ -12,6 +12,12 @@ export function deletionRemainingMs(player: PlayerSummary, now: number): number 
   return Math.max(0, scheduledAt - now)
 }
 
+export function isPlayerDeletionDue(player: PlayerSummary, now: number): boolean {
+  if (!player.deleteScheduledAt) return false
+  const scheduledAt = new Date(player.deleteScheduledAt).getTime()
+  return Number.isFinite(scheduledAt) && now >= scheduledAt
+}
+
 export function formatDeletionCountdown(ms: number): string {
   if (ms <= 0) return '即将删除'
   const totalSeconds = Math.ceil(ms / 1000)

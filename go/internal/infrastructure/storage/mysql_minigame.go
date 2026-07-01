@@ -16,7 +16,7 @@ func (r *MySQLRepository) SaveMiniGameRecord(record game.MiniGameRecord) error {
 	if createdAt.IsZero() {
 		createdAt = time.Now()
 	}
-	if record.GameType == "fishing" && record.RemainingAmount == 0 && record.RewardAmount > 0 {
+	if (record.GameType == "fishing" || record.GameType == "gambling") && record.RemainingAmount == 0 && record.RewardAmount > 0 {
 		record.RemainingAmount = record.RewardAmount
 	}
 
@@ -137,7 +137,6 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 	if err != nil {
 		return game.GameState{}, nil, err
 	}
-	defer rows.Close()
 
 	records := []game.MiniGameRecord{}
 	previousRemainingByRecordID := map[string]int{}
@@ -164,6 +163,10 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 		previousRemainingByRecordID[record.ID] = record.RemainingAmount
 	}
 	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return game.GameState{}, nil, err
+	}
+	if err := rows.Close(); err != nil {
 		return game.GameState{}, nil, err
 	}
 
@@ -174,6 +177,30 @@ func (r *MySQLRepository) UpdateMiniGamePlayerState(playerID string, updatedAt t
 		}
 	}
 	for _, record := range records {
+		if _, exists := previousRemainingByRecordID[record.ID]; !exists {
+			createdAt, _ := time.Parse(time.RFC3339, record.CreatedAt)
+			if createdAt.IsZero() {
+				createdAt = updatedAt
+			}
+			if _, err := tx.Exec(
+				`INSERT INTO minigame_records (id, player_id, game_type, result_name, rarity, reward_unit, reward_amount, remaining_amount, bet_unit, bet_amount, created_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				record.ID,
+				record.PlayerID,
+				record.GameType,
+				record.ResultName,
+				record.Rarity,
+				record.RewardUnit,
+				record.RewardAmount,
+				record.RemainingAmount,
+				record.BetUnit,
+				record.BetAmount,
+				createdAt.UTC(),
+			); err != nil {
+				return game.GameState{}, nil, err
+			}
+			continue
+		}
 		if !miniGameRemainingAmountChanged(previousRemainingByRecordID, record) {
 			continue
 		}

@@ -8,18 +8,19 @@ import { getFactionLabel } from '@/utils/faction'
 import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
 import CloudSyncModal from '@/components/CloudSyncModal'
-import { deletionRemainingMs, formatDeletionCountdown, isPlayerDeletionPending } from '@/utils/playerDeletion'
+import { deletionRemainingMs, formatDeletionCountdown, isPlayerDeletionDue, isPlayerDeletionPending } from '@/utils/playerDeletion'
 import Section from './components/Section'
 import InfoItem from './components/InfoItem'
 
 const AccountPage: FC = () => {
   const navigate = useNavigate()
-  const { account, players, logout, loadPlayers } = useAccountStore()
+  const { account, players, logout, loadPlayers, deletePlayer } = useAccountStore()
   const restorePlayerDeletion = useAccountStore((s) => s.restorePlayerDeletion)
   const { state: gameState, activePlayerId, clearActivePlayer, setActivePlayer, loadGameState } = useGameStore()
   const [cloudSyncOpen, setCloudSyncOpen] = useState(false)
   const [switching, setSwitching] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  const [nextDeletionRefreshAt, setNextDeletionRefreshAt] = useState(0)
 
   // 页面加载时拉取存档列表
   useEffect(() => {
@@ -32,6 +33,30 @@ const AccountPage: FC = () => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    if (!account || players.length === 0) return
+    const current = Date.now()
+    const due = players.some((player) => isPlayerDeletionDue(player, current))
+    if (due) {
+      if (current >= nextDeletionRefreshAt) {
+        setNextDeletionRefreshAt(current + 5000)
+        void loadPlayers()
+      }
+      return
+    }
+
+    const nextRemaining = players
+      .filter(isPlayerDeletionPending)
+      .map((player) => deletionRemainingMs(player, current))
+      .filter((remaining) => remaining > 0)
+      .sort((a, b) => a - b)[0]
+    if (!Number.isFinite(nextRemaining)) return
+    const timer = window.setTimeout(() => {
+      void loadPlayers()
+    }, nextRemaining + 500)
+    return () => window.clearTimeout(timer)
+  }, [account, players, loadPlayers, nextDeletionRefreshAt])
 
   const handleLogout = () => {
     logout()
@@ -62,6 +87,12 @@ const AccountPage: FC = () => {
   const handleRestorePlayer = async (e: React.MouseEvent, playerId: string) => {
     e.stopPropagation()
     await restorePlayerDeletion(playerId)
+  }
+
+  const handleHardDeletePlayer = async (e: React.MouseEvent, player: { id: string; nickname: string }) => {
+    e.stopPropagation()
+    if (!confirm(`冷静期已结束，确定永久删除存档「${player.nickname}」吗？`)) return
+    await deletePlayer(player.id)
   }
 
   return (
@@ -106,6 +137,7 @@ const AccountPage: FC = () => {
               const isActive = p.id === activePlayerId
               const pendingDelete = isPlayerDeletionPending(p)
               const remaining = deletionRemainingMs(p, now)
+              const deletionDue = isPlayerDeletionDue(p, now)
               return (
                 <div
                   key={p.id}
@@ -138,7 +170,7 @@ const AccountPage: FC = () => {
                       )}
                       {pendingDelete && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 font-medium">
-                          删除倒计时 {formatDeletionCountdown(remaining)}
+                          {deletionDue ? '冷静期已结束' : `删除倒计时 ${formatDeletionCountdown(remaining)}`}
                         </span>
                       )}
                     </div>
@@ -152,6 +184,15 @@ const AccountPage: FC = () => {
                       <span className="text-[10px] text-[var(--color-text-muted)]">切换中...</span>
                     )}
                     {pendingDelete && (
+                      deletionDue ? (
+                        <button
+                          type="button"
+                          onClick={(e) => void handleHardDeletePlayer(e, p)}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-semibold text-red-600 bg-red-500/10 hover:bg-red-500/20 cursor-pointer"
+                        >
+                          删除
+                        </button>
+                      ) : (
                       <button
                         type="button"
                         onClick={(e) => void handleRestorePlayer(e, p.id)}
@@ -159,6 +200,7 @@ const AccountPage: FC = () => {
                       >
                         恢复
                       </button>
+                      )
                     )}
                     <span className="text-[10px] text-[var(--color-text-muted)]">{p.updatedAt}</span>
                   </div>
