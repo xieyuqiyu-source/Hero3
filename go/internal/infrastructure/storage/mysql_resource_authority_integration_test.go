@@ -104,6 +104,106 @@ func createResourceAuthorityPlayer(t *testing.T, repo *MySQLRepository, suffix s
 	return account, state
 }
 
+// TestMySQLDeletePlayerRemovesRelatedRows 验证删除存档时显式清理历史库可能缺少级联的关联表。
+func TestMySQLDeletePlayerRemovesRelatedRows(t *testing.T) {
+	repo, db := openResourceAuthorityTestRepository(t)
+	account, state := createResourceAuthorityPlayer(t, repo, "delete_player_related")
+	playerID := state.Player.ID
+	now := time.Now().UTC()
+	reportID := "it_report_delete_" + strings.NewReplacer(".", "_").Replace(now.Format("150405.000000000"))
+
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM battle_report_links WHERE report_id = ?`, reportID)
+		_, _ = db.Exec(`DELETE FROM battle_report_states WHERE report_id = ?`, reportID)
+		_, _ = db.Exec(`DELETE FROM battle_reports WHERE id = ?`, reportID)
+		_, _ = db.Exec(`DELETE FROM mails WHERE player_id = ?`, playerID)
+		_, _ = db.Exec(`DELETE FROM minigame_records WHERE player_id = ?`, playerID)
+		_, _ = db.Exec(`DELETE FROM pvp_player_states WHERE player_id = ?`, playerID)
+		_, _ = db.Exec(`DELETE FROM gold_ledger WHERE player_id = ?`, playerID)
+		_, _ = db.Exec(`DELETE FROM item_ledger WHERE player_id = ?`, playerID)
+		_, _ = db.Exec(`DELETE FROM players WHERE id = ?`, playerID)
+		_, _ = db.Exec(`DELETE FROM accounts WHERE id = ?`, account.ID)
+	})
+
+	if _, err := db.Exec(
+		`INSERT INTO battle_reports (id, player_id, report_json, created_at) VALUES (?, ?, ?, ?)`,
+		reportID, playerID, []byte(`{"id":"`+reportID+`"}`), now,
+	); err != nil {
+		t.Fatalf("insert battle report: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO battle_report_states (id, report_id, player_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+		"state_"+reportID, reportID, playerID, now, now,
+	); err != nil {
+		t.Fatalf("insert battle report state: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO battle_report_links (id, report_id, token, visibility, created_at) VALUES (?, ?, ?, ?, ?)`,
+		"link_"+reportID, reportID, "token_"+reportID, "private", now,
+	); err != nil {
+		t.Fatalf("insert battle report link: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO mails (id, player_id, mail_type, sender_type, title, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		"mail_"+reportID, playerID, "system", "system", "测试信函", "删除存档清理验证", now,
+	); err != nil {
+		t.Fatalf("insert mail: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO minigame_records (id, player_id, game_type, result_name, rarity, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"mini_"+reportID, playerID, "fishing", "测试奖励", "common", now,
+	); err != nil {
+		t.Fatalf("insert minigame record: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO pvp_player_states (player_id, created_at, updated_at) VALUES (?, ?, ?)`,
+		playerID, now, now,
+	); err != nil {
+		t.Fatalf("insert pvp player state: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO gold_ledger (account_id, player_id, currency, direction, amount, balance_after, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		account.ID, playerID, "gold", "credit", 1, 1, now,
+	); err != nil {
+		t.Fatalf("insert gold ledger: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO item_ledger (id, player_id, item_id, change_amount, before_amount, after_amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		"item_ledger_"+reportID, playerID, "resource_pack_small", 1, 0, 1, now,
+	); err != nil {
+		t.Fatalf("insert item ledger: %v", err)
+	}
+
+	if err := repo.DeletePlayer(playerID); err != nil {
+		t.Fatalf("DeletePlayer failed: %v", err)
+	}
+
+	checks := map[string]string{
+		"players":              `SELECT COUNT(*) FROM players WHERE id = ?`,
+		"battle_reports":       `SELECT COUNT(*) FROM battle_reports WHERE player_id = ?`,
+		"battle_report_states": `SELECT COUNT(*) FROM battle_report_states WHERE player_id = ?`,
+		"battle_report_links":  `SELECT COUNT(*) FROM battle_report_links WHERE report_id = ?`,
+		"mails":                `SELECT COUNT(*) FROM mails WHERE player_id = ?`,
+		"minigame_records":     `SELECT COUNT(*) FROM minigame_records WHERE player_id = ?`,
+		"pvp_player_states":    `SELECT COUNT(*) FROM pvp_player_states WHERE player_id = ?`,
+		"gold_ledger":          `SELECT COUNT(*) FROM gold_ledger WHERE player_id = ?`,
+		"item_ledger":          `SELECT COUNT(*) FROM item_ledger WHERE player_id = ?`,
+	}
+	for table, query := range checks {
+		arg := playerID
+		if table == "battle_report_links" {
+			arg = reportID
+		}
+		var count int
+		if err := db.QueryRow(query, arg).Scan(&count); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		if count != 0 {
+			t.Fatalf("expected %s rows to be deleted, got %d", table, count)
+		}
+	}
+}
+
 // readResourceRow 读取 player_resources 中的单项资源。
 func readResourceRow(t *testing.T, db *sql.DB, playerID string, resourceType string) (int, int) {
 	t.Helper()

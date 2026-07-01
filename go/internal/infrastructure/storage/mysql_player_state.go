@@ -121,11 +121,17 @@ func (r *MySQLRepository) DeleteAccount(accountID string) error {
 }
 
 func (r *MySQLRepository) DeletePlayer(playerID string) error {
-	// 先删独立存储
-	_, _ = r.db.Exec(`DELETE FROM battle_reports WHERE player_id = ?`, playerID)
-	_, _ = r.db.Exec(`DELETE FROM mails WHERE player_id = ?`, playerID)
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
 
-	result, err := r.db.Exec(`DELETE FROM players WHERE id = ?`, playerID)
+	if err := deletePlayerRelatedRowsTx(tx, playerID); err != nil {
+		return err
+	}
+
+	result, err := tx.Exec(`DELETE FROM players WHERE id = ?`, playerID)
 	if err != nil {
 		return err
 	}
@@ -136,6 +142,52 @@ func (r *MySQLRepository) DeletePlayer(playerID string) error {
 	}
 	if affected == 0 {
 		return game.ErrPlayerNotFound
+	}
+	return tx.Commit()
+}
+
+// deletePlayerRelatedRowsTx 显式清理存档关联行，避免历史库缺少级联外键时删不掉存档。
+func deletePlayerRelatedRowsTx(tx *sql.Tx, playerID string) error {
+	deleteStatements := []struct {
+		query string
+		args  []any
+	}{
+		{`DELETE FROM battle_report_links WHERE report_id IN (SELECT id FROM battle_reports WHERE player_id = ?)`, []any{playerID}},
+		{`DELETE FROM battle_report_states WHERE player_id = ? OR report_id IN (SELECT id FROM battle_reports WHERE player_id = ?)`, []any{playerID, playerID}},
+		{`DELETE FROM battle_report_participants WHERE player_id = ? OR report_id IN (SELECT id FROM battle_reports WHERE player_id = ?)`, []any{playerID, playerID}},
+		{`DELETE FROM battle_reports WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM battle_events WHERE attacker_player_id = ? OR defender_player_id = ?`, []any{playerID, playerID}},
+		{`DELETE FROM pvp_marches WHERE attacker_player_id = ? OR defender_player_id = ?`, []any{playerID, playerID}},
+		{`DELETE FROM pvp_battles WHERE attacker_player_id = ? OR defender_player_id = ?`, []any{playerID, playerID}},
+		{`DELETE FROM pvp_player_states WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM pvp_season_players WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM minigame_records WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM mails WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM gold_ledger WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM item_ledger WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM announcement_reads WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM gameplay_module_settlements WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM gameplay_module_participants WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM reincarnation_battles WHERE player_id = ? OR run_id IN (SELECT id FROM reincarnation_runs WHERE player_id = ?)`, []any{playerID, playerID}},
+		{`DELETE FROM reincarnation_waves WHERE run_id IN (SELECT id FROM reincarnation_runs WHERE player_id = ?)`, []any{playerID}},
+		{`DELETE FROM reincarnation_runs WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM player_reinforcements WHERE from_player_id = ? OR to_player_id = ? OR owner_player_id = ? OR host_player_id = ?`, []any{playerID, playerID, playerID, playerID}},
+		{`DELETE FROM player_buffs WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM player_general_assignments WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM player_generals WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM player_recruit_queues WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM player_army_units WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM player_resource_slots WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM player_buildings WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM player_inventory WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM player_currencies WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM player_npc_states WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM player_resources WHERE player_id = ?`, []any{playerID}},
+	}
+	for _, statement := range deleteStatements {
+		if _, err := tx.Exec(statement.query, statement.args...); err != nil {
+			return err
+		}
 	}
 	return nil
 }

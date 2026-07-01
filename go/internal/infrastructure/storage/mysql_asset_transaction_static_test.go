@@ -46,7 +46,11 @@ func TestPlayerInventoryDeletesStaySlotScoped(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", file, err)
 		}
-		normalized := strings.Join(strings.Fields(string(content)), " ")
+		source := string(content)
+		if file == "mysql_player_state.go" {
+			source = strings.Split(source, "func deletePlayerRelatedRowsTx")[0]
+		}
+		normalized := strings.Join(strings.Fields(source), " ")
 		if strings.Contains(normalized, "DELETE FROM player_inventory WHERE player_id = ?`,") {
 			t.Fatalf("%s must not delete all player_inventory rows by player_id", file)
 		}
