@@ -67,6 +67,8 @@ BootstrapResponse:
       description: 道具配置。
     fishing:
       $ref: '#/components/schemas/FishingConfig'
+    slot:
+      $ref: '#/components/schemas/SlotConfig'
     reincarnation:
       $ref: '#/components/schemas/ReincarnationConfig'
     message:

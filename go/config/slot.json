@@ -1,0 +1,49 @@
+{
+  "minBet": 1000,
+  "maxBet": 1000000,
+  "maxBetRatio": 0.05,
+  "symbols": [
+    {
+      "id": "bronze_charm",
+      "name": "玄铜符",
+      "rarity": "common",
+      "weight": 35,
+      "multiplier": 5
+    },
+    {
+      "id": "silver_charm",
+      "name": "白银符",
+      "rarity": "rare",
+      "weight": 25,
+      "multiplier": 12
+    },
+    {
+      "id": "gold_charm",
+      "name": "赤金符",
+      "rarity": "rare",
+      "weight": 18,
+      "multiplier": 30
+    },
+    {
+      "id": "jade_seal",
+      "name": "玉玺",
+      "rarity": "epic",
+      "weight": 12,
+      "multiplier": 80
+    },
+    {
+      "id": "tiger_tally",
+      "name": "虎符",
+      "rarity": "epic",
+      "weight": 7,
+      "multiplier": 250
+    },
+    {
+      "id": "heaven_order",
+      "name": "天命令",
+      "rarity": "legendary",
+      "weight": 3,
+      "multiplier": 1000
+    }
+  ]
+}

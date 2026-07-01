@@ -1,3 +1,4 @@
+// 本文件定义游戏服务主结构、基础错误、配置加载和通用玩家能力。
 package game
 
 import (
@@ -51,6 +52,8 @@ var (
 	ErrMailRecipientSelf        = errors.New("cannot send mail to yourself")
 	ErrMiniGameNotFound         = errors.New("minigame record not found")
 	ErrInvalidMiniGame          = errors.New("invalid minigame record")
+	ErrMiniGameBetTooLow        = errors.New("minigame bet amount too low")
+	ErrMiniGameBetTooHigh       = errors.New("minigame bet amount exceeds limit")
 	ErrInvalidBait              = errors.New("invalid fishing bait")
 	ErrCrossFactionReward       = errors.New("reward unit is not available for current faction")
 	ErrMiniGameStockShort       = errors.New("insufficient minigame reward stock")
@@ -89,6 +92,7 @@ type Service struct {
 	itemsPath         string
 	dropPoolsPath     string
 	fishingPath       string
+	slotPath          string
 	reincarnationPath string
 }
 
@@ -116,6 +120,7 @@ type BootstrapResponse struct {
 	Items         ItemsConfig         `json:"items"`
 	DropPools     DropPoolsConfig     `json:"dropPools"`
 	Fishing       FishingConfig       `json:"fishing"`
+	Slot          SlotConfig          `json:"slot"`
 	Reincarnation ReincarnationConfig `json:"reincarnation"`
 	Message       string              `json:"message"`
 }
@@ -187,6 +192,12 @@ func (s *Service) SetFishingPath(path string) error {
 	return LoadFishingConfig(path)
 }
 
+// SetSlotPath 设置并加载天机轮转配置。
+func (s *Service) SetSlotPath(path string) error {
+	s.slotPath = path
+	return LoadSlotConfig(path)
+}
+
 // SetReincarnationPath 设置并加载轮回绝境配置。
 func (s *Service) SetReincarnationPath(path string) error {
 	s.reincarnationPath = path
@@ -215,6 +226,16 @@ func (s *Service) GetFishingConfig() FishingConfig {
 
 func (s *Service) UpdateFishingConfig(config FishingConfig) error {
 	return SaveFishingConfig(s.fishingPath, config)
+}
+
+// GetSlotConfig 返回天机轮转配置。
+func (s *Service) GetSlotConfig() SlotConfig {
+	return GetSlotConfig()
+}
+
+// UpdateSlotConfig 保存天机轮转配置。
+func (s *Service) UpdateSlotConfig(config SlotConfig) error {
+	return SaveSlotConfig(s.slotPath, config)
 }
 
 // GetReincarnationConfig 返回轮回绝境配置。
@@ -622,6 +643,7 @@ func (s *Service) Bootstrap() BootstrapResponse {
 	items := GetItemsConfig()
 	dropPools := GetDropPoolsConfig()
 	fishing := GetFishingConfig()
+	slot := GetSlotConfig()
 	reincarnation := GetReincarnationConfig()
 	return BootstrapResponse{
 		GameName: "Hero3",
@@ -641,6 +663,7 @@ func (s *Service) Bootstrap() BootstrapResponse {
 		Items:         items,
 		DropPools:     dropPools,
 		Fishing:       fishing,
+		Slot:          slot,
 		Reincarnation: reincarnation,
 		Message:       "Hero3 后端基础服务已就绪，具体玩法逻辑待接入。",
 	}

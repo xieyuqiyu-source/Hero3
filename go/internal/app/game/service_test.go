@@ -2785,6 +2785,268 @@ func TestResolveGamblingRoundRejectsInsufficientArmyWithoutRecord(t *testing.T) 
 	}
 }
 
+func TestResolveSlotRoundDeductsBetArmyAndWritesWinningStock(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	if err := SetSlotConfig(SlotConfig{
+		MinBet:      1000,
+		MaxBet:      1000000,
+		MaxBetRatio: 0.05,
+		Symbols: []SlotSymbol{
+			{ID: "bronze_charm", Name: "玄铜符", Rarity: "common", Weight: 1, Multiplier: 5},
+		},
+	}); err != nil {
+		t.Fatalf("set slot config: %v", err)
+	}
+	defer func() { _ = SetSlotConfig(defaultSlotConfig) }()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_slot_resolve", Username: "slot_resolve", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_slot_resolve", "Slotter", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 200000}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 10000)
+	if err != nil {
+		t.Fatalf("ResolveSlotRound failed: %v", err)
+	}
+	if !result.Won || result.Multiplier != 5 || result.WinAmount != 50000 {
+		t.Fatalf("expected winning slot result, got %+v", result)
+	}
+	if armySliceToMap(result.Army)["qiQiYing"] != 190000 {
+		t.Fatalf("expected bet army deducted to 190000, got %+v", result.Army)
+	}
+	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "slot", 10, 0)
+	if err != nil {
+		t.Fatalf("list slot records: %v", err)
+	}
+	if len(records) != 1 || records[0].GameType != "slot" || records[0].RemainingAmount != 50000 || records[0].RewardUnit != "骁骑营" {
+		t.Fatalf("expected winning slot record persisted, got %+v", records)
+	}
+}
+
+func TestResolveSlotRoundWritesLosingRecordWithoutStock(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	previousRoller := slotSymbolRoller
+	slotSymbolRoller = func(cfg SlotConfig) ([3]SlotSymbol, error) {
+		return [3]SlotSymbol{
+			{ID: "bronze_charm", Name: "玄铜符", Rarity: "common", Weight: 1, Multiplier: 5},
+			{ID: "silver_charm", Name: "白银符", Rarity: "rare", Weight: 1, Multiplier: 12},
+			{ID: "gold_charm", Name: "赤金符", Rarity: "rare", Weight: 1, Multiplier: 30},
+		}, nil
+	}
+	defer func() { slotSymbolRoller = previousRoller }()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_slot_loss", Username: "slot_loss", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_slot_loss", "Slotter", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 200000}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 10000)
+	if err != nil {
+		t.Fatalf("ResolveSlotRound failed: %v", err)
+	}
+	if result.Won || result.WinAmount != 0 || result.Record.RemainingAmount != 0 {
+		t.Fatalf("expected losing slot result, got %+v", result)
+	}
+	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "slot", 10, 0)
+	if err != nil {
+		t.Fatalf("list slot records: %v", err)
+	}
+	if len(records) != 1 || records[0].ResultName != "未中奖" || records[0].RemainingAmount != 0 || records[0].RewardUnit != "" {
+		t.Fatalf("expected losing slot record without stock, got %+v", records)
+	}
+}
+
+func TestResolveSlotRoundRejectsBetBoundsWithoutRecord(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_slot_bounds", Username: "slot_bounds", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_slot_bounds", "Slotter", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 100000}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	if _, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 999); !errors.Is(err, ErrMiniGameBetTooLow) {
+		t.Fatalf("expected ErrMiniGameBetTooLow, got %v", err)
+	}
+	if _, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 6000); !errors.Is(err, ErrMiniGameBetTooHigh) {
+		t.Fatalf("expected ErrMiniGameBetTooHigh, got %v", err)
+	}
+	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "slot", 10, 0)
+	if err != nil {
+		t.Fatalf("list slot records: %v", err)
+	}
+	if len(records) != 0 {
+		t.Fatalf("invalid slot bet should not write record, got %+v", records)
+	}
+	stored, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState failed: %v", err)
+	}
+	if armySliceToMap(stored.Army)["qiQiYing"] != 100000 {
+		t.Fatalf("invalid slot bet should not deduct army, got %+v", stored.Army)
+	}
+}
+
+func TestResolveSlotRoundRejectsInvalidUnits(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_slot_units", Username: "slot_units", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_slot_units", "Slotter", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "zhanYingTanMa", Amount: 100000}, {UnitType: "southernElephant", Amount: 100000}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	if _, err := svc.ResolveSlotRound(state.Player.ID, "southernElephant", 1000); !errors.Is(err, ErrUnitNotFound) {
+		t.Fatalf("expected ErrUnitNotFound for cross faction unit, got %v", err)
+	}
+	if _, err := svc.ResolveSlotRound(state.Player.ID, "zhanYingTanMa", 1000); !errors.Is(err, ErrNonCombatUnit) {
+		t.Fatalf("expected ErrNonCombatUnit for scout unit, got %v", err)
+	}
+}
+
+func TestRedeemSlotMiniGameRewardAddsFactionArmy(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_slot_redeem", Username: "slot_redeem", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_slot_redeem", "Slotter", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+	record := MiniGameRecord{
+		ID:              "mg_slot_redeem",
+		PlayerID:        state.Player.ID,
+		GameType:        "slot",
+		ResultName:      "玄铜符三连 ×5",
+		Rarity:          "common",
+		RewardUnit:      "骁骑营",
+		RewardAmount:    50000,
+		RemainingAmount: 50000,
+		BetUnit:         "骁骑营",
+		BetAmount:       10000,
+		CreatedAt:       now.UTC().Format(resourceDateLayout),
+	}
+	if err := repo.SaveMiniGameRecord(record); err != nil {
+		t.Fatalf("save slot record: %v", err)
+	}
+
+	result, err := svc.RedeemMiniGameReward(state.Player.ID, record.ID, 12000)
+	if err != nil {
+		t.Fatalf("RedeemMiniGameReward failed: %v", err)
+	}
+	if result.Record.GameType != "slot" || result.Record.RemainingAmount != 38000 {
+		t.Fatalf("unexpected redeemed slot record: %+v", result.Record)
+	}
+	if result.RedeemedTarget != "army" || result.RedeemedUnitID != "qiQiYing" || result.RedeemedAmount != 12000 {
+		t.Fatalf("unexpected slot redeem result: %+v", result)
+	}
+	if armySliceToMap(result.Army)["qiQiYing"] != 12000 {
+		t.Fatalf("expected redeemed slot unit in army, got %+v", result.Army)
+	}
+}
+
+func TestRedeemAllSlotMiniGameRewardsOnlyRedeemsSlot(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_slot_redeem_all", Username: "slot_redeem_all", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_slot_redeem_all", "Slotter", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+	if err := repo.SaveMiniGameRecord(MiniGameRecord{ID: "mg_slot_all", PlayerID: state.Player.ID, GameType: "slot", ResultName: "玄铜符三连 ×5", Rarity: "common", RewardUnit: "骁骑营", RewardAmount: 50000, RemainingAmount: 50000, BetUnit: "骁骑营", BetAmount: 10000, CreatedAt: now.UTC().Format(resourceDateLayout)}); err != nil {
+		t.Fatalf("save slot record: %v", err)
+	}
+	if _, err := svc.SaveMiniGameRecord(state.Player.ID, "fishing", "金龙鱼", "rare", "骁骑营", 5000, "", 0); err != nil {
+		t.Fatalf("save fishing record: %v", err)
+	}
+
+	result, err := svc.RedeemAllFactionMiniGameRewards(state.Player.ID, "slot")
+	if err != nil {
+		t.Fatalf("RedeemAllFactionMiniGameRewards failed: %v", err)
+	}
+	if result.RedeemedAmount != 50000 || result.RedeemedRecords != 1 || result.RedeemedUnits["骁骑营"] != 50000 {
+		t.Fatalf("unexpected slot redeem all result: %+v", result)
+	}
+	slotRecords, _, err := repo.ListMiniGameRecords(state.Player.ID, "slot", 10, 0)
+	if err != nil {
+		t.Fatalf("list slot records: %v", err)
+	}
+	if len(slotRecords) != 1 || slotRecords[0].RemainingAmount != 0 {
+		t.Fatalf("expected slot stock redeemed, got %+v", slotRecords)
+	}
+	fishingRecords, _, err := repo.ListMiniGameRecords(state.Player.ID, "fishing", 10, 0)
+	if err != nil {
+		t.Fatalf("list fishing records: %v", err)
+	}
+	if len(fishingRecords) != 1 || fishingRecords[0].RemainingAmount != 5000 {
+		t.Fatalf("expected fishing stock untouched, got %+v", fishingRecords)
+	}
+}
+
+func TestSaveMiniGameRecordRejectsSlotGameType(t *testing.T) {
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_slot_record_reject", Username: "slot_record_reject", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_slot_record_reject", "Slotter", "wei", "caocao", now)
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+	if _, err := svc.SaveMiniGameRecord(state.Player.ID, "slot", "玄铜符三连 ×5", "common", "骁骑营", 50000, "骁骑营", 10000); !errors.Is(err, ErrInvalidMiniGame) {
+		t.Fatalf("expected ErrInvalidMiniGame for slot record upload, got %v", err)
+	}
+}
+
 func TestRedeemAllGamblingMiniGameRewardsOnlyRedeemsGambling(t *testing.T) {
 	svc := NewService()
 	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {

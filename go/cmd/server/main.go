@@ -1,3 +1,4 @@
+// 本文件是 Hero3 后端服务启动入口，负责加载配置、存储和 HTTP 路由。
 package main
 
 import (
@@ -66,6 +67,10 @@ func main() {
 		logger.Error("fishing config load failed", "path", cfg.FishingPath, "error", err)
 		os.Exit(1)
 	}
+	if err := gameService.SetSlotPath(cfg.SlotPath); err != nil {
+		logger.Error("slot config load failed", "path", cfg.SlotPath, "error", err)
+		os.Exit(1)
+	}
 	if err := gameService.SetReincarnationPath(cfg.ReincarnationPath); err != nil {
 		logger.Error("reincarnation config load failed", "path", cfg.ReincarnationPath, "error", err)
 		os.Exit(1)
@@ -130,6 +135,10 @@ func main() {
 		}
 		if err := gameService.SetFishingPath(cfg.FishingPath); err != nil {
 			logger.Error("fishing config load failed", "path", cfg.FishingPath, "error", err)
+			os.Exit(1)
+		}
+		if err := gameService.SetSlotPath(cfg.SlotPath); err != nil {
+			logger.Error("slot config load failed", "path", cfg.SlotPath, "error", err)
 			os.Exit(1)
 		}
 		if err := gameService.SetReincarnationPath(cfg.ReincarnationPath); err != nil {

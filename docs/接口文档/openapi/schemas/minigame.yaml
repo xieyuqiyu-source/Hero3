@@ -18,7 +18,7 @@ MiniGameRecord:
       type: string
     gameType:
       type: string
-      enum: [fishing, gambling]
+      enum: [fishing, gambling, slot]
     resultName:
       type: string
       example: 金龙鱼
@@ -85,7 +85,7 @@ MiniGameRecordRequest:
       type: string
     gameType:
       type: string
-      enum: [fishing, gambling]
+      enum: [fishing, gambling, slot]
     resultName:
       type: string
     rarity:
@@ -188,6 +188,110 @@ MiniGameRedeemAllResult:
         type: integer
     skippedRecords:
       type: integer
+SlotRoundResult:
+  type: object
+  required:
+  - record
+  - serverTime
+  - won
+  - symbols
+  - symbolNames
+  - multiplier
+  - betUnitId
+  - betUnit
+  - betAmount
+  - winAmount
+  - maxBet
+  properties:
+    record:
+      $ref: '#/components/schemas/MiniGameRecord'
+    army:
+      type: array
+      description: 本局扣除押注后的最新军队。
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    serverTime:
+      type: string
+      format: date-time
+    won:
+      type: boolean
+    symbols:
+      type: array
+      items:
+        type: string
+      example: [gold_charm, gold_charm, gold_charm]
+    symbolNames:
+      type: array
+      items:
+        type: string
+      example: [赤金符, 赤金符, 赤金符]
+    multiplier:
+      type: integer
+      example: 30
+    betUnitId:
+      type: string
+      example: qiQiYing
+    betUnit:
+      type: string
+      example: 骁骑营
+    betAmount:
+      type: integer
+      example: 10000
+    winAmount:
+      type: integer
+      example: 300000
+    rewardRarity:
+      type: string
+      enum: [common, rare, epic, legendary]
+    maxBet:
+      type: integer
+      description: 按当前兵力和配置计算出的本局最大押注。
+SlotConfig:
+  type: object
+  required:
+  - minBet
+  - maxBet
+  - maxBetRatio
+  - symbols
+  properties:
+    minBet:
+      type: integer
+      example: 1000
+    maxBet:
+      type: integer
+      example: 1000000
+    maxBetRatio:
+      type: number
+      format: double
+      example: 0.05
+    symbols:
+      type: array
+      items:
+        $ref: '#/components/schemas/SlotSymbolConfig'
+SlotSymbolConfig:
+  type: object
+  required:
+  - id
+  - name
+  - rarity
+  - weight
+  - multiplier
+  properties:
+    id:
+      type: string
+      example: gold_charm
+    name:
+      type: string
+      example: 赤金符
+    rarity:
+      type: string
+      enum: [common, rare, epic, legendary]
+    weight:
+      type: integer
+      example: 18
+    multiplier:
+      type: integer
+      example: 30
 FishingConfig:
   type: object
   required:

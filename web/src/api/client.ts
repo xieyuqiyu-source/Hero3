@@ -41,6 +41,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   'invalid gold amount': '数量无效',
   'exchange is on cooldown': '兑换冷却中，请稍后再试',
   'invalid fishing bait': '鱼饵无效',
+  'minigame bet amount too low': '押注数量太低',
+  'minigame bet amount exceeds limit': '押注数量超过上限',
   'general not found': '将领不存在',
   'general change is on cooldown': '换将冷却中',
   'invalid general stat': '将领属性无效',

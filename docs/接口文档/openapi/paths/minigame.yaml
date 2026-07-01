@@ -32,8 +32,8 @@
       required: false
       schema:
         type: string
-        enum: [fishing, gambling]
-      description: 按小游戏类型筛选；钓鱼库存通常传 fishing。
+        enum: [fishing, gambling, slot]
+      description: 按小游戏类型筛选；天机轮转库存传 slot。
     - name: limit
       in: query
       required: false
@@ -78,6 +78,54 @@
           application/json:
             schema:
               $ref: '#/components/schemas/FishingBaitUseResult'
+/api/v1/minigame/slot/resolve:
+  post:
+    tags: [MiniGame]
+    summary: 结算一局天机轮转
+    description: 后端校验押注兵种和数量，扣除押注兵力，服务器抽取三轴图案并写入 slot 小游戏记录。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId, betUnitType, betAmount]
+            properties:
+              playerId:
+                type: string
+              betUnitType:
+                type: string
+                description: 押注兵种 ID。
+                example: qiQiYing
+              betAmount:
+                type: integer
+                minimum: 1000
+                example: 10000
+    responses:
+      '200':
+        description: 结算成功
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SlotRoundResult'
+      '404':
+        description: 存档不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '422':
+        description: 押注兵种不存在、押注不足、超过上限或兵种不能押注
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '429':
+        description: 同一存档操作过快
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
 /api/v1/minigame/redeem:
   post:
     tags:
@@ -122,7 +170,7 @@
                 type: string
               gameType:
                 type: string
-                enum: [fishing, gambling]
+                enum: [fishing, gambling, slot]
                 default: fishing
     responses:
       '200':
@@ -153,7 +201,7 @@
       required: false
       schema:
         type: string
-        enum: [fishing, gambling]
+        enum: [fishing, gambling, slot]
       description: 按小游戏类型筛选；不传则返回全部小游戏记录。
     - name: limit
       in: query

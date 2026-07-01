@@ -99,6 +99,21 @@ export interface FishingConfig {
   fishPool: FishingFishConfig[]
 }
 
+export interface SlotSymbolConfig {
+  id: string
+  name: string
+  rarity: 'common' | 'rare' | 'epic' | 'legendary' | string
+  weight: number
+  multiplier: number
+}
+
+export interface SlotConfig {
+  minBet: number
+  maxBet: number
+  maxBetRatio: number
+  symbols: SlotSymbolConfig[]
+}
+
 export interface FactionConfig {
   name: string
   description: string
@@ -113,6 +128,7 @@ interface ConfigStore {
   units: Record<string, Record<string, UnitConfig>> | null
   items: Record<string, ItemDefinition> | null
   fishing: FishingConfig | null
+  slot: SlotConfig | null
   reincarnation: ReincarnationConfig | null
   loaded: boolean
   loadBootstrap: () => Promise<void>
@@ -124,6 +140,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   units: null,
   items: null,
   fishing: null,
+  slot: null,
   reincarnation: null,
   loaded: false,
 
@@ -137,6 +154,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         units: data.units,
         items: data.items,
         fishing: data.fishing,
+        slot: data.slot,
         reincarnation: data.reincarnation,
         loaded: true,
       })

@@ -33,6 +33,7 @@ type Config struct {
 	ItemsPath            string
 	DropPoolsPath        string
 	FishingPath          string
+	SlotPath             string
 	ReincarnationPath    string
 	HelpDocsDir          string
 	JWTSecret            string
@@ -66,6 +67,7 @@ func Load() Config {
 		ItemsPath:            getEnv("HERO3_ITEMS_PATH", "config/items.json"),
 		DropPoolsPath:        getEnv("HERO3_DROP_POOLS_PATH", "config/drop_pools.json"),
 		FishingPath:          getEnv("HERO3_FISHING_PATH", "config/fishing.json"),
+		SlotPath:             getEnv("HERO3_SLOT_PATH", "config/slot.json"),
 		ReincarnationPath:    getEnv("HERO3_REINCARNATION_PATH", "config/reincarnation.json"),
 		HelpDocsDir:          getEnv("HERO3_HELP_DOCS_DIR", "helpdocs/content"),
 		JWTSecret:            getEnv("HERO3_JWT_SECRET", ""),

@@ -1,3 +1,4 @@
+// 本文件实现万象幻境小游戏记录、后端结算和库存兑换。
 package game
 
 import (
@@ -8,12 +9,12 @@ import (
 	"time"
 )
 
-// MiniGameRecord 小游戏记录（钓鱼/赌博等）
+// MiniGameRecord 小游戏记录（钓鱼/赌博/老虎机等）。
 type MiniGameRecord struct {
 	ID              string `json:"id"`
 	PlayerID        string `json:"playerId"`
-	GameType        string `json:"gameType"`            // "fishing" | "gambling"
-	ResultName      string `json:"resultName"`          // "金龙鱼" / "猜大 赢 ×2"
+	GameType        string `json:"gameType"`            // "fishing" | "gambling" | "slot"
+	ResultName      string `json:"resultName"`          // "金龙鱼" / "猜大 赢 ×2" / "赤金符三连 ×30"
 	Rarity          string `json:"rarity"`              // "common" | "rare" | "epic" | "legendary"
 	RewardUnit      string `json:"rewardUnit"`          // 赢得的兵种名称
 	RewardAmount    int    `json:"rewardAmount"`        // 原始赢得数量
@@ -74,6 +75,22 @@ type GamblingRoundResult struct {
 	RewardRarity string         `json:"rewardRarity"`
 }
 
+type SlotRoundResult struct {
+	Record       MiniGameRecord `json:"record"`
+	Army         []ArmyUnit     `json:"army,omitempty"`
+	ServerTime   string         `json:"serverTime"`
+	Won          bool           `json:"won"`
+	Symbols      []string       `json:"symbols"`
+	SymbolNames  []string       `json:"symbolNames"`
+	Multiplier   int            `json:"multiplier"`
+	BetUnitID    string         `json:"betUnitId"`
+	BetUnit      string         `json:"betUnit"`
+	BetAmount    int            `json:"betAmount"`
+	WinAmount    int            `json:"winAmount"`
+	RewardRarity string         `json:"rewardRarity"`
+	MaxBet       int            `json:"maxBet"`
+}
+
 type FishingBaitUseResult struct {
 	BaitID         string   `json:"baitId"`
 	CityGold       *FlexInt `json:"cityGold,omitempty"`
@@ -89,7 +106,7 @@ func fishingBaitCost(baitID string) (int, bool) {
 // miniGameRecordHasRedeemableReward 判断小游戏记录是否允许沉淀为可兑换库存。
 func miniGameRecordHasRedeemableReward(gameType string) bool {
 	switch strings.TrimSpace(gameType) {
-	case "fishing", "gambling":
+	case "fishing", "gambling", "slot":
 		return true
 	default:
 		return false
@@ -100,6 +117,8 @@ var gamblingExactOdds = map[int]int{
 	3: 150, 4: 60, 5: 30, 6: 18, 7: 12, 8: 8, 9: 6, 10: 6,
 	11: 6, 12: 6, 13: 8, 14: 12, 15: 18, 16: 30, 17: 60, 18: 150,
 }
+
+var slotSymbolRoller = rollSlotSymbols
 
 // ResolveGamblingRound 由后端完成赌场一局结算：扣押注、掷骰、写记录并返回最新军队。
 func (s *Service) ResolveGamblingRound(playerID string, betUnitType string, betAmount int, betID string, exactNumber int) (GamblingRoundResult, error) {
@@ -193,6 +212,166 @@ func (s *Service) ResolveGamblingRound(playerID string, betUnitType string, betA
 	return result, nil
 }
 
+// ResolveSlotRound 由后端完成天机轮转一局结算：扣押注、抽图案、写记录并返回最新军队。
+func (s *Service) ResolveSlotRound(playerID string, betUnitType string, betAmount int) (SlotRoundResult, error) {
+	playerID = strings.TrimSpace(playerID)
+	betUnitType = strings.TrimSpace(betUnitType)
+	if playerID == "" {
+		return SlotRoundResult{}, ErrPlayerNotFound
+	}
+	if betUnitType == "" {
+		return SlotRoundResult{}, ErrUnitNotFound
+	}
+
+	cfg := GetSlotConfig()
+	if betAmount < cfg.MinBet {
+		return SlotRoundResult{}, ErrMiniGameBetTooLow
+	}
+
+	unlock, ok := s.tryPlayerLockIfIdle(playerID)
+	if !ok {
+		return SlotRoundResult{}, ErrOperationTooFast
+	}
+	defer unlock()
+
+	now := time.Now()
+	nowText := now.UTC().Format(resourceDateLayout)
+	var result SlotRoundResult
+	state, _, err := s.repo.UpdateMiniGamePlayerState(playerID, now, func(state *GameState, records []MiniGameRecord) ([]MiniGameRecord, error) {
+		unitCfg, exists := GetUnitConfig(state.Player.Faction, betUnitType)
+		if !exists {
+			return nil, ErrUnitNotFound
+		}
+		if isSlotBetUnitBlocked(unitCfg) {
+			return nil, ErrNonCombatUnit
+		}
+
+		currentAmount := armyAmountByUnitType(state.Army, betUnitType)
+		if currentAmount <= 0 {
+			return nil, ErrInsufficientArmy
+		}
+		maxBet := slotMaxBet(cfg, currentAmount)
+		if maxBet < cfg.MinBet || betAmount > maxBet {
+			return nil, ErrMiniGameBetTooHigh
+		}
+		if _, err := validateAndConsumeArmy(state, map[string]int{betUnitType: betAmount}); err != nil {
+			return nil, err
+		}
+
+		symbols, err := slotSymbolRoller(cfg)
+		if err != nil {
+			return nil, err
+		}
+		won := symbols[0].ID == symbols[1].ID && symbols[1].ID == symbols[2].ID
+		multiplier := 0
+		winAmount := 0
+		rewardUnit := ""
+		rarity := "common"
+		resultName := "未中奖"
+		if won {
+			multiplier = symbols[0].Multiplier
+			winAmount = betAmount * multiplier
+			rewardUnit = unitCfg.Name
+			rarity = symbols[0].Rarity
+			resultName = symbols[0].Name + "三连 ×" + strconv.Itoa(multiplier)
+		}
+		record := MiniGameRecord{
+			ID:              "mg_" + randomID(10),
+			PlayerID:        playerID,
+			GameType:        "slot",
+			ResultName:      resultName,
+			Rarity:          rarity,
+			RewardUnit:      rewardUnit,
+			RewardAmount:    winAmount,
+			RemainingAmount: winAmount,
+			BetUnit:         unitCfg.Name,
+			BetAmount:       betAmount,
+			CreatedAt:       nowText,
+		}
+		if !won {
+			record.RemainingAmount = 0
+		}
+		state.ServerTime = nowText
+		records = append([]MiniGameRecord{record}, records...)
+		result = SlotRoundResult{
+			Record:       record,
+			ServerTime:   nowText,
+			Won:          won,
+			Symbols:      []string{symbols[0].ID, symbols[1].ID, symbols[2].ID},
+			SymbolNames:  []string{symbols[0].Name, symbols[1].Name, symbols[2].Name},
+			Multiplier:   multiplier,
+			BetUnitID:    betUnitType,
+			BetUnit:      unitCfg.Name,
+			BetAmount:    betAmount,
+			WinAmount:    winAmount,
+			RewardRarity: rarity,
+			MaxBet:       maxBet,
+		}
+		return records, nil
+	})
+	if err != nil {
+		return SlotRoundResult{}, err
+	}
+	result.Army = state.Army
+	result.ServerTime = state.ServerTime
+	return result, nil
+}
+
+// isSlotBetUnitBlocked 判断天机轮转是否禁止该兵种押注。
+func isSlotBetUnitBlocked(unitCfg UnitConfig) bool {
+	if unitCfg.Role == "scout" || unitCfg.Role == "transport" {
+		return true
+	}
+	return isNonCombatUnit(unitCfg)
+}
+
+// armyAmountByUnitType 获取玩家当前某兵种数量。
+func armyAmountByUnitType(army []ArmyUnit, unitType string) int {
+	for _, unit := range army {
+		if unit.UnitType == unitType {
+			return unit.Amount
+		}
+	}
+	return 0
+}
+
+// slotMaxBet 按固定上限和兵力比例上限计算单局最大押注。
+func slotMaxBet(cfg SlotConfig, currentAmount int) int {
+	ratioLimit := int(float64(currentAmount) * cfg.MaxBetRatio)
+	if ratioLimit < cfg.MaxBet {
+		return ratioLimit
+	}
+	return cfg.MaxBet
+}
+
+// rollSlotSymbols 使用服务器加密随机数按权重抽取 3 个转轮图案。
+func rollSlotSymbols(cfg SlotConfig) ([3]SlotSymbol, error) {
+	var result [3]SlotSymbol
+	totalWeight := 0
+	for _, symbol := range cfg.Symbols {
+		totalWeight += symbol.Weight
+	}
+	if totalWeight <= 0 {
+		return result, ErrInvalidMiniGame
+	}
+	for i := range result {
+		n, err := cryptorand.Int(cryptorand.Reader, big.NewInt(int64(totalWeight)))
+		if err != nil {
+			return result, err
+		}
+		pick := int(n.Int64()) + 1
+		running := 0
+		for _, symbol := range cfg.Symbols {
+			running += symbol.Weight
+			if pick <= running {
+				result[i] = symbol
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
 // rollGamblingDice 生成三颗 1-6 的服务器骰子。
 func rollGamblingDice() ([3]int, error) {
 	var dice [3]int
@@ -257,8 +436,12 @@ func gamblingResultName(betLabel string, won bool, multiplier int) string {
 // SaveMiniGameRecord 保存一条小游戏记录
 func (s *Service) SaveMiniGameRecord(playerID string, gameType string, resultName string, rarity string, rewardUnit string, rewardAmount int, betUnit string, betAmount int) (MiniGameRecord, error) {
 	playerID = strings.TrimSpace(playerID)
+	gameType = strings.TrimSpace(gameType)
 	if playerID == "" {
 		return MiniGameRecord{}, ErrPlayerNotFound
+	}
+	if gameType == "slot" {
+		return MiniGameRecord{}, ErrInvalidMiniGame
 	}
 
 	now := time.Now()

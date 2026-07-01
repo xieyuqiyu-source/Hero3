@@ -16,7 +16,7 @@ func (r *MySQLRepository) SaveMiniGameRecord(record game.MiniGameRecord) error {
 	if createdAt.IsZero() {
 		createdAt = time.Now()
 	}
-	if (record.GameType == "fishing" || record.GameType == "gambling") && record.RemainingAmount == 0 && record.RewardAmount > 0 {
+	if (record.GameType == "fishing" || record.GameType == "gambling" || record.GameType == "slot") && record.RemainingAmount == 0 && record.RewardAmount > 0 {
 		record.RemainingAmount = record.RewardAmount
 	}
 

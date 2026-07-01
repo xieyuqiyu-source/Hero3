@@ -2234,7 +2234,8 @@ paths:
           enum:
           - fishing
           - gambling
-        description: 按小游戏类型筛选；钓鱼库存通常传 fishing。
+          - slot
+        description: 按小游戏类型筛选；天机轮转库存传 slot。
       - name: limit
         in: query
         required: false
@@ -2282,6 +2283,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FishingBaitUseResult'
+  /api/v1/minigame/slot/resolve:
+    post:
+      tags:
+      - MiniGame
+      summary: 结算一局天机轮转
+      description: 后端校验押注兵种和数量，扣除押注兵力，服务器抽取三轴图案并写入 slot 小游戏记录。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - playerId
+              - betUnitType
+              - betAmount
+              properties:
+                playerId:
+                  type: string
+                betUnitType:
+                  type: string
+                  description: 押注兵种 ID。
+                  example: qiQiYing
+                betAmount:
+                  type: integer
+                  minimum: 1000
+                  example: 10000
+      responses:
+        '200':
+          description: 结算成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlotRoundResult'
+        '404':
+          description: 存档不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: 押注兵种不存在、押注不足、超过上限或兵种不能押注
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: 同一存档操作过快
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/minigame/redeem:
     post:
       tags:
@@ -2329,6 +2382,7 @@ paths:
                   enum:
                   - fishing
                   - gambling
+                  - slot
                   default: fishing
       responses:
         '200':
@@ -2362,6 +2416,7 @@ paths:
           enum:
           - fishing
           - gambling
+          - slot
         description: 按小游戏类型筛选；不传则返回全部小游戏记录。
       - name: limit
         in: query
@@ -3237,6 +3292,8 @@ components:
           description: 道具配置。
         fishing:
           $ref: '#/components/schemas/FishingConfig'
+        slot:
+          $ref: '#/components/schemas/SlotConfig'
         reincarnation:
           $ref: '#/components/schemas/ReincarnationConfig'
         message:
@@ -4995,6 +5052,7 @@ components:
           enum:
           - fishing
           - gambling
+          - slot
         resultName:
           type: string
           example: 金龙鱼
@@ -5068,6 +5126,7 @@ components:
           enum:
           - fishing
           - gambling
+          - slot
         resultName:
           type: string
         rarity:
@@ -5172,6 +5231,124 @@ components:
             type: integer
         skippedRecords:
           type: integer
+    SlotRoundResult:
+      type: object
+      required:
+      - record
+      - serverTime
+      - won
+      - symbols
+      - symbolNames
+      - multiplier
+      - betUnitId
+      - betUnit
+      - betAmount
+      - winAmount
+      - maxBet
+      properties:
+        record:
+          $ref: '#/components/schemas/MiniGameRecord'
+        army:
+          type: array
+          description: 本局扣除押注后的最新军队。
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        serverTime:
+          type: string
+          format: date-time
+        won:
+          type: boolean
+        symbols:
+          type: array
+          items:
+            type: string
+          example:
+          - gold_charm
+          - gold_charm
+          - gold_charm
+        symbolNames:
+          type: array
+          items:
+            type: string
+          example:
+          - 赤金符
+          - 赤金符
+          - 赤金符
+        multiplier:
+          type: integer
+          example: 30
+        betUnitId:
+          type: string
+          example: qiQiYing
+        betUnit:
+          type: string
+          example: 骁骑营
+        betAmount:
+          type: integer
+          example: 10000
+        winAmount:
+          type: integer
+          example: 300000
+        rewardRarity:
+          type: string
+          enum:
+          - common
+          - rare
+          - epic
+          - legendary
+        maxBet:
+          type: integer
+          description: 按当前兵力和配置计算出的本局最大押注。
+    SlotConfig:
+      type: object
+      required:
+      - minBet
+      - maxBet
+      - maxBetRatio
+      - symbols
+      properties:
+        minBet:
+          type: integer
+          example: 1000
+        maxBet:
+          type: integer
+          example: 1000000
+        maxBetRatio:
+          type: number
+          format: double
+          example: 0.05
+        symbols:
+          type: array
+          items:
+            $ref: '#/components/schemas/SlotSymbolConfig'
+    SlotSymbolConfig:
+      type: object
+      required:
+      - id
+      - name
+      - rarity
+      - weight
+      - multiplier
+      properties:
+        id:
+          type: string
+          example: gold_charm
+        name:
+          type: string
+          example: 赤金符
+        rarity:
+          type: string
+          enum:
+          - common
+          - rare
+          - epic
+          - legendary
+        weight:
+          type: integer
+          example: 18
+        multiplier:
+          type: integer
+          example: 30
     FishingConfig:
       type: object
       required:

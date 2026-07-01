@@ -1,3 +1,4 @@
+// 本文件实现万象幻境小游戏相关 HTTP 接口处理器。
 package api
 
 import (
@@ -25,8 +26,8 @@ func (h *Handlers) SaveMiniGameRecord(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "playerId, gameType, and resultName are required")
 		return
 	}
-	if payload.GameType == "gambling" {
-		writeError(w, http.StatusUnprocessableEntity, "赌场记录必须通过结算接口生成")
+	if payload.GameType == "gambling" || payload.GameType == "slot" {
+		writeError(w, http.StatusUnprocessableEntity, "该小游戏记录必须通过结算接口生成")
 		return
 	}
 	if !h.requireOwnership(w, r, payload.PlayerID) {
@@ -120,6 +121,51 @@ func (h *Handlers) ResolveGamblingRound(w http.ResponseWriter, r *http.Request) 
 		case errors.Is(err, game.ErrNonCombatUnit):
 			status = http.StatusUnprocessableEntity
 			message = "该兵种不能押注"
+		case errors.Is(err, game.ErrInvalidAmount), errors.Is(err, game.ErrInvalidMiniGame):
+			status = http.StatusUnprocessableEntity
+		}
+		writeError(w, status, message)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handlers) ResolveSlotRound(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID    string `json:"playerId"`
+		BetUnitType string `json:"betUnitType"`
+		BetAmount   int    `json:"betAmount"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+	result, err := h.gameService.ResolveSlotRound(payload.PlayerID, payload.BetUnitType, payload.BetAmount)
+	if err != nil {
+		status := http.StatusBadRequest
+		message := err.Error()
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrOperationTooFast):
+			status = http.StatusTooManyRequests
+		case errors.Is(err, game.ErrInsufficientArmy):
+			status = http.StatusUnprocessableEntity
+			message = "押注兵力不足"
+		case errors.Is(err, game.ErrUnitNotFound):
+			status = http.StatusUnprocessableEntity
+			message = "押注兵种不存在"
+		case errors.Is(err, game.ErrNonCombatUnit):
+			status = http.StatusUnprocessableEntity
+			message = "该兵种不能押注"
+		case errors.Is(err, game.ErrMiniGameBetTooLow):
+			status = http.StatusUnprocessableEntity
+			message = "押注数量太低"
+		case errors.Is(err, game.ErrMiniGameBetTooHigh):
+			status = http.StatusUnprocessableEntity
+			message = "押注数量超过上限"
 		case errors.Is(err, game.ErrInvalidAmount), errors.Is(err, game.ErrInvalidMiniGame):
 			status = http.StatusUnprocessableEntity
 		}

@@ -1,8 +1,8 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, PlayerDeletionResult, NpcCity, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, GamblingRoundResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult } from '@/types/game'
-import type { BalanceConfig, FactionConfig, FishingConfig, UnitConfig } from '@/store/configStore'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, PlayerDeletionResult, NpcCity, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, GamblingRoundResult, SlotRoundResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult } from '@/types/game'
+import type { BalanceConfig, FactionConfig, FishingConfig, SlotConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
   id: string
@@ -82,6 +82,7 @@ export const gameApi = {
       items: Record<string, ItemDefinition>
       reincarnation: ReincarnationConfig
       fishing: FishingConfig
+      slot: SlotConfig
       message: string
     }>('/game/bootstrap')
   },
@@ -611,6 +612,11 @@ export const gameApi = {
   /** 后端结算一局赌场并扣除押注兵力 */
   resolveGamblingRound(playerId: string, betUnitType: string, betAmount: number, betId: string, exactNumber: number) {
     return api.post<GamblingRoundResult>('/minigame/gambling/resolve', { playerId, betUnitType, betAmount, betId, exactNumber })
+  },
+
+  /** 后端结算一局天机轮转并扣除押注兵力 */
+  resolveSlotRound(playerId: string, betUnitType: string, betAmount: number) {
+    return api.post<SlotRoundResult>('/minigame/slot/resolve', { playerId, betUnitType, betAmount })
   },
 
   /** 兑换小游戏库存奖励 */

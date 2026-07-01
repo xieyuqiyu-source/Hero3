@@ -565,6 +565,22 @@ export interface GamblingRoundResult {
   rewardRarity: string
 }
 
+export interface SlotRoundResult {
+  record: MiniGameRecord
+  army?: ArmyUnit[]
+  serverTime: string
+  won: boolean
+  symbols: string[]
+  symbolNames: string[]
+  multiplier: number
+  betUnitId: string
+  betUnit: string
+  betAmount: number
+  winAmount: number
+  rewardRarity: string
+  maxBet: number
+}
+
 export interface MiniGameRedeemAllResult {
   army?: ArmyUnit[]
   serverTime: string

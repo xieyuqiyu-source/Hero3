@@ -73,7 +73,7 @@ go/
 
 - `gameplay_module_registry.go`：玩法模块边界声明，当前登记 `mail`、`minigame`、`reinforcement`、`pvp` 和 `reincarnation_abyss`。
 - `service_mail.go`：信函列表、阅读、发送、删除和附件领取。
-- `service_minigame.go`：万象幻境记录、鱼饵消耗、奖励兑换和兑换事件。
+- `service_minigame.go`：万象幻境记录、鱼饵消耗、军营豪赌结算、天机轮转结算、奖励兑换和兑换事件。
 - `service_reinforcement.go`：增援派出、召回、遣返、到达、返程和战斗损耗接入。
 - `service_reincarnation.go`：轮回绝境开启、18 波攻防结算、金币重置当前波随机加成、真实战损、累计奖励和副本战报接入。
 
@@ -87,6 +87,7 @@ Effect Pipeline 当前集中在：
 - `building_lifecycle.go`：建筑变更已通过 `building_mutation` 效果执行。
 - `service_mail.go`：信函附件已通过标准 `reward` 效果发放。
 - `service_minigame.go`：万象幻境兑换已通过标准 `reward` 效果发放。
+- `slot_config.go`：天机轮转押注上下限、图案权重和倍率配置，默认读取 `config/slot.json`。
 
 后续武将特性、活动、副本如果要影响长期资产，应优先提交标准 Effect。
 

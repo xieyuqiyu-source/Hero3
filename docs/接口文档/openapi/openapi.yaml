@@ -190,6 +190,8 @@ paths:
     $ref: ./paths/minigame.yaml#/~1api~1v1~1minigame~1records
   /api/v1/minigame/fishing/use-bait:
     $ref: ./paths/minigame.yaml#/~1api~1v1~1minigame~1fishing~1use-bait
+  /api/v1/minigame/slot/resolve:
+    $ref: ./paths/minigame.yaml#/~1api~1v1~1minigame~1slot~1resolve
   /api/v1/minigame/redeem:
     $ref: ./paths/minigame.yaml#/~1api~1v1~1minigame~1redeem
   /api/v1/minigame/redeem-all:
@@ -384,6 +386,12 @@ components:
       $ref: ./schemas/minigame.yaml#/MiniGameRedeemResult
     MiniGameRedeemAllResult:
       $ref: ./schemas/minigame.yaml#/MiniGameRedeemAllResult
+    SlotRoundResult:
+      $ref: ./schemas/minigame.yaml#/SlotRoundResult
+    SlotConfig:
+      $ref: ./schemas/minigame.yaml#/SlotConfig
+    SlotSymbolConfig:
+      $ref: ./schemas/minigame.yaml#/SlotSymbolConfig
     FishingConfig:
       $ref: ./schemas/minigame.yaml#/FishingConfig
     FishingRarityConfig:

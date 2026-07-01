@@ -1,5 +1,6 @@
+// 本文件提供 GM 后台万象幻境记录查询面板。
 import { useState } from 'react'
-import { Gamepad2, Fish, Dice5 } from 'lucide-react'
+import { Gamepad2, Fish, Dice5, RotateCw } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import PlayerSelector from './PlayerSelector'
 
@@ -12,6 +13,8 @@ interface MiniGameRecord {
   rewardUnit: string
   rewardAmount: number
   remainingAmount: number
+  betUnit?: string
+  betAmount?: number
   createdAt: string
 }
 
@@ -64,6 +67,7 @@ export default function MiniGameRecordsPanel() {
 
   const fishingRecords = summary?.records?.filter(r => r.gameType === 'fishing') ?? []
   const gamblingRecords = summary?.records?.filter(r => r.gameType === 'gambling') ?? []
+  const slotRecords = summary?.records?.filter(r => r.gameType === 'slot') ?? []
 
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-panel)] p-4">
@@ -187,6 +191,45 @@ export default function MiniGameRecordsPanel() {
                         <span className="text-[10px] text-green-600 font-medium">{record.rewardUnit} ×{record.rewardAmount.toLocaleString()}</span>
                       ) : (
                         <span className="text-[10px] text-red-500">输</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 天机轮转记录 */}
+          {slotRecords.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <RotateCw size={12} className="text-violet-500" />
+                <h3 className="text-xs font-semibold text-[var(--color-text-primary)]">天机轮转记录 ({slotRecords.length})</h3>
+              </div>
+              <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                {slotRecords.map(record => (
+                  <div key={record.id} className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
+                    <div className="min-w-0 flex items-center gap-2">
+                      <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded ${RARITY_STYLES[record.rarity] ?? ''}`}>
+                        {RARITY_LABELS[record.rarity] ?? record.rarity}
+                      </span>
+                      <div className="min-w-0">
+                        <span className="block truncate text-xs text-[var(--color-text-primary)]">{record.resultName}</span>
+                        {record.betUnit && record.betAmount ? (
+                          <span className="block truncate text-[9px] text-[var(--color-text-muted)]">
+                            押 {record.betUnit} ×{record.betAmount.toLocaleString()}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {record.rewardAmount > 0 ? (
+                        <>
+                          <span className="block text-[10px] text-green-600 font-medium">{record.rewardUnit} ×{record.rewardAmount.toLocaleString()}</span>
+                          <span className="block text-[9px] text-amber-600">剩 {record.remainingAmount.toLocaleString()}</span>
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-red-500">未中奖</span>
                       )}
                     </div>
                   </div>

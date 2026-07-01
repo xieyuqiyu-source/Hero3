@@ -1,10 +1,11 @@
 // 本文件实现万象幻境小游戏入口和各小游戏视图切换。
 import { useState, type FC } from 'react'
-import { Fish, Dice5, ArrowLeft } from 'lucide-react'
+import { Fish, Dice5, ArrowLeft, RotateCw } from 'lucide-react'
 import FishingGame from './minigames/FishingGame'
 import GamblingGame from './minigames/GamblingGame'
+import SlotMachineGame from './minigames/SlotMachineGame'
 
-type MiniGameView = 'list' | 'fishing' | 'gambling'
+type MiniGameView = 'list' | 'fishing' | 'gambling' | 'slot'
 
 const MiniGamesTab: FC = () => {
   const [view, setView] = useState<MiniGameView>('list')
@@ -41,6 +42,22 @@ const MiniGamesTab: FC = () => {
     )
   }
 
+  if (view === 'slot') {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => setView('list')}
+          className="flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] mb-4 cursor-pointer transition-colors"
+        >
+          <ArrowLeft size={14} />
+          返回万象幻境
+        </button>
+        <SlotMachineGame />
+      </div>
+    )
+  }
+
   return (
     <div>
       <div className="mb-6">
@@ -48,7 +65,7 @@ const MiniGamesTab: FC = () => {
         <p className="text-sm text-[var(--color-text-muted)] mt-1">在这里体验各种趣味小游戏，赢取丰厚奖励</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* 钓鱼 */}
         <button
           type="button"
@@ -88,6 +105,29 @@ const MiniGamesTab: FC = () => {
             </p>
             <div className="mt-3 flex flex-wrap gap-1.5">
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 font-medium">押注兵力</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 font-medium">可兑换兵种</span>
+            </div>
+          </div>
+        </button>
+
+        {/* 天机轮转 */}
+        <button
+          type="button"
+          onClick={() => setView('slot')}
+          className="group relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-left cursor-pointer transition-all duration-200 hover:border-[var(--color-accent)]/40 hover:shadow-[0_4px_20px_rgba(15,23,42,0.08)]"
+        >
+          <div className="absolute top-0 right-0 w-24 h-24 bg-violet-500/5 rounded-full -translate-y-8 translate-x-8 group-hover:scale-150 transition-transform duration-300" />
+          <div className="relative">
+            <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center mb-3">
+              <RotateCw size={20} className="text-violet-500" />
+            </div>
+            <h3 className="text-sm font-bold text-[var(--color-text-primary)] mb-1">天机轮转</h3>
+            <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
+              投入兵力驱动天机轮盘，三符同现即可获得兵种库存
+            </p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 font-medium">押注兵力</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 font-medium">后端结算</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 font-medium">可兑换兵种</span>
             </div>
           </div>

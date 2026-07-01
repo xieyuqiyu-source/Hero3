@@ -227,6 +227,7 @@ func registerMiniGameRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("GET /api/v1/minigame/records", handlers.ListMiniGameRecords)
 	mux.HandleFunc("POST /api/v1/minigame/fishing/use-bait", handlers.UseFishingBait)
 	mux.HandleFunc("POST /api/v1/minigame/gambling/resolve", handlers.ResolveGamblingRound)
+	mux.HandleFunc("POST /api/v1/minigame/slot/resolve", handlers.ResolveSlotRound)
 	mux.HandleFunc("POST /api/v1/minigame/redeem", handlers.RedeemMiniGameReward)
 	mux.HandleFunc("POST /api/v1/minigame/redeem-all", handlers.RedeemAllMiniGameRewards)
 }
