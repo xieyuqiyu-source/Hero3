@@ -96,6 +96,11 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
   const drops = report.drops ?? report.detail?.rewards?.drops ?? []
   const mergedDrops = mergeBattleReportDrops(drops)
   const sweepDefenders = readSweepDefenders(report)
+  const isSweepReport = report.battleType === 'sweep' || sweepDefenders.length > 0
+  const sweepExtra = report.detail?.extra?.sweep
+  const sweepLossTotal = sweepDefenders.reduce((sum, defender) => {
+    return sum + (defender.units ?? []).reduce((inner, unit) => inner + Math.max(0, unit.lost ?? 0), 0)
+  }, 0)
 
   return (
     <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
@@ -107,7 +112,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
 
       {/* Modal */}
       <div className={`
-        relative w-full max-w-sm rounded-2xl overflow-hidden
+        relative w-full max-w-sm max-h-[calc(100vh-2rem)] rounded-2xl overflow-hidden flex flex-col
         bg-[var(--color-surface)] border border-[var(--color-border)]
         shadow-[0_24px_60px_rgba(15,23,42,0.3)]
         transition-all duration-200
@@ -133,13 +138,32 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
         </div>
 
         {/* Body */}
-        <div className="px-4 py-3 space-y-3">
+        <div className="px-4 py-3 space-y-3 overflow-y-auto">
           {/* Player VS NPC */}
           <div className="flex items-center justify-center gap-3 px-3 py-2 rounded-xl bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
             <span className="text-sm font-bold text-[var(--color-text-primary)]">{nickname}</span>
             <span className="text-xs font-bold text-[var(--color-text-muted)]">VS</span>
             <span className="text-sm font-bold text-[var(--color-text-primary)]">{report.targetName}</span>
           </div>
+
+          {isSweepReport && (
+            <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold text-emerald-600">扫荡汇总</span>
+                <span className="text-[10px] font-bold text-emerald-600">
+                  成功 {(sweepExtra?.success ?? sweepDefenders.length).toLocaleString()} / 请求 {(sweepExtra?.requested ?? sweepDefenders.length).toLocaleString()}
+                </span>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-1.5">
+                <SummaryPill label="失败" value={(sweepExtra?.failed ?? 0).toLocaleString()} />
+                <SummaryPill label="击溃" value={sweepLossTotal.toLocaleString()} />
+                <SummaryPill label="状态" value={sweepExtra?.stopped ? '中止' : '完成'} />
+              </div>
+              <p className="mt-2 text-[10px] leading-relaxed text-[var(--color-text-muted)]">
+                这里只保留本次扫荡结果摘要，逐城战损、守军明细和完整过程请查看战报详情。
+              </p>
+            </div>
+          )}
 
           {generalExpGained > 0 && (
             <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/25">
@@ -187,7 +211,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
             </div>
           )}
 
-          {sweepDefenders.length > 0 && (
+          {!isSweepReport && sweepDefenders.length > 0 && (
             <div>
               <h3 className="text-[11px] font-semibold text-[var(--color-text-primary)] mb-1.5">防守方战损</h3>
               <div className="space-y-1.5">
@@ -270,7 +294,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
           )}
 
           {/* 触发的特性 */}
-          {report.traitTriggered && report.traitTriggered.length > 0 && (
+          {!isSweepReport && report.traitTriggered && report.traitTriggered.length > 0 && (
             <div>
               <h3 className="text-[11px] font-semibold text-[var(--color-text-primary)] mb-1.5">将领特性触发</h3>
               <div className="space-y-1.5">
@@ -303,7 +327,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
           )}
 
           {/* 美人计：俘虏到军队 */}
-          {report.capturedUnits && Object.keys(report.capturedUnits).length > 0 && (
+          {!isSweepReport && report.capturedUnits && Object.keys(report.capturedUnits).length > 0 && (
             <div>
               <h3 className="text-[11px] font-semibold text-pink-500 mb-1.5">🌸 美人计·俘虏归队</h3>
               <div className="flex flex-wrap gap-1.5">
@@ -317,7 +341,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
           )}
 
           {/* 美人计：俘虏到驻防 */}
-          {report.capturedToGarrison && Object.keys(report.capturedToGarrison).length > 0 && (
+          {!isSweepReport && report.capturedToGarrison && Object.keys(report.capturedToGarrison).length > 0 && (
             <div>
               <h3 className="text-[11px] font-semibold text-pink-500 mb-1.5">🌸 美人计·俘虏驻防</h3>
               <div className="flex flex-wrap gap-1.5">
@@ -331,7 +355,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
           )}
 
           {/* 仁德：复活 */}
-          {report.revivedUnits && Object.keys(report.revivedUnits).length > 0 && (
+          {!isSweepReport && report.revivedUnits && Object.keys(report.revivedUnits).length > 0 && (
             <div>
               <h3 className="text-[11px] font-semibold text-emerald-500 mb-1.5">🕊️ 仁德·复活归队</h3>
               <div className="flex flex-wrap gap-1.5">
@@ -383,5 +407,13 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
     </div>
   )
 }
+
+// SummaryPill 渲染扫荡摘要中的紧凑指标。
+const SummaryPill: FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="rounded-lg border border-emerald-500/20 bg-white/60 px-2 py-1 text-center dark:bg-emerald-500/10">
+    <div className="text-[9px] text-[var(--color-text-muted)]">{label}</div>
+    <div className="mt-0.5 truncate text-[10px] font-bold text-[var(--color-text-primary)]">{value}</div>
+  </div>
+)
 
 export default BattleResultModal
