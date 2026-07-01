@@ -202,3 +202,42 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/slot-config:
+  get:
+    tags:
+    - Admin
+    summary: GM 读取天机轮转配置
+    description: 读取每线押注、赔付线、图案权重、倍率、免费旋转和宝匣倍率配置。Web 端也会通过 game/bootstrap 获取同一份配置。
+    operationId: adminGetSlotConfig
+    responses:
+      '200':
+        description: 当前天机轮转配置
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SlotConfig'
+  put:
+    tags:
+    - Admin
+    summary: GM 保存天机轮转配置
+    description: 保存后立即更新后端内存配置，后续新结算的天机轮转局会使用新权重和倍率。
+    operationId: adminUpdateSlotConfig
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SlotConfig'
+    responses:
+      '200':
+        description: 保存后的天机轮转配置
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SlotConfig'
+      '400':
+        description: 配置格式或内容不合法
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

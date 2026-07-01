@@ -146,3 +146,34 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ReinforcementResponse'
+/api/v1/reinforcements/{reinforcementId}/accelerate:
+  post:
+    tags:
+    - Military
+    summary: 加速援军
+    operationId: accelerateReinforcement
+    parameters:
+    - name: reinforcementId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReinforcementPlayerRequest'
+    responses:
+      '200':
+        description: 援军行军时间已缩短并扣除城金
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReinforcementActionResponse'
+      '409':
+        description: 援军不可加速、加速次数已满或城金不足
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

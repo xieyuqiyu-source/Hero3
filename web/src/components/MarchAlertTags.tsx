@@ -1,5 +1,5 @@
 // 本组件在左侧菜单展示玩家当前相关的行军倒计时提示。
-import { RotateCcw, Zap } from 'lucide-react'
+import { RotateCcw, UserMinus, Zap } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type FC } from 'react'
 import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
@@ -20,6 +20,8 @@ interface MarchAlertItem {
   sortAt: number
   priority: number
   pvpMarch?: PvpMarch
+  reinforcement?: Reinforcement
+  reinforcementRole?: 'sent' | 'received'
 }
 
 interface MarchAlertTagsProps {
@@ -166,6 +168,60 @@ const MarchAlertTags: FC<MarchAlertTagsProps> = ({ limit = 5 }) => {
     }
   }
 
+  // handleReinforcementAccelerate 使用城金加速自己派出的增援。
+  const handleReinforcementAccelerate = async (reinforcement: Reinforcement) => {
+    if (!activePlayerId || busyMarchId) return
+    setBusyMarchId(reinforcement.reinforcementId)
+    try {
+      const result = await gameApi.accelerateReinforcement(activePlayerId, reinforcement.reinforcementId)
+      setSentReinforcements((prev) => prev.map((item) => item.reinforcementId === result.reinforcement.reinforcementId ? result.reinforcement : item))
+      useGameStore.getState().patchState({
+        ...(typeof result.cityGold === 'number' ? { cityGold: result.cityGold } : {}),
+        ...(result.serverTime ? { serverTime: result.serverTime } : {}),
+      })
+      toast.success(`援军已加速，消耗 ${result.cost ?? 0} 城金。`)
+      void loadMarches()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '援军加速失败')
+    } finally {
+      setBusyMarchId(null)
+    }
+  }
+
+  // handleReinforcementRecall 召回自己派出的行军中援军。
+  const handleReinforcementRecall = async (reinforcement: Reinforcement) => {
+    if (!activePlayerId || busyMarchId) return
+    setBusyMarchId(reinforcement.reinforcementId)
+    try {
+      const result = await gameApi.recallReinforcement(activePlayerId, reinforcement.reinforcementId)
+      setSentReinforcements((prev) => prev.map((item) => item.reinforcementId === result.reinforcement.reinforcementId ? result.reinforcement : item))
+      if (result.patch) useGameStore.getState().patchState(result.patch)
+      toast.success('援军已召回，返程完成后兵力会归队。')
+      void loadMarches()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '援军召回失败')
+    } finally {
+      setBusyMarchId(null)
+    }
+  }
+
+  // handleReinforcementExpel 遣返别人派来的行军中援军。
+  const handleReinforcementExpel = async (reinforcement: Reinforcement) => {
+    if (!activePlayerId || busyMarchId) return
+    setBusyMarchId(reinforcement.reinforcementId)
+    try {
+      const result = await gameApi.expelReinforcement(activePlayerId, reinforcement.reinforcementId)
+      setReceivedReinforcements((prev) => prev.map((item) => item.reinforcementId === result.reinforcement.reinforcementId ? result.reinforcement : item))
+      if (result.patch) useGameStore.getState().patchState(result.patch)
+      toast.success('援军已遣返。')
+      void loadMarches()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '援军遣返失败')
+    } finally {
+      setBusyMarchId(null)
+    }
+  }
+
   if (items.length === 0) return null
 
   return (
@@ -198,6 +254,39 @@ const MarchAlertTags: FC<MarchAlertTagsProps> = ({ limit = 5 }) => {
               title="召回"
             >
               <RotateCcw size={11} />
+            </button>
+          )}
+          {item.reinforcementRole === 'sent' && item.reinforcement && canAccelerateReinforcement(item.reinforcement) && (
+            <button
+              type="button"
+              onClick={() => void handleReinforcementAccelerate(item.reinforcement!)}
+              disabled={busyMarchId !== null}
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-amber-500/20 text-amber-700 transition-colors hover:bg-amber-500/35 disabled:opacity-50"
+              title="加速援军"
+            >
+              <Zap size={11} />
+            </button>
+          )}
+          {item.reinforcementRole === 'sent' && item.reinforcement && item.reinforcement.status === 'marching' && (
+            <button
+              type="button"
+              onClick={() => void handleReinforcementRecall(item.reinforcement!)}
+              disabled={busyMarchId !== null}
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-500/15 text-slate-600 transition-colors hover:bg-slate-500/25 disabled:opacity-50"
+              title="召回援军"
+            >
+              <RotateCcw size={11} />
+            </button>
+          )}
+          {item.reinforcementRole === 'received' && item.reinforcement && item.reinforcement.status === 'marching' && (
+            <button
+              type="button"
+              onClick={() => void handleReinforcementExpel(item.reinforcement!)}
+              disabled={busyMarchId !== null}
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-500/15 text-slate-600 transition-colors hover:bg-slate-500/25 disabled:opacity-50"
+              title="遣返援军"
+            >
+              <UserMinus size={11} />
             </button>
           )}
         </div>
@@ -245,11 +334,13 @@ function buildSentReinforcementItem(reinforcement: Reinforcement): MarchAlertIte
   const endsAt = reinforcement.status === 'returning' ? reinforcement.expectedReturnedAt : reinforcement.arriveAt
   return {
     id: `reinforcement:sent:${reinforcement.reinforcementId}`,
-    tag: '增援',
+    tag: reinforcement.status === 'returning' ? '返程' : '增援',
     playerName: reinforcement.toPlayerName ?? reinforcement.toPlayerId,
     endsAt,
     sortAt: toTime(endsAt),
-    priority: ALERT_PRIORITY.增援,
+    priority: reinforcement.status === 'returning' ? ALERT_PRIORITY.返程 : ALERT_PRIORITY.增援,
+    reinforcement,
+    reinforcementRole: 'sent',
   }
 }
 
@@ -263,6 +354,8 @@ function buildReceivedReinforcementItem(reinforcement: Reinforcement): MarchAler
     endsAt: reinforcement.arriveAt,
     sortAt: toTime(reinforcement.arriveAt),
     priority: ALERT_PRIORITY.增援,
+    reinforcement,
+    reinforcementRole: 'received',
   }
 }
 
@@ -318,6 +411,17 @@ function canRecallPvpMarch(march: PvpMarch, nowMs: number) {
 // canAcceleratePvpMarch 判断出征行军是否还能加速。
 function canAcceleratePvpMarch(march: PvpMarch) {
   return march.status === 'marching' && (march.acceleratedTimes ?? 0) < PVP_MAX_ACCELERATE_TIMES
+}
+
+// canAccelerateReinforcement 判断增援是否还能使用城金加速。
+function canAccelerateReinforcement(reinforcement: Reinforcement) {
+  return reinforcement.status === 'marching' && readAcceleratedTimes(reinforcement.metadata) < PVP_MAX_ACCELERATE_TIMES
+}
+
+// readAcceleratedTimes 从后端 metadata 中读取已加速次数。
+function readAcceleratedTimes(metadata?: Record<string, unknown>) {
+  const value = metadata?.acceleratedTimes
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
 export default MarchAlertTags

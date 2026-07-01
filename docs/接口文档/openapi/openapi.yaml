@@ -94,6 +94,8 @@ paths:
     $ref: ./paths/reinforcement.yaml#/~1api~1v1~1reinforcements~1{reinforcementId}~1recall
   /api/v1/reinforcements/{reinforcementId}/expel:
     $ref: ./paths/reinforcement.yaml#/~1api~1v1~1reinforcements~1{reinforcementId}~1expel
+  /api/v1/reinforcements/{reinforcementId}/accelerate:
+    $ref: ./paths/reinforcement.yaml#/~1api~1v1~1reinforcements~1{reinforcementId}~1accelerate
   /api/v1/map/npc-cities:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities
   /api/v1/map/npc-cities/refresh:
@@ -238,6 +240,8 @@ paths:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1npc-config
   /api/v1/admin/fishing-config:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1fishing-config
+  /api/v1/admin/slot-config:
+    $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1slot-config
   /api/v1/admin/dungeons/reincarnation/config:
     $ref: ./paths/dungeon.yaml#/~1api~1v1~1admin~1dungeons~1reincarnation~1config
   /api/v1/admin/dungeons/reincarnation/runs:
@@ -440,6 +444,8 @@ components:
       $ref: ./schemas/reinforcement.yaml#/Reinforcement
     ReinforcementResponse:
       $ref: ./schemas/reinforcement.yaml#/ReinforcementResponse
+    ReinforcementActionResponse:
+      $ref: ./schemas/reinforcement.yaml#/ReinforcementActionResponse
     ReinforcementListResponse:
       $ref: ./schemas/reinforcement.yaml#/ReinforcementListResponse
     NpcState:

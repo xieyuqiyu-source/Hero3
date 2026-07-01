@@ -1,6 +1,6 @@
 // 本文件实现增援与驻防队伍页面，收到列表按来源聚合展示驻防队伍。
 import { useEffect, useMemo, useState, type FC } from 'react'
-import { RotateCcw, Send, ShieldCheck, UserMinus } from 'lucide-react'
+import { RotateCcw, Send, ShieldCheck, UserMinus, Zap } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
@@ -122,6 +122,17 @@ const ReinforcementsPage: FC = () => {
     await refresh()
   }
 
+  const handleAccelerate = async (record: Reinforcement) => {
+    if (!activePlayerId) return
+    const result = await gameApi.accelerateReinforcement(activePlayerId, record.reinforcementId)
+    if (result.patch) patchState(result.patch)
+    patchState({
+      ...(typeof result.cityGold === 'number' ? { cityGold: result.cityGold } : {}),
+      ...(result.serverTime ? { serverTime: result.serverTime } : {}),
+    })
+    await refresh()
+  }
+
   const receivedDisplay = useMemo(() => aggregateGarrisonDisplayRecords(activePlayerId ?? '', received), [activePlayerId, received])
   const items = tab === 'sent' ? sent : receivedDisplay
 
@@ -166,7 +177,7 @@ const ReinforcementsPage: FC = () => {
 
         <section className="grid gap-3">
           {items.map((record) => (
-            <ReinforcementCard key={record.reinforcementId} record={record} mode={tab} onRecall={handleRecall} onExpel={handleExpel} />
+            <ReinforcementCard key={record.reinforcementId} record={record} mode={tab} onRecall={handleRecall} onExpel={handleExpel} onAccelerate={handleAccelerate} />
           ))}
           {items.length === 0 && (
             <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-12 text-center text-sm text-[var(--color-text-muted)]">
@@ -179,13 +190,20 @@ const ReinforcementsPage: FC = () => {
   )
 }
 
-const ReinforcementCard: FC<{ record: Reinforcement; mode: Tab; onRecall: (record: Reinforcement) => Promise<void>; onExpel: (record: Reinforcement) => Promise<void> }> = ({ record, mode, onRecall, onExpel }) => {
+const ReinforcementCard: FC<{
+  record: Reinforcement
+  mode: Tab
+  onRecall: (record: Reinforcement) => Promise<void>
+  onExpel: (record: Reinforcement) => Promise<void>
+  onAccelerate: (record: Reinforcement) => Promise<void>
+}> = ({ record, mode, onRecall, onExpel, onAccelerate }) => {
   const sourceType = normalizeDisplaySourceType(record.sourceType)
   const sourceTitle = SOURCE_LABELS[sourceType]
   const sourceName = sourceType === 'obtained' ? '自己' : (record.fromPlayerName || record.fromPlayerId)
   const name = mode === 'sent' ? (record.toPlayerName || record.toPlayerId) : `${sourceTitle} · ${sourceName}`
   const canRecall = mode === 'sent' && (record.status === 'marching' || record.status === 'stationed')
-  const canExpel = mode === 'received' && sourceType === 'reinforcement' && record.status === 'stationed'
+  const canAccelerate = mode === 'sent' && record.status === 'marching' && readAcceleratedTimes(record.metadata) < 2
+  const canExpel = mode === 'received' && sourceType === 'reinforcement' && (record.status === 'marching' || record.status === 'stationed')
   return (
     <article className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -199,6 +217,7 @@ const ReinforcementCard: FC<{ record: Reinforcement; mode: Tab; onRecall: (recor
         <Metric label="携带武将" value={(record.generals ?? []).map((general) => general.name || general.id).join('、') || '-'} />
       </div>
       <div className="mt-3 flex justify-end gap-2">
+        {canAccelerate && <button type="button" onClick={() => void onAccelerate(record)} className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 cursor-pointer hover:bg-amber-100"><Zap size={14} />加速</button>}
         {canRecall && <button type="button" onClick={() => void onRecall(record)} className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold cursor-pointer hover:text-[var(--color-accent)]"><RotateCcw size={14} />召回</button>}
         {canExpel && <button type="button" onClick={() => void onExpel(record)} className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold cursor-pointer hover:text-[var(--color-accent)]"><UserMinus size={14} />遣返</button>}
       </div>
@@ -264,6 +283,12 @@ function mergeTroops(a?: Record<string, number>, b?: Record<string, number>) {
     if (amount > 0) result[unitType] = (result[unitType] ?? 0) + amount
   }
   return result
+}
+
+// readAcceleratedTimes 从增援 metadata 读取已加速次数。
+function readAcceleratedTimes(metadata?: Record<string, unknown>) {
+  const value = metadata?.acceleratedTimes
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
 // laterText 返回更晚的时间文本，用于聚合卡片排序。

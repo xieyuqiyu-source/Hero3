@@ -19,6 +19,7 @@ import MiniGameRecordsPanel from '@/components/MiniGameRecordsPanel'
 import AdminTokenPanel from '@/components/AdminTokenPanel'
 import GeneralsConfigPanel from '@/components/GeneralsConfigPanel'
 import FishingConfigPanel from '@/components/FishingConfigPanel'
+import SlotConfigPanel from '@/components/SlotConfigPanel'
 import ItemsConfigPanel from '@/components/ItemsConfigPanel'
 import GoldLedgerPanel from '@/components/GoldLedgerPanel'
 import MailAdminPanel from '@/components/MailAdminPanel'
@@ -27,7 +28,7 @@ import PvpAdminPanel from '@/components/PvpAdminPanel'
 import DungeonAssetConfigPanel from '@/components/DungeonAssetConfigPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
-import { Sliders, MapPin, Swords, Flag, Shield, Users, Fish, Package } from 'lucide-react'
+import { Sliders, MapPin, Swords, Flag, Shield, Users, Fish, Package, Sparkles } from 'lucide-react'
 
 function App() {
   const [activePage, setActivePage] = useState<AdminPage>('overview')
@@ -125,6 +126,9 @@ function App() {
             </CollapsiblePanel>
             <CollapsiblePanel icon={<Fish size={16} className="text-[var(--color-accent)]" />} title="钓鱼配置">
               <FishingConfigPanel />
+            </CollapsiblePanel>
+            <CollapsiblePanel icon={<Sparkles size={16} className="text-[var(--color-accent)]" />} title="天机轮转配置">
+              <SlotConfigPanel />
             </CollapsiblePanel>
           </div>
         )

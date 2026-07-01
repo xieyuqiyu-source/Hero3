@@ -732,6 +732,7 @@ export interface Reinforcement {
   lastBattleReportId?: string
   lastBattleAt?: string
   isAnnihilated: boolean
+  metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string
 }
@@ -743,6 +744,14 @@ export interface ReinforcementListResponse {
 export interface ReinforcementResponse {
   reinforcement: Reinforcement
   patch?: GarrisonActionResult
+}
+
+export interface ReinforcementActionResponse {
+  reinforcement: Reinforcement
+  patch?: GarrisonActionResult
+  cityGold?: number
+  cost?: number
+  serverTime?: string
 }
 
 export interface DefenseReinforcementUnit {

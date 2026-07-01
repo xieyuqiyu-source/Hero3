@@ -256,8 +256,8 @@ func TestReinforcementArrivalBattleLossAndReturnIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SendReinforcement failed: %v", err)
 	}
-	if result.Reinforcement.MarchSeconds != 5346 {
-		t.Fatalf("expected speed and relay station to shorten march to 5346, got %d", result.Reinforcement.MarchSeconds)
+	if result.Reinforcement.SpeedMultiplier != 1 || result.Reinforcement.MarchSeconds < defaultReinforcementMarchSeconds-200 {
+		t.Fatalf("client speedMultiplier should be ignored, got speed %.2f seconds %d", result.Reinforcement.SpeedMultiplier, result.Reinforcement.MarchSeconds)
 	}
 	forceReinforcementDue(t, repo, result.Reinforcement.ID, true)
 	arrived, err := svc.MarkReinforcementArrived(result.Reinforcement.ID)
@@ -305,6 +305,167 @@ func TestReinforcementArrivalBattleLossAndReturnIdempotent(t *testing.T) {
 	}
 }
 
+func TestRecallReinforcementOnRoadUsesElapsedReturnSeconds(t *testing.T) {
+	svc, repo, from, to := newReinforcementTestService(t)
+	from.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	repo.players[from.Player.ID] = from
+	result, err := svc.SendReinforcement(SendReinforcementRequest{
+		FromPlayerID:   from.Player.ID,
+		TargetPlayerID: to.Player.ID,
+		Troops:         map[string]int{"weiInfantry": 40},
+	})
+	if err != nil {
+		t.Fatalf("SendReinforcement failed: %v", err)
+	}
+	mutateReinforcementForTest(t, repo, result.Reinforcement.ID, func(record *Reinforcement) {
+		now := time.Now().UTC()
+		record.SentAt = now.Add(-10 * time.Minute).Format(resourceDateLayout)
+		record.MarchSeconds = 3600
+		record.ReturnSeconds = 3600
+		record.ExpectedArriveAt = now.Add(50 * time.Minute).Format(resourceDateLayout)
+	})
+	recalled, err := svc.RecallReinforcement(from.Player.ID, result.Reinforcement.ID)
+	if err != nil {
+		t.Fatalf("RecallReinforcement failed: %v", err)
+	}
+	if recalled.Reinforcement.Status != ReinforcementStatusReturning {
+		t.Fatalf("expected returning, got %s", recalled.Reinforcement.Status)
+	}
+	if recalled.Reinforcement.ReturnSeconds < 600 || recalled.Reinforcement.ReturnSeconds > 605 {
+		t.Fatalf("expected road return around 600 seconds, got %d", recalled.Reinforcement.ReturnSeconds)
+	}
+}
+
+func TestExpelReinforcementOnRoadUsesElapsedReturnSeconds(t *testing.T) {
+	svc, repo, from, to := newReinforcementTestService(t)
+	from.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	repo.players[from.Player.ID] = from
+	result, err := svc.SendReinforcement(SendReinforcementRequest{
+		FromPlayerID:   from.Player.ID,
+		TargetPlayerID: to.Player.ID,
+		Troops:         map[string]int{"weiInfantry": 40},
+	})
+	if err != nil {
+		t.Fatalf("SendReinforcement failed: %v", err)
+	}
+	mutateReinforcementForTest(t, repo, result.Reinforcement.ID, func(record *Reinforcement) {
+		now := time.Now().UTC()
+		record.SentAt = now.Add(-7 * time.Minute).Format(resourceDateLayout)
+		record.MarchSeconds = 3600
+		record.ReturnSeconds = 3600
+		record.ExpectedArriveAt = now.Add(53 * time.Minute).Format(resourceDateLayout)
+	})
+	expelled, err := svc.ExpelReinforcement(to.Player.ID, result.Reinforcement.ID)
+	if err != nil {
+		t.Fatalf("ExpelReinforcement failed: %v", err)
+	}
+	if expelled.Reinforcement.ReturnSeconds < 420 || expelled.Reinforcement.ReturnSeconds > 425 {
+		t.Fatalf("expected road expel return around 420 seconds, got %d", expelled.Reinforcement.ReturnSeconds)
+	}
+}
+
+func TestStationedReinforcementReturnUsesActualOutboundSeconds(t *testing.T) {
+	svc, repo, from, to := newReinforcementTestService(t)
+	from.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	repo.players[from.Player.ID] = from
+	result, err := svc.SendReinforcement(SendReinforcementRequest{
+		FromPlayerID:   from.Player.ID,
+		TargetPlayerID: to.Player.ID,
+		Troops:         map[string]int{"weiInfantry": 40},
+	})
+	if err != nil {
+		t.Fatalf("SendReinforcement failed: %v", err)
+	}
+	mutateReinforcementForTest(t, repo, result.Reinforcement.ID, func(record *Reinforcement) {
+		now := time.Now().UTC()
+		record.Status = ReinforcementStatusStationed
+		record.SentAt = now.Add(-60 * time.Minute).Format(resourceDateLayout)
+		record.ArrivedAt = now.Add(-20 * time.Minute).Format(resourceDateLayout)
+		record.MarchSeconds = 3600
+		record.ReturnSeconds = 3600
+	})
+	recalled, err := svc.RecallReinforcement(from.Player.ID, result.Reinforcement.ID)
+	if err != nil {
+		t.Fatalf("RecallReinforcement failed: %v", err)
+	}
+	if recalled.Reinforcement.ReturnSeconds != 2400 {
+		t.Fatalf("expected stationed return 2400 seconds, got %d", recalled.Reinforcement.ReturnSeconds)
+	}
+}
+
+func TestAccelerateReinforcementDeductsCityGoldAndLimitsTimes(t *testing.T) {
+	svc, repo, from, to := newReinforcementTestService(t)
+	from.CityGold = 100
+	from.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	repo.players[from.Player.ID] = from
+	result, err := svc.SendReinforcement(SendReinforcementRequest{
+		FromPlayerID:   from.Player.ID,
+		TargetPlayerID: to.Player.ID,
+		Troops:         map[string]int{"weiInfantry": 40},
+	})
+	if err != nil {
+		t.Fatalf("SendReinforcement failed: %v", err)
+	}
+	mutateReinforcementForTest(t, repo, result.Reinforcement.ID, func(record *Reinforcement) {
+		now := time.Now().UTC()
+		record.SentAt = now.Format(resourceDateLayout)
+		record.MarchSeconds = 3600
+		record.ReturnSeconds = 3600
+		record.ExpectedArriveAt = now.Add(time.Hour).Format(resourceDateLayout)
+	})
+	first, err := svc.AccelerateReinforcement(from.Player.ID, result.Reinforcement.ID)
+	if err != nil {
+		t.Fatalf("AccelerateReinforcement first failed: %v", err)
+	}
+	if first.Cost != pvpAccelerateFixedCityGoldCost || first.CityGold != 90 {
+		t.Fatalf("unexpected first accelerate cost/cityGold: cost=%d cityGold=%d", first.Cost, first.CityGold)
+	}
+	if first.Reinforcement.MarchSeconds >= 3600 {
+		t.Fatalf("expected march seconds shortened, got %d", first.Reinforcement.MarchSeconds)
+	}
+	if got := reinforcementAcceleratedTimes(first.Reinforcement.Metadata); got != 1 {
+		t.Fatalf("expected acceleratedTimes 1, got %d", got)
+	}
+	second, err := svc.AccelerateReinforcement(from.Player.ID, result.Reinforcement.ID)
+	if err != nil {
+		t.Fatalf("AccelerateReinforcement second failed: %v", err)
+	}
+	if second.CityGold != 80 {
+		t.Fatalf("expected second cityGold 80, got %d", second.CityGold)
+	}
+	if _, err := svc.AccelerateReinforcement(from.Player.ID, result.Reinforcement.ID); !errors.Is(err, ErrReinforcementNotAccelerable) {
+		t.Fatalf("expected third accelerate blocked, got %v", err)
+	}
+	entries, err := svc.ListGoldLedger(GoldLedgerFilter{PlayerID: from.Player.ID, RefType: LedgerRefReinforcementAccelerate})
+	if err != nil {
+		t.Fatalf("ListGoldLedger failed: %v", err)
+	}
+	if len(entries) != 2 || entries[0].Amount != pvpAccelerateFixedCityGoldCost {
+		t.Fatalf("expected two accelerate ledgers, got %+v", entries)
+	}
+}
+
+func TestAccelerateReinforcementRequiresSenderAndCityGold(t *testing.T) {
+	svc, repo, from, to := newReinforcementTestService(t)
+	from.CityGold = 5
+	from.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	repo.players[from.Player.ID] = from
+	result, err := svc.SendReinforcement(SendReinforcementRequest{
+		FromPlayerID:   from.Player.ID,
+		TargetPlayerID: to.Player.ID,
+		Troops:         map[string]int{"weiInfantry": 40},
+	})
+	if err != nil {
+		t.Fatalf("SendReinforcement failed: %v", err)
+	}
+	if _, err := svc.AccelerateReinforcement(to.Player.ID, result.Reinforcement.ID); !errors.Is(err, ErrReinforcementNotFound) {
+		t.Fatalf("expected receiver cannot accelerate, got %v", err)
+	}
+	if _, err := svc.AccelerateReinforcement(from.Player.ID, result.Reinforcement.ID); !errors.Is(err, ErrInsufficientCityGold) {
+		t.Fatalf("expected insufficient city gold, got %v", err)
+	}
+}
+
 func newReinforcementTestService(t *testing.T) (*Service, *MemoryRepository, GameState, GameState) {
 	t.Helper()
 	setTestCombatUnitsConfig(t)
@@ -325,16 +486,23 @@ func newReinforcementTestService(t *testing.T) (*Service, *MemoryRepository, Gam
 	return NewServiceWithRepository(repo), repo, from, to
 }
 
-func forceReinforcementDue(t *testing.T, repo *MemoryRepository, reinforcementID string, outbound bool) {
+func mutateReinforcementForTest(t *testing.T, repo *MemoryRepository, reinforcementID string, mutate func(*Reinforcement)) {
 	t.Helper()
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
 	record := repo.reinforcements[reinforcementID]
-	old := time.Now().Add(-4 * time.Hour).UTC().Format(resourceDateLayout)
-	if outbound {
-		record.SentAt = old
-	} else {
-		record.ReturnStartedAt = old
-	}
+	mutate(&record)
 	repo.reinforcements[reinforcementID] = record
+}
+
+func forceReinforcementDue(t *testing.T, repo *MemoryRepository, reinforcementID string, outbound bool) {
+	t.Helper()
+	mutateReinforcementForTest(t, repo, reinforcementID, func(record *Reinforcement) {
+		old := time.Now().Add(-4 * time.Hour).UTC().Format(resourceDateLayout)
+		if outbound {
+			record.SentAt = old
+		} else {
+			record.ReturnStartedAt = old
+		}
+	})
 }

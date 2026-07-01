@@ -105,13 +105,32 @@ func (h *Handlers) ExpelReinforcement(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// AccelerateReinforcement 加速我派出的行军中增援。
+func (h *Handlers) AccelerateReinforcement(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		PlayerID string `json:"playerId"`
+	}
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+	if !h.requireOwnership(w, r, payload.PlayerID) {
+		return
+	}
+	result, err := h.gameService.AccelerateReinforcement(payload.PlayerID, r.PathValue("reinforcementId"))
+	if err != nil {
+		h.writeReinforcementError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 // writeReinforcementError 写出增援系统统一错误。
 func (h *Handlers) writeReinforcementError(w http.ResponseWriter, err error) {
 	status := http.StatusBadRequest
 	switch {
 	case errors.Is(err, game.ErrPlayerNotFound), errors.Is(err, game.ErrReinforcementNotFound), errors.Is(err, game.ErrGeneralNotFound), errors.Is(err, game.ErrUnitNotFound):
 		status = http.StatusNotFound
-	case errors.Is(err, game.ErrInsufficientArmy), errors.Is(err, game.ErrReinforcementSlotFull), errors.Is(err, game.ErrGeneralBusy), errors.Is(err, game.ErrReinforcementBusy):
+	case errors.Is(err, game.ErrInsufficientArmy), errors.Is(err, game.ErrReinforcementSlotFull), errors.Is(err, game.ErrGeneralBusy), errors.Is(err, game.ErrReinforcementBusy), errors.Is(err, game.ErrReinforcementNotAccelerable), errors.Is(err, game.ErrInsufficientCityGold):
 		status = http.StatusConflict
 	case errors.Is(err, game.ErrNoUnitsSelected), errors.Is(err, game.ErrReinforcementTargetSelf), errors.Is(err, game.ErrReinforcementTargetNPC), errors.Is(err, game.ErrInvalidReinforcement), errors.Is(err, game.ErrNonCombatUnit):
 		status = http.StatusBadRequest

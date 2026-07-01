@@ -7,11 +7,6 @@ import { useConfigStore } from '@/store/configStore'
 import type { Reinforcement } from '@/types/game'
 import { sortUnitEntries } from '@/utils/unitOrder'
 
-const SOURCE_LABELS: Record<'reinforcement' | 'obtained', string> = {
-  reinforcement: '增援',
-  obtained: '获得',
-}
-
 const STATUS_LABELS: Record<Reinforcement['status'], string> = {
   marching: '行军',
   stationed: '驻防',
@@ -113,11 +108,13 @@ function aggregateGarrisonDisplayRecords(activePlayerId: string, items: Reinforc
         sourceType,
         remainingTroops: { ...(item.remainingTroops ?? {}) },
         troops: { ...(item.troops ?? {}) },
+        generals: [...(item.generals ?? [])],
       })
       continue
     }
     current.troops = mergeTroops(current.troops, item.troops)
     current.remainingTroops = mergeTroops(current.remainingTroops, item.remainingTroops)
+    current.generals = mergeGenerals(current.generals, item.generals)
     current.updatedAt = laterText(current.updatedAt, item.updatedAt)
     current.createdAt = earlierText(current.createdAt, item.createdAt)
     if ((STATUS_WEIGHT[item.status] ?? 0) > (STATUS_WEIGHT[current.status] ?? 0)) {
@@ -145,6 +142,18 @@ function mergeTroops(a?: Record<string, number>, b?: Record<string, number>) {
   return result
 }
 
+// mergeGenerals 合并同来源驻防的携带武将，按 ID 去重。
+function mergeGenerals(a?: Reinforcement['generals'], b?: Reinforcement['generals']) {
+  const result = [...(a ?? [])]
+  const seen = new Set(result.map((general) => general.id))
+  for (const general of b ?? []) {
+    if (!general.id || seen.has(general.id)) continue
+    seen.add(general.id)
+    result.push(general)
+  }
+  return result
+}
+
 // laterText 返回较新的时间文本，用于聚合卡片排序。
 function laterText(a?: string, b?: string) {
   if (!a) return b ?? ''
@@ -163,10 +172,11 @@ const GarrisonCard: FC<{ record: Reinforcement; units: ReturnType<typeof useConf
   const sourceType = normalizeDisplaySourceType(record.sourceType)
   const total = Object.values(record.remainingTroops ?? {}).reduce((sum, amount) => sum + amount, 0)
   const troopEntries = sortUnitEntries(record.remainingTroops, record.fromPlayerFaction, units ?? undefined).filter(([, amount]) => amount > 0)
-  const title = SOURCE_LABELS[sourceType]
+  const title = sourceType === 'obtained' ? '自己' : `增援 · ${record.fromPlayerName || record.fromPlayerId || '未知'}`
+  const generalNames = (record.generals ?? []).map((general) => general.name || general.id).filter(Boolean)
 
   return (
-    <div className="rounded-xl border border-emerald-500/20 bg-white/70 px-2.5 py-2 dark:bg-emerald-500/10">
+    <div className="rounded-lg border border-emerald-500/20 bg-white/70 px-2.5 py-2 dark:bg-emerald-500/10">
       <div className="flex items-center gap-1.5">
         <span className="min-w-0 flex-1 text-[10px] font-bold text-emerald-600">{title}</span>
         <span className="shrink-0 text-[10px] font-semibold text-emerald-600">{total.toLocaleString()}</span>
@@ -182,7 +192,8 @@ const GarrisonCard: FC<{ record: Reinforcement; units: ReturnType<typeof useConf
         )}
       </div>
       <div className="mt-1 flex justify-end text-[9px] text-[var(--color-text-muted)]">
-        <span>{STATUS_LABELS[record.status]}</span>
+        <span className="min-w-0 flex-1 truncate">{generalNames.length > 0 ? generalNames.join('、') : ''}</span>
+        <span className="shrink-0">{STATUS_LABELS[record.status]}</span>
       </div>
     </div>
   )

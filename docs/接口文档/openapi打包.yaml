@@ -879,6 +879,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReinforcementResponse'
+  /api/v1/reinforcements/{reinforcementId}/accelerate:
+    post:
+      tags:
+      - Military
+      summary: 加速援军
+      operationId: accelerateReinforcement
+      parameters:
+      - name: reinforcementId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReinforcementPlayerRequest'
+      responses:
+        '200':
+          description: 援军行军时间已缩短并扣除城金
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReinforcementActionResponse'
+        '409':
+          description: 援军不可加速、加速次数已满或城金不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/map/npc-cities:
     get:
       tags:
@@ -3083,6 +3114,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FishingConfig'
+        '400':
+          description: 配置格式或内容不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/admin/slot-config:
+    get:
+      tags:
+      - Admin
+      summary: GM 读取天机轮转配置
+      description: 读取每线押注、赔付线、图案权重、倍率、免费旋转和宝匣倍率配置。Web 端也会通过 game/bootstrap 获取同一份配置。
+      operationId: adminGetSlotConfig
+      responses:
+        '200':
+          description: 当前天机轮转配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlotConfig'
+    put:
+      tags:
+      - Admin
+      summary: GM 保存天机轮转配置
+      description: 保存后立即更新后端内存配置，后续新结算的天机轮转局会使用新权重和倍率。
+      operationId: adminUpdateSlotConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SlotConfig'
+      responses:
+        '200':
+          description: 保存后的天机轮转配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlotConfig'
         '400':
           description: 配置格式或内容不合法
           content:
@@ -5843,6 +5913,7 @@ components:
         speedMultiplier:
           type: number
           example: 1
+          description: 历史兼容字段；服务端会忽略客户端传入值，增援加速必须走加速接口扣除城金。
     ReinforcementPlayerRequest:
       type: object
       required:
@@ -5929,6 +6000,7 @@ components:
           type: string
           enum:
           - reinforcement
+          - obtained
           - captured
           - mercenary
           - event_reward
@@ -6007,6 +6079,10 @@ components:
           format: date-time
         isAnnihilated:
           type: boolean
+        metadata:
+          type: object
+          additionalProperties: true
+          description: 增援扩展信息，例如 acceleratedTimes 和 accelerateLogs。
         createdAt:
           type: string
           format: date-time
@@ -6039,6 +6115,41 @@ components:
             serverTime:
               type: string
               format: date-time
+    ReinforcementActionResponse:
+      type: object
+      required:
+      - reinforcement
+      properties:
+        reinforcement:
+          $ref: '#/components/schemas/Reinforcement'
+        patch:
+          type: object
+          description: 增援操作后的局部状态补丁，不再返回完整 GameState。
+          properties:
+            army:
+              type: array
+              items:
+                $ref: '#/components/schemas/ArmyUnit'
+            generals:
+              type: array
+              items:
+                $ref: '#/components/schemas/General'
+            generalAssignments:
+              type: array
+              items:
+                $ref: '#/components/schemas/GeneralAssignment'
+            serverTime:
+              type: string
+              format: date-time
+        cityGold:
+          type: integer
+          description: 操作后的城金余额。
+        cost:
+          type: integer
+          description: 本次加速消耗城金。
+        serverTime:
+          type: string
+          format: date-time
     ReinforcementListResponse:
       type: object
       required:

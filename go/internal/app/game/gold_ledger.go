@@ -37,6 +37,7 @@ const (
 	LedgerRefBattleOverflow          = "battle_overflow"
 	LedgerRefBattleReward            = "battle_reward"
 	LedgerRefPvpMarchAccelerate      = "pvp_march_accelerate"
+	LedgerRefReinforcementAccelerate = "reinforcement_accelerate"
 	LedgerRefAdminAdjust             = "admin_adjust"
 	LedgerRefMiniGameBait            = "minigame_bait"
 	LedgerRefMiniGameRedeem          = "minigame_redeem"

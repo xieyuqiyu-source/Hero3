@@ -127,6 +127,24 @@ func (h *Handlers) UpdateAdminFishingConfig(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, h.gameService.GetFishingConfig())
 }
 
+func (h *Handlers) AdminSlotConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.gameService.GetSlotConfig())
+}
+
+func (h *Handlers) UpdateAdminSlotConfig(w http.ResponseWriter, r *http.Request) {
+	var payload game.SlotConfig
+	if !decodeJSON(w, r, &payload) {
+		return
+	}
+
+	if err := h.gameService.UpdateSlotConfig(payload); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, h.gameService.GetSlotConfig())
+}
+
 func (h *Handlers) AdminFactionsConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, game.GetFactionsConfig())
 }

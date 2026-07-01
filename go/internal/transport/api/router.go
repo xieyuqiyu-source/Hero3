@@ -127,6 +127,7 @@ func registerReinforcementRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("GET /api/v1/reinforcements/{reinforcementId}", handlers.GetReinforcement)
 	mux.HandleFunc("POST /api/v1/reinforcements/{reinforcementId}/recall", handlers.RecallReinforcement)
 	mux.HandleFunc("POST /api/v1/reinforcements/{reinforcementId}/expel", handlers.ExpelReinforcement)
+	mux.HandleFunc("POST /api/v1/reinforcements/{reinforcementId}/accelerate", handlers.AccelerateReinforcement)
 }
 
 // registerPvpRoutes 注册 PVP 玩家战斗路由。
@@ -299,6 +300,8 @@ func registerAdminRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("PUT /api/v1/admin/generals-config", handlers.UpdateAdminGeneralsConfig)
 	mux.HandleFunc("GET /api/v1/admin/fishing-config", handlers.AdminFishingConfig)
 	mux.HandleFunc("PUT /api/v1/admin/fishing-config", handlers.UpdateAdminFishingConfig)
+	mux.HandleFunc("GET /api/v1/admin/slot-config", handlers.AdminSlotConfig)
+	mux.HandleFunc("PUT /api/v1/admin/slot-config", handlers.UpdateAdminSlotConfig)
 	mux.HandleFunc("GET /api/v1/admin/general-traits", handlers.AdminGeneralTraitRegistry)
 	mux.HandleFunc("POST /api/v1/admin/mails/send", handlers.AdminSendMail)
 	mux.HandleFunc("GET /api/v1/admin/players/{playerId}/mails", handlers.AdminPlayerMails)

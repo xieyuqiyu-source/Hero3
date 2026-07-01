@@ -30,6 +30,7 @@ import type {
   PvpMarchActionResponse,
   PvpStateResponse,
   SaveAnnouncementPayload,
+  SlotConfig,
   TraitRegistryResponse,
   UnitsConfig,
 } from '@/types'
@@ -376,6 +377,16 @@ export const adminApi = {
   },
   updateFishingConfig(config: FishingConfig) {
     return request<FishingConfig>(`${API_BASE}/admin/fishing-config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+  },
+  getSlotConfig() {
+    return request<SlotConfig>(`${API_BASE}/admin/slot-config`)
+  },
+  updateSlotConfig(config: SlotConfig) {
+    return request<SlotConfig>(`${API_BASE}/admin/slot-config`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),

@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, PlayerDeletionResult, NpcCity, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, GamblingRoundResult, SlotRoundResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, PlayerDeletionResult, NpcCity, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, GamblingRoundResult, SlotRoundResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, ReinforcementActionResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult } from '@/types/game'
 import type { BalanceConfig, FactionConfig, FishingConfig, SlotConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -299,6 +299,11 @@ export const gameApi = {
   /** 遣返援军 */
   expelReinforcement(playerId: string, reinforcementId: string) {
     return api.post<ReinforcementResponse>(`/reinforcements/${reinforcementId}/expel`, { playerId })
+  },
+
+  /** 加速援军 */
+  accelerateReinforcement(playerId: string, reinforcementId: string) {
+    return api.post<ReinforcementActionResponse>(`/reinforcements/${reinforcementId}/accelerate`, { playerId })
   },
 
   /** 极速完成建筑升级 */

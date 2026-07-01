@@ -113,6 +113,15 @@ type ReinforcementResponse struct {
 	Patch         GarrisonActionResult `json:"patch,omitempty"`
 }
 
+// ReinforcementActionResponse 是会改变城金或局部状态的增援操作响应。
+type ReinforcementActionResponse struct {
+	Reinforcement Reinforcement        `json:"reinforcement"`
+	Patch         GarrisonActionResult `json:"patch,omitempty"`
+	CityGold      FlexInt              `json:"cityGold,omitempty"`
+	Cost          int                  `json:"cost,omitempty"`
+	ServerTime    string               `json:"serverTime,omitempty"`
+}
+
 // ReinforcementListResponse 是增援列表响应。
 type ReinforcementListResponse struct {
 	Items []Reinforcement `json:"items"`

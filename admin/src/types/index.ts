@@ -364,6 +364,30 @@ export interface FishingConfig {
   fishPool: FishingFishConfig[]
 }
 
+export interface SlotBonusMultiplierConfig {
+  multiplier: number
+  weight: number
+}
+
+export interface SlotSymbolConfig {
+  id: string
+  name: string
+  rarity: string
+  type: 'normal' | 'wild' | 'scatter' | 'bonus' | string
+  weight: number
+  multiplier?: number
+  freeSpins?: number
+  retriggerFreeSpins?: number
+  bonusMultipliers?: SlotBonusMultiplierConfig[]
+}
+
+export interface SlotConfig {
+  minLineBet: number
+  lineCount: number
+  maxFreeSpinsPerRound: number
+  symbols: SlotSymbolConfig[]
+}
+
 export interface MailAttachment {
   type: string
   itemId: string

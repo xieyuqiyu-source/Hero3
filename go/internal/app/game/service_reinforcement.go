@@ -296,6 +296,85 @@ func (s *Service) ExpelReinforcement(playerID string, reinforcementID string) (R
 	return ReinforcementResponse{Reinforcement: record, Patch: BuildGarrisonActionResult(to)}, nil
 }
 
+// AccelerateReinforcement 使用城金加速自己派出的行军中援军。
+func (s *Service) AccelerateReinforcement(playerID string, reinforcementID string) (ReinforcementActionResponse, error) {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return ReinforcementActionResponse{}, ErrPlayerNotFound
+	}
+	now := time.Now().UTC()
+	cost := 0
+	from, _, record, err := s.repo.UpdateReinforcement(strings.TrimSpace(reinforcementID), now, func(from *GameState, to *GameState, record *Reinforcement) error {
+		normalizeGarrisonRecord(record)
+		if record.FromPlayerID != playerID {
+			return ErrReinforcementNotFound
+		}
+		if record.SourceType != GarrisonSourceReinforcement || record.Status != ReinforcementStatusMarching {
+			return ErrReinforcementNotAccelerable
+		}
+		if reinforcementAcceleratedTimes(record.Metadata) >= pvpMaxAccelerateTimes {
+			return ErrReinforcementNotAccelerable
+		}
+		arrivesAt, err := time.Parse(resourceDateLayout, strings.TrimSpace(record.ExpectedArriveAt))
+		if err != nil || !arrivesAt.After(now) {
+			return ErrReinforcementNotAccelerable
+		}
+		remainingSeconds := int(math.Ceil(arrivesAt.Sub(now).Seconds()))
+		if remainingSeconds <= 1 {
+			return ErrReinforcementNotAccelerable
+		}
+		cost = pvpAccelerateFixedCityGoldCost
+		if int(from.CityGold) < cost {
+			return ErrInsufficientCityGold
+		}
+		sentAt, err := time.Parse(resourceDateLayout, strings.TrimSpace(record.SentAt))
+		if err != nil {
+			return ErrReinforcementNotAccelerable
+		}
+		elapsedSeconds := int(math.Ceil(now.Sub(sentAt).Seconds()))
+		if elapsedSeconds < 0 {
+			elapsedSeconds = 0
+		}
+		nextRemainingSeconds := (remainingSeconds + 1) / 2
+		nextMarchSeconds := elapsedSeconds + nextRemainingSeconds
+		if nextMarchSeconds < 1 {
+			nextMarchSeconds = 1
+		}
+		from.CityGold -= FlexInt(cost)
+		record.MarchSeconds = nextMarchSeconds
+		record.ReturnSeconds = nextMarchSeconds
+		record.ExpectedArriveAt = now.Add(time.Duration(nextRemainingSeconds) * time.Second).Format(resourceDateLayout)
+		record.SpeedMultiplier = calculateReinforcementSpeedMultiplier(nextMarchSeconds)
+		record.Metadata = appendReinforcementAccelerateMetadata(record.Metadata, now, cost, remainingSeconds, nextRemainingSeconds)
+		record.UpdatedAt = now.Format(resourceDateLayout)
+		from.ServerTime = now.Format(resourceDateLayout)
+		return nil
+	})
+	if err != nil {
+		return ReinforcementActionResponse{}, err
+	}
+	if cost > 0 {
+		s.recordLedger(GoldLedgerEntry{
+			PlayerID:     playerID,
+			Currency:     LedgerCurrencyCityGold,
+			Direction:    LedgerDirectionDebit,
+			Amount:       cost,
+			BalanceAfter: int(from.CityGold),
+			RefType:      LedgerRefReinforcementAccelerate,
+			RefID:        record.ID,
+			Reason:       "reinforcement_accelerate",
+		})
+		s.publishCurrencyChanged(playerID, "", record.ID, LedgerRefReinforcementAccelerate)
+	}
+	return ReinforcementActionResponse{
+		Reinforcement: record,
+		Patch:         BuildGarrisonActionResult(from),
+		CityGold:      from.CityGold,
+		Cost:          cost,
+		ServerTime:    from.ServerTime,
+	}, nil
+}
+
 // MarkReinforcementArrived 把到达时间已满足的援军转为驻扎。
 func (s *Service) MarkReinforcementArrived(reinforcementID string) (Reinforcement, error) {
 	now := time.Now()
@@ -451,10 +530,7 @@ func normalizePositiveTroops(troops map[string]int) map[string]int {
 }
 
 func normalizeReinforcementSpeed(speed float64) float64 {
-	if speed <= 0 {
-		return 1
-	}
-	return speed
+	return 1
 }
 
 func reinforcementTravelSeconds(speed float64, now time.Time, sources []ModifierSource) int {
@@ -633,6 +709,51 @@ func cloneAnyMap(src map[string]any) map[string]any {
 	return dst
 }
 
+func reinforcementAcceleratedTimes(metadata map[string]any) int {
+	if len(metadata) == 0 {
+		return 0
+	}
+	switch value := metadata["acceleratedTimes"].(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	case json.Number:
+		n, _ := value.Int64()
+		return int(n)
+	default:
+		return 0
+	}
+}
+
+func appendReinforcementAccelerateMetadata(metadata map[string]any, now time.Time, cost int, beforeRemaining int, afterRemaining int) map[string]any {
+	next := cloneAnyMap(metadata)
+	times := reinforcementAcceleratedTimes(next) + 1
+	next["acceleratedTimes"] = times
+	logs := []any{}
+	if existing, ok := next["accelerateLogs"].([]any); ok {
+		logs = append(logs, existing...)
+	}
+	logs = append(logs, map[string]any{
+		"acceleratedAt":    now.Format(resourceDateLayout),
+		"cost":             cost,
+		"remainingBefore":  beforeRemaining,
+		"remainingAfter":   afterRemaining,
+		"acceleratedTimes": times,
+	})
+	next["accelerateLogs"] = logs
+	return next
+}
+
+func calculateReinforcementSpeedMultiplier(marchSeconds int) float64 {
+	if marchSeconds <= 0 {
+		return 1
+	}
+	return math.Round((float64(defaultReinforcementMarchSeconds)/float64(marchSeconds))*100) / 100
+}
+
 func reserveReinforcementGenerals(state *GameState, generalIDs []string, reinforcementID string, now time.Time) ([]ReinforcementGeneralSnapshot, error) {
 	result := []ReinforcementGeneralSnapshot{}
 	seen := map[string]bool{}
@@ -733,9 +854,11 @@ func startReinforcementReturn(record *Reinforcement, status string, reason strin
 		return ErrInvalidReinforcement
 	}
 	nowText := now.UTC().Format(resourceDateLayout)
+	returnSeconds := calculateReinforcementReturnSeconds(record, now)
 	record.Status = status
+	record.ReturnSeconds = returnSeconds
 	record.ReturnStartedAt = nowText
-	record.ExpectedReturnedAt = now.Add(time.Duration(record.ReturnSeconds) * time.Second).UTC().Format(resourceDateLayout)
+	record.ExpectedReturnedAt = now.Add(time.Duration(returnSeconds) * time.Second).UTC().Format(resourceDateLayout)
 	if reason == "recalled" {
 		record.RecalledAt = nowText
 	}
@@ -745,6 +868,43 @@ func startReinforcementReturn(record *Reinforcement, status string, reason strin
 	record.MailState = markStateFlag(record.MailState, reason)
 	record.UpdatedAt = nowText
 	return nil
+}
+
+func calculateReinforcementReturnSeconds(record *Reinforcement, now time.Time) int {
+	if record.Status == ReinforcementStatusMarching {
+		sentAt, err := time.Parse(resourceDateLayout, strings.TrimSpace(record.SentAt))
+		if err == nil {
+			elapsed := int(math.Ceil(now.Sub(sentAt).Seconds()))
+			if elapsed < 1 {
+				elapsed = 1
+			}
+			marchSeconds := record.MarchSeconds
+			if marchSeconds < 1 {
+				marchSeconds = record.ReturnSeconds
+			}
+			if marchSeconds > 0 && elapsed > marchSeconds {
+				elapsed = marchSeconds
+			}
+			return elapsed
+		}
+	}
+	if record.Status == ReinforcementStatusStationed {
+		sentAt, sentErr := time.Parse(resourceDateLayout, strings.TrimSpace(record.SentAt))
+		arrivedAt, arrivedErr := time.Parse(resourceDateLayout, strings.TrimSpace(record.ArrivedAt))
+		if sentErr == nil && arrivedErr == nil && arrivedAt.After(sentAt) {
+			seconds := int(math.Ceil(arrivedAt.Sub(sentAt).Seconds()))
+			if seconds > 0 {
+				return seconds
+			}
+		}
+	}
+	if record.ReturnSeconds > 0 {
+		return record.ReturnSeconds
+	}
+	if record.MarchSeconds > 0 {
+		return record.MarchSeconds
+	}
+	return 1
 }
 
 func completeReinforcementReturn(from *GameState, record *Reinforcement, now time.Time) error {
