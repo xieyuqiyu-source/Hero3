@@ -3,7 +3,7 @@ import { type FC, useState } from 'react'
 import { ArrowLeft, Share2, Check } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
-import type { BattleReport, BattleReportSweepExtra } from '@/types/game'
+import type { BattleReport, BattleReportSweepDefender, BattleReportSweepExtra, BattleReportUnit } from '@/types/game'
 import { getTraitMeta } from '@/utils/traits'
 import { sortUnitEntries, sortUnitIds } from '@/utils/unitOrder'
 import { gameApi } from '@/api/game'
@@ -57,6 +57,14 @@ function readSweepExtra(report: BattleReport): BattleReportSweepExtra | null {
     mode: report.type,
   }
   return raw as BattleReportSweepExtra
+}
+
+// unitMapFromSideUnits 把标准战报兵种快照转成旧版表格可直接消费的数量 map。
+function unitMapFromSideUnits(sideUnits: BattleReportUnit[], key: 'amountBefore' | 'lost'): Record<string, number> {
+  return sideUnits.reduce<Record<string, number>>((acc, unit) => {
+    acc[unit.unitType] = unit[key] ?? 0
+    return acc
+  }, {})
 }
 
 const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => {
@@ -164,12 +172,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const reportGeneralExp = report.generalExpGained ?? report.detail?.rewards?.generalExp ?? 0
   const sweepExtra = readSweepExtra(report)
   const isSweepReport = Boolean(sweepExtra)
-  const sweepRequested = sweepExtra?.requested ?? 0
-  const sweepSuccess = sweepExtra?.success ?? 0
-  const sweepFailed = sweepExtra?.failed ?? 0
-  const sweepStopped = sweepExtra?.stopped ?? false
-  const totalLost = Object.values(lostUnits).reduce((sum, amount) => sum + amount, 0)
-  const totalKills = Object.values(defenderLostUnits).reduce((sum, amount) => sum + amount, 0)
+  const sweepDefenders = safeArray<BattleReportSweepDefender>(sweepExtra?.defenders)
   const generalLevelBefore = report.generalLevelBefore ?? report.detail?.rewards?.generalLevelBefore
   const generalLevelAfter = report.generalLevelAfter ?? report.detail?.rewards?.generalLevelAfter
   const generalExpText = reportGeneralExp > 0
@@ -209,6 +212,168 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
     return `${label}: ${value}`
   }
 
+  const renderDefenseCard = (params: {
+    keyValue: string
+    displayName: string
+    factionText?: string
+    power: number
+    unitIds: string[]
+    unitsMap: Record<string, number>
+    lostMap: Record<string, number>
+    revealed: boolean
+    resources?: Record<string, number>
+    unitName: (unitType: string) => string
+  }) => (
+    <div key={params.keyValue} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+      <div className="px-4 py-2 border-b border-[var(--color-border)] bg-blue-500/5">
+        <span className="text-xs font-bold text-blue-600">🛡 防守方 — {params.displayName}</span>
+        {params.factionText && <span className="text-[10px] text-[var(--color-text-muted)] ml-2">{params.factionText}</span>}
+        <span className="text-[10px] text-[var(--color-text-muted)] ml-2">战力 {params.power.toLocaleString()}</span>
+      </div>
+
+      <div className="px-4 py-2 border-b border-[var(--color-border)]">
+        <div className="flex items-center">
+          <span className="text-xs text-[var(--color-text-secondary)] w-12 flex-shrink-0">将领</span>
+          <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">{bottomGeneralText}</span>
+        </div>
+        <div className="flex items-center mt-1">
+          <span className="text-xs text-[var(--color-text-secondary)] w-12 flex-shrink-0">经验</span>
+          <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">{bottomGeneralExpText}</span>
+        </div>
+      </div>
+
+      <div className="px-4 py-2 border-b border-[var(--color-border)]">
+        {params.revealed && params.unitIds.length > 0 ? (
+          <>
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-center text-[10px]">
+                <thead>
+                  <tr className="text-[var(--color-text-muted)]">
+                    <td className="py-1 text-left font-medium">兵种</td>
+                    {params.unitIds.map((uid) => (
+                      <td key={uid} className="py-1 px-1 min-w-[40px]">
+                        <span className="text-[9px]">{params.unitName(uid)}</span>
+                      </td>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="py-1 text-left font-medium text-[var(--color-text-secondary)]">驻守</td>
+                    {params.unitIds.map((uid) => {
+                      const count = params.unitsMap[uid] ?? 0
+                      return (
+                        <td key={uid} className={`py-1 px-1 ${count > 0 ? 'font-bold text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
+                          {count}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                  <tr>
+                    <td className="py-1 text-left font-medium text-red-500">阵亡</td>
+                    {params.unitIds.map((uid) => {
+                      const lost = params.lostMap[uid] ?? 0
+                      return (
+                        <td key={uid} className={`py-1 px-1 ${lost > 0 ? 'font-bold text-red-600' : 'text-[var(--color-text-muted)]'}`}>
+                          {lost}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="sm:hidden space-y-1.5">
+              {params.unitIds
+                .filter((uid) => (params.unitsMap[uid] ?? 0) > 0)
+                .map((uid) => {
+                  const count = params.unitsMap[uid] ?? 0
+                  const lost = params.lostMap[uid] ?? 0
+                  return (
+                    <div key={uid} className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
+                      <span className="text-[10px] font-medium text-[var(--color-text-primary)]">{params.unitName(uid)}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] text-[var(--color-text-secondary)]">驻守 <span className="font-bold">{count}</span></span>
+                        {lost > 0 && <span className="text-[10px] text-red-600">阵亡 <span className="font-bold">{lost}</span></span>}
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-center py-2">
+            <span className="text-[11px] text-amber-600 font-medium">对方战损低于25%，无法显示对方详细兵力情报</span>
+          </div>
+        )}
+      </div>
+
+      <div className="px-4 py-2 border-b border-[var(--color-border)]">
+        <div className="flex items-center">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)] w-16 flex-shrink-0">剩余资源</span>
+          <div className="flex flex-wrap items-center justify-center gap-3 flex-1">
+            {RESOURCE_ORDER.map((res) => (
+              <span key={res} className="inline-flex items-center gap-1 text-[10px] text-[var(--color-text-secondary)]">
+                {RESOURCE_ICONS[res]} {RESOURCE_LABELS[res]} {(params.resources?.[res] ?? 0).toLocaleString()}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 py-2 border-b border-[var(--color-border)]">
+        <div className="flex items-center">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)] w-16 flex-shrink-0">建筑损坏</span>
+          <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">无</span>
+        </div>
+      </div>
+
+      <div className="px-4 py-2 border-b border-[var(--color-border)]">
+        <div className="flex items-center">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)] w-16 flex-shrink-0">战损反馈</span>
+          <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">—</span>
+        </div>
+      </div>
+
+      <div className="px-4 py-2 border-b border-[var(--color-border)]">
+        <div className="flex items-center">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)] w-16 flex-shrink-0">宝物掉落</span>
+          <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">无</span>
+        </div>
+      </div>
+
+      <div className="px-4 py-2">
+        <div className="flex items-center">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)] w-16 flex-shrink-0">词条/战术</span>
+          <div className="flex flex-wrap items-center justify-center gap-1.5 flex-1">
+            <span className="text-[9px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[var(--color-text-muted)]">词条加成</span>
+            <span className="text-[9px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[var(--color-text-muted)]">战术卡</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderSweepDefenseCard = (defender: BattleReportSweepDefender) => {
+    const sideUnits = safeArray(defender.units)
+    const unitIds = sortUnitIds(sideUnits.map((unit) => unit.unitType), defender.faction, units ?? undefined).filter((unitType) => !isHiddenReportUnit(unitType, units ?? undefined))
+    const unitsMap = unitMapFromSideUnits(sideUnits, 'amountBefore')
+    const lostMap = unitMapFromSideUnits(sideUnits, 'lost')
+    const unitNames = new Map(sideUnits.map((unit) => [unit.unitType, unit.unitName || getDefenderUnitName(unit.unitType)]))
+    return renderDefenseCard({
+      keyValue: defender.targetId,
+      displayName: defender.targetName || defender.targetId,
+      factionText: defender.factionLabel || defender.faction,
+      power: defender.power,
+      unitIds,
+      unitsMap,
+      lostMap,
+      revealed: defender.defenderRevealed,
+      resources: defender.resources,
+      unitName: (unitType) => unitNames.get(unitType) || getDefenderUnitName(unitType),
+    })
+  }
+
   return (
     <div className="space-y-4">
       {/* Back button + Share */}
@@ -240,42 +405,6 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
           {new Date(report.createdAt).toLocaleString('zh-CN')}
         </p>
       </div>
-
-      {isSweepReport && (
-        <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/5 overflow-hidden">
-          <div className="px-4 py-2 border-b border-emerald-400/20 bg-emerald-400/10">
-            <span className="text-xs font-bold text-emerald-600">扫荡汇总</span>
-            {sweepStopped && <span className="ml-2 text-[10px] font-medium text-amber-600">已中止</span>}
-          </div>
-          <div className="grid grid-cols-2 gap-px bg-[var(--color-border)] sm:grid-cols-4">
-            {[
-              ['目标', sweepRequested > 0 ? sweepRequested.toLocaleString() : '—'],
-              ['成功', sweepSuccess > 0 ? sweepSuccess.toLocaleString() : '—'],
-              ['失败', sweepFailed > 0 ? sweepFailed.toLocaleString() : '0'],
-              ['城金', report.overflowCityGold ? `+${report.overflowCityGold.toLocaleString()}` : '0'],
-            ].map(([label, value]) => (
-              <div key={label} className="bg-[var(--color-surface)] px-3 py-2 text-center">
-                <div className="text-[10px] text-[var(--color-text-muted)]">{label}</div>
-                <div className="mt-0.5 text-sm font-bold text-[var(--color-text-primary)]">{value}</div>
-              </div>
-            ))}
-          </div>
-          <div className="grid gap-2 p-4 sm:grid-cols-3">
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
-              <div className="text-[10px] font-medium text-[var(--color-text-secondary)]">总击杀</div>
-              <div className="mt-1 text-sm font-bold text-red-600">{totalKills.toLocaleString()}</div>
-            </div>
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
-              <div className="text-[10px] font-medium text-[var(--color-text-secondary)]">总战损</div>
-              <div className="mt-1 text-sm font-bold text-[var(--color-text-primary)]">{totalLost.toLocaleString()}</div>
-            </div>
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
-              <div className="text-[10px] font-medium text-[var(--color-text-secondary)]">武将经验</div>
-              <div className="mt-1 text-sm font-bold text-emerald-600">+{reportGeneralExp.toLocaleString()}</div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 进攻方 */}
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
@@ -588,143 +717,19 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
         </div>
       )}
 
-      {/* 防守方 */}
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
-        <div className="px-4 py-2 border-b border-[var(--color-border)] bg-blue-500/5">
-          <span className="text-xs font-bold text-blue-600">🛡 防守方 — {bottomDisplayName}</span>
-          <span className="text-[10px] text-[var(--color-text-muted)] ml-2">战力 {bottomPower.toLocaleString()}</span>
-        </div>
-
-        {/* 将领 & 经验 */}
-        <div className="px-4 py-2 border-b border-[var(--color-border)]">
-          <div className="flex items-center">
-            <span className="text-xs text-[var(--color-text-secondary)] w-12 flex-shrink-0">将领</span>
-            <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">{bottomGeneralText}</span>
-          </div>
-          <div className="flex items-center mt-1">
-            <span className="text-xs text-[var(--color-text-secondary)] w-12 flex-shrink-0">经验</span>
-            <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">{bottomGeneralExpText}</span>
-          </div>
-        </div>
-
-        {/* 防守方兵种 */}
-        <div className="px-4 py-2 border-b border-[var(--color-border)]">
-          {bottomRevealed && bottomUnitIds.length > 0 ? (
-            <>
-              {/* Desktop: horizontal table */}
-              <div className="hidden sm:block overflow-x-auto">
-                <table className="w-full text-center text-[10px]">
-                  <thead>
-                    <tr className="text-[var(--color-text-muted)]">
-                      <td className="py-1 text-left font-medium">兵种</td>
-                      {bottomUnitIds.map((uid) => (
-                        <td key={uid} className="py-1 px-1 min-w-[40px]">
-                          <span className="text-[9px]">{getDefenderUnitName(uid)}</span>
-                        </td>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="py-1 text-left font-medium text-[var(--color-text-secondary)]">驻守</td>
-                      {bottomUnitIds.map((uid) => {
-                        const count = bottomUnits[uid] ?? 0
-                        return (
-                          <td key={uid} className={`py-1 px-1 ${count > 0 ? 'font-bold text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
-                            {count}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                    <tr>
-                      <td className="py-1 text-left font-medium text-red-500">阵亡</td>
-                      {bottomUnitIds.map((uid) => {
-                        const lost = bottomLostUnits[uid] ?? 0
-                        return (
-                          <td key={uid} className={`py-1 px-1 ${lost > 0 ? 'font-bold text-red-600' : 'text-[var(--color-text-muted)]'}`}>
-                            {lost}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              {/* Mobile: vertical list, only show units with count > 0 */}
-              <div className="sm:hidden space-y-1.5">
-                {bottomUnitIds
-                  .filter((uid) => (bottomUnits[uid] ?? 0) > 0)
-                  .map((uid) => {
-                    const count = bottomUnits[uid] ?? 0
-                    const lost = bottomLostUnits[uid] ?? 0
-                    return (
-                      <div key={uid} className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-[var(--color-surface-dim)] border border-[var(--color-border)]">
-                        <span className="text-[10px] font-medium text-[var(--color-text-primary)]">{getDefenderUnitName(uid)}</span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[10px] text-[var(--color-text-secondary)]">驻守 <span className="font-bold">{count}</span></span>
-                          {lost > 0 && <span className="text-[10px] text-red-600">阵亡 <span className="font-bold">{lost}</span></span>}
-                        </div>
-                      </div>
-                    )
-                  })}
-              </div>
-            </>
-          ) : (
-            <div className="flex items-center justify-center py-2">
-              <span className="text-[11px] text-amber-600 font-medium">对方战损低于25%，无法显示对方详细兵力情报</span>
-            </div>
-          )}
-        </div>
-
-        {/* 防守方剩余资源 */}
-        <div className="px-4 py-2 border-b border-[var(--color-border)]">
-          <div className="flex items-center">
-            <span className="text-xs font-medium text-[var(--color-text-secondary)] w-16 flex-shrink-0">剩余资源</span>
-            <div className="flex flex-wrap items-center justify-center gap-3 flex-1">
-              {RESOURCE_ORDER.map((res) => (
-                <span key={res} className="inline-flex items-center gap-1 text-[10px] text-[var(--color-text-secondary)]">
-                  {RESOURCE_ICONS[res]} {RESOURCE_LABELS[res]} {(report.defenderResources?.[res] ?? 0).toLocaleString()}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 建筑损坏 */}
-        <div className="px-4 py-2 border-b border-[var(--color-border)]">
-          <div className="flex items-center">
-            <span className="text-xs font-medium text-[var(--color-text-secondary)] w-16 flex-shrink-0">建筑损坏</span>
-            <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">无</span>
-          </div>
-        </div>
-
-        {/* 战损反馈 */}
-        <div className="px-4 py-2 border-b border-[var(--color-border)]">
-          <div className="flex items-center">
-            <span className="text-xs font-medium text-[var(--color-text-secondary)] w-16 flex-shrink-0">战损反馈</span>
-            <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">—</span>
-          </div>
-        </div>
-
-        {/* 宝物掉落 */}
-        <div className="px-4 py-2 border-b border-[var(--color-border)]">
-          <div className="flex items-center">
-            <span className="text-xs font-medium text-[var(--color-text-secondary)] w-16 flex-shrink-0">宝物掉落</span>
-            <span className="text-[10px] text-[var(--color-text-muted)] flex-1 text-center">无</span>
-          </div>
-        </div>
-
-        {/* 词条加成 & 战术卡 */}
-        <div className="px-4 py-2">
-          <div className="flex items-center">
-            <span className="text-xs font-medium text-[var(--color-text-secondary)] w-16 flex-shrink-0">词条/战术</span>
-            <div className="flex flex-wrap items-center justify-center gap-1.5 flex-1">
-              <span className="text-[9px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[var(--color-text-muted)]">词条加成</span>
-              <span className="text-[9px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[var(--color-text-muted)]">战术卡</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      {isSweepReport && sweepDefenders.length > 0
+        ? sweepDefenders.map(renderSweepDefenseCard)
+        : renderDefenseCard({
+          keyValue: 'defender',
+          displayName: bottomDisplayName,
+          power: bottomPower,
+          unitIds: bottomUnitIds,
+          unitsMap: bottomUnits,
+          lostMap: bottomLostUnits,
+          revealed: bottomRevealed,
+          resources: report.defenderResources,
+          unitName: getDefenderUnitName,
+        })}
     </div>
   )
 }

@@ -614,9 +614,9 @@ export const gameApi = {
     return api.post<GamblingRoundResult>('/minigame/gambling/resolve', { playerId, betUnitType, betAmount, betId, exactNumber })
   },
 
-  /** 后端结算一局天机轮转并扣除押注兵力 */
-  resolveSlotRound(playerId: string, betUnitType: string, betAmount: number) {
-    return api.post<SlotRoundResult>('/minigame/slot/resolve', { playerId, betUnitType, betAmount })
+  /** 后端结算一局天机轮转并扣除总押注兵力 */
+  resolveSlotRound(playerId: string, betUnitType: string, lineBet: number) {
+    return api.post<SlotRoundResult>('/minigame/slot/resolve', { playerId, betUnitType, lineBet })
   },
 
   /** 兑换小游戏库存奖励 */

@@ -194,14 +194,17 @@ SlotRoundResult:
   - record
   - serverTime
   - won
-  - symbols
-  - symbolNames
-  - multiplier
+  - grid
+  - lineBet
+  - lineCount
+  - totalBet
+  - winningLines
+  - freeSpins
+  - bonusRewards
   - betUnitId
   - betUnit
   - betAmount
   - winAmount
-  - maxBet
   properties:
     record:
       $ref: '#/components/schemas/MiniGameRecord'
@@ -215,19 +218,38 @@ SlotRoundResult:
       format: date-time
     won:
       type: boolean
-    symbols:
+    grid:
       type: array
+      description: 3x3 行优先结果矩阵，外层为上/中/下三行，内层为左/中/右三轮。
       items:
-        type: string
-      example: [gold_charm, gold_charm, gold_charm]
-    symbolNames:
-      type: array
-      items:
-        type: string
-      example: [赤金符, 赤金符, 赤金符]
-    multiplier:
+        type: array
+        items:
+          type: string
+      example:
+      - [bronze_charm, silver_charm, tiger_tally]
+      - [gold_charm, gold_charm, gold_charm]
+      - [scatter, jade_seal, bonus]
+    lineBet:
       type: integer
-      example: 30
+      example: 10000
+    lineCount:
+      type: integer
+      example: 5
+    totalBet:
+      type: integer
+      example: 50000
+    winningLines:
+      type: array
+      items:
+        $ref: '#/components/schemas/SlotWinningLine'
+    freeSpins:
+      type: array
+      items:
+        $ref: '#/components/schemas/SlotFreeSpinResult'
+    bonusRewards:
+      type: array
+      items:
+        $ref: '#/components/schemas/SlotBonusReward'
     betUnitId:
       type: string
       example: qiQiYing
@@ -236,46 +258,122 @@ SlotRoundResult:
       example: 骁骑营
     betAmount:
       type: integer
-      example: 10000
+      description: 与 totalBet 相同，用于兼容小游戏记录展示。
+      example: 50000
     winAmount:
       type: integer
-      example: 300000
+      example: 120000
     rewardRarity:
       type: string
       enum: [common, rare, epic, legendary]
-    maxBet:
+SlotWinningLine:
+  type: object
+  required: [lineId, symbol, symbolName, multiplier, amount, positions]
+  properties:
+    lineId:
+      type: string
+      enum: [middle, top, bottom, diagonal_down, diagonal_up]
+    symbol:
+      type: string
+      example: gold_charm
+    symbolName:
+      type: string
+      example: 赤金符
+    multiplier:
       type: integer
-      description: 按当前兵力和配置计算出的本局最大押注。
+      example: 12
+    amount:
+      type: integer
+      example: 120000
+    positions:
+      type: array
+      items:
+        type: array
+        items:
+          type: integer
+      example:
+      - [1, 0]
+      - [1, 1]
+      - [1, 2]
+SlotBonusReward:
+  type: object
+  required: [multiplier, amount]
+  properties:
+    multiplier:
+      type: integer
+      example: 20
+    amount:
+      type: integer
+      example: 200000
+SlotFreeSpinResult:
+  type: object
+  required: [spinIndex, grid, winningLines, bonusRewards, scatterCount, retriggeredFreeSpins, winAmount]
+  properties:
+    spinIndex:
+      type: integer
+      example: 1
+    grid:
+      type: array
+      items:
+        type: array
+        items:
+          type: string
+    winningLines:
+      type: array
+      items:
+        $ref: '#/components/schemas/SlotWinningLine'
+    bonusRewards:
+      type: array
+      items:
+        $ref: '#/components/schemas/SlotBonusReward'
+    scatterCount:
+      type: integer
+      example: 3
+    retriggeredFreeSpins:
+      type: integer
+      example: 3
+    winAmount:
+      type: integer
+      example: 800000
 SlotConfig:
   type: object
   required:
-  - minBet
-  - maxBet
-  - maxBetRatio
+  - minLineBet
+  - lineCount
+  - maxFreeSpinsPerRound
   - symbols
   properties:
-    minBet:
+    minLineBet:
       type: integer
       example: 1000
-    maxBet:
+    lineCount:
       type: integer
-      example: 1000000
-    maxBetRatio:
-      type: number
-      format: double
-      example: 0.05
+      example: 5
+    maxFreeSpinsPerRound:
+      type: integer
+      example: 20
     symbols:
       type: array
       items:
         $ref: '#/components/schemas/SlotSymbolConfig'
+SlotBonusMultiplierConfig:
+  type: object
+  required: [multiplier, weight]
+  properties:
+    multiplier:
+      type: integer
+      example: 20
+    weight:
+      type: integer
+      example: 15
 SlotSymbolConfig:
   type: object
   required:
   - id
   - name
   - rarity
+  - type
   - weight
-  - multiplier
   properties:
     id:
       type: string
@@ -286,12 +384,25 @@ SlotSymbolConfig:
     rarity:
       type: string
       enum: [common, rare, epic, legendary]
+    type:
+      type: string
+      enum: [normal, wild, scatter, bonus]
     weight:
       type: integer
-      example: 18
+      example: 16
     multiplier:
       type: integer
-      example: 30
+      example: 12
+    freeSpins:
+      type: integer
+      example: 5
+    retriggerFreeSpins:
+      type: integer
+      example: 3
+    bonusMultipliers:
+      type: array
+      items:
+        $ref: '#/components/schemas/SlotBonusMultiplierConfig'
 FishingConfig:
   type: object
   required:

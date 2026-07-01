@@ -123,10 +123,10 @@ const MiniGamesTab: FC = () => {
             </div>
             <h3 className="text-sm font-bold text-[var(--color-text-primary)] mb-1">天机轮转</h3>
             <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
-              投入兵力驱动天机轮盘，三符同现即可获得兵种库存
+              三轮滚动、固定5线、后端结算、可兑换兵种
             </p>
             <div className="mt-3 flex flex-wrap gap-1.5">
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 font-medium">押注兵力</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 font-medium">固定5线</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 font-medium">后端结算</span>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 font-medium">可兑换兵种</span>
             </div>

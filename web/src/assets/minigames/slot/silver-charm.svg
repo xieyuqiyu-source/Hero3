@@ -1,0 +1,19 @@
+<!-- 本文件绘制天机轮转白银符小图标。 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="白银符">
+  <defs>
+    <linearGradient id="silver-bg" x1="19" y1="7" x2="61" y2="73" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="0.5" stop-color="#9fb4cf"/>
+      <stop offset="1" stop-color="#43556f"/>
+    </linearGradient>
+    <linearGradient id="silver-ribbon" x1="25" y1="14" x2="56" y2="65" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60a5fa"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <path d="M27 10h26l9 12v43l-22 8-22-8V22l9-12Z" fill="url(#silver-bg)" stroke="#dbeafe" stroke-width="3"/>
+  <path d="M28 18h24" stroke="#f8fafc" stroke-width="4" stroke-linecap="round"/>
+  <path d="M25 33c9-7 21-7 30 0M25 48c9 7 21 7 30 0" stroke="url(#silver-ribbon)" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="40" cy="40" r="8" fill="#eff6ff" stroke="#2563eb" stroke-width="3"/>
+  <path d="M36 40h8M40 36v8" stroke="#2563eb" stroke-width="3" stroke-linecap="round"/>
+</svg>

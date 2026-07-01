@@ -2,7 +2,7 @@
 import { useState, useEffect, type FC } from 'react'
 import { Trophy, Skull, X, Share2, Check } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import type { BattleReport } from '@/types/game'
+import type { BattleReport, BattleReportSweepDefender } from '@/types/game'
 import { useConfigStore } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
 import { getTraitMeta } from '@/utils/traits'
@@ -20,6 +20,12 @@ const DROP_QUALITY_CLASS: Record<string, string> = {
   rare: 'text-blue-600 bg-blue-500/10 border-blue-500/20',
   epic: 'text-purple-600 bg-purple-500/10 border-purple-500/20',
   legendary: 'text-amber-600 bg-amber-500/10 border-amber-500/25',
+}
+
+// readSweepDefenders 读取扫荡聚合战报中的多个 NPC 防守方快照。
+function readSweepDefenders(report: BattleReport): BattleReportSweepDefender[] {
+  const defenders = report.detail?.extra?.sweep?.defenders
+  return Array.isArray(defenders) ? defenders : []
 }
 
 const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
@@ -89,6 +95,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
   const generalLevelAfter = report.generalLevelAfter ?? report.detail?.rewards?.generalLevelAfter
   const drops = report.drops ?? report.detail?.rewards?.drops ?? []
   const mergedDrops = mergeBattleReportDrops(drops)
+  const sweepDefenders = readSweepDefenders(report)
 
   return (
     <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
@@ -176,6 +183,35 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
                     {getUnitName(unitType)} ×{count}
                   </span>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {sweepDefenders.length > 0 && (
+            <div>
+              <h3 className="text-[11px] font-semibold text-[var(--color-text-primary)] mb-1.5">防守方战损</h3>
+              <div className="space-y-1.5">
+                {sweepDefenders.map((defender) => {
+                  const losses = (defender.units ?? []).filter((unit) => unit.lost > 0)
+                  const total = losses.reduce((sum, unit) => sum + unit.lost, 0)
+                  return (
+                    <div key={defender.targetId} className="rounded-lg border border-blue-500/15 bg-blue-500/5 px-2.5 py-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate text-[10px] font-bold text-blue-600">{defender.targetName || defender.targetId}</span>
+                        <span className="shrink-0 text-[10px] font-bold text-red-600">阵亡 {total.toLocaleString()}</span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {losses.length > 0 ? losses.map((unit) => (
+                          <span key={unit.unitType} className="rounded bg-red-500/10 px-1.5 py-0.5 text-[9px] font-medium text-red-600">
+                            {unit.unitName || getUnitName(unit.unitType)} ×{unit.lost.toLocaleString()}
+                          </span>
+                        )) : (
+                          <span className="text-[9px] text-[var(--color-text-muted)]">无可见战损</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}

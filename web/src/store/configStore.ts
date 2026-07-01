@@ -103,14 +103,18 @@ export interface SlotSymbolConfig {
   id: string
   name: string
   rarity: 'common' | 'rare' | 'epic' | 'legendary' | string
+  type: 'normal' | 'wild' | 'scatter' | 'bonus' | string
   weight: number
-  multiplier: number
+  multiplier?: number
+  freeSpins?: number
+  retriggerFreeSpins?: number
+  bonusMultipliers?: Array<{ multiplier: number; weight: number }>
 }
 
 export interface SlotConfig {
-  minBet: number
-  maxBet: number
-  maxBetRatio: number
+  minLineBet: number
+  lineCount: number
+  maxFreeSpinsPerRound: number
   symbols: SlotSymbolConfig[]
 }
 

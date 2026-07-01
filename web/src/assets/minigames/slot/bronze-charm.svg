@@ -1,0 +1,19 @@
+<!-- 本文件绘制天机轮转玄铜符小图标。 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="玄铜符">
+  <defs>
+    <linearGradient id="bronze-bg" x1="16" y1="10" x2="64" y2="70" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f6b36a"/>
+      <stop offset="0.52" stop-color="#b86a2a"/>
+      <stop offset="1" stop-color="#5f3218"/>
+    </linearGradient>
+    <radialGradient id="bronze-shine" cx="0" cy="0" r="1" gradientTransform="matrix(20 24 -24 20 30 24)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff3cf" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#fff3cf" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M40 8 65 22v30L40 72 15 52V22L40 8Z" fill="url(#bronze-bg)" stroke="#f3c076" stroke-width="3"/>
+  <path d="M40 8 65 22v30L40 72 15 52V22L40 8Z" fill="url(#bronze-shine)"/>
+  <rect x="30" y="30" width="20" height="20" rx="3" fill="#2b1a12" opacity="0.62"/>
+  <rect x="35" y="35" width="10" height="10" rx="2" fill="#f7b86d"/>
+  <path d="M25 25h9M46 25h9M25 55h9M46 55h9" stroke="#ffd08a" stroke-width="4" stroke-linecap="round"/>
+</svg>

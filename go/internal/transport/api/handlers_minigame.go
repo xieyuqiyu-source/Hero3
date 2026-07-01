@@ -135,6 +135,7 @@ func (h *Handlers) ResolveSlotRound(w http.ResponseWriter, r *http.Request) {
 		PlayerID    string `json:"playerId"`
 		BetUnitType string `json:"betUnitType"`
 		BetAmount   int    `json:"betAmount"`
+		LineBet     int    `json:"lineBet"`
 	}
 	if !decodeJSON(w, r, &payload) {
 		return
@@ -142,7 +143,11 @@ func (h *Handlers) ResolveSlotRound(w http.ResponseWriter, r *http.Request) {
 	if !h.requireOwnership(w, r, payload.PlayerID) {
 		return
 	}
-	result, err := h.gameService.ResolveSlotRound(payload.PlayerID, payload.BetUnitType, payload.BetAmount)
+	lineBet := payload.LineBet
+	if lineBet == 0 {
+		lineBet = payload.BetAmount
+	}
+	result, err := h.gameService.ResolveSlotRound(payload.PlayerID, payload.BetUnitType, lineBet)
 	if err != nil {
 		status := http.StatusBadRequest
 		message := err.Error()

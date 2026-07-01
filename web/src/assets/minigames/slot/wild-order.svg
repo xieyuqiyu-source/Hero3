@@ -1,0 +1,15 @@
+<!-- 本文件绘制天机轮转天机令小图标。 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="天机令">
+  <defs>
+    <linearGradient id="wild-bg" x1="14" y1="11" x2="66" y2="69" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#c4b5fd"/>
+      <stop offset="0.5" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#312e81"/>
+    </linearGradient>
+  </defs>
+  <circle cx="40" cy="40" r="31" fill="url(#wild-bg)" stroke="#ddd6fe" stroke-width="3"/>
+  <path d="M40 13v12M40 55v12M13 40h12M55 40h12" stroke="#f5f3ff" stroke-width="4" stroke-linecap="round"/>
+  <path d="M40 24 49 40 40 56 31 40 40 24Z" fill="#111827" opacity="0.65" stroke="#a78bfa" stroke-width="3"/>
+  <path d="M40 31v18M32 40h16" stroke="#facc15" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="40" cy="40" r="5" fill="#fef3c7"/>
+</svg>

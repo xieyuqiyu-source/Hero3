@@ -507,7 +507,6 @@ func (s *Service) SweepNpc(req SweepNpcRequest) (SweepNpcResponse, error) {
 	}
 
 	reports := make([]BattleReport, 0, len(npcIDs))
-	detailReports := make([]BattleReport, 0, len(npcIDs))
 	for _, npcID := range npcIDs {
 		units := sweepUnitsFromArmy(currentArmy)
 		if len(units) == 0 {
@@ -537,9 +536,6 @@ func (s *Service) SweepNpc(req SweepNpcRequest) (SweepNpcResponse, error) {
 
 		response.Done++
 		reports = append(reports, result.BattleReport)
-		if shouldKeepSweepDetailReport(result.BattleReport) {
-			detailReports = append(detailReports, prepareSweepDetailReport(result.BattleReport))
-		}
 		currentArmy = result.Army
 		response.Resources = result.Resources
 		response.Army = result.Army
@@ -555,9 +551,6 @@ func (s *Service) SweepNpc(req SweepNpcRequest) (SweepNpcResponse, error) {
 	}
 
 	report := buildNpcSweepReport(sweepReportID, reports, mode, len(npcIDs), response.Failed, response.Stopped)
-	reportsToSave := make([]BattleReport, 0, 1+len(detailReports))
-	reportsToSave = append(reportsToSave, report)
-	reportsToSave = append(reportsToSave, detailReports...)
 	createResult, err := s.CreateBattleReports(BattleReportCreateInput{
 		EventID:    report.EventID,
 		SourceType: report.SourceType,
@@ -565,7 +558,7 @@ func (s *Service) SweepNpc(req SweepNpcRequest) (SweepNpcResponse, error) {
 		BattleType: report.BattleType,
 		Result:     report.Result,
 		OccurredAt: report.CreatedAt,
-		Reports:    reportsToSave,
+		Reports:    []BattleReport{report},
 		Extra: map[string]interface{}{
 			"requested": len(npcIDs),
 			"success":   response.Done,
@@ -599,58 +592,6 @@ func (s *Service) SweepNpc(req SweepNpcRequest) (SweepNpcResponse, error) {
 	s.publishBattleFinished(playerID, report)
 	response.BattleReport = report
 	return response, nil
-}
-
-// shouldKeepSweepDetailReport 判断扫荡中的单场战斗是否需要额外保留完整战报。
-func shouldKeepSweepDetailReport(report BattleReport) bool {
-	if report.Result != "" && report.Result != "attacker_victory" {
-		return true
-	}
-	if report.GeneralLevelAfter > report.GeneralLevelBefore && report.GeneralLevelBefore > 0 {
-		return true
-	}
-	if hasHighQualityBattleDrop(report.Drops) {
-		return true
-	}
-	if len(report.TraitTriggered) > 0 || len(report.TraitOutcomes) > 0 {
-		return true
-	}
-	if hasPositiveTroopMap(report.CapturedUnits) || hasPositiveTroopMap(report.CapturedToGarrison) || hasPositiveTroopMap(report.RevivedUnits) {
-		return true
-	}
-	if report.OverflowCityGold > 0 {
-		return true
-	}
-	return false
-}
-
-// prepareSweepDetailReport 为扫荡特殊明细补齐分类字段，避免被汇总战报类型覆盖。
-func prepareSweepDetailReport(report BattleReport) BattleReport {
-	report.ViewType = ReportViewAttack
-	report.SourceType = ReportSourceNPCCity
-	report.BattleType = valueOrDefault(report.BattleType, report.Type)
-	report.OwnerPlayerID = valueOrDefault(report.OwnerPlayerID, report.PlayerID)
-	return report
-}
-
-// hasHighQualityBattleDrop 判断战斗掉落里是否包含需要保留单场明细的高品质道具。
-func hasHighQualityBattleDrop(drops []BattleReportDrop) bool {
-	for _, drop := range drops {
-		if itemQualityRank(drop.Quality) >= itemQualityRank(ItemQualityEpic) {
-			return true
-		}
-	}
-	return false
-}
-
-// hasPositiveTroopMap 判断兵力 map 是否包含正数变化。
-func hasPositiveTroopMap(values map[string]int) bool {
-	for _, amount := range values {
-		if amount > 0 {
-			return true
-		}
-	}
-	return false
 }
 
 // normalizeSweepNpcIDs 去重并过滤空 NPC ID，避免一次扫荡重复打同一个目标。
@@ -697,6 +638,8 @@ func buildNpcSweepReport(reportID string, reports []BattleReport, mode string, r
 		TargetName:       "NPC 扫荡",
 		Type:             mode,
 		Result:           "attacker_victory",
+		PlayerPower:      first.PlayerPower,
+		DispatchedUnits:  cloneStringIntMap(first.DispatchedUnits),
 		DefenderFaction:  first.DefenderFaction,
 		DefenderRevealed: true,
 		Read:             false,
@@ -705,9 +648,7 @@ func buildNpcSweepReport(reportID string, reports []BattleReport, mode string, r
 
 	levelBeforeSet := false
 	for _, report := range reports {
-		aggregate.PlayerPower += report.PlayerPower
 		aggregate.EnemyPower += report.EnemyPower
-		aggregate.DispatchedUnits = mergeTroopMaps(aggregate.DispatchedUnits, report.DispatchedUnits)
 		aggregate.LostUnits = mergeTroopMaps(aggregate.LostUnits, report.LostUnits)
 		aggregate.DefenderUnits = mergeTroopMaps(aggregate.DefenderUnits, report.DefenderUnits)
 		aggregate.DefenderLostUnits = mergeTroopMaps(aggregate.DefenderLostUnits, report.DefenderLostUnits)
@@ -742,9 +683,29 @@ func buildNpcSweepReport(reportID string, reports []BattleReport, mode string, r
 		"failed":    failed,
 		"stopped":   stopped,
 		"mode":      mode,
+		"defenders": buildNpcSweepDefenders(reports),
 	}
 	aggregate.Detail = &detail
 	return aggregate
+}
+
+// buildNpcSweepDefenders 构造扫荡聚合战报里的多个 NPC 防守方明细。
+func buildNpcSweepDefenders(reports []BattleReport) []BattleReportSweepDefender {
+	defenders := make([]BattleReportSweepDefender, 0, len(reports))
+	for _, report := range reports {
+		defenders = append(defenders, BattleReportSweepDefender{
+			TargetID:         report.TargetID,
+			TargetName:       report.TargetName,
+			Faction:          report.DefenderFaction,
+			FactionLabel:     factionLabel(report.DefenderFaction),
+			Power:            report.EnemyPower,
+			Result:           report.Result,
+			DefenderRevealed: report.DefenderRevealed,
+			Units:            buildReportUnits(report.DefenderFaction, report.DefenderUnits, report.DefenderLostUnits, nil),
+			Resources:        cloneReportIntMap(report.DefenderResources),
+		})
+	}
+	return defenders
 }
 
 // latestPvpGeneralSnapshots 保留最新的武将快照，确保聚合战报展示扫荡结束后的等级。

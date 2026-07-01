@@ -73,7 +73,7 @@ go build ./cmd/server
 - `clone-data` 不复制或清空 `schema_migrations`，测试库迁移记录由测试库自己的迁移命令维护。
 - 物品系统使用 `go/config/items.json` 和 `go/config/drop_pools.json` 配置注册；背包权威表按格子 `slot_id` 存储，兼容接口仍返回按物品聚合的 `inventory`。
 - NPC 层级可在 `go/config/npc.json` 通过 `dropPoolId` 绑定掉落池；掉落池支持 `slots` 独立槽位和 `none` 空掉落，用于配置保底、低概率和多段概率奖励。
-- 万象幻境当前包含仙池垂钓、军营豪赌和天机轮转；军营豪赌与天机轮转均由后端结算并复用 `minigame_records` 库存兑换体系，天机轮转配置在 `go/config/slot.json`。
+- 万象幻境当前包含仙池垂钓、军营豪赌和天机轮转；军营豪赌与天机轮转均由后端结算并复用 `minigame_records` 库存兑换体系，天机轮转配置在 `go/config/slot.json`。天机轮转第二版采用每线押注、固定 5 线、3x3 服务端结果矩阵，并支持 Wild、Scatter 免费旋转和 Bonus 奖励。
 - 物品获得和消耗会写入 `item_ledger`，GM 后台可查看物品配置、玩家背包格子和物品流水。
 - 战斗规则使用 `go/config/combat.json`，GM 后台可调整损失指数、场景规则映射和悬殊战力无损阈值 `noLossPowerRatioThreshold`。
 - 购买产量/容量加成时，同倍率续订只叠加剩余时间；不同倍率购买会按新倍率和新时长重新计算。

@@ -1,0 +1,19 @@
+<!-- 本文件绘制天机轮转赤金符小图标。 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="赤金符">
+  <defs>
+    <linearGradient id="gold-bg" x1="18" y1="8" x2="62" y2="72" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff7ad"/>
+      <stop offset="0.45" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#8a3b0d"/>
+    </linearGradient>
+    <linearGradient id="gold-core" x1="30" y1="24" x2="50" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="0.45" stop-color="#fde047"/>
+      <stop offset="1" stop-color="#f97316"/>
+    </linearGradient>
+  </defs>
+  <path d="M40 7 64 22l-6 42-18 9-18-9-6-42L40 7Z" fill="url(#gold-bg)" stroke="#fde68a" stroke-width="3"/>
+  <path d="M25 29 40 20l15 9-4 21-11 8-11-8-4-21Z" fill="url(#gold-core)" stroke="#fff7ad" stroke-width="2"/>
+  <path d="M40 24v30M30 37h20" stroke="#92400e" stroke-width="4" stroke-linecap="round"/>
+  <path d="M23 22 18 15M57 22l5-7M25 61l-5 6M55 61l5 6" stroke="#fff7ad" stroke-width="4" stroke-linecap="round"/>
+</svg>

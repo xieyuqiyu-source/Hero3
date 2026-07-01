@@ -11,18 +11,27 @@ import (
 )
 
 type SlotConfig struct {
-	MinBet      int          `json:"minBet"`
-	MaxBet      int          `json:"maxBet"`
-	MaxBetRatio float64      `json:"maxBetRatio"`
-	Symbols     []SlotSymbol `json:"symbols"`
+	MinLineBet           int          `json:"minLineBet"`
+	LineCount            int          `json:"lineCount"`
+	MaxFreeSpinsPerRound int          `json:"maxFreeSpinsPerRound"`
+	Symbols              []SlotSymbol `json:"symbols"`
 }
 
 type SlotSymbol struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Rarity     string `json:"rarity"`
-	Weight     int    `json:"weight"`
-	Multiplier int    `json:"multiplier"`
+	ID                 string                `json:"id"`
+	Name               string                `json:"name"`
+	Rarity             string                `json:"rarity"`
+	Type               string                `json:"type"`
+	Weight             int                   `json:"weight"`
+	Multiplier         int                   `json:"multiplier,omitempty"`
+	FreeSpins          int                   `json:"freeSpins,omitempty"`
+	RetriggerFreeSpins int                   `json:"retriggerFreeSpins,omitempty"`
+	BonusMultipliers   []SlotBonusMultiplier `json:"bonusMultipliers,omitempty"`
+}
+
+type SlotBonusMultiplier struct {
+	Multiplier int `json:"multiplier"`
+	Weight     int `json:"weight"`
 }
 
 var (
@@ -31,16 +40,24 @@ var (
 )
 
 var defaultSlotConfig = SlotConfig{
-	MinBet:      1000,
-	MaxBet:      1000000,
-	MaxBetRatio: 0.05,
+	MinLineBet:           1000,
+	LineCount:            5,
+	MaxFreeSpinsPerRound: 20,
 	Symbols: []SlotSymbol{
-		{ID: "bronze_charm", Name: "玄铜符", Rarity: "common", Weight: 35, Multiplier: 5},
-		{ID: "silver_charm", Name: "白银符", Rarity: "rare", Weight: 25, Multiplier: 12},
-		{ID: "gold_charm", Name: "赤金符", Rarity: "rare", Weight: 18, Multiplier: 30},
-		{ID: "jade_seal", Name: "玉玺", Rarity: "epic", Weight: 12, Multiplier: 80},
-		{ID: "tiger_tally", Name: "虎符", Rarity: "epic", Weight: 7, Multiplier: 250},
-		{ID: "heaven_order", Name: "天命令", Rarity: "legendary", Weight: 3, Multiplier: 1000},
+		{ID: "bronze_charm", Name: "玄铜符", Rarity: "common", Type: "normal", Weight: 30, Multiplier: 3},
+		{ID: "silver_charm", Name: "白银符", Rarity: "rare", Type: "normal", Weight: 22, Multiplier: 6},
+		{ID: "gold_charm", Name: "赤金符", Rarity: "rare", Type: "normal", Weight: 16, Multiplier: 12},
+		{ID: "jade_seal", Name: "玉玺", Rarity: "epic", Type: "normal", Weight: 10, Multiplier: 30},
+		{ID: "tiger_tally", Name: "虎符", Rarity: "epic", Type: "normal", Weight: 6, Multiplier: 80},
+		{ID: "heaven_order", Name: "天命令", Rarity: "legendary", Type: "normal", Weight: 2, Multiplier: 250},
+		{ID: "wild", Name: "天机令", Rarity: "epic", Type: "wild", Weight: 5, Multiplier: 250},
+		{ID: "scatter", Name: "星陨", Rarity: "epic", Type: "scatter", Weight: 4, FreeSpins: 5, RetriggerFreeSpins: 3},
+		{ID: "bonus", Name: "宝匣", Rarity: "rare", Type: "bonus", Weight: 5, BonusMultipliers: []SlotBonusMultiplier{
+			{Multiplier: 5, Weight: 50},
+			{Multiplier: 10, Weight: 30},
+			{Multiplier: 20, Weight: 15},
+			{Multiplier: 50, Weight: 5},
+		}},
 	},
 }
 
@@ -101,35 +118,81 @@ func SaveSlotConfig(path string, cfg SlotConfig) error {
 
 // ValidateSlotConfig 校验天机轮转押注和图案配置。
 func ValidateSlotConfig(cfg SlotConfig) error {
-	if cfg.MinBet <= 0 || cfg.MaxBet < cfg.MinBet || cfg.MaxBetRatio <= 0 || cfg.MaxBetRatio > 1 {
+	if cfg.MinLineBet <= 0 {
 		return errors.New("invalid slot bet config")
+	}
+	if cfg.LineCount <= 0 || cfg.MaxFreeSpinsPerRound <= 0 {
+		return errors.New("invalid slot line or free spin config")
 	}
 	if len(cfg.Symbols) == 0 {
 		return errors.New("slot symbols are required")
 	}
 	seen := map[string]bool{}
+	hasWild := false
+	hasScatter := false
+	hasBonus := false
+	hasHeavenOrder := false
 	for _, symbol := range cfg.Symbols {
 		id := strings.TrimSpace(symbol.ID)
-		if id == "" || strings.TrimSpace(symbol.Name) == "" || strings.TrimSpace(symbol.Rarity) == "" {
-			return errors.New("slot symbol id, name and rarity are required")
+		symbolType := strings.TrimSpace(symbol.Type)
+		if id == "" || strings.TrimSpace(symbol.Name) == "" || strings.TrimSpace(symbol.Rarity) == "" || symbolType == "" {
+			return errors.New("slot symbol id, name, rarity and type are required")
 		}
 		if seen[id] {
 			return errors.New("duplicate slot symbol id: " + id)
 		}
 		seen[id] = true
-		if symbol.Weight <= 0 || symbol.Multiplier <= 0 {
-			return errors.New("slot symbol weight and multiplier must be positive: " + id)
+		if symbol.Weight <= 0 {
+			return errors.New("slot symbol weight must be positive: " + id)
 		}
+		switch symbolType {
+		case "normal":
+			if symbol.Multiplier <= 0 {
+				return errors.New("slot normal symbol multiplier must be positive: " + id)
+			}
+			if id == "heaven_order" {
+				hasHeavenOrder = true
+			}
+		case "wild":
+			if symbol.Multiplier <= 0 {
+				return errors.New("slot wild multiplier must be positive: " + id)
+			}
+			hasWild = true
+		case "scatter":
+			if symbol.FreeSpins <= 0 || symbol.RetriggerFreeSpins <= 0 {
+				return errors.New("slot scatter free spin config must be positive: " + id)
+			}
+			hasScatter = true
+		case "bonus":
+			if len(symbol.BonusMultipliers) == 0 {
+				return errors.New("slot bonus multipliers are required: " + id)
+			}
+			for _, bonus := range symbol.BonusMultipliers {
+				if bonus.Multiplier <= 0 || bonus.Weight <= 0 {
+					return errors.New("slot bonus multiplier and weight must be positive: " + id)
+				}
+			}
+			hasBonus = true
+		default:
+			return errors.New("unsupported slot symbol type: " + symbolType)
+		}
+	}
+	if !hasWild || !hasScatter || !hasBonus || !hasHeavenOrder {
+		return errors.New("slot config must include wild, scatter, bonus and heaven_order symbols")
 	}
 	return nil
 }
 
 // cloneSlotConfig 复制配置，避免调用方修改全局配置。
 func cloneSlotConfig(cfg SlotConfig) SlotConfig {
-	return SlotConfig{
-		MinBet:      cfg.MinBet,
-		MaxBet:      cfg.MaxBet,
-		MaxBetRatio: cfg.MaxBetRatio,
-		Symbols:     append([]SlotSymbol(nil), cfg.Symbols...),
+	result := SlotConfig{
+		MinLineBet:           cfg.MinLineBet,
+		LineCount:            cfg.LineCount,
+		MaxFreeSpinsPerRound: cfg.MaxFreeSpinsPerRound,
+		Symbols:              append([]SlotSymbol(nil), cfg.Symbols...),
 	}
+	for i := range result.Symbols {
+		result.Symbols[i].BonusMultipliers = append([]SlotBonusMultiplier(nil), cfg.Symbols[i].BonusMultipliers...)
+	}
+	return result
 }

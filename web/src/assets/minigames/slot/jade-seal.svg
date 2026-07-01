@@ -1,0 +1,19 @@
+<!-- 本文件绘制天机轮转玉玺小图标。 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="玉玺">
+  <defs>
+    <linearGradient id="jade-body" x1="18" y1="14" x2="62" y2="70" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#bbf7d0"/>
+      <stop offset="0.55" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#065f46"/>
+    </linearGradient>
+    <radialGradient id="jade-glow" cx="0" cy="0" r="1" gradientTransform="matrix(20 16 -16 20 32 28)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ecfdf5"/>
+      <stop offset="1" stop-color="#ecfdf5" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M28 18c3-8 21-8 24 0 2 6-3 12-12 12S26 24 28 18Z" fill="#064e3b" opacity="0.85"/>
+  <rect x="23" y="29" width="34" height="28" rx="6" fill="url(#jade-body)" stroke="#a7f3d0" stroke-width="3"/>
+  <path d="M23 29h34v28H23z" fill="url(#jade-glow)"/>
+  <path d="M18 57h44l6 10H12l6-10Z" fill="#047857" stroke="#86efac" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M33 39h14M33 48h14" stroke="#ecfdf5" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+</svg>

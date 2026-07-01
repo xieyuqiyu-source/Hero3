@@ -2288,7 +2288,8 @@ paths:
       tags:
       - MiniGame
       summary: 结算一局天机轮转
-      description: 后端校验押注兵种和数量，扣除押注兵力，服务器抽取三轴图案并写入 slot 小游戏记录。
+      description: 后端校验押注兵种和每线押注，按固定 5 线扣除总押注；不设置额外押注上限，只有当前兵力不足支付总押注时拒绝。服务器生成 3x3
+        图案、赔付线、免费旋转和宝匣奖励，并写入一条 slot 小游戏记录。
       requestBody:
         required: true
         content:
@@ -2298,7 +2299,7 @@ paths:
               required:
               - playerId
               - betUnitType
-              - betAmount
+              - lineBet
               properties:
                 playerId:
                   type: string
@@ -2306,8 +2307,9 @@ paths:
                   type: string
                   description: 押注兵种 ID。
                   example: qiQiYing
-                betAmount:
+                lineBet:
                   type: integer
+                  description: 每线押注；总押注为 lineBet × 5。
                   minimum: 1000
                   example: 10000
       responses:
@@ -2324,7 +2326,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '422':
-          description: 押注兵种不存在、押注不足、超过上限或兵种不能押注
+          description: 押注兵种不存在、押注不足、兵力不足或兵种不能押注
           content:
             application/json:
               schema:
@@ -5237,14 +5239,17 @@ components:
       - record
       - serverTime
       - won
-      - symbols
-      - symbolNames
-      - multiplier
+      - grid
+      - lineBet
+      - lineCount
+      - totalBet
+      - winningLines
+      - freeSpins
+      - bonusRewards
       - betUnitId
       - betUnit
       - betAmount
       - winAmount
-      - maxBet
       properties:
         record:
           $ref: '#/components/schemas/MiniGameRecord'
@@ -5258,25 +5263,44 @@ components:
           format: date-time
         won:
           type: boolean
-        symbols:
+        grid:
           type: array
+          description: 3x3 行优先结果矩阵，外层为上/中/下三行，内层为左/中/右三轮。
           items:
-            type: string
+            type: array
+            items:
+              type: string
           example:
-          - gold_charm
-          - gold_charm
-          - gold_charm
-        symbolNames:
-          type: array
-          items:
-            type: string
-          example:
-          - 赤金符
-          - 赤金符
-          - 赤金符
-        multiplier:
+          - - bronze_charm
+            - silver_charm
+            - tiger_tally
+          - - gold_charm
+            - gold_charm
+            - gold_charm
+          - - scatter
+            - jade_seal
+            - bonus
+        lineBet:
           type: integer
-          example: 30
+          example: 10000
+        lineCount:
+          type: integer
+          example: 5
+        totalBet:
+          type: integer
+          example: 50000
+        winningLines:
+          type: array
+          items:
+            $ref: '#/components/schemas/SlotWinningLine'
+        freeSpins:
+          type: array
+          items:
+            $ref: '#/components/schemas/SlotFreeSpinResult'
+        bonusRewards:
+          type: array
+          items:
+            $ref: '#/components/schemas/SlotBonusReward'
         betUnitId:
           type: string
           example: qiQiYing
@@ -5285,10 +5309,11 @@ components:
           example: 骁骑营
         betAmount:
           type: integer
-          example: 10000
+          description: 与 totalBet 相同，用于兼容小游戏记录展示。
+          example: 50000
         winAmount:
           type: integer
-          example: 300000
+          example: 120000
         rewardRarity:
           type: string
           enum:
@@ -5296,27 +5321,23 @@ components:
           - rare
           - epic
           - legendary
-        maxBet:
-          type: integer
-          description: 按当前兵力和配置计算出的本局最大押注。
     SlotConfig:
       type: object
       required:
-      - minBet
-      - maxBet
-      - maxBetRatio
+      - minLineBet
+      - lineCount
+      - maxFreeSpinsPerRound
       - symbols
       properties:
-        minBet:
+        minLineBet:
           type: integer
           example: 1000
-        maxBet:
+        lineCount:
           type: integer
-          example: 1000000
-        maxBetRatio:
-          type: number
-          format: double
-          example: 0.05
+          example: 5
+        maxFreeSpinsPerRound:
+          type: integer
+          example: 20
         symbols:
           type: array
           items:
@@ -5327,8 +5348,8 @@ components:
       - id
       - name
       - rarity
+      - type
       - weight
-      - multiplier
       properties:
         id:
           type: string
@@ -5343,12 +5364,29 @@ components:
           - rare
           - epic
           - legendary
+        type:
+          type: string
+          enum:
+          - normal
+          - wild
+          - scatter
+          - bonus
         weight:
           type: integer
-          example: 18
+          example: 16
         multiplier:
           type: integer
-          example: 30
+          example: 12
+        freeSpins:
+          type: integer
+          example: 5
+        retriggerFreeSpins:
+          type: integer
+          example: 3
+        bonusMultipliers:
+          type: array
+          items:
+            $ref: '#/components/schemas/SlotBonusMultiplierConfig'
     FishingConfig:
       type: object
       required:

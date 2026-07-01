@@ -1,0 +1,19 @@
+<!-- 本文件绘制天机轮转宝匣小图标。 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="宝匣">
+  <defs>
+    <linearGradient id="chest-lid" x1="15" y1="15" x2="65" y2="43" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fcd34d"/>
+      <stop offset="1" stop-color="#b45309"/>
+    </linearGradient>
+    <linearGradient id="chest-body" x1="14" y1="34" x2="66" y2="68" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7dd3fc"/>
+      <stop offset="0.45" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#1e1b4b"/>
+    </linearGradient>
+  </defs>
+  <path d="M18 36c2-15 13-23 22-23s20 8 22 23H18Z" fill="url(#chest-lid)" stroke="#fde68a" stroke-width="3"/>
+  <rect x="14" y="34" width="52" height="31" rx="6" fill="url(#chest-body)" stroke="#bfdbfe" stroke-width="3"/>
+  <path d="M14 45h52M27 34v31M53 34v31" stroke="#facc15" stroke-width="4"/>
+  <rect x="34" y="42" width="12" height="13" rx="3" fill="#fef3c7" stroke="#92400e" stroke-width="3"/>
+  <path d="M31 20 25 13M49 20l6-7M40 17V8" stroke="#fde68a" stroke-width="4" stroke-linecap="round"/>
+</svg>

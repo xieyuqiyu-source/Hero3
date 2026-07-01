@@ -1,0 +1,15 @@
+<!-- 本文件绘制天机轮转天命令小图标。 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="天命令">
+  <defs>
+    <linearGradient id="order-body" x1="24" y1="5" x2="56" y2="67" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fef3c7"/>
+      <stop offset="0.45" stop-color="#eab308"/>
+      <stop offset="1" stop-color="#854d0e"/>
+    </linearGradient>
+  </defs>
+  <path d="M27 8h26l7 8v48l-20 9-20-9V16l7-8Z" fill="url(#order-body)" stroke="#fde68a" stroke-width="3"/>
+  <path d="M31 19h18M30 31h20M34 43h12" stroke="#7c2d12" stroke-width="4" stroke-linecap="round"/>
+  <path d="M40 55v16" stroke="#dc2626" stroke-width="5" stroke-linecap="round"/>
+  <path d="M33 66c3-4 11-4 14 0" stroke="#f97316" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="40" cy="12" r="4" fill="#fff7ed"/>
+</svg>

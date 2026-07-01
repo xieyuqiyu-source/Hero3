@@ -401,6 +401,19 @@ export interface BattleReportSweepExtra {
   failed?: number
   stopped?: boolean
   mode?: string
+  defenders?: BattleReportSweepDefender[]
+}
+
+export interface BattleReportSweepDefender {
+  targetId: string
+  targetName: string
+  faction?: string
+  factionLabel?: string
+  power: number
+  result?: string
+  defenderRevealed: boolean
+  units: BattleReportUnit[]
+  resources?: Record<string, number>
 }
 
 export interface BattleReportSide {
@@ -570,15 +583,42 @@ export interface SlotRoundResult {
   army?: ArmyUnit[]
   serverTime: string
   won: boolean
-  symbols: string[]
-  symbolNames: string[]
-  multiplier: number
+  grid: string[][]
+  lineBet: number
+  lineCount: number
+  totalBet: number
+  winningLines: SlotWinningLine[]
+  freeSpins: SlotFreeSpinResult[]
+  bonusRewards: SlotBonusReward[]
   betUnitId: string
   betUnit: string
   betAmount: number
   winAmount: number
   rewardRarity: string
-  maxBet: number
+}
+
+export interface SlotWinningLine {
+  lineId: string
+  symbol: string
+  symbolName: string
+  multiplier: number
+  amount: number
+  positions: number[][]
+}
+
+export interface SlotBonusReward {
+  multiplier: number
+  amount: number
+}
+
+export interface SlotFreeSpinResult {
+  spinIndex: number
+  grid: string[][]
+  winningLines: SlotWinningLine[]
+  bonusRewards: SlotBonusReward[]
+  scatterCount: number
+  retriggeredFreeSpins: number
+  winAmount: number
 }
 
 export interface MiniGameRedeemAllResult {

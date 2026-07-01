@@ -1,0 +1,16 @@
+<!-- 本文件绘制天机轮转虎符小图标。 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="虎符">
+  <defs>
+    <linearGradient id="tiger-body" x1="15" y1="9" x2="65" y2="71" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f0abfc"/>
+      <stop offset="0.5" stop-color="#a855f7"/>
+      <stop offset="1" stop-color="#4c1d95"/>
+    </linearGradient>
+  </defs>
+  <path d="M17 25c6-11 18-15 31-10 12 5 19 16 17 29-2 15-15 25-31 22C18 63 10 49 17 25Z" fill="url(#tiger-body)" stroke="#e9d5ff" stroke-width="3"/>
+  <path d="M24 27 18 15M56 26l8-10" stroke="#f5d0fe" stroke-width="5" stroke-linecap="round"/>
+  <path d="M30 33h9M50 33h6" stroke="#1f1234" stroke-width="4" stroke-linecap="round"/>
+  <path d="M41 38 36 47h10l-5-9Z" fill="#1f1234"/>
+  <path d="M28 50c6 6 19 6 25 0" stroke="#1f1234" stroke-width="4" stroke-linecap="round"/>
+  <path d="M38 21l5 9 5-8M24 40l12-2M55 39l-10-2" stroke="#fbbf24" stroke-width="4" stroke-linecap="round"/>
+</svg>

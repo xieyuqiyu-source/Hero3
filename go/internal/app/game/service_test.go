@@ -1813,12 +1813,37 @@ func TestSweepNpcCreatesOneAggregateReport(t *testing.T) {
 	if result.BattleReport.BattleType != "sweep" || result.BattleReport.Title != "NPC 扫荡" {
 		t.Fatalf("expected aggregate sweep report, got %+v", result.BattleReport)
 	}
+	if result.BattleReport.DispatchedUnits["weiInfantry"] != 100 {
+		t.Fatalf("expected sweep attacker dispatched units to use initial army only, got %+v", result.BattleReport.DispatchedUnits)
+	}
+	if result.BattleReport.Detail == nil || result.BattleReport.Detail.PrimarySide.Units[0].Dispatched != 100 {
+		t.Fatalf("expected sweep detail primary side to use initial dispatched units, got %+v", result.BattleReport.Detail)
+	}
 	sweepExtra, ok := result.BattleReport.Detail.Extra["sweep"].(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected sweep extra in aggregate report detail, got %+v", result.BattleReport.Detail.Extra)
 	}
 	if sweepExtra["requested"] != 2 || sweepExtra["success"] != 2 || sweepExtra["failed"] != 0 || sweepExtra["stopped"] != false {
 		t.Fatalf("unexpected sweep extra: %+v", sweepExtra)
+	}
+	defenders, ok := sweepExtra["defenders"].([]BattleReportSweepDefender)
+	if !ok || len(defenders) != 2 {
+		t.Fatalf("expected two sweep defender snapshots, got %#v", sweepExtra["defenders"])
+	}
+	for _, defender := range defenders {
+		if defender.TargetID == "" || defender.Power <= 0 || len(defender.Units) == 0 {
+			t.Fatalf("expected defender snapshot to include target and units, got %+v", defender)
+		}
+		hasLoss := false
+		for _, unit := range defender.Units {
+			if unit.Lost > 0 {
+				hasLoss = true
+				break
+			}
+		}
+		if !hasLoss {
+			t.Fatalf("expected defender snapshot to include lost units, got %+v", defender)
+		}
 	}
 
 	reports, total, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: state.Player.ID, BattleType: "sweep", Page: 1, PageSize: 10})
@@ -1840,7 +1865,7 @@ func TestSweepNpcCreatesOneAggregateReport(t *testing.T) {
 	}
 }
 
-func TestSweepNpcKeepsDetailReportForGeneralLevelUp(t *testing.T) {
+func TestSweepNpcKeepsGeneralLevelUpInAggregateReportOnly(t *testing.T) {
 	setTestCombatUnitsConfig(t)
 	setTestGeneralsConfig(t, GeneralsConfig{
 		Enabled: true,
@@ -1883,6 +1908,14 @@ func TestSweepNpcKeepsDetailReportForGeneralLevelUp(t *testing.T) {
 	if result.BattleReport.BattleType != "sweep" || result.BattleReport.GeneralLevelAfter <= result.BattleReport.GeneralLevelBefore {
 		t.Fatalf("expected sweep aggregate to include level up, got %+v", result.BattleReport)
 	}
+	sweepExtra, ok := result.BattleReport.Detail.Extra["sweep"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected sweep extra in aggregate report detail, got %+v", result.BattleReport.Detail.Extra)
+	}
+	defenders, ok := sweepExtra["defenders"].([]BattleReportSweepDefender)
+	if !ok || len(defenders) != 1 {
+		t.Fatalf("expected one sweep defender snapshot, got %#v", sweepExtra["defenders"])
+	}
 
 	sweepReports, sweepTotal, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: state.Player.ID, BattleType: "sweep", Page: 1, PageSize: 10})
 	if err != nil {
@@ -1895,14 +1928,8 @@ func TestSweepNpcKeepsDetailReportForGeneralLevelUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list attack reports: %v", err)
 	}
-	if attackTotal != 1 || len(attackReports) != 1 {
-		t.Fatalf("expected one special detail attack report, total=%d reports=%+v", attackTotal, attackReports)
-	}
-	if attackReports[0].GeneralLevelAfter <= attackReports[0].GeneralLevelBefore {
-		t.Fatalf("expected detail report to preserve level up, got %+v", attackReports[0])
-	}
-	if attackReports[0].EventID != sweepReports[0].EventID {
-		t.Fatalf("expected detail report to share sweep event, sweep=%s detail=%s", sweepReports[0].EventID, attackReports[0].EventID)
+	if attackTotal != 0 || len(attackReports) != 0 {
+		t.Fatalf("expected no per-attack reports from sweep level up, total=%d reports=%+v", attackTotal, attackReports)
 	}
 }
 
@@ -2785,22 +2812,85 @@ func TestResolveGamblingRoundRejectsInsufficientArmyWithoutRecord(t *testing.T) 
 	}
 }
 
+func testSlotConfigForRules() SlotConfig {
+	return SlotConfig{
+		MinLineBet:           1000,
+		LineCount:            5,
+		MaxFreeSpinsPerRound: 20,
+		Symbols: []SlotSymbol{
+			{ID: "bronze_charm", Name: "玄铜符", Rarity: "common", Type: "normal", Weight: 30, Multiplier: 3},
+			{ID: "silver_charm", Name: "白银符", Rarity: "rare", Type: "normal", Weight: 22, Multiplier: 6},
+			{ID: "gold_charm", Name: "赤金符", Rarity: "rare", Type: "normal", Weight: 16, Multiplier: 12},
+			{ID: "jade_seal", Name: "玉玺", Rarity: "epic", Type: "normal", Weight: 10, Multiplier: 30},
+			{ID: "tiger_tally", Name: "虎符", Rarity: "epic", Type: "normal", Weight: 6, Multiplier: 80},
+			{ID: "heaven_order", Name: "天命令", Rarity: "legendary", Type: "normal", Weight: 2, Multiplier: 250},
+			{ID: "wild", Name: "天机令", Rarity: "epic", Type: "wild", Weight: 5, Multiplier: 250},
+			{ID: "scatter", Name: "星陨", Rarity: "epic", Type: "scatter", Weight: 4, FreeSpins: 5, RetriggerFreeSpins: 3},
+			{ID: "bonus", Name: "宝匣", Rarity: "rare", Type: "bonus", Weight: 5, BonusMultipliers: []SlotBonusMultiplier{
+				{Multiplier: 5, Weight: 50},
+				{Multiplier: 10, Weight: 30},
+				{Multiplier: 20, Weight: 15},
+				{Multiplier: 50, Weight: 5},
+			}},
+		},
+	}
+}
+
+func testSlotGrid(cfg SlotConfig, rows [3][3]string) [3][3]SlotSymbol {
+	symbols := slotSymbolsByID(cfg)
+	var grid [3][3]SlotSymbol
+	for row := range rows {
+		for col := range rows[row] {
+			grid[row][col] = symbols[rows[row][col]]
+		}
+	}
+	return grid
+}
+
+func setTestSlotGridSequence(t *testing.T, cfg SlotConfig, grids ...[3][3]string) {
+	t.Helper()
+	if err := SetSlotConfig(cfg); err != nil {
+		t.Fatalf("set slot config: %v", err)
+	}
+	previousGridRoller := slotGridRoller
+	previousBonusRoller := slotBonusRoller
+	index := 0
+	slotGridRoller = func(cfg SlotConfig) ([3][3]SlotSymbol, error) {
+		if len(grids) == 0 {
+			return testSlotGrid(cfg, [3][3]string{
+				{"bronze_charm", "silver_charm", "gold_charm"},
+				{"silver_charm", "gold_charm", "bronze_charm"},
+				{"jade_seal", "bronze_charm", "silver_charm"},
+			}), nil
+		}
+		if index >= len(grids) {
+			return testSlotGrid(cfg, grids[len(grids)-1]), nil
+		}
+		grid := testSlotGrid(cfg, grids[index])
+		index++
+		return grid, nil
+	}
+	slotBonusRoller = func(symbol SlotSymbol) (int, error) {
+		return 20, nil
+	}
+	t.Cleanup(func() {
+		slotGridRoller = previousGridRoller
+		slotBonusRoller = previousBonusRoller
+		_ = SetSlotConfig(defaultSlotConfig)
+	})
+}
+
 func TestResolveSlotRoundDeductsBetArmyAndWritesWinningStock(t *testing.T) {
 	svc := NewService()
 	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
 		t.Fatalf("load units: %v", err)
 	}
-	if err := SetSlotConfig(SlotConfig{
-		MinBet:      1000,
-		MaxBet:      1000000,
-		MaxBetRatio: 0.05,
-		Symbols: []SlotSymbol{
-			{ID: "bronze_charm", Name: "玄铜符", Rarity: "common", Weight: 1, Multiplier: 5},
-		},
-	}); err != nil {
-		t.Fatalf("set slot config: %v", err)
-	}
-	defer func() { _ = SetSlotConfig(defaultSlotConfig) }()
+	cfg := testSlotConfigForRules()
+	setTestSlotGridSequence(t, cfg, [3][3]string{
+		{"bronze_charm", "silver_charm", "tiger_tally"},
+		{"gold_charm", "gold_charm", "gold_charm"},
+		{"jade_seal", "bronze_charm", "silver_charm"},
+	})
 	repo := svc.repo.(*MemoryRepository)
 	now := time.Now()
 	account := Account{ID: "acc_slot_resolve", Username: "slot_resolve", PasswordHash: "x", CreatedAt: now}
@@ -2808,7 +2898,7 @@ func TestResolveSlotRoundDeductsBetArmyAndWritesWinningStock(t *testing.T) {
 		t.Fatalf("create account: %v", err)
 	}
 	state := newPlayerState("player_slot_resolve", "Slotter", "wei", "caocao", now)
-	state.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 200000}}
+	state.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 1000000}}
 	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
 		t.Fatalf("create player: %v", err)
 	}
@@ -2817,17 +2907,20 @@ func TestResolveSlotRoundDeductsBetArmyAndWritesWinningStock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveSlotRound failed: %v", err)
 	}
-	if !result.Won || result.Multiplier != 5 || result.WinAmount != 50000 {
+	if !result.Won || result.LineBet != 10000 || result.TotalBet != 50000 || result.WinAmount != 120000 || len(result.WinningLines) != 1 {
 		t.Fatalf("expected winning slot result, got %+v", result)
 	}
-	if armySliceToMap(result.Army)["qiQiYing"] != 190000 {
-		t.Fatalf("expected bet army deducted to 190000, got %+v", result.Army)
+	if result.WinningLines[0].LineID != "middle" || result.WinningLines[0].Multiplier != 12 {
+		t.Fatalf("expected middle gold line, got %+v", result.WinningLines)
+	}
+	if armySliceToMap(result.Army)["qiQiYing"] != 950000 {
+		t.Fatalf("expected total bet army deducted to 950000, got %+v", result.Army)
 	}
 	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "slot", 10, 0)
 	if err != nil {
 		t.Fatalf("list slot records: %v", err)
 	}
-	if len(records) != 1 || records[0].GameType != "slot" || records[0].RemainingAmount != 50000 || records[0].RewardUnit != "骁骑营" {
+	if len(records) != 1 || records[0].GameType != "slot" || records[0].BetAmount != 50000 || records[0].RemainingAmount != 120000 || records[0].RewardUnit != "骁骑营" {
 		t.Fatalf("expected winning slot record persisted, got %+v", records)
 	}
 }
@@ -2837,15 +2930,12 @@ func TestResolveSlotRoundWritesLosingRecordWithoutStock(t *testing.T) {
 	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
 		t.Fatalf("load units: %v", err)
 	}
-	previousRoller := slotSymbolRoller
-	slotSymbolRoller = func(cfg SlotConfig) ([3]SlotSymbol, error) {
-		return [3]SlotSymbol{
-			{ID: "bronze_charm", Name: "玄铜符", Rarity: "common", Weight: 1, Multiplier: 5},
-			{ID: "silver_charm", Name: "白银符", Rarity: "rare", Weight: 1, Multiplier: 12},
-			{ID: "gold_charm", Name: "赤金符", Rarity: "rare", Weight: 1, Multiplier: 30},
-		}, nil
-	}
-	defer func() { slotSymbolRoller = previousRoller }()
+	cfg := testSlotConfigForRules()
+	setTestSlotGridSequence(t, cfg, [3][3]string{
+		{"bronze_charm", "silver_charm", "gold_charm"},
+		{"silver_charm", "gold_charm", "bronze_charm"},
+		{"jade_seal", "bronze_charm", "silver_charm"},
+	})
 	repo := svc.repo.(*MemoryRepository)
 	now := time.Now()
 	account := Account{ID: "acc_slot_loss", Username: "slot_loss", PasswordHash: "x", CreatedAt: now}
@@ -2858,7 +2948,7 @@ func TestResolveSlotRoundWritesLosingRecordWithoutStock(t *testing.T) {
 		t.Fatalf("create player: %v", err)
 	}
 
-	result, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 10000)
+	result, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 1000)
 	if err != nil {
 		t.Fatalf("ResolveSlotRound failed: %v", err)
 	}
@@ -2874,11 +2964,258 @@ func TestResolveSlotRoundWritesLosingRecordWithoutStock(t *testing.T) {
 	}
 }
 
-func TestResolveSlotRoundRejectsBetBoundsWithoutRecord(t *testing.T) {
+func TestResolveSlotRoundWildSubstitutesNormalSymbols(t *testing.T) {
 	svc := NewService()
 	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
 		t.Fatalf("load units: %v", err)
 	}
+	cfg := testSlotConfigForRules()
+	setTestSlotGridSequence(t, cfg, [3][3]string{
+		{"bronze_charm", "silver_charm", "tiger_tally"},
+		{"wild", "wild", "gold_charm"},
+		{"jade_seal", "bronze_charm", "silver_charm"},
+	})
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_slot_wild", Username: "slot_wild", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_slot_wild", "Slotter", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 200000}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 1000)
+	if err != nil {
+		t.Fatalf("ResolveSlotRound failed: %v", err)
+	}
+	if len(result.WinningLines) != 1 || result.WinningLines[0].Symbol != "gold_charm" || result.WinAmount != 12000 {
+		t.Fatalf("expected wild to pay gold line, got %+v", result)
+	}
+}
+
+func TestResolveSlotRoundWildTriplePaysHeavenOrder(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	cfg := testSlotConfigForRules()
+	setTestSlotGridSequence(t, cfg, [3][3]string{
+		{"bronze_charm", "silver_charm", "tiger_tally"},
+		{"wild", "wild", "wild"},
+		{"jade_seal", "bronze_charm", "silver_charm"},
+	})
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_slot_wild_triple", Username: "slot_wild_triple", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_slot_wild_triple", "Slotter", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 200000}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 1000)
+	if err != nil {
+		t.Fatalf("ResolveSlotRound failed: %v", err)
+	}
+	if len(result.WinningLines) != 1 || result.WinningLines[0].Symbol != "heaven_order" || result.WinAmount != 250000 {
+		t.Fatalf("expected wild triple to pay heaven order, got %+v", result)
+	}
+}
+
+func TestResolveSlotRoundWildDoesNotSubstituteSpecialSymbols(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	cfg := testSlotConfigForRules()
+	setTestSlotGridSequence(t, cfg, [3][3]string{
+		{"wild", "scatter", "wild"},
+		{"bronze_charm", "bonus", "silver_charm"},
+		{"gold_charm", "jade_seal", "tiger_tally"},
+	})
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_slot_wild_special", Username: "slot_wild_special", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_slot_wild_special", "Slotter", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 200000}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 1000)
+	if err != nil {
+		t.Fatalf("ResolveSlotRound failed: %v", err)
+	}
+	if result.Won || len(result.WinningLines) != 0 || result.WinAmount != 0 {
+		t.Fatalf("expected wild not to substitute special symbols, got %+v", result)
+	}
+}
+
+func TestResolveSlotRoundScatterTriggersFreeSpinsWithoutExtraDeduction(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	cfg := testSlotConfigForRules()
+	losing := [3][3]string{
+		{"bronze_charm", "silver_charm", "gold_charm"},
+		{"silver_charm", "gold_charm", "bronze_charm"},
+		{"jade_seal", "bronze_charm", "silver_charm"},
+	}
+	setTestSlotGridSequence(t, cfg,
+		[3][3]string{
+			{"scatter", "silver_charm", "gold_charm"},
+			{"silver_charm", "gold_charm", "bronze_charm"},
+			{"jade_seal", "scatter", "scatter"},
+		},
+		[3][3]string{
+			{"bronze_charm", "silver_charm", "gold_charm"},
+			{"tiger_tally", "tiger_tally", "tiger_tally"},
+			{"jade_seal", "bronze_charm", "silver_charm"},
+		},
+		losing, losing, losing, losing,
+	)
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_slot_scatter", Username: "slot_scatter", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_slot_scatter", "Slotter", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 200000}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 1000)
+	if err != nil {
+		t.Fatalf("ResolveSlotRound failed: %v", err)
+	}
+	if len(result.FreeSpins) != 5 || result.WinAmount != 80000 {
+		t.Fatalf("expected five free spins with one tiger win, got %+v", result)
+	}
+	if armySliceToMap(result.Army)["qiQiYing"] != 195000 {
+		t.Fatalf("expected only main total bet deducted, got %+v", result.Army)
+	}
+}
+
+func TestResolveSlotRoundFreeSpinsCapAtTwenty(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	cfg := testSlotConfigForRules()
+	scatterGrid := [3][3]string{
+		{"scatter", "silver_charm", "gold_charm"},
+		{"silver_charm", "gold_charm", "bronze_charm"},
+		{"jade_seal", "scatter", "scatter"},
+	}
+	setTestSlotGridSequence(t, cfg, scatterGrid)
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_slot_free_cap", Username: "slot_free_cap", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_slot_free_cap", "Slotter", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 200000}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 1000)
+	if err != nil {
+		t.Fatalf("ResolveSlotRound failed: %v", err)
+	}
+	if len(result.FreeSpins) != 20 {
+		t.Fatalf("expected free spins capped at 20, got %d", len(result.FreeSpins))
+	}
+}
+
+func TestResolveSlotRoundBonusTriggersReward(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	cfg := testSlotConfigForRules()
+	setTestSlotGridSequence(t, cfg, [3][3]string{
+		{"bonus", "silver_charm", "gold_charm"},
+		{"silver_charm", "gold_charm", "bonus"},
+		{"jade_seal", "bonus", "silver_charm"},
+	})
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_slot_bonus", Username: "slot_bonus", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_slot_bonus", "Slotter", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 200000}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 1000)
+	if err != nil {
+		t.Fatalf("ResolveSlotRound failed: %v", err)
+	}
+	if len(result.BonusRewards) != 1 || result.BonusRewards[0].Multiplier != 20 || result.WinAmount != 20000 {
+		t.Fatalf("expected bonus reward, got %+v", result)
+	}
+}
+
+func TestResolveSlotRoundAccumulatesMultiplePaylines(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	cfg := testSlotConfigForRules()
+	setTestSlotGridSequence(t, cfg, [3][3]string{
+		{"gold_charm", "gold_charm", "gold_charm"},
+		{"gold_charm", "gold_charm", "gold_charm"},
+		{"gold_charm", "gold_charm", "gold_charm"},
+	})
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_slot_multiline", Username: "slot_multiline", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_slot_multiline", "Slotter", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 200000}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 1000)
+	if err != nil {
+		t.Fatalf("ResolveSlotRound failed: %v", err)
+	}
+	if len(result.WinningLines) != 5 || result.WinAmount != 60000 {
+		t.Fatalf("expected five accumulated lines, got %+v", result)
+	}
+}
+
+func TestResolveSlotRoundRejectsInvalidOrUnaffordableBetWithoutRecord(t *testing.T) {
+	svc := NewService()
+	if err := svc.SetUnitsDir(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("load units: %v", err)
+	}
+	cfg := testSlotConfigForRules()
+	setTestSlotGridSequence(t, cfg, [3][3]string{
+		{"bronze_charm", "silver_charm", "gold_charm"},
+		{"silver_charm", "gold_charm", "bronze_charm"},
+		{"jade_seal", "bronze_charm", "silver_charm"},
+	})
 	repo := svc.repo.(*MemoryRepository)
 	now := time.Now()
 	account := Account{ID: "acc_slot_bounds", Username: "slot_bounds", PasswordHash: "x", CreatedAt: now}
@@ -2894,22 +3231,25 @@ func TestResolveSlotRoundRejectsBetBoundsWithoutRecord(t *testing.T) {
 	if _, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 999); !errors.Is(err, ErrMiniGameBetTooLow) {
 		t.Fatalf("expected ErrMiniGameBetTooLow, got %v", err)
 	}
-	if _, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 6000); !errors.Is(err, ErrMiniGameBetTooHigh) {
-		t.Fatalf("expected ErrMiniGameBetTooHigh, got %v", err)
+	if _, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 10000); err != nil {
+		t.Fatalf("expected arbitrary upper bet limit removed, got %v", err)
+	}
+	if _, err := svc.ResolveSlotRound(state.Player.ID, "qiQiYing", 20000); !errors.Is(err, ErrInsufficientArmy) {
+		t.Fatalf("expected ErrInsufficientArmy for unaffordable total bet, got %v", err)
 	}
 	records, _, err := repo.ListMiniGameRecords(state.Player.ID, "slot", 10, 0)
 	if err != nil {
 		t.Fatalf("list slot records: %v", err)
 	}
-	if len(records) != 0 {
-		t.Fatalf("invalid slot bet should not write record, got %+v", records)
+	if len(records) != 1 {
+		t.Fatalf("only affordable round should write record, got %+v", records)
 	}
 	stored, err := repo.GetState(state.Player.ID)
 	if err != nil {
 		t.Fatalf("GetState failed: %v", err)
 	}
-	if armySliceToMap(stored.Army)["qiQiYing"] != 100000 {
-		t.Fatalf("invalid slot bet should not deduct army, got %+v", stored.Army)
+	if armySliceToMap(stored.Army)["qiQiYing"] != 50000 {
+		t.Fatalf("unaffordable bet should not deduct extra army, got %+v", stored.Army)
 	}
 }
 

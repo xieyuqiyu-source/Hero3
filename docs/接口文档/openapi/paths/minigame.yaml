@@ -82,14 +82,14 @@
   post:
     tags: [MiniGame]
     summary: 结算一局天机轮转
-    description: 后端校验押注兵种和数量，扣除押注兵力，服务器抽取三轴图案并写入 slot 小游戏记录。
+    description: 后端校验押注兵种和每线押注，按固定 5 线扣除总押注；不设置额外押注上限，只有当前兵力不足支付总押注时拒绝。服务器生成 3x3 图案、赔付线、免费旋转和宝匣奖励，并写入一条 slot 小游戏记录。
     requestBody:
       required: true
       content:
         application/json:
           schema:
             type: object
-            required: [playerId, betUnitType, betAmount]
+            required: [playerId, betUnitType, lineBet]
             properties:
               playerId:
                 type: string
@@ -97,8 +97,9 @@
                 type: string
                 description: 押注兵种 ID。
                 example: qiQiYing
-              betAmount:
+              lineBet:
                 type: integer
+                description: 每线押注；总押注为 lineBet × 5。
                 minimum: 1000
                 example: 10000
     responses:
@@ -115,7 +116,7 @@
             schema:
               $ref: '#/components/schemas/ErrorResponse'
       '422':
-        description: 押注兵种不存在、押注不足、超过上限或兵种不能押注
+        description: 押注兵种不存在、押注不足、兵力不足或兵种不能押注
         content:
           application/json:
             schema:

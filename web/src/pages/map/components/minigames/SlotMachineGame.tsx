@@ -1,35 +1,71 @@
-// 本文件实现天机轮转老虎机小游戏，并接入后端权威结算与天机库存兑换。
+// 本文件实现天机轮转老虎机小游戏，并接入后端权威 3x3 结算与天机库存兑换。
 import { useCallback, useEffect, useMemo, useRef, useState, type FC } from 'react'
-import { History, Loader2, PackageCheck, Play, RotateCw, Sparkles, Trophy, XCircle } from 'lucide-react'
+import { CircleHelp, History, Loader2, PackageCheck, Play, RotateCw, Trophy, XCircle } from 'lucide-react'
 import { gameApi } from '@/api/game'
+import bronzeCharmIcon from '@/assets/minigames/slot/bronze-charm.svg'
+import silverCharmIcon from '@/assets/minigames/slot/silver-charm.svg'
+import goldCharmIcon from '@/assets/minigames/slot/gold-charm.svg'
+import jadeSealIcon from '@/assets/minigames/slot/jade-seal.svg'
+import tigerTallyIcon from '@/assets/minigames/slot/tiger-tally.svg'
+import heavenOrderIcon from '@/assets/minigames/slot/heaven-order.svg'
+import wildOrderIcon from '@/assets/minigames/slot/wild-order.svg'
+import scatterStarIcon from '@/assets/minigames/slot/scatter-star.svg'
+import bonusChestIcon from '@/assets/minigames/slot/bonus-chest.svg'
 import { toast } from '@/components/ui'
 import { useConfigStore, type SlotSymbolConfig } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
-import type { ArmyUnit, MiniGameRecord, SlotRoundResult } from '@/types/game'
+import type { ArmyUnit, MiniGameRecord, SlotFreeSpinResult, SlotRoundResult, SlotWinningLine } from '@/types/game'
 import { RARITY_CONFIG } from './fishing/fishingConfig'
 import type { FishCatch } from './fishing/types'
 import { SlotInventoryModal } from './SlotInventoryModal'
 
 const FALLBACK_SLOT_SYMBOLS: SlotSymbolConfig[] = [
-  { id: 'bronze_charm', name: '玄铜符', rarity: 'common', weight: 35, multiplier: 5 },
-  { id: 'silver_charm', name: '白银符', rarity: 'rare', weight: 25, multiplier: 12 },
-  { id: 'gold_charm', name: '赤金符', rarity: 'rare', weight: 18, multiplier: 30 },
-  { id: 'jade_seal', name: '玉玺', rarity: 'epic', weight: 12, multiplier: 80 },
-  { id: 'tiger_tally', name: '虎符', rarity: 'epic', weight: 7, multiplier: 250 },
-  { id: 'heaven_order', name: '天命令', rarity: 'legendary', weight: 3, multiplier: 1000 },
+  { id: 'bronze_charm', name: '玄铜符', rarity: 'common', type: 'normal', weight: 30, multiplier: 3 },
+  { id: 'silver_charm', name: '白银符', rarity: 'rare', type: 'normal', weight: 22, multiplier: 6 },
+  { id: 'gold_charm', name: '赤金符', rarity: 'rare', type: 'normal', weight: 16, multiplier: 12 },
+  { id: 'jade_seal', name: '玉玺', rarity: 'epic', type: 'normal', weight: 10, multiplier: 30 },
+  { id: 'tiger_tally', name: '虎符', rarity: 'epic', type: 'normal', weight: 6, multiplier: 80 },
+  { id: 'heaven_order', name: '天命令', rarity: 'legendary', type: 'normal', weight: 2, multiplier: 250 },
+  { id: 'wild', name: '天机令', rarity: 'epic', type: 'wild', weight: 5, multiplier: 250 },
+  { id: 'scatter', name: '星陨', rarity: 'epic', type: 'scatter', weight: 4, freeSpins: 5, retriggerFreeSpins: 3 },
+  { id: 'bonus', name: '宝匣', rarity: 'rare', type: 'bonus', weight: 5, bonusMultipliers: [{ multiplier: 5, weight: 50 }] },
 ]
 
-const BET_AMOUNTS = [1000, 5000, 10000, 50000, 100000]
+const SLOT_SYMBOL_ICONS: Record<string, string> = {
+  bronze_charm: bronzeCharmIcon,
+  silver_charm: silverCharmIcon,
+  gold_charm: goldCharmIcon,
+  jade_seal: jadeSealIcon,
+  tiger_tally: tigerTallyIcon,
+  heaven_order: heavenOrderIcon,
+  wild: wildOrderIcon,
+  scatter: scatterStarIcon,
+  bonus: bonusChestIcon,
+}
+
+const LINE_BET_AMOUNTS = [1000, 5000, 10000, 50000]
+const REEL_LOCK_DELAYS = [2680, 4080, 5580]
+const REEL_FILLER_ROWS = 14
+const WIN_REACTION_DELAY_MS = 3000
+const LOSE_REACTION_DELAY_MS = 1200
+const DEFAULT_GRID = [
+  ['bronze_charm', 'silver_charm', 'gold_charm'],
+  ['jade_seal', 'wild', 'tiger_tally'],
+  ['scatter', 'bonus', 'heaven_order'],
+]
 const RECORD_PAGE_SIZE = 100
 const BULK_REDEEM_ID = '__all__'
 
 type SlotPhase = 'betting' | 'spinning' | 'result'
+type SlotDebugWindow = Window & {
+  render_game_to_text?: () => string
+  advanceTime?: (ms?: number) => void
+}
 
 interface PlayerUnit {
   unitType: string
   name: string
   amount: number
-  maxBet: number
 }
 
 interface SlotStats {
@@ -45,14 +81,35 @@ const normalizeRarity = (rarity: string): FishCatch['rarity'] => {
   return (rarity in RARITY_CONFIG ? rarity : 'common') as FishCatch['rarity']
 }
 
-// slotMaxBet 计算前端展示用押注上限，后端仍是最终权威。
-const slotMaxBet = (amount: number, maxBet: number, ratio: number): number => {
-  return Math.min(maxBet, Math.floor(amount * ratio))
-}
-
 // symbolById 根据图案 ID 获取配置，旧数据缺失时返回兜底符号。
 const symbolById = (symbols: SlotSymbolConfig[], id: string): SlotSymbolConfig => {
   return symbols.find(symbol => symbol.id === id) ?? FALLBACK_SLOT_SYMBOLS.find(symbol => symbol.id === id) ?? FALLBACK_SLOT_SYMBOLS[0]
+}
+
+// symbolIconById 根据图案 ID 获取对应小图标。
+const symbolIconById = (id: string): string => {
+  return SLOT_SYMBOL_ICONS[id] ?? bronzeCharmIcon
+}
+
+// positionKey 把行列坐标转换为高亮集合键。
+const positionKey = (row: number, col: number) => `${row}:${col}`
+
+// winningPositionSet 汇总中奖线坐标。
+const winningPositionSet = (lines: SlotWinningLine[]): Set<string> => {
+  const result = new Set<string>()
+  lines.forEach(line => line.positions.forEach(pos => result.add(positionKey(pos[0], pos[1]))))
+  return result
+}
+
+// slotArray 兼容旧响应里的 null 列表，避免结果弹窗读取 length 崩溃。
+const slotArray = <T,>(value: T[] | null | undefined): T[] => Array.isArray(value) ? value : []
+
+// reelStripSymbols 生成滚轴滑动长条，末尾三格固定为后端最终结果。
+const reelStripSymbols = (symbols: SlotSymbolConfig[], targetGrid: string[][], col: number): string[] => {
+  const pool = symbols.length > 0 ? symbols : FALLBACK_SLOT_SYMBOLS
+  const filler = Array.from({ length: REEL_FILLER_ROWS }, (_, index) => pool[(index * 2 + col * 3) % pool.length]?.id ?? FALLBACK_SLOT_SYMBOLS[0].id)
+  const target = [0, 1, 2].map(row => targetGrid[row]?.[col] ?? FALLBACK_SLOT_SYMBOLS[0].id)
+  return [...filler, ...target]
 }
 
 // SlotMachineGame 渲染天机轮转主界面和一局结算流程。
@@ -65,9 +122,8 @@ const SlotMachineGame: FC = () => {
   const faction = gameState?.player.faction ?? 'wei'
   const factionUnits = units?.[faction] ?? {}
   const symbols = slotConfig?.symbols?.length ? slotConfig.symbols : FALLBACK_SLOT_SYMBOLS
-  const minBet = slotConfig?.minBet ?? 1000
-  const maxBetLimit = slotConfig?.maxBet ?? 1000000
-  const maxBetRatio = slotConfig?.maxBetRatio ?? 0.05
+  const minLineBet = slotConfig?.minLineBet ?? 1000
+  const lineCount = slotConfig?.lineCount ?? 5
 
   const playerUnits = useMemo<PlayerUnit[]>(() => {
     return (gameState?.army ?? [])
@@ -78,26 +134,29 @@ const SlotMachineGame: FC = () => {
           unitType: unit.unitType,
           name: cfg?.name ?? unit.unitType,
           amount: unit.amount,
-          maxBet: slotMaxBet(unit.amount, maxBetLimit, maxBetRatio),
         }
       })
       .filter(unit => {
         const cfg = factionUnits[unit.unitType]
         if (!cfg) return false
         if (cfg.role === 'scout' || cfg.role === 'transport') return false
-        return (cfg.stats?.upkeep ?? 0) > 0 && unit.maxBet >= minBet
+        return (cfg.stats?.upkeep ?? 0) > 0 && unit.amount >= minLineBet * lineCount
       })
-  }, [factionUnits, gameState?.army, maxBetLimit, maxBetRatio, minBet])
+  }, [factionUnits, gameState?.army, lineCount, minLineBet])
 
   const [selectedUnit, setSelectedUnit] = useState<PlayerUnit | null>(playerUnits[0] ?? null)
-  const [betAmount, setBetAmount] = useState(BET_AMOUNTS[0])
-  const [customBet, setCustomBet] = useState('')
+  const [lineBet, setLineBet] = useState(LINE_BET_AMOUNTS[0])
+  const [customLineBet, setCustomLineBet] = useState('')
   const [phase, setPhase] = useState<SlotPhase>('betting')
-  const [reels, setReels] = useState<string[]>(['bronze_charm', 'silver_charm', 'gold_charm'])
+  const [grid, setGrid] = useState<string[][]>(DEFAULT_GRID)
+  const [spinningTargetGrid, setSpinningTargetGrid] = useState<string[][] | null>(null)
   const [lockedReels, setLockedReels] = useState(0)
+  const [activeLines, setActiveLines] = useState<SlotWinningLine[]>([])
+  const [currentSpinLabel, setCurrentSpinLabel] = useState('')
   const [pendingRound, setPendingRound] = useState<SlotRoundResult | null>(null)
   const [history, setHistory] = useState<SlotRoundResult[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [showRules, setShowRules] = useState(false)
   const [stats, setStats] = useState<SlotStats>({ totalGames: 0, wins: 0, biggestWin: 0, totalWon: 0, totalBet: 0 })
   const [records, setRecords] = useState<MiniGameRecord[]>([])
   const [recordsLoading, setRecordsLoading] = useState(false)
@@ -107,13 +166,21 @@ const SlotMachineGame: FC = () => {
   const [redeemingId, setRedeemingId] = useState('')
   const [showInventory, setShowInventory] = useState(false)
   const [resolvingRound, setResolvingRound] = useState(false)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const timeoutRefs = useRef<Array<ReturnType<typeof setTimeout>>>([])
+  const lockedReelsRef = useRef(0)
 
-  const actualBet = customBet ? parseInt(customBet) || 0 : betAmount
-  const selectedMaxBet = selectedUnit?.maxBet ?? 0
-  const canBet = Boolean(selectedUnit) && actualBet >= minBet && actualBet <= selectedMaxBet && phase === 'betting' && !resolvingRound
+  const actualLineBet = customLineBet ? parseInt(customLineBet, 10) || 0 : lineBet
+  const totalBet = actualLineBet * lineCount
+  const canBet = Boolean(selectedUnit) && actualLineBet >= minLineBet && totalBet <= (selectedUnit?.amount ?? 0) && phase === 'betting' && !resolvingRound
   const inventoryRecords = records.filter(record => record.remainingAmount > 0)
+  const highlightedPositions = winningPositionSet(activeLines)
+
+  // clearAnimationTimers 清理滚轮动画计时器。
+  const clearAnimationTimers = useCallback(() => {
+    timeoutRefs.current.forEach(timer => clearTimeout(timer))
+    timeoutRefs.current = []
+    lockedReelsRef.current = 0
+  }, [])
 
   // loadRecords 拉取天机轮转记录和库存。
   const loadRecords = useCallback(async (offset = 0) => {
@@ -144,17 +211,32 @@ const SlotMachineGame: FC = () => {
       setSelectedUnit(playerUnits[0] ?? null)
       return
     }
-    if (latestUnit.amount !== selectedUnit.amount || latestUnit.maxBet !== selectedUnit.maxBet) {
+    if (latestUnit.amount !== selectedUnit.amount) {
       setSelectedUnit(latestUnit)
     }
   }, [playerUnits, selectedUnit])
 
   useEffect(() => {
+    return () => clearAnimationTimers()
+  }, [clearAnimationTimers])
+
+  useEffect(() => {
+    const debugWindow = window as SlotDebugWindow
+    debugWindow.render_game_to_text = () => JSON.stringify({
+      mode: phase,
+      grid,
+      lockedReels,
+      lineBet: actualLineBet,
+      totalBet,
+      currentSpinLabel,
+      highlighted: Array.from(highlightedPositions),
+    })
+    debugWindow.advanceTime = () => undefined
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      delete debugWindow.render_game_to_text
+      delete debugWindow.advanceTime
     }
-  }, [])
+  }, [actualLineBet, currentSpinLabel, grid, highlightedPositions, lockedReels, phase, totalBet])
 
   // isFactionUnit 判断库存奖励是否属于当前玩家阵营兵种。
   const isFactionUnit = (unitName: string): boolean => {
@@ -216,44 +298,29 @@ const SlotMachineGame: FC = () => {
     }
   }
 
-  // startSlotRound 请求后端结算并播放最终落点动画。
-  const startSlotRound = async () => {
-    if (!activePlayerId || !selectedUnit || !canBet) return
-    setResolvingRound(true)
-    try {
-      const round = await gameApi.resolveSlotRound(activePlayerId, selectedUnit.unitType, actualBet)
-      if (round.army) patchState({ army: round.army, serverTime: round.serverTime })
-      setRecords(prev => [round.record, ...prev].slice(0, 200))
-      setRecordsTotal(prev => prev + 1)
-      setPendingRound(round)
-      setPhase('spinning')
-      setLockedReels(0)
-      playReelAnimation(round)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : '天机轮转结算失败')
-      setResolvingRound(false)
-    }
-  }
+  // playGridAnimation 播放单次 3 轮滚动，并在停靠时对齐后端返回 grid。
+  const playGridAnimation = (targetGrid: string[][], lines: SlotWinningLine[], label: string, onDone: () => void) => {
+    clearAnimationTimers()
+    setCurrentSpinLabel(label)
+    setActiveLines([])
+    setLockedReels(0)
+    setSpinningTargetGrid(targetGrid)
+    lockedReelsRef.current = 0
 
-  // playReelAnimation 播放转轮动画，并按后端返回图案逐轴停下。
-  const playReelAnimation = (round: SlotRoundResult) => {
-    let ticks = 0
-    intervalRef.current = setInterval(() => {
-      ticks += 1
-      setReels(prev => prev.map((current, index) => {
-        const lockThreshold = 12 + index * 8
-        if (ticks >= lockThreshold) return round.symbols[index] ?? current
-        return symbols[(ticks + index) % symbols.length]?.id ?? current
-      }))
-      if (ticks === 12) setLockedReels(1)
-      if (ticks === 20) setLockedReels(2)
-      if (ticks >= 28) {
-        if (intervalRef.current) clearInterval(intervalRef.current)
-        setLockedReels(3)
-        setReels(round.symbols)
-        timeoutRef.current = setTimeout(() => finishRound(round), 700)
-      }
-    }, 80)
+    const lockColumn = (col: number) => {
+      lockedReelsRef.current = col + 1
+      setLockedReels(col + 1)
+      setGrid(prev => prev.map((row, rowIndex) => row.map((cell, colIndex) => colIndex === col ? targetGrid[rowIndex]?.[colIndex] ?? cell : cell)))
+    }
+    REEL_LOCK_DELAYS.forEach((delay, col) => {
+      timeoutRefs.current.push(setTimeout(() => lockColumn(col), delay))
+    })
+    timeoutRefs.current.push(setTimeout(() => {
+      setGrid(targetGrid)
+      setSpinningTargetGrid(null)
+      setActiveLines(lines)
+      timeoutRefs.current.push(setTimeout(onDone, lines.length > 0 ? WIN_REACTION_DELAY_MS : LOSE_REACTION_DELAY_MS))
+    }, REEL_LOCK_DELAYS[2] + 120))
   }
 
   // finishRound 收尾一局统计和历史记录。
@@ -263,18 +330,58 @@ const SlotMachineGame: FC = () => {
       wins: prev.wins + (round.won ? 1 : 0),
       biggestWin: Math.max(prev.biggestWin, round.winAmount),
       totalWon: prev.totalWon + round.winAmount,
-      totalBet: prev.totalBet + round.betAmount,
+      totalBet: prev.totalBet + round.totalBet,
     }))
     setHistory(prev => [round, ...prev].slice(0, 20))
     setResolvingRound(false)
     setPhase('result')
   }
 
+  // playRoundSequence 依次播放主旋转和后端返回的免费旋转。
+  const playRoundSequence = (round: SlotRoundResult) => {
+    const roundFreeSpins = slotArray(round.freeSpins)
+    const spins: Array<{ grid: string[][]; lines: SlotWinningLine[]; label: string }> = [
+      { grid: round.grid, lines: slotArray(round.winningLines), label: '主旋转' },
+      ...roundFreeSpins.map((spin: SlotFreeSpinResult) => ({ grid: spin.grid, lines: slotArray(spin.winningLines), label: `免费旋转 ${spin.spinIndex}/${roundFreeSpins.length}` })),
+    ]
+    const playAt = (index: number) => {
+      const spin = spins[index]
+      if (!spin) {
+        finishRound(round)
+        return
+      }
+      playGridAnimation(spin.grid, spin.lines, spin.label, () => playAt(index + 1))
+    }
+    playAt(0)
+  }
+
+  // startSlotRound 请求后端结算并播放服务端结果动画。
+  const startSlotRound = async () => {
+    if (!activePlayerId || !selectedUnit || !canBet) return
+    setResolvingRound(true)
+    try {
+      const round = await gameApi.resolveSlotRound(activePlayerId, selectedUnit.unitType, actualLineBet)
+      if (round.army) patchState({ army: round.army, serverTime: round.serverTime })
+      setRecords(prev => [round.record, ...prev].slice(0, 200))
+      setRecordsTotal(prev => prev + 1)
+      setPendingRound(round)
+      setPhase('spinning')
+      playRoundSequence(round)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '天机轮转结算失败')
+      setResolvingRound(false)
+    }
+  }
+
   // resetRound 返回押注态，等待下一局。
   const resetRound = () => {
+    clearAnimationTimers()
     setPhase('betting')
     setPendingRound(null)
     setLockedReels(0)
+    setSpinningTargetGrid(null)
+    setActiveLines([])
+    setCurrentSpinLabel('')
   }
 
   if (playerUnits.length === 0 && phase === 'betting') {
@@ -282,7 +389,7 @@ const SlotMachineGame: FC = () => {
       <div className="max-w-md mx-auto text-center py-12">
         <RotateCw size={40} className="text-[var(--color-text-muted)] mx-auto mb-4" />
         <p className="text-sm text-[var(--color-text-primary)] font-medium">暂无可押注兵种</p>
-        <p className="text-xs text-[var(--color-text-muted)] mt-1">至少需要某个战斗兵种达到 20,000 才能参与天机轮转</p>
+        <p className="text-xs text-[var(--color-text-muted)] mt-1">至少需要一个战斗兵种可支付 {lineCount} 线总押注</p>
       </div>
     )
   }
@@ -295,23 +402,16 @@ const SlotMachineGame: FC = () => {
             <RotateCw size={20} className="text-violet-500" />
             天机轮转
           </h2>
-          <p className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">三符同现即可获得押注兵种库存</p>
+          <p className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">固定 {lineCount} 线 · 总押注 {totalBet > 0 ? totalBet.toLocaleString() : '-'}</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowHistory(!showHistory)}
-            className="p-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] cursor-pointer hover:border-violet-500/40 transition-colors"
-            aria-label="查看天机轮转历史"
-          >
+          <button type="button" onClick={() => setShowRules(true)} className="p-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] cursor-pointer hover:border-violet-500/40 transition-colors" aria-label="查看天机轮转玩法">
+            <CircleHelp size={14} className="text-[var(--color-text-muted)]" />
+          </button>
+          <button type="button" onClick={() => setShowHistory(!showHistory)} className="p-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] cursor-pointer hover:border-violet-500/40 transition-colors" aria-label="查看天机轮转历史">
             <History size={14} className="text-[var(--color-text-muted)]" />
           </button>
-          <button
-            type="button"
-            onClick={() => setShowInventory(true)}
-            className="relative p-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] cursor-pointer hover:border-violet-500/40 transition-colors"
-            aria-label="打开天机库存"
-          >
+          <button type="button" onClick={() => setShowInventory(true)} className="relative p-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] cursor-pointer hover:border-violet-500/40 transition-colors" aria-label="打开天机库存">
             <PackageCheck size={14} className="text-violet-600" />
             {inventoryRecords.length > 0 && (
               <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-emerald-500 px-1 text-center text-[8px] font-bold leading-[14px] text-white">
@@ -324,37 +424,25 @@ const SlotMachineGame: FC = () => {
 
       {stats.totalGames > 0 && (
         <div className="mb-4 grid grid-cols-4 gap-2">
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-center">
-            <p className="text-[10px] text-[var(--color-text-muted)]">总局</p>
-            <p className="text-sm font-bold text-[var(--color-text-primary)]">{stats.totalGames}</p>
-          </div>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-center">
-            <p className="text-[10px] text-[var(--color-text-muted)]">中奖</p>
-            <p className="text-sm font-bold text-emerald-600">{stats.wins}</p>
-          </div>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-center">
-            <p className="text-[10px] text-[var(--color-text-muted)]">最大赢</p>
-            <p className="text-sm font-bold text-violet-600">{stats.biggestWin > 0 ? `${Math.round(stats.biggestWin / 10000)}万` : '-'}</p>
-          </div>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-center">
-            <p className="text-[10px] text-[var(--color-text-muted)]">返奖</p>
-            <p className="text-sm font-bold text-amber-600">{stats.totalBet > 0 ? `${Math.round(stats.totalWon / stats.totalBet * 100)}%` : '-'}</p>
-          </div>
+          <StatTile label="总局" value={stats.totalGames.toLocaleString()} />
+          <StatTile label="中奖" value={stats.wins.toLocaleString()} tone="text-emerald-600" />
+          <StatTile label="最大赢" value={stats.biggestWin > 0 ? `${Math.round(stats.biggestWin / 10000)}万` : '-'} tone="text-violet-600" />
+          <StatTile label="返奖" value={stats.totalBet > 0 ? `${Math.round(stats.totalWon / stats.totalBet * 100)}%` : '-'} tone="text-amber-600" />
         </div>
       )}
 
       {showHistory && history.length > 0 && (
-        <div className="mb-4 max-h-[180px] overflow-y-auto rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <div className="mb-4 max-h-[180px] overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
           <h3 className="mb-2 text-xs font-semibold text-[var(--color-text-primary)]">最近记录</h3>
           <div className="space-y-1.5">
             {history.map(round => (
               <div key={round.record.id} className="flex items-center justify-between rounded-lg bg-[var(--color-surface-dim)] px-2.5 py-1.5">
                 <div className="min-w-0">
                   <p className="truncate text-[10px] font-medium text-[var(--color-text-secondary)]">{round.record.resultName}</p>
-                  <p className="truncate text-[9px] text-[var(--color-text-muted)]">押 {round.betUnit} ×{round.betAmount.toLocaleString()}</p>
+                  <p className="truncate text-[9px] text-[var(--color-text-muted)]">押 {round.betUnit} ×{round.totalBet.toLocaleString()}</p>
                 </div>
                 <span className={`text-[10px] font-bold ${round.won ? 'text-emerald-600' : 'text-red-500'}`}>
-                  {round.won ? `+${round.winAmount.toLocaleString()}` : `-${round.betAmount.toLocaleString()}`}
+                  {round.won ? `+${round.winAmount.toLocaleString()}` : `-${round.totalBet.toLocaleString()}`}
                 </span>
               </div>
             ))}
@@ -362,92 +450,77 @@ const SlotMachineGame: FC = () => {
         </div>
       )}
 
-      <div className="mb-4 rounded-2xl border border-violet-500/20 bg-[var(--color-surface)] p-4">
-        <div className="flex items-center justify-center gap-3">
-          {reels.map((symbolID, index) => {
-            const symbol = symbolById(symbols, symbolID)
-            const rarity = normalizeRarity(symbol.rarity)
-            const cfg = RARITY_CONFIG[rarity] ?? RARITY_CONFIG.common
-            const locked = lockedReels > index
-            return (
-              <div
-                key={`${index}-${symbolID}`}
-                className={`flex h-24 w-24 flex-col items-center justify-center rounded-2xl border-2 bg-[var(--color-surface-dim)] transition-all duration-200 ${locked ? `${cfg.border} ${cfg.glow} scale-105` : 'border-[var(--color-border)]'} ${phase === 'spinning' && !locked ? 'animate-pulse' : ''}`}
-              >
-                <Sparkles size={22} className={cfg.color} />
-                <p className="mt-2 text-xs font-bold text-[var(--color-text-primary)]">{symbol.name}</p>
-                <p className={`mt-0.5 text-[10px] font-semibold ${cfg.color}`}>×{symbol.multiplier}</p>
-              </div>
-            )
-          })}
+      <div className="mb-4 rounded-lg border border-violet-500/20 bg-[var(--color-surface)] p-4">
+        <div className="mb-2 flex items-center justify-between text-[10px] text-[var(--color-text-muted)]">
+          <span>{currentSpinLabel || '待机'}</span>
+          <span>{lockedReels}/3</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {[0, 1, 2].map(col => (
+            <div key={col} className={`relative h-64 overflow-hidden rounded-lg border bg-[var(--color-surface-dim)] p-2 transition-colors duration-200 ${lockedReels > col ? 'border-violet-500/40 shadow-sm' : 'border-[var(--color-border)]'}`}>
+              <div className="pointer-events-none absolute inset-x-2 top-2 z-10 h-5 rounded-t-lg bg-gradient-to-b from-[var(--color-surface-dim)] to-transparent" />
+              <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 h-5 rounded-b-lg bg-gradient-to-t from-[var(--color-surface-dim)] to-transparent" />
+              {phase === 'spinning' && lockedReels <= col ? (
+                <div className={`slot-reel-strip animate-slot-reel-spin-${col}`}>
+                  {reelStripSymbols(symbols, spinningTargetGrid ?? grid, col).map((symbolID, index) => (
+                    <SlotSymbolTile
+                      key={`${col}-spin-${index}-${symbolID}`}
+                      symbol={symbolById(symbols, symbolID)}
+                      highlighted={false}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid h-full grid-rows-3 gap-2">
+                  {[0, 1, 2].map(row => (
+                    <SlotSymbolTile
+                      key={`${row}-${col}-${grid[row]?.[col] ?? 'empty'}`}
+                      symbol={symbolById(symbols, grid[row]?.[col] ?? FALLBACK_SLOT_SYMBOLS[0].id)}
+                      highlighted={highlightedPositions.has(positionKey(row, col))}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
       {phase === 'betting' && (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <h3 className="mb-3 text-xs font-semibold text-[var(--color-text-primary)]">选择押注兵种</h3>
             <div className="grid grid-cols-2 gap-2">
               {playerUnits.map(unit => (
-                <button
-                  key={unit.unitType}
-                  type="button"
-                  onClick={() => setSelectedUnit(unit)}
-                  className={`flex items-center gap-2 rounded-xl border-2 p-2.5 text-left transition-all duration-150 cursor-pointer ${selectedUnit?.unitType === unit.unitType ? 'border-violet-500/40 bg-violet-500/10 shadow-sm' : 'border-transparent bg-[var(--color-surface-dim)] hover:border-[var(--color-border)]'}`}
-                >
+                <button key={unit.unitType} type="button" onClick={() => setSelectedUnit(unit)} className={`flex items-center gap-2 rounded-lg border-2 p-2.5 text-left transition-all duration-150 cursor-pointer ${selectedUnit?.unitType === unit.unitType ? 'border-violet-500/40 bg-violet-500/10 shadow-sm' : 'border-transparent bg-[var(--color-surface-dim)] hover:border-[var(--color-border)]'}`}>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[11px] font-medium text-[var(--color-text-primary)]">{unit.name}</p>
                     <p className="text-[9px] text-[var(--color-text-muted)]">拥有 {unit.amount.toLocaleString()}</p>
-                    <p className="text-[9px] text-violet-600">本局上限 {unit.maxBet.toLocaleString()}</p>
                   </div>
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-            <h3 className="mb-3 text-xs font-semibold text-[var(--color-text-primary)]">押注数量</h3>
-            <div className="mb-3 grid grid-cols-3 gap-2">
-              {BET_AMOUNTS.map(amount => (
-                <button
-                  key={amount}
-                  type="button"
-                  onClick={() => { setBetAmount(amount); setCustomBet('') }}
-                  disabled={amount < minBet || amount > selectedMaxBet}
-                  className={`rounded-xl border-2 px-2 py-2 text-xs font-medium transition-all duration-150 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${!customBet && betAmount === amount ? 'border-violet-500/40 bg-violet-500/10 text-violet-600' : 'border-transparent bg-[var(--color-surface-dim)] text-[var(--color-text-secondary)] hover:border-[var(--color-border)]'}`}
-                >
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+            <h3 className="mb-3 text-xs font-semibold text-[var(--color-text-primary)]">每线押注</h3>
+            <div className="mb-3 grid grid-cols-4 gap-2">
+              {LINE_BET_AMOUNTS.map(amount => (
+                <button key={amount} type="button" onClick={() => { setLineBet(amount); setCustomLineBet('') }} disabled={amount < minLineBet || amount * lineCount > (selectedUnit?.amount ?? 0)} className={`rounded-lg border-2 px-2 py-2 text-xs font-medium transition-all duration-150 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${!customLineBet && lineBet === amount ? 'border-violet-500/40 bg-violet-500/10 text-violet-600' : 'border-transparent bg-[var(--color-surface-dim)] text-[var(--color-text-secondary)] hover:border-[var(--color-border)]'}`}>
                   {amount >= 10000 ? `${amount / 10000}万` : amount.toLocaleString()}
                 </button>
               ))}
             </div>
-            <input
-              type="number"
-              placeholder="自定义数量..."
-              value={customBet}
-              onChange={(event) => setCustomBet(event.target.value)}
-              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-violet-500/40 focus:outline-none"
-            />
-            {actualBet > 0 && actualBet < minBet && (
-              <p className="mt-1.5 text-[10px] text-red-500">低于最小押注 {minBet.toLocaleString()}</p>
-            )}
-            {selectedUnit && actualBet > selectedMaxBet && (
-              <p className="mt-1.5 text-[10px] text-red-500">超过本局上限 {selectedMaxBet.toLocaleString()}</p>
-            )}
+            <input type="number" placeholder="自定义每线押注..." value={customLineBet} onChange={(event) => setCustomLineBet(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:border-violet-500/40 focus:outline-none" />
+            {actualLineBet > 0 && actualLineBet < minLineBet && <p className="mt-1.5 text-[10px] text-red-500">低于最小每线押注 {minLineBet.toLocaleString()}</p>}
+            {selectedUnit && totalBet > selectedUnit.amount && <p className="mt-1.5 text-[10px] text-red-500">当前兵力不足支付总押注 {totalBet.toLocaleString()}</p>}
           </div>
 
-          <div className="rounded-2xl border border-violet-500/30 bg-violet-500/5 p-4 text-center">
+          <div className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-4 text-center">
             <p className="text-sm text-[var(--color-text-primary)]">
-              押注 <span className="font-bold text-violet-600">{actualBet.toLocaleString()}</span> {selectedUnit?.name ?? ''}
+              每线 <span className="font-bold text-violet-600">{actualLineBet.toLocaleString()}</span> · 总押注 <span className="font-bold text-violet-600">{totalBet.toLocaleString()}</span>
             </p>
-            <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-              只有三符完全相同才中奖，押注兵力先扣除
-            </p>
-            <button
-              type="button"
-              onClick={() => void startSlotRound()}
-              disabled={!canBet}
-              className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-8 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
-            >
+            <button type="button" onClick={() => void startSlotRound()} disabled={!canBet} className="mt-3 inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-8 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer">
               {resolvingRound ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
               {resolvingRound ? '结算中...' : '启动轮转'}
             </button>
@@ -456,14 +529,18 @@ const SlotMachineGame: FC = () => {
       )}
 
       {phase === 'spinning' && (
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-center">
-          <p className="text-sm font-medium text-violet-600">{lockedReels < 3 ? '天机轮盘转动中...' : '落定'}</p>
-          <p className="mt-1 text-xs text-[var(--color-text-muted)]">押注 {pendingRound?.betUnit} ×{pendingRound?.betAmount.toLocaleString()}</p>
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-center">
+          <p className="text-sm font-medium text-violet-600">{currentSpinLabel || '天机轮盘转动中...'}</p>
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">押注 {pendingRound?.betUnit} ×{pendingRound?.totalBet.toLocaleString()}</p>
         </div>
       )}
 
       {phase === 'result' && pendingRound && (
-        <SlotResultModal round={pendingRound} onClose={resetRound} />
+        <SlotResultModal round={pendingRound} symbols={symbols} onClose={resetRound} />
+      )}
+
+      {showRules && (
+        <SlotRulesModal lineCount={lineCount} minLineBet={minLineBet} onClose={() => setShowRules(false)} />
       )}
 
       {showInventory && (
@@ -488,14 +565,109 @@ const SlotMachineGame: FC = () => {
   )
 }
 
-interface SlotResultModalProps {
-  round: SlotRoundResult
+interface SlotSymbolTileProps {
+  symbol: SlotSymbolConfig
+  highlighted: boolean
+}
+
+// SlotSymbolTile 渲染滚轴中的单个图案格。
+const SlotSymbolTile: FC<SlotSymbolTileProps> = ({ symbol, highlighted }) => {
+  const rarity = normalizeRarity(symbol.rarity)
+  const cfg = RARITY_CONFIG[rarity] ?? RARITY_CONFIG.common
+  const special = symbol.type === 'scatter' || symbol.type === 'bonus'
+  return (
+    <div className={`flex min-h-0 flex-col items-center justify-center rounded-lg border bg-[var(--color-surface)] px-1 text-center transition-all duration-200 ${highlighted ? `${cfg.border} ${cfg.glow} animate-slot-win-flash` : special ? 'border-amber-400/40 shadow-[0_0_14px_rgba(245,158,11,0.22)]' : 'border-transparent'}`}>
+      <img src={symbolIconById(symbol.id)} alt="" className="h-9 w-9 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.28)]" draggable={false} />
+      <p className="mt-1 max-w-full truncate text-[10px] font-bold text-[var(--color-text-primary)]">{symbol.name}</p>
+      <p className={`mt-0.5 text-[9px] font-semibold ${cfg.color}`}>{symbol.type === 'normal' || symbol.type === 'wild' ? `×${symbol.multiplier ?? 0}` : symbol.type === 'scatter' ? 'FREE' : 'BONUS'}</p>
+    </div>
+  )
+}
+
+interface StatTileProps {
+  label: string
+  value: string
+  tone?: string
+}
+
+// StatTile 渲染天机轮转局内统计。
+const StatTile: FC<StatTileProps> = ({ label, value, tone = 'text-[var(--color-text-primary)]' }) => (
+  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-center">
+    <p className="text-[10px] text-[var(--color-text-muted)]">{label}</p>
+    <p className={`text-sm font-bold ${tone}`}>{value}</p>
+  </div>
+)
+
+interface SlotRulesModalProps {
+  lineCount: number
+  minLineBet: number
   onClose: () => void
 }
 
-// SlotResultModal 展示一局天机轮转结果。
-const SlotResultModal: FC<SlotResultModalProps> = ({ round, onClose }) => {
+// SlotRulesModal 展示天机轮转玩法说明。
+const SlotRulesModal: FC<SlotRulesModalProps> = ({ lineCount, minLineBet, onClose }) => {
   const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true))
+  }, [])
+
+  // handleClose 播放关闭过渡后关闭玩法弹窗。
+  const handleClose = () => {
+    setVisible(false)
+    setTimeout(onClose, 160)
+  }
+
+  return (
+    <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
+      <div className={`absolute inset-0 bg-slate-900/50 backdrop-blur-[4px] transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`} onClick={handleClose} />
+      <div className={`relative w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_24px_60px_rgba(15,23,42,0.3)] transition-all duration-200 ${visible ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-4 scale-95 opacity-0'}`}>
+        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
+          <div>
+            <h2 className="text-sm font-bold text-[var(--color-text-primary)]">天机轮转玩法</h2>
+            <p className="mt-0.5 text-[10px] text-[var(--color-text-muted)]">固定 {lineCount} 线 · 每线最低 {minLineBet.toLocaleString()}</p>
+          </div>
+          <button type="button" onClick={handleClose} className="rounded-lg p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-dim)] cursor-pointer" aria-label="关闭玩法说明">
+            <XCircle size={16} />
+          </button>
+        </div>
+        <div className="space-y-3 p-4 text-xs text-[var(--color-text-secondary)]">
+          <div className="rounded-lg bg-[var(--color-surface-dim)] p-3">
+            <p className="font-semibold text-[var(--color-text-primary)]">基础押注</p>
+            <p className="mt-1 leading-5">选择兵种和每线押注后启动，实际扣除为每线押注 × 固定 {lineCount} 线。</p>
+          </div>
+          <div className="rounded-lg bg-[var(--color-surface-dim)] p-3">
+            <p className="font-semibold text-[var(--color-text-primary)]">中奖连线</p>
+            <p className="mt-1 leading-5">横向上、中、下三线，以及两条对角线，只要同一条线上形成 3 个普通图案或天机令替代组合，就按该图案倍率入库奖励。</p>
+          </div>
+          <div className="rounded-lg bg-[var(--color-surface-dim)] p-3">
+            <p className="font-semibold text-[var(--color-text-primary)]">特殊图案</p>
+            <p className="mt-1 leading-5">天机令可替代普通图案；星陨达到 3 个会触发免费旋转；宝匣会触发额外奖励倍率。</p>
+          </div>
+          <div className="rounded-lg bg-[var(--color-surface-dim)] p-3">
+            <p className="font-semibold text-[var(--color-text-primary)]">结果展示</p>
+            <p className="mt-1 leading-5">命中的连线会在滚轴上快速闪烁约 3 秒，随后弹出结算；未中奖会直接显示很遗憾提示。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface SlotResultModalProps {
+  round: SlotRoundResult
+  symbols: SlotSymbolConfig[]
+  onClose: () => void
+}
+
+// SlotResultModal 展示一局天机轮转结果详情。
+const SlotResultModal: FC<SlotResultModalProps> = ({ round, symbols, onClose }) => {
+  const [visible, setVisible] = useState(false)
+  const winningLines = slotArray(round.winningLines)
+  const bonusRewards = slotArray(round.bonusRewards)
+  const freeSpins = slotArray(round.freeSpins)
+  const resultTitle = round.won ? round.record.resultName : '很遗憾，未中奖'
+  const resultSubtitle = round.won ? `奖励 ${round.winAmount.toLocaleString()} · 押注 ${round.totalBet.toLocaleString()}` : `本次没有形成有效连线，已扣除押注 ${round.totalBet.toLocaleString()}`
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true))
@@ -510,40 +682,100 @@ const SlotResultModal: FC<SlotResultModalProps> = ({ round, onClose }) => {
   return (
     <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
       <div className={`absolute inset-0 bg-slate-900/50 backdrop-blur-[4px] transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`} onClick={handleClose} />
-      <div className={`relative w-full max-w-xs overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_24px_60px_rgba(15,23,42,0.3)] transition-all duration-200 ${visible ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-4 scale-95 opacity-0'}`}>
+      <div className={`relative max-h-[88vh] w-full max-w-sm overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_24px_60px_rgba(15,23,42,0.3)] transition-all duration-200 ${visible ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-4 scale-95 opacity-0'}`}>
         <div className={`px-4 py-4 text-center ${round.won ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
           {round.won ? <Trophy size={28} className="mx-auto mb-1 text-emerald-500" /> : <XCircle size={28} className="mx-auto mb-1 text-red-500" />}
-          <h2 className={`text-lg font-bold ${round.won ? 'text-emerald-600' : 'text-red-600'}`}>
-            {round.won ? '三符同现' : '未中奖'}
-          </h2>
-          <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">{round.symbolNames.join(' / ')}</p>
+          <h2 className={`text-lg font-bold ${round.won ? 'text-emerald-600' : 'text-red-600'}`}>{resultTitle}</h2>
+          <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">{resultSubtitle}</p>
         </div>
         <div className="space-y-3 p-4">
-          <div className="rounded-xl bg-[var(--color-surface-dim)] p-3">
-            <div className="flex justify-between text-xs">
-              <span className="text-[var(--color-text-muted)]">押注</span>
-              <span className="font-semibold text-[var(--color-text-primary)]">{round.betUnit} ×{round.betAmount.toLocaleString()}</span>
-            </div>
-            <div className="mt-2 flex justify-between text-xs">
-              <span className="text-[var(--color-text-muted)]">倍率</span>
-              <span className="font-semibold text-violet-600">×{round.multiplier || 0}</span>
-            </div>
-            <div className="mt-2 flex justify-between text-xs">
-              <span className="text-[var(--color-text-muted)]">库存奖励</span>
-              <span className={`font-semibold ${round.won ? 'text-emerald-600' : 'text-red-500'}`}>{round.winAmount.toLocaleString()}</span>
-            </div>
+          <ResultGrid grid={round.grid} symbols={symbols} lines={winningLines} />
+          <div className="rounded-lg bg-[var(--color-surface-dim)] p-3">
+            <ResultRow label="每线押注" value={round.lineBet.toLocaleString()} />
+            <ResultRow label="固定线数" value={`${round.lineCount}`} />
+            <ResultRow label="总押注" value={`${round.betUnit} ×${round.totalBet.toLocaleString()}`} />
+            <ResultRow label="库存奖励" value={round.winAmount.toLocaleString()} tone={round.won ? 'text-emerald-600' : 'text-red-500'} />
           </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="w-full rounded-xl bg-violet-600 py-2.5 text-sm font-bold text-white transition-colors hover:bg-violet-700 cursor-pointer"
-          >
-            继续
+          {winningLines.length > 0 && (
+            <ResultList title="中奖线" items={winningLines.map(line => `${line.lineId} · ${line.symbolName} ×${line.multiplier} · ${line.amount.toLocaleString()}`)} />
+          )}
+          {bonusRewards.length > 0 && (
+            <ResultList title="宝匣" items={bonusRewards.map(bonus => `×${bonus.multiplier} · ${bonus.amount.toLocaleString()}`)} />
+          )}
+          {freeSpins.length > 0 && (
+            <ResultList title="免费旋转" items={freeSpins.map(spin => `第 ${spin.spinIndex} 次 · +${spin.winAmount.toLocaleString()}${spin.retriggeredFreeSpins > 0 ? ` · 追加 ${spin.retriggeredFreeSpins}` : ''}`)} />
+          )}
+          {!round.won && (
+            <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-center">
+              <p className="text-xs font-medium text-red-500">差一点就连成了，再试一次或调整每线押注。</p>
+            </div>
+          )}
+          <button type="button" onClick={handleClose} className="w-full rounded-lg bg-violet-600 py-2.5 text-sm font-bold text-white transition-colors hover:bg-violet-700 cursor-pointer">
+            {round.won ? '继续' : '再来一局'}
           </button>
         </div>
       </div>
     </div>
   )
 }
+
+interface ResultGridProps {
+  grid: string[][]
+  symbols: SlotSymbolConfig[]
+  lines: SlotWinningLine[]
+}
+
+// ResultGrid 渲染结果弹窗中的主旋转矩阵。
+const ResultGrid: FC<ResultGridProps> = ({ grid, symbols, lines }) => {
+  const highlights = winningPositionSet(lines)
+  return (
+    <div className="grid grid-cols-3 gap-1.5">
+      {[0, 1, 2].map(row => (
+        [0, 1, 2].map(col => {
+          const symbol = symbolById(symbols, grid[row]?.[col] ?? FALLBACK_SLOT_SYMBOLS[0].id)
+          const rarity = normalizeRarity(symbol.rarity)
+          const cfg = RARITY_CONFIG[rarity] ?? RARITY_CONFIG.common
+          return (
+            <div key={`${row}-${col}`} className={`flex h-16 flex-col items-center justify-center rounded-lg border bg-[var(--color-surface-dim)] px-1 text-center ${highlights.has(positionKey(row, col)) ? `${cfg.border} ${cfg.glow}` : 'border-[var(--color-border)]'}`}>
+              <img src={symbolIconById(symbol.id)} alt="" className="h-7 w-7 object-contain drop-shadow-[0_3px_8px_rgba(0,0,0,0.28)]" draggable={false} />
+              <span className="mt-1 max-w-full truncate text-[10px] font-semibold text-[var(--color-text-primary)]">{symbol.name}</span>
+            </div>
+          )
+        })
+      ))}
+    </div>
+  )
+}
+
+interface ResultRowProps {
+  label: string
+  value: string
+  tone?: string
+}
+
+// ResultRow 渲染结果数值行。
+const ResultRow: FC<ResultRowProps> = ({ label, value, tone = 'text-[var(--color-text-primary)]' }) => (
+  <div className="flex justify-between py-1 text-xs">
+    <span className="text-[var(--color-text-muted)]">{label}</span>
+    <span className={`font-semibold ${tone}`}>{value}</span>
+  </div>
+)
+
+interface ResultListProps {
+  title: string
+  items: string[]
+}
+
+// ResultList 渲染结果明细列表。
+const ResultList: FC<ResultListProps> = ({ title, items }) => (
+  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+    <h3 className="mb-2 text-xs font-semibold text-[var(--color-text-primary)]">{title}</h3>
+    <div className="space-y-1">
+      {items.map((item, index) => (
+        <p key={`${title}-${index}`} className="rounded bg-[var(--color-surface-dim)] px-2 py-1 text-[10px] text-[var(--color-text-secondary)]">{item}</p>
+      ))}
+    </div>
+  </div>
+)
 
 export default SlotMachineGame

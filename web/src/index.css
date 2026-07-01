@@ -297,3 +297,74 @@ body {
 .animate-water-shimmer {
   animation: water-shimmer 4.5s ease-in-out infinite;
 }
+
+/* 天机轮转滚轴动画：固定长条滑到后端结果，前段逐格推进，后段减速停稳。 */
+.slot-reel-strip {
+  display: grid;
+  grid-auto-rows: calc((15rem - 1rem) / 3);
+  gap: 0.5rem;
+  will-change: transform;
+}
+
+@keyframes slot-reel-stop {
+  0% {
+    transform: translateY(0);
+  }
+  10% {
+    transform: translateY(calc(-1 * (((15rem - 1rem) / 3) + 0.5rem)));
+  }
+  20% {
+    transform: translateY(calc(-3 * (((15rem - 1rem) / 3) + 0.5rem)));
+  }
+  34% {
+    transform: translateY(calc(-6 * (((15rem - 1rem) / 3) + 0.5rem)));
+  }
+  48% {
+    transform: translateY(calc(-9 * (((15rem - 1rem) / 3) + 0.5rem)));
+  }
+  62% {
+    transform: translateY(calc(-11 * (((15rem - 1rem) / 3) + 0.5rem)));
+  }
+  76% {
+    transform: translateY(calc(-12 * (((15rem - 1rem) / 3) + 0.5rem)));
+  }
+  86% {
+    transform: translateY(calc(-13 * (((15rem - 1rem) / 3) + 0.5rem)));
+  }
+  93% {
+    transform: translateY(calc(-13 * (((15rem - 1rem) / 3) + 0.5rem)));
+  }
+  98% {
+    transform: translateY(calc(-14 * (((15rem - 1rem) / 3) + 0.5rem)));
+  }
+  100% {
+    transform: translateY(calc(-14 * (((15rem - 1rem) / 3) + 0.5rem)));
+  }
+}
+
+@keyframes slot-win-flash {
+  0%, 100% {
+    filter: brightness(1);
+    transform: scale(1);
+  }
+  45% {
+    filter: brightness(1.45);
+    transform: scale(1.035);
+  }
+}
+
+.animate-slot-reel-spin-0 {
+  animation: slot-reel-stop 2.6s cubic-bezier(0.16, 0.82, 0.18, 1) both;
+}
+
+.animate-slot-reel-spin-1 {
+  animation: slot-reel-stop 4s cubic-bezier(0.16, 0.82, 0.18, 1) both;
+}
+
+.animate-slot-reel-spin-2 {
+  animation: slot-reel-stop 5.5s cubic-bezier(0.16, 0.82, 0.18, 1) both;
+}
+
+.animate-slot-win-flash {
+  animation: slot-win-flash 0.34s ease-in-out infinite;
+}

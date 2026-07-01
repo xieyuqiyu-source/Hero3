@@ -1,49 +1,85 @@
 {
-  "minBet": 1000,
-  "maxBet": 1000000,
-  "maxBetRatio": 0.05,
+  "minLineBet": 1000,
+  "lineCount": 5,
+  "maxFreeSpinsPerRound": 20,
   "symbols": [
     {
       "id": "bronze_charm",
       "name": "玄铜符",
       "rarity": "common",
-      "weight": 35,
-      "multiplier": 5
+      "type": "normal",
+      "weight": 30,
+      "multiplier": 3
     },
     {
       "id": "silver_charm",
       "name": "白银符",
       "rarity": "rare",
-      "weight": 25,
-      "multiplier": 12
+      "type": "normal",
+      "weight": 22,
+      "multiplier": 6
     },
     {
       "id": "gold_charm",
       "name": "赤金符",
       "rarity": "rare",
-      "weight": 18,
-      "multiplier": 30
+      "type": "normal",
+      "weight": 16,
+      "multiplier": 12
     },
     {
       "id": "jade_seal",
       "name": "玉玺",
       "rarity": "epic",
-      "weight": 12,
-      "multiplier": 80
+      "type": "normal",
+      "weight": 10,
+      "multiplier": 30
     },
     {
       "id": "tiger_tally",
       "name": "虎符",
       "rarity": "epic",
-      "weight": 7,
-      "multiplier": 250
+      "type": "normal",
+      "weight": 6,
+      "multiplier": 80
     },
     {
       "id": "heaven_order",
       "name": "天命令",
       "rarity": "legendary",
-      "weight": 3,
-      "multiplier": 1000
+      "type": "normal",
+      "weight": 2,
+      "multiplier": 250
+    },
+    {
+      "id": "wild",
+      "name": "天机令",
+      "rarity": "epic",
+      "type": "wild",
+      "weight": 5,
+      "multiplier": 250
+    },
+    {
+      "id": "scatter",
+      "name": "星陨",
+      "rarity": "epic",
+      "type": "scatter",
+      "weight": 4,
+      "freeSpins": 5,
+      "retriggerFreeSpins": 3
+    },
+    {
+      "id": "bonus",
+      "name": "宝匣",
+      "rarity": "rare",
+      "type": "bonus",
+      "weight": 5,
+      "bonusMultipliers": [
+        { "multiplier": 5, "weight": 50 },
+        { "multiplier": 10, "weight": 30 },
+        { "multiplier": 20, "weight": 15 },
+        { "multiplier": 50, "weight": 5 }
+      ]
     }
   ]
 }

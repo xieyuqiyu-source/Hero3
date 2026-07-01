@@ -285,6 +285,19 @@ type BattleReportDetail struct {
 	Share         *BattleReportShare     `json:"share,omitempty"`
 }
 
+// BattleReportSweepDefender 保存扫荡聚合战报中的单个 NPC 防守方快照。
+type BattleReportSweepDefender struct {
+	TargetID         string             `json:"targetId"`
+	TargetName       string             `json:"targetName"`
+	Faction          string             `json:"faction,omitempty"`
+	FactionLabel     string             `json:"factionLabel,omitempty"`
+	Power            int                `json:"power"`
+	Result           string             `json:"result,omitempty"`
+	DefenderRevealed bool               `json:"defenderRevealed"`
+	Units            []BattleReportUnit `json:"units"`
+	Resources        map[string]int     `json:"resources,omitempty"`
+}
+
 // BattleReportSide 保存战斗某一方在战斗发生时的快照。
 type BattleReportSide struct {
 	Role         string                `json:"role"`
