@@ -22,6 +22,7 @@ func init() {
 
 func (w *WeizhenXiaoyao) ID() string   { return "weizhenxiaoyao" }
 func (w *WeizhenXiaoyao) Name() string { return "威震逍遥" }
+func (w *WeizhenXiaoyao) Type() string { return general.TraitTypeSpecial }
 
 func (w *WeizhenXiaoyao) Description(p general.Params) string {
 	return "以少打多时概率震慑敌军，使部分守军不参与本场防御"
@@ -91,8 +92,13 @@ func (w *WeizhenXiaoyao) beforeBattle(ctx general.EventContext, p general.Params
 		c.Triggered = map[string]general.TraitOutcome{}
 	}
 	c.Triggered["weizhenxiaoyao"] = general.TraitOutcome{
-		TraitID: "weizhenxiaoyao",
-		Name:    "威震逍遥",
+		TraitID:        "weizhenxiaoyao",
+		Name:           "威震逍遥",
+		TraitType:      general.TraitTypeSpecial,
+		OwnerSide:      c.Actor.Side,
+		OwnerGeneralID: c.Actor.GeneralID,
+		OwnerPlayerID:  c.Actor.PlayerID,
+		Scope:          c.Actor.Scope,
 		Detail: map[string]interface{}{
 			"foodRatio":       roundFloat(ratio, 2),
 			"triggerChance":   chance,

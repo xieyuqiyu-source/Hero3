@@ -1,6 +1,6 @@
-// 本文件实现军事页的战争页签，集中展示本城守军和他城来援部队。
+// 本文件实现军事页的战争页签，集中展示本城守军、派出增援和他城来援部队。
 import { useCallback, useEffect, useState, type FC } from 'react'
-import { RotateCcw, Shield, UserMinus, UsersRound } from 'lucide-react'
+import { RotateCcw, Shield, UserMinus, UsersRound, Zap } from 'lucide-react'
 import { gameApi } from '@/api/game'
 import { useConfigStore } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
@@ -8,6 +8,9 @@ import type { ArmyUnit, Reinforcement } from '@/types/game'
 import { sortUnitIds } from '@/utils/unitOrder'
 
 const ACTIVE_GARRISON_STATUSES = new Set<Reinforcement['status']>(['marching', 'stationed', 'fighting'])
+const ACTIVE_SENT_STATUSES = new Set<Reinforcement['status']>(['marching', 'stationed', 'fighting', 'returning'])
+const REINFORCEMENT_ACCELERATE_COST = 10
+const REINFORCEMENT_MAX_ACCELERATE_TIMES = 2
 
 const STATUS_LABELS: Record<Reinforcement['status'], string> = {
   marching: '行军中',
@@ -28,24 +31,33 @@ const WarTab: FC = () => {
   const patchState = useGameStore((s) => s.patchState)
   const units = useConfigStore((s) => s.units)
   const army = state?.army ?? EMPTY_ARMY
+  const cityGold = typeof state?.cityGold === 'number' ? state.cityGold : 0
+  const [sent, setSent] = useState<Reinforcement[]>([])
   const [received, setReceived] = useState<Reinforcement[]>([])
   const [loading, setLoading] = useState(false)
+  const [actingId, setActingId] = useState<string | null>(null)
   const [expellingId, setExpellingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // refresh 读取本城收到的活跃增援。
+  // refresh 读取本城相关的活跃增援。
   const refresh = useCallback(async () => {
     if (!activePlayerId) {
+      setSent([])
       setReceived([])
       return
     }
     setLoading(true)
     setError(null)
     try {
-      const result = await gameApi.listReceivedReinforcements(activePlayerId)
-      setReceived((result.items ?? []).filter((item) => ACTIVE_GARRISON_STATUSES.has(item.status)))
+      const [sentResult, receivedResult] = await Promise.all([
+        gameApi.listSentReinforcements(activePlayerId),
+        gameApi.listReceivedReinforcements(activePlayerId),
+      ])
+      setSent((sentResult.items ?? []).filter((item) => ACTIVE_SENT_STATUSES.has(item.status)))
+      setReceived((receivedResult.items ?? []).filter((item) => ACTIVE_GARRISON_STATUSES.has(item.status)))
     } catch (err) {
       setError(err instanceof Error ? err.message : '战争状态加载失败')
+      setSent([])
       setReceived([])
     } finally {
       setLoading(false)
@@ -81,6 +93,47 @@ const WarTab: FC = () => {
     }
   }
 
+  // handleRecall 召回自己派出的援军。
+  const handleRecall = async (record: Reinforcement) => {
+    if (!activePlayerId || actingId) return
+    setActingId(record.reinforcementId)
+    setError(null)
+    try {
+      const result = await gameApi.recallReinforcement(activePlayerId, record.reinforcementId)
+      if (result.patch) patchState(result.patch)
+      setSent((prev) => prev.map((item) => item.reinforcementId === result.reinforcement.reinforcementId ? result.reinforcement : item))
+      await refresh()
+      window.dispatchEvent(new Event('hero3:garrison-updated'))
+      window.dispatchEvent(new Event('hero3:marches-updated'))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '召回失败')
+    } finally {
+      setActingId(null)
+    }
+  }
+
+  // handleAccelerate 加速自己派出的行军中援军。
+  const handleAccelerate = async (record: Reinforcement) => {
+    if (!activePlayerId || actingId) return
+    setActingId(record.reinforcementId)
+    setError(null)
+    try {
+      const result = await gameApi.accelerateReinforcement(activePlayerId, record.reinforcementId)
+      if (result.patch) patchState(result.patch)
+      patchState({
+        ...(typeof result.cityGold === 'number' ? { cityGold: result.cityGold } : {}),
+        ...(result.serverTime ? { serverTime: result.serverTime } : {}),
+      })
+      setSent((prev) => prev.map((item) => item.reinforcementId === result.reinforcement.reinforcementId ? result.reinforcement : item))
+      await refresh()
+      window.dispatchEvent(new Event('hero3:marches-updated'))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加速失败')
+    } finally {
+      setActingId(null)
+    }
+  }
+
   return (
     <div className="min-w-0 space-y-4">
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
@@ -100,6 +153,33 @@ const WarTab: FC = () => {
           </div>
         )}
         <WarTroopTable troops={armyToTroops(army)} units={units} faction={state?.player.faction} />
+      </section>
+
+      <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <UsersRound size={16} className="text-amber-600" />
+          <h2 className="text-sm font-bold text-[var(--color-text-primary)]">我派出去的军队</h2>
+          {loading && <span className="ml-auto text-xs text-[var(--color-text-muted)]">刷新中</span>}
+        </div>
+        {sent.length > 0 ? (
+          <div className="grid gap-3">
+            {sent.map((record) => (
+              <ReinforcementSentCard
+                key={record.reinforcementId}
+                record={record}
+                units={units}
+                cityGold={cityGold}
+                acting={actingId === record.reinforcementId}
+                onRecall={handleRecall}
+                onAccelerate={handleAccelerate}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg bg-[var(--color-surface-dim)] px-4 py-8 text-center text-sm text-[var(--color-text-muted)]">
+            暂无派出的军队
+          </div>
+        )}
       </section>
 
       <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
@@ -185,6 +265,68 @@ function armyToTroops(army: ArmyUnit[]) {
   return result
 }
 
+// ReinforcementSentCard 展示自己派出的增援队伍。
+const ReinforcementSentCard: FC<{
+  record: Reinforcement
+  units: ReturnType<typeof useConfigStore.getState>['units']
+  cityGold: number
+  acting: boolean
+  onRecall: (record: Reinforcement) => Promise<void>
+  onAccelerate: (record: Reinforcement) => Promise<void>
+}> = ({ record, units, cityGold, acting, onRecall, onAccelerate }) => {
+  const generals = record.generals ?? []
+  const acceleratedTimes = readAcceleratedTimes(record.metadata)
+  const canRecall = record.status === 'marching' || record.status === 'stationed'
+  const canAccelerate = record.status === 'marching' && acceleratedTimes < REINFORCEMENT_MAX_ACCELERATE_TIMES
+  const canPayAccelerate = cityGold >= REINFORCEMENT_ACCELERATE_COST
+  return (
+    <article className="min-w-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="min-w-0 truncate text-sm font-bold text-[var(--color-text-primary)]">{record.toPlayerName || record.toPlayerId || '未知城池'}</span>
+        <span className="rounded bg-amber-500/10 px-2 py-0.5 text-xs font-bold text-amber-700">{STATUS_LABELS[record.status]}</span>
+        <span className="ml-auto text-sm font-black text-amber-700">{totalTroops(record.remainingTroops).toLocaleString()}</span>
+      </div>
+      {generals.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {generals.map((general) => (
+            <span key={general.id} className="text-xs font-bold text-amber-700">{general.name || general.id} Lv.{general.level}</span>
+          ))}
+        </div>
+      )}
+      <div className="mt-2">
+        <WarTroopTable troops={record.remainingTroops} units={units} faction={record.fromPlayerFaction} />
+      </div>
+      {(canAccelerate || canRecall) && (
+        <div className="mt-3 flex flex-wrap justify-end gap-2">
+          {canAccelerate && (
+            <button
+              type="button"
+              onClick={() => void onAccelerate(record)}
+              disabled={acting || !canPayAccelerate}
+              className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+              title={canPayAccelerate ? `消耗 ${REINFORCEMENT_ACCELERATE_COST} 城金，将剩余时间减半` : `城金不足，需要 ${REINFORCEMENT_ACCELERATE_COST} 城金`}
+            >
+              <Zap size={13} />
+              加速
+            </button>
+          )}
+          {canRecall && (
+            <button
+              type="button"
+              onClick={() => void onRecall(record)}
+              disabled={acting}
+              className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-bold text-[var(--color-text-secondary)] hover:border-amber-400 hover:text-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RotateCcw size={13} />
+              {acting ? '召回中' : '召回'}
+            </button>
+          )}
+        </div>
+      )}
+    </article>
+  )
+}
+
 // ReinforcementDefenseCard 展示单支他城增援守军。
 const ReinforcementDefenseCard: FC<{
   record: Reinforcement
@@ -240,6 +382,12 @@ function findUnitName(units: ReturnType<typeof useConfigStore.getState>['units']
 // totalTroops 统计兵力总数。
 function totalTroops(troops?: Record<string, number>) {
   return Object.values(troops ?? {}).reduce((sum, amount) => sum + amount, 0)
+}
+
+// readAcceleratedTimes 读取援军已加速次数。
+function readAcceleratedTimes(metadata?: Record<string, unknown>) {
+  const value = metadata?.acceleratedTimes
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
 export default WarTab

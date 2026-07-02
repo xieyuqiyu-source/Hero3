@@ -46,14 +46,19 @@ func (s *Service) SendReinforcement(req SendReinforcementRequest) (Reinforcement
 		if _, err := validateAndConsumeArmy(from, troops); err != nil {
 			return Reinforcement{}, err
 		}
-		marchSeconds := reinforcementTravelSecondsForDistance(distance, reinforcementSlowestUnitSpeed(from.Player.Faction, troops), now, CollectModifierSources(from))
-		expectedArriveAt := now.Add(time.Duration(marchSeconds) * time.Second).UTC().Format(resourceDateLayout)
 		EnsureGeneralRoster(from, now)
 		reinforcementID := "reinforcement_" + randomID(12)
 		generals, err := reserveReinforcementGenerals(from, req.GeneralIDs, reinforcementID, now)
 		if err != nil {
 			return Reinforcement{}, err
 		}
+		generalIDs := make([]string, 0, len(generals))
+		for _, item := range generals {
+			generalIDs = append(generalIDs, item.ID)
+		}
+		marchSeconds := reinforcementTravelSecondsForDistance(distance, reinforcementSlowestUnitSpeed(from.Player.Faction, troops), now, CollectModifierSources(from))
+		marchSeconds = dispatchMarchCreateTraits(marchSeconds, "reinforcement", from, generalIDs)
+		expectedArriveAt := now.Add(time.Duration(marchSeconds) * time.Second).UTC().Format(resourceDateLayout)
 		record := Reinforcement{
 			ID:                reinforcementID,
 			FromPlayerID:      from.Player.ID,

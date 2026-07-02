@@ -214,6 +214,7 @@ func (h *Handlers) AdminGeneralTraitRegistry(w http.ResponseWriter, r *http.Requ
 	type traitMeta struct {
 		ID          string               `json:"id"`
 		Name        string               `json:"name"`
+		TraitType   string               `json:"traitType"`
 		Description string               `json:"description"`
 		ParamSchema []general.ParamField `json:"paramSchema"`
 	}
@@ -223,6 +224,7 @@ func (h *Handlers) AdminGeneralTraitRegistry(w http.ResponseWriter, r *http.Requ
 		out = append(out, traitMeta{
 			ID:          t.ID(),
 			Name:        t.Name(),
+			TraitType:   t.Type(),
 			Description: t.Description(general.Params{}),
 			ParamSchema: t.ParamSchema(),
 		})

@@ -78,3 +78,148 @@ BootstrapResponse:
     message:
       type: string
       example: Hero3 后端基础服务已就绪，具体玩法逻辑待接入。
+GeneralTraitConfig:
+  type: object
+  required:
+  - traitId
+  - enabled
+  - params
+  properties:
+    traitId:
+      type: string
+      example: huogong
+    traitType:
+      type: string
+      enum: [special, bonus]
+      example: special
+    enabled:
+      type: boolean
+      example: true
+    scope:
+      type: string
+      description: 作用范围；增援默认使用 reinforcement_self，只影响自己的增援队伍。
+      example: self_army
+    targetUnitType:
+      type: string
+      description: 目标兵种或兵种分类。
+      example: infantry
+    params:
+      type: object
+      additionalProperties:
+        type: number
+      description: GM 可调参数，百分比统一使用 0 到 1 的小数。
+      example:
+        triggerChance: 1
+        effectRate: 0.25
+GeneralHeroConfig:
+  type: object
+  required:
+  - id
+  - name
+  - faction
+  - enabled
+  - specialTrait
+  - bonusTrait
+  properties:
+    id:
+      type: string
+      example: zhouyu
+    name:
+      type: string
+      example: 周瑜
+    faction:
+      type: string
+      example: wu
+    title:
+      type: string
+      example: 美周郎
+    rarity:
+      type: string
+      description: 历史兼容字段，不参与特性强度或排序权重。
+      example: epic
+    enabled:
+      type: boolean
+      example: true
+    buffs:
+      type: object
+      additionalProperties:
+        type: number
+    specialTrait:
+      $ref: '#/components/schemas/GeneralTraitConfig'
+    bonusTrait:
+      $ref: '#/components/schemas/GeneralTraitConfig'
+GeneralsConfig:
+  type: object
+  required:
+  - enabled
+  - common
+  - heroes
+  properties:
+    enabled:
+      type: boolean
+      example: true
+    common:
+      type: object
+      additionalProperties: true
+    heroes:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/GeneralHeroConfig'
+TraitParamField:
+  type: object
+  required:
+  - key
+  - label
+  - default
+  - min
+  - max
+  - step
+  properties:
+    key:
+      type: string
+    label:
+      type: string
+    description:
+      type: string
+    default:
+      type: number
+    min:
+      type: number
+    max:
+      type: number
+    step:
+      type: number
+TraitMeta:
+  type: object
+  required:
+  - id
+  - name
+  - traitType
+  - description
+  - paramSchema
+  properties:
+    id:
+      type: string
+      example: huogong
+    name:
+      type: string
+      example: 火烧赤壁
+    traitType:
+      type: string
+      enum: [special, bonus]
+      example: special
+    description:
+      type: string
+    paramSchema:
+      type: array
+      items:
+        $ref: '#/components/schemas/TraitParamField'
+TraitRegistryResponse:
+  type: object
+  required:
+  - traits
+  properties:
+    traits:
+      type: array
+      items:
+        $ref: '#/components/schemas/TraitMeta'

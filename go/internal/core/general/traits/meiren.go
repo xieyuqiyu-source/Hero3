@@ -28,6 +28,7 @@ func init() {
 
 func (m *Meiren) ID() string   { return "meiren" }
 func (m *Meiren) Name() string { return "美人计" }
+func (m *Meiren) Type() string { return general.TraitTypeSpecial }
 
 func (m *Meiren) Description(p general.Params) string {
 	return "战斗开始前，魅惑敌方部分残兵归己方所用"
@@ -116,8 +117,13 @@ func (m *Meiren) beforeBattle(ctx general.EventContext, p general.Params) {
 			c.Triggered = map[string]general.TraitOutcome{}
 		}
 		c.Triggered["meiren"] = general.TraitOutcome{
-			TraitID: "meiren",
-			Name:    "美人计",
+			TraitID:        "meiren",
+			Name:           "美人计",
+			TraitType:      general.TraitTypeSpecial,
+			OwnerSide:      c.Actor.Side,
+			OwnerGeneralID: c.Actor.GeneralID,
+			OwnerPlayerID:  c.Actor.PlayerID,
+			Scope:          c.Actor.Scope,
 			Detail: map[string]interface{}{
 				"totalCaptured": totalCapturedAll,
 			},

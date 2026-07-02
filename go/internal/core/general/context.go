@@ -6,9 +6,24 @@ import (
 
 // TraitOutcome 特性触发后的结果详情（写入战报供前端展示）
 type TraitOutcome struct {
-	TraitID string                 `json:"traitId"`          // 特性 ID
-	Name    string                 `json:"name,omitempty"`   // 中文名（冗余便于前端）
-	Detail  map[string]interface{} `json:"detail,omitempty"` // 关键数据（俘虏数、复活数、伤害量等）
+	TraitID        string                 `json:"traitId"`                  // 特性 ID
+	Name           string                 `json:"name,omitempty"`           // 中文名（冗余便于前端）
+	TraitType      string                 `json:"traitType,omitempty"`      // 特性类型
+	OwnerSide      string                 `json:"ownerSide,omitempty"`      // 触发方：attacker/defender/reinforcement
+	OwnerGeneralID string                 `json:"ownerGeneralId,omitempty"` // 触发武将
+	OwnerPlayerID  string                 `json:"ownerPlayerId,omitempty"`  // 触发玩家
+	Scope          string                 `json:"scope,omitempty"`          // 作用范围
+	Detail         map[string]interface{} `json:"detail,omitempty"`         // 关键数据（俘虏数、复活数、伤害量等）
+}
+
+// TraitActor 描述当前事件中某条特性的触发归属。
+type TraitActor struct {
+	Side            string // attacker / defender / reinforcement
+	PlayerID        string
+	GeneralID       string
+	ReinforcementID string
+	Scope           string
+	TargetUnitType  string
 }
 
 // BeforeBattleContext 战斗开始前的上下文
@@ -23,6 +38,8 @@ type BeforeBattleContext struct {
 	Defender          *combat.Army // 防守方军队（可改）
 	AttackerOwnsTrait bool         // 进攻方是否拥有当前特性
 	DefenderOwnsTrait bool         // 防守方是否拥有当前特性
+	Actor             TraitActor   // 当前分发批次的特性归属
+	Scene             string       // attack / plunder / reinforcement_defense / npc 等
 
 	// 输出：俘虏到我方的兵（key: unitType → count）
 	// 主城兵进入军队，跨阵营进入驻防
@@ -52,6 +69,9 @@ type AfterCombatResolveContext struct {
 	Defender          *combat.Army         // 防守方
 	AttackerOwnsTrait bool
 	DefenderOwnsTrait bool
+	Actor             TraitActor
+	Scene             string
+	DisabledTraitSide map[string]int // 已被压制的阵营特性数量，key: attacker/defender/reinforcement
 
 	IsAttackerOnly bool // 是否只在进攻方触发（如周瑜火攻）
 
@@ -74,6 +94,8 @@ type AfterBattleContext struct {
 	PlayerLosses map[string]int // 玩家本场损失（按 unitType）
 	IsAttacker   bool           // 该玩家是进攻方还是防守方
 	Won          bool           // 该玩家是否胜利
+	Actor        TraitActor     // 当前分发批次的特性归属
+	Scene        string         // attack / defense / reinforcement_defense 等
 
 	// 输出：复活的兵（key: unitType → count），调用方应用回 state.Army
 	Revived map[string]int
@@ -83,3 +105,36 @@ type AfterBattleContext struct {
 }
 
 func (c *AfterBattleContext) EventType() string { return EventAfterBattle }
+
+// MarchCreateContext 行军创建前的上下文，特性可修改本次行军秒数。
+type MarchCreateContext struct {
+	BaseSeconds  int
+	FinalSeconds int
+	Scene        string
+	Actor        TraitActor
+	Triggered    map[string]TraitOutcome
+}
+
+func (c *MarchCreateContext) EventType() string { return EventMarchCreate }
+
+// RecruitCostContext 征兵消耗计算上下文，特性可降低本次资源消耗。
+type RecruitCostContext struct {
+	UnitType  string
+	Category  string
+	Amount    int
+	Cost      map[string]int
+	Actor     TraitActor
+	Triggered map[string]TraitOutcome
+}
+
+func (c *RecruitCostContext) EventType() string { return EventRecruitCost }
+
+// PlunderResolveContext 掠夺结算上下文，特性可修正本次掠夺收益。
+type PlunderResolveContext struct {
+	Rewards   map[string]int
+	Scene     string
+	Actor     TraitActor
+	Triggered map[string]TraitOutcome
+}
+
+func (c *PlunderResolveContext) EventType() string { return EventPlunderResolve }

@@ -21,7 +21,8 @@ func init() {
 }
 
 func (h *Huogong) ID() string   { return "huogong" }
-func (h *Huogong) Name() string { return "火攻" }
+func (h *Huogong) Name() string { return "火烧赤壁" }
+func (h *Huogong) Type() string { return general.TraitTypeSpecial }
 
 func (h *Huogong) Description(p general.Params) string {
 	return "战斗中有概率发动火攻，对敌方造成额外百分比伤害"
@@ -29,6 +30,7 @@ func (h *Huogong) Description(p general.Params) string {
 
 func (h *Huogong) ParamSchema() []general.ParamField {
 	return []general.ParamField{
+		{Key: "effectRate", Label: "火攻伤害比例", Description: "敌方按原始兵力额外损失的比例", Default: 0.25, Min: 0, Max: 1, Step: 0.01},
 		{Key: "damagePercent", Label: "额外伤害百分比", Description: "敌方按原始兵力额外损失的比例", Default: 0.15, Min: 0, Max: 1, Step: 0.01},
 		{Key: "triggerChance", Label: "触发概率", Description: "战斗时发动火攻的概率", Default: 0.6, Min: 0, Max: 1, Step: 0.05},
 	}
@@ -53,6 +55,9 @@ func (h *Huogong) afterCombat(ctx general.EventContext, p general.Params) {
 	if !c.AttackerOwnsTrait {
 		return
 	}
+	if c.Actor.Side != "" && c.Actor.Side != "attacker" {
+		return
+	}
 
 	// 触发概率（限制在 0-1 之间）
 	chance := p.FloatWithBounds("triggerChance", 0.6, 0, 1)
@@ -61,7 +66,7 @@ func (h *Huogong) afterCombat(ctx general.EventContext, p general.Params) {
 	}
 
 	// 伤害百分比（限制在 0-1 之间，防止超过 100% 伤害）
-	damagePct := p.FloatWithBounds("damagePercent", 0.15, 0, 1)
+	damagePct := p.FloatWithBounds("effectRate", p.FloatOr("damagePercent", 0.15), 0, 1)
 	if damagePct <= 0 {
 		return
 	}
@@ -100,8 +105,13 @@ func (h *Huogong) afterCombat(ctx general.EventContext, p general.Params) {
 			c.Triggered = map[string]general.TraitOutcome{}
 		}
 		c.Triggered["huogong"] = general.TraitOutcome{
-			TraitID: "huogong",
-			Name:    "火攻",
+			TraitID:        "huogong",
+			Name:           "火烧赤壁",
+			TraitType:      general.TraitTypeSpecial,
+			OwnerSide:      c.Actor.Side,
+			OwnerGeneralID: c.Actor.GeneralID,
+			OwnerPlayerID:  c.Actor.PlayerID,
+			Scope:          c.Actor.Scope,
 			Detail: map[string]interface{}{
 				"extraDamage":   totalExtra,
 				"damagePercent": damagePct,

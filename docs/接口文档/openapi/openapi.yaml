@@ -62,6 +62,10 @@ paths:
     $ref: ./paths/account.yaml#/~1api~1v1~1accounts~1{accountId}~1players
   /api/v1/accounts/{accountId}:
     $ref: ./paths/account.yaml#/~1api~1v1~1accounts~1{accountId}
+  /api/v1/admin/generals-config:
+    $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1generals-config
+  /api/v1/admin/general-traits:
+    $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1general-traits
   /api/v1/players/create:
     $ref: ./paths/account.yaml#/~1api~1v1~1players~1create
   /api/v1/players/{playerId}:
@@ -535,6 +539,16 @@ components:
       $ref: ./schemas/reincarnation.yaml#/ReincarnationSettleRequest
     ReincarnationRunPage:
       $ref: ./schemas/reincarnation.yaml#/ReincarnationRunPage
+    GeneralTraitConfig:
+      $ref: ./schemas/system.yaml#/GeneralTraitConfig
+    GeneralHeroConfig:
+      $ref: ./schemas/system.yaml#/GeneralHeroConfig
+    GeneralsConfig:
+      $ref: ./schemas/system.yaml#/GeneralsConfig
+    TraitMeta:
+      $ref: ./schemas/system.yaml#/TraitMeta
+    TraitRegistryResponse:
+      $ref: ./schemas/system.yaml#/TraitRegistryResponse
     ErrorResponse:
       $ref: ./schemas/common.yaml#/ErrorResponse
     DeleteResponse:

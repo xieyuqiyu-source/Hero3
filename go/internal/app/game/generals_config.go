@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"hero3/internal/core/general"
@@ -41,14 +42,19 @@ type GeneralHeroConfig struct {
 	Buffs map[string]float64 `json:"buffs"`
 
 	// 特性列表（特性 id 在代码注册中心查到，参数从这里读）
-	Traits []GeneralTraitConfig `json:"traits"`
+	Traits       []GeneralTraitConfig `json:"traits,omitempty"`
+	SpecialTrait GeneralTraitConfig   `json:"specialTrait"`
+	BonusTrait   GeneralTraitConfig   `json:"bonusTrait"`
 }
 
 // GeneralTraitConfig 单将领的某个特性的配置
 type GeneralTraitConfig struct {
-	TraitID string             `json:"traitId"` // 对应 general.traits 注册的 id（如 "meiren"）
-	Enabled bool               `json:"enabled"` // 该特性是否启用
-	Params  map[string]float64 `json:"params"`  // 当前参数（覆盖默认值）
+	TraitID        string             `json:"traitId"`                  // 对应 general.traits 注册的 id（如 "meiren"）
+	TraitType      string             `json:"traitType,omitempty"`      // special / bonus
+	Enabled        bool               `json:"enabled"`                  // 该特性是否启用
+	Scope          string             `json:"scope,omitempty"`          // 作用范围
+	TargetUnitType string             `json:"targetUnitType,omitempty"` // 目标兵种或兵种分类
+	Params         map[string]float64 `json:"params"`                   // 当前参数（覆盖默认值）
 }
 
 // --- 全局管理 ---
@@ -65,6 +71,7 @@ func GetGeneralsConfig() GeneralsConfig {
 }
 
 func SetGeneralsConfig(cfg GeneralsConfig) error {
+	cfg = NormalizeGeneralsConfig(cfg)
 	// 校验配置一致性
 	if err := ValidateGeneralsConfig(cfg); err != nil {
 		return err
@@ -94,6 +101,7 @@ func LoadGeneralsConfig(path string) error {
 }
 
 func SaveGeneralsConfig(path string, cfg GeneralsConfig) error {
+	cfg = NormalizeGeneralsConfig(cfg)
 	if err := SetGeneralsConfig(cfg); err != nil {
 		return err
 	}
@@ -108,6 +116,25 @@ func SaveGeneralsConfig(path string, cfg GeneralsConfig) error {
 		return err
 	}
 	return os.WriteFile(path, append(content, '\n'), 0o644)
+}
+
+// NormalizeGeneralsConfig 将旧 traits 数组兼容归一为双特性结构。
+func NormalizeGeneralsConfig(cfg GeneralsConfig) GeneralsConfig {
+	for id, hero := range cfg.Heroes {
+		normalizeHeroDualTraits(&hero)
+		if strings.TrimSpace(hero.SpecialTrait.TraitID) != "" {
+			if trait, ok := general.Get(hero.SpecialTrait.TraitID); ok {
+				hero.SpecialTrait.TraitType = trait.Type()
+			}
+		}
+		if strings.TrimSpace(hero.BonusTrait.TraitID) != "" {
+			if trait, ok := general.Get(hero.BonusTrait.TraitID); ok {
+				hero.BonusTrait.TraitType = trait.Type()
+			}
+		}
+		cfg.Heroes[id] = hero
+	}
+	return cfg
 }
 
 // --- 默认配置 ---
@@ -190,17 +217,21 @@ func cloneHeroConfig(src GeneralHeroConfig) GeneralHeroConfig {
 	}
 	dst.Traits = make([]GeneralTraitConfig, len(src.Traits))
 	for i, t := range src.Traits {
-		clonedParams := make(map[string]float64, len(t.Params))
-		for k, v := range t.Params {
-			clonedParams[k] = v
-		}
-		dst.Traits[i] = GeneralTraitConfig{
-			TraitID: t.TraitID,
-			Enabled: t.Enabled,
-			Params:  clonedParams,
-		}
+		dst.Traits[i] = cloneTraitConfig(t)
 	}
+	dst.SpecialTrait = cloneTraitConfig(src.SpecialTrait)
+	dst.BonusTrait = cloneTraitConfig(src.BonusTrait)
 	return dst
+}
+
+// cloneTraitConfig 深拷贝一条将领特性配置。
+func cloneTraitConfig(t GeneralTraitConfig) GeneralTraitConfig {
+	clonedParams := make(map[string]float64, len(t.Params))
+	for k, v := range t.Params {
+		clonedParams[k] = v
+	}
+	t.Params = clonedParams
+	return t
 }
 
 // ValidateGeneralsConfig 校验将领配置的一致性和数值边界。
@@ -249,7 +280,8 @@ func ValidateGeneralsConfig(cfg GeneralsConfig) error {
 		if err := validateGeneralBuffs("heroes."+generalID+".buffs", hero.Buffs); err != nil {
 			return err
 		}
-		if err := validateGeneralTraits(generalID, hero.Traits); err != nil {
+		normalizeHeroDualTraits(&hero)
+		if err := validateGeneralDualTraits(generalID, hero); err != nil {
 			return err
 		}
 	}
@@ -300,34 +332,109 @@ func validateGeneralBuffs(label string, buffs map[string]float64) error {
 	return nil
 }
 
-func validateGeneralTraits(generalID string, traits []GeneralTraitConfig) error {
+func validateGeneralDualTraits(generalID string, hero GeneralHeroConfig) error {
+	traits := activeHeroTraitConfigs(hero)
+	if hero.Enabled {
+		if strings.TrimSpace(hero.SpecialTrait.TraitID) == "" {
+			return fmt.Errorf("enabled general %s must configure specialTrait", generalID)
+		}
+		if strings.TrimSpace(hero.BonusTrait.TraitID) == "" {
+			return fmt.Errorf("enabled general %s must configure bonusTrait", generalID)
+		}
+	}
+	if hero.Enabled || strings.TrimSpace(hero.SpecialTrait.TraitID) != "" {
+		if err := validateSingleGeneralTrait(generalID, hero.SpecialTrait, general.TraitTypeSpecial); err != nil {
+			return err
+		}
+	}
+	if hero.Enabled || strings.TrimSpace(hero.BonusTrait.TraitID) != "" {
+		if err := validateSingleGeneralTrait(generalID, hero.BonusTrait, general.TraitTypeBonus); err != nil {
+			return err
+		}
+	}
 	for _, traitCfg := range traits {
-		trait, ok := general.Get(traitCfg.TraitID)
-		if !ok {
-			return fmt.Errorf("general %s uses unknown trait %s", generalID, traitCfg.TraitID)
+		if traitCfg.TraitID == hero.SpecialTrait.TraitID || traitCfg.TraitID == hero.BonusTrait.TraitID {
+			continue
 		}
-		schemaByKey := map[string]general.ParamField{}
-		for _, field := range trait.ParamSchema() {
-			schemaByKey[field.Key] = field
-			if value, ok := traitCfg.Params[field.Key]; ok {
-				if math.IsNaN(value) || math.IsInf(value, 0) {
-					return fmt.Errorf("general %s trait %s param %s must be finite", generalID, traitCfg.TraitID, field.Key)
-				}
-				if value < field.Min || value > field.Max {
-					return fmt.Errorf("general %s trait %s param %s=%g out of range [%g,%g]", generalID, traitCfg.TraitID, field.Key, value, field.Min, field.Max)
-				}
-			}
-		}
-		for key := range traitCfg.Params {
-			if _, ok := schemaByKey[key]; !ok {
-				return fmt.Errorf("general %s trait %s contains unknown param %s", generalID, traitCfg.TraitID, key)
-			}
-		}
-		if err := validateTraitParamConsistency(generalID, traitCfg.TraitID, traitCfg.Params, schemaByKey); err != nil {
+		if err := validateSingleGeneralTrait(generalID, traitCfg, ""); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func validateSingleGeneralTrait(generalID string, traitCfg GeneralTraitConfig, expectedType string) error {
+	if strings.TrimSpace(traitCfg.TraitID) == "" {
+		if expectedType == "" {
+			return nil
+		}
+		return fmt.Errorf("general %s %s trait is empty", generalID, expectedType)
+	}
+	trait, ok := general.Get(traitCfg.TraitID)
+	if !ok {
+		return fmt.Errorf("general %s uses unknown trait %s", generalID, traitCfg.TraitID)
+	}
+	if expectedType != "" && trait.Type() != expectedType {
+		return fmt.Errorf("general %s trait %s type mismatch: expected %s got %s", generalID, traitCfg.TraitID, expectedType, trait.Type())
+	}
+	if traitCfg.TraitType != "" && traitCfg.TraitType != trait.Type() {
+		return fmt.Errorf("general %s trait %s config type %s does not match registered type %s", generalID, traitCfg.TraitID, traitCfg.TraitType, trait.Type())
+	}
+	schemaByKey := map[string]general.ParamField{}
+	for _, field := range trait.ParamSchema() {
+		schemaByKey[field.Key] = field
+		if value, ok := traitCfg.Params[field.Key]; ok {
+			if math.IsNaN(value) || math.IsInf(value, 0) {
+				return fmt.Errorf("general %s trait %s param %s must be finite", generalID, traitCfg.TraitID, field.Key)
+			}
+			if value < field.Min || value > field.Max {
+				return fmt.Errorf("general %s trait %s param %s=%g out of range [%g,%g]", generalID, traitCfg.TraitID, field.Key, value, field.Min, field.Max)
+			}
+		}
+	}
+	for key := range traitCfg.Params {
+		if _, ok := schemaByKey[key]; !ok {
+			return fmt.Errorf("general %s trait %s contains unknown param %s", generalID, traitCfg.TraitID, key)
+		}
+	}
+	if err := validateTraitParamConsistency(generalID, traitCfg.TraitID, traitCfg.Params, schemaByKey); err != nil {
+		return err
+	}
+	return nil
+}
+
+func normalizeHeroDualTraits(hero *GeneralHeroConfig) {
+	if hero == nil {
+		return
+	}
+	if strings.TrimSpace(hero.SpecialTrait.TraitID) != "" && strings.TrimSpace(hero.BonusTrait.TraitID) != "" {
+		return
+	}
+	for _, traitCfg := range hero.Traits {
+		trait, ok := general.Get(traitCfg.TraitID)
+		if !ok {
+			continue
+		}
+		traitCfg.TraitType = trait.Type()
+		if trait.Type() == general.TraitTypeSpecial && strings.TrimSpace(hero.SpecialTrait.TraitID) == "" {
+			hero.SpecialTrait = traitCfg
+		}
+		if trait.Type() == general.TraitTypeBonus && strings.TrimSpace(hero.BonusTrait.TraitID) == "" {
+			hero.BonusTrait = traitCfg
+		}
+	}
+}
+
+func activeHeroTraitConfigs(hero GeneralHeroConfig) []GeneralTraitConfig {
+	traits := []GeneralTraitConfig{}
+	if strings.TrimSpace(hero.SpecialTrait.TraitID) != "" {
+		traits = append(traits, hero.SpecialTrait)
+	}
+	if strings.TrimSpace(hero.BonusTrait.TraitID) != "" {
+		traits = append(traits, hero.BonusTrait)
+	}
+	traits = append(traits, hero.Traits...)
+	return traits
 }
 
 func validateTraitParamConsistency(generalID string, traitID string, params map[string]float64, fields map[string]general.ParamField) error {

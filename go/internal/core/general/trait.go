@@ -26,6 +26,11 @@ import (
 
 // EventType 事件类型常量
 const (
+	TraitTypeSpecial = "special"
+	TraitTypeBonus   = "bonus"
+)
+
+const (
 	EventBeforeBattle       = "before_battle"
 	EventAfterCombatResolve = "after_combat_resolve"
 	EventAfterBattle        = "after_battle"
@@ -33,6 +38,9 @@ const (
 	EventResourceSettle     = "resource_settle"
 	EventBuildingUpgrade    = "building_upgrade"
 	EventRecruitComplete    = "recruit_complete"
+	EventMarchCreate        = "march_create"
+	EventRecruitCost        = "recruit_cost"
+	EventPlunderResolve     = "plunder_resolve"
 )
 
 // Params 特性参数（来自 GM 配置）
@@ -96,6 +104,9 @@ type Trait interface {
 
 	// Name 显示名（中文）
 	Name() string
+
+	// Type 返回特性类型：特殊特性 special 或加成特性 bonus。
+	Type() string
 
 	// Description 玩家可见的描述（参数会动态展示）
 	// params 是 GM 配置的当前生效参数

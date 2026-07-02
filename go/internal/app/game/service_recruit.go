@@ -36,6 +36,7 @@ func (s *Service) Recruit(playerID string, unitID string, amount int) (GameState
 
 		modSources := CollectModifierSources(state)
 		totalCost := calculateRecruitCost(unitConfig, amount, now, modSources)
+		totalCost = dispatchRecruitCostTraits(state, unitConfig, unitID, amount, totalCost)
 		if err := spendResources(state, totalCost); err != nil {
 			return err
 		}

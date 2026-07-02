@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"hero3/internal/core/combat"
+	coregeneral "hero3/internal/core/general"
 	_ "hero3/internal/core/general/traits"
 )
 
@@ -212,6 +213,7 @@ func setTestFactionsAndGenerals(t *testing.T, factions FactionsConfig, cfg Gener
 	activeFactions = factions
 	factionsMu.Unlock()
 
+	cfg = fillTestDualTraits(cfg)
 	if err := SetGeneralsConfig(cfg); err != nil {
 		t.Fatalf("set generals config: %v", err)
 	}
@@ -224,6 +226,36 @@ func setTestFactionsAndGenerals(t *testing.T, factions FactionsConfig, cfg Gener
 		activeFactions = originalFactions
 		factionsMu.Unlock()
 	})
+}
+
+func fillTestDualTraits(cfg GeneralsConfig) GeneralsConfig {
+	cfg = NormalizeGeneralsConfig(cfg)
+	for id, hero := range cfg.Heroes {
+		if !hero.Enabled {
+			cfg.Heroes[id] = hero
+			continue
+		}
+		if strings.TrimSpace(hero.SpecialTrait.TraitID) == "" {
+			hero.SpecialTrait = GeneralTraitConfig{
+				TraitID:   "rende",
+				TraitType: "special",
+				Enabled:   true,
+				Scope:     "self_army",
+				Params:    map[string]float64{"effectRate": 0.1, "reviveRate": 0.1, "maxReviveCount": 1000, "triggerChance": 0},
+			}
+		}
+		if strings.TrimSpace(hero.BonusTrait.TraitID) == "" {
+			hero.BonusTrait = GeneralTraitConfig{
+				TraitID:   "renzhu_shouhu",
+				TraitType: "bonus",
+				Enabled:   true,
+				Scope:     "self_army",
+				Params:    map[string]float64{"lossReductionRate": 0.1, "maxReturnCount": 1000, "triggerChance": 0},
+			}
+		}
+		cfg.Heroes[id] = hero
+	}
+	return cfg
 }
 
 func setTestCombatUnitsConfig(t *testing.T) {
@@ -278,11 +310,18 @@ func TestValidateGeneralsConfigRejectsUnsafeTraitParams(t *testing.T) {
 				Name:    "甄宓",
 				Faction: "wei",
 				Enabled: true,
-				Traits: []GeneralTraitConfig{{
-					TraitID: "meiren",
-					Enabled: true,
-					Params:  map[string]float64{"captureRate": 2, "captureMax": 1000, "triggerChance": 1},
-				}},
+				SpecialTrait: GeneralTraitConfig{
+					TraitID:   "meiren",
+					TraitType: "special",
+					Enabled:   true,
+					Params:    map[string]float64{"captureRate": 2, "captureMax": 1000, "triggerChance": 1},
+				},
+				BonusTrait: GeneralTraitConfig{
+					TraitID:   "renzhu_shouhu",
+					TraitType: "bonus",
+					Enabled:   true,
+					Params:    map[string]float64{"lossReductionRate": 0.1, "maxReturnCount": 1000},
+				},
 			},
 		},
 	}
@@ -299,6 +338,73 @@ func TestValidateGeneralsConfigRejectsUnsafeTraitParams(t *testing.T) {
 
 	if err := ValidateGeneralsConfig(cfg); err == nil {
 		t.Fatalf("expected out-of-range trait param to be rejected")
+	}
+}
+
+func TestValidateGeneralsConfigRejectsMissingDualTraits(t *testing.T) {
+	originalFactions := GetFactionsConfig()
+	factionsMu.Lock()
+	activeFactions = FactionsConfig{"wei": {Generals: []GeneralInfo{{ID: "caocao", Name: "曹操"}}}}
+	factionsMu.Unlock()
+	t.Cleanup(func() {
+		factionsMu.Lock()
+		activeFactions = originalFactions
+		factionsMu.Unlock()
+	})
+
+	err := ValidateGeneralsConfig(GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"caocao": {ID: "caocao", Name: "曹操", Faction: "wei", Enabled: true},
+		},
+	})
+	if err == nil {
+		t.Fatalf("expected enabled general without specialTrait and bonusTrait to fail")
+	}
+}
+
+func TestGeneralsConfigFileHasAllDualTraits(t *testing.T) {
+	original := GetGeneralsConfig()
+	originalFactions := GetFactionsConfig()
+	if err := LoadFactionsConfig("../../../config/factions.json"); err != nil {
+		t.Fatalf("load factions config: %v", err)
+	}
+	t.Cleanup(func() {
+		generalsMu.Lock()
+		activeGenerals = original
+		generalsMu.Unlock()
+		factionsMu.Lock()
+		activeFactions = originalFactions
+		factionsMu.Unlock()
+	})
+	if err := LoadGeneralsConfig("../../../config/generals.json"); err != nil {
+		t.Fatalf("load generals config: %v", err)
+	}
+	cfg := GetGeneralsConfig()
+	if len(cfg.Heroes) < 24 {
+		t.Fatalf("expected at least 24 generals, got %d", len(cfg.Heroes))
+	}
+	for id, hero := range cfg.Heroes {
+		if strings.TrimSpace(hero.SpecialTrait.TraitID) == "" || strings.TrimSpace(hero.BonusTrait.TraitID) == "" {
+			t.Fatalf("general %s missing dual traits: %+v", id, hero)
+		}
+		if hero.SpecialTrait.TraitType != "special" || hero.BonusTrait.TraitType != "bonus" {
+			t.Fatalf("general %s has wrong trait types: special=%s bonus=%s", id, hero.SpecialTrait.TraitType, hero.BonusTrait.TraitType)
+		}
+	}
+}
+
+func TestGeneralTraitRegistryCoversDualTraitCatalog(t *testing.T) {
+	traits := coregeneral.All()
+	if len(traits) < 48 {
+		t.Fatalf("expected at least 48 registered traits, got %d", len(traits))
+	}
+	seenTypes := map[string]int{}
+	for _, trait := range traits {
+		seenTypes[trait.Type()]++
+	}
+	if seenTypes["special"] < 24 || seenTypes["bonus"] < 24 {
+		t.Fatalf("expected at least 24 special and 24 bonus traits, got %+v", seenTypes)
 	}
 }
 

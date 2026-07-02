@@ -50,6 +50,57 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/generals-config:
+  get:
+    tags:
+    - Admin
+    summary: GM 查看将领双特性配置
+    operationId: adminGetGeneralsConfig
+    responses:
+      '200':
+        description: 当前将领配置
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeneralsConfig'
+  put:
+    tags:
+    - Admin
+    summary: GM 保存将领双特性配置
+    description: 每个启用将领必须同时配置 specialTrait 和 bonusTrait，参数必须符合后端 schema 上下限。
+    operationId: adminUpdateGeneralsConfig
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/GeneralsConfig'
+    responses:
+      '200':
+        description: 保存后的将领配置
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeneralsConfig'
+      '400':
+        description: 配置校验失败
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/general-traits:
+  get:
+    tags:
+    - Admin
+    summary: GM 查看已注册将领特性
+    operationId: adminGetGeneralTraitRegistry
+    responses:
+      '200':
+        description: 已注册特性及参数 schema
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TraitRegistryResponse'
 /api/v1/admin/world-map/occupancy:
   get:
     tags:

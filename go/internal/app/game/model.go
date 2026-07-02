@@ -132,16 +132,24 @@ type GeneralAttributeBreakdownItem struct {
 // GeneralTraitInstance 玩家身上激活的特性实例（trait id + 当前参数）
 // 在玩家创建/读取时根据 GeneralsConfig 填充
 type GeneralTraitInstance struct {
-	TraitID string             `json:"traitId"` // 对应 traits 注册中心
-	Name    string             `json:"name"`    // 显示名（冗余便于前端）
-	Params  map[string]float64 `json:"params"`  // GM 配置的当前参数
+	TraitID        string             `json:"traitId"`                  // 对应 traits 注册中心
+	TraitType      string             `json:"traitType,omitempty"`      // special / bonus
+	Name           string             `json:"name"`                     // 显示名（冗余便于前端）
+	Scope          string             `json:"scope,omitempty"`          // 作用范围
+	TargetUnitType string             `json:"targetUnitType,omitempty"` // 目标兵种
+	Params         map[string]float64 `json:"params"`                   // GM 配置的当前参数
 }
 
 // TraitOutcomeReport 战报中单条特性触发结果
 type TraitOutcomeReport struct {
-	TraitID string                 `json:"traitId"`
-	Name    string                 `json:"name,omitempty"`
-	Detail  map[string]interface{} `json:"detail,omitempty"`
+	TraitID        string                 `json:"traitId"`
+	Name           string                 `json:"name,omitempty"`
+	TraitType      string                 `json:"traitType,omitempty"`
+	OwnerSide      string                 `json:"ownerSide,omitempty"`
+	OwnerGeneralID string                 `json:"ownerGeneralId,omitempty"`
+	OwnerPlayerID  string                 `json:"ownerPlayerId,omitempty"`
+	Scope          string                 `json:"scope,omitempty"`
+	Detail         map[string]interface{} `json:"detail,omitempty"`
 }
 
 type RecruitQueue struct {

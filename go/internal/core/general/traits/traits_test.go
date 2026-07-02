@@ -341,3 +341,79 @@ func TestWeizhenXiaoyao_ZeroUpkeepAttackerDoesNotTrigger(t *testing.T) {
 		t.Fatalf("expected no triggered trait, got %v", ctx.Triggered)
 	}
 }
+
+// 配置化追击：防守方触发时应追加进攻方损失。
+func TestConfigurableExtraDamage_DefenderDamagesAttacker(t *testing.T) {
+	result := &combat.CombatResult{
+		AttackerLosses: []combat.UnitLoss{{ID: "infantry", Count: 100, Losses: 10}},
+		DefenderLosses: []combat.UnitLoss{{ID: "cavalry", Count: 100, Losses: 10}},
+	}
+	ctx := &general.AfterCombatResolveContext{
+		Result:            result,
+		AttackerOwnsTrait: true,
+		DefenderOwnsTrait: true,
+	}
+
+	general.Dispatch(ctx, []general.ActiveTrait{
+		{
+			TraitID:   "xiaobawang_zhuiji",
+			OwnerSide: "defender",
+			Params: general.Params{
+				"effectRate":    0.2,
+				"triggerChance": 1,
+			},
+		},
+	})
+
+	if result.AttackerLosses[0].Losses != 30 {
+		t.Fatalf("expected attacker losses increased to 30, got %d", result.AttackerLosses[0].Losses)
+	}
+	if result.DefenderLosses[0].Losses != 10 {
+		t.Fatalf("expected defender losses unchanged, got %d", result.DefenderLosses[0].Losses)
+	}
+	if ctx.Triggered["xiaobawang_zhuiji"].OwnerSide != "defender" {
+		t.Fatalf("expected defender outcome, got %+v", ctx.Triggered["xiaobawang_zhuiji"])
+	}
+}
+
+// 配置化压制：核心事件管线应跳过被压制方的后续特性。
+func TestConfigurableDisableTraits_SkipsEnemyTraitInBus(t *testing.T) {
+	result := &combat.CombatResult{
+		AttackerLosses: []combat.UnitLoss{{ID: "infantry", Count: 100, Losses: 10}},
+		DefenderLosses: []combat.UnitLoss{{ID: "cavalry", Count: 100, Losses: 10}},
+	}
+	ctx := &general.AfterCombatResolveContext{
+		Result:            result,
+		AttackerOwnsTrait: true,
+		DefenderOwnsTrait: true,
+	}
+
+	general.Dispatch(ctx, []general.ActiveTrait{
+		{
+			TraitID:   "kurouji",
+			OwnerSide: "attacker",
+			Params: general.Params{
+				"disableTraitCount": 1,
+				"triggerChance":     1,
+			},
+		},
+		{
+			TraitID:   "xiaobawang_zhuiji",
+			OwnerSide: "defender",
+			Params: general.Params{
+				"effectRate":    0.2,
+				"triggerChance": 1,
+			},
+		},
+	})
+
+	if result.AttackerLosses[0].Losses != 10 {
+		t.Fatalf("expected defender trait skipped, got attacker losses %d", result.AttackerLosses[0].Losses)
+	}
+	if _, ok := ctx.Triggered["kurouji"]; !ok {
+		t.Fatalf("expected kurouji outcome, got %v", ctx.Triggered)
+	}
+	if _, ok := ctx.Triggered["xiaobawang_zhuiji"]; ok {
+		t.Fatalf("expected defender trait suppressed, got %v", ctx.Triggered)
+	}
+}

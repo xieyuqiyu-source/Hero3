@@ -213,6 +213,9 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 		sliceStart := settledAt
 		resources := copyResourceMap(state.Resources.Items)
 		capacity := calculateResourceCapacity(state.Buildings)
+		if applyGuardPerMinuteTraits(&state, now.Sub(settledAt).Seconds()) {
+			changed = true
+		}
 
 		// 用 sliceStart 判断加成是否生效
 		modSources := CollectModifierSources(&state)
@@ -332,6 +335,51 @@ func addProducedResource(current int, perHour int, elapsedSeconds float64, capac
 	}
 
 	return min(current+produced, capacity)
+}
+
+// applyGuardPerMinuteTraits 按资源结算间隔应用将领产兵类特性。
+func applyGuardPerMinuteTraits(state *GameState, elapsedSeconds float64) bool {
+	if state == nil || state.General == nil || elapsedSeconds <= 0 {
+		return false
+	}
+	generalCopy := cloneGeneral(*state.General)
+	applyHeroConfigToGeneral(&generalCopy)
+	changed := false
+	for _, trait := range generalCopy.Traits {
+		perMinute := trait.Params["guardPerMinute"]
+		if perMinute <= 0 {
+			continue
+		}
+		amount := int(perMinute * elapsedSeconds / 60)
+		if maxPerSettle := int(trait.Params["maxGuardPerDay"]); maxPerSettle > 0 && amount > maxPerSettle {
+			amount = maxPerSettle
+		}
+		if amount <= 0 {
+			continue
+		}
+		unitType := strings.TrimSpace(trait.TargetUnitType)
+		if unitType == "" {
+			unitType = firstCombatUnitByCategory(state.Player.Faction, "special")
+		}
+		if unitType == "" {
+			continue
+		}
+		AddArmyUnit(state, unitType, amount)
+		changed = true
+	}
+	return changed
+}
+
+// firstCombatUnitByCategory 返回指定阵营中第一个可战斗兵种。
+func firstCombatUnitByCategory(faction string, category string) string {
+	unitsMu.RLock()
+	defer unitsMu.RUnlock()
+	for unitType, cfg := range activeUnits[faction] {
+		if cfg.Category == category && !isNonCombatUnit(cfg) {
+			return unitType
+		}
+	}
+	return ""
 }
 
 // --- Modifier 管线辅助函数 ---

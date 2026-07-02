@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Users, Save, ChevronDown, ChevronUp, AlertCircle, Plus, Trash2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
-import type { GeneralHeroConfig, GeneralsConfig, GeneralTraitConfig, TraitMeta } from '@/types'
+import type { GeneralHeroConfig, GeneralsConfig, TraitMeta } from '@/types'
 
 const RARITY_LABELS: Record<string, string> = {
   common: '普通',
@@ -36,6 +36,11 @@ const BUFF_LABELS: Record<string, string> = {
 }
 
 const BUFF_OPTIONS = Object.keys(BUFF_LABELS)
+
+const TRAIT_TYPE_LABELS: Record<'special' | 'bonus', string> = {
+  special: '特殊特性',
+  bonus: '加成特性',
+}
 
 export default function GeneralsConfigPanel() {
   const [config, setConfig] = useState<GeneralsConfig | null>(null)
@@ -105,13 +110,13 @@ export default function GeneralsConfigPanel() {
   const toggleTraitEnabled = (heroId: string, traitIndex: number) => {
     if (!config) return
     const hero = config.heroes[heroId]
-    const traits = [...hero.traits]
-    traits[traitIndex] = { ...traits[traitIndex], enabled: !traits[traitIndex].enabled }
+    const key = traitIndex === 0 ? 'specialTrait' : 'bonusTrait'
+    const trait = hero[key]
     setConfig({
       ...config,
       heroes: {
         ...config.heroes,
-        [heroId]: { ...hero, traits },
+        [heroId]: { ...hero, [key]: { ...trait, enabled: !trait.enabled } },
       },
     })
   }
@@ -119,16 +124,27 @@ export default function GeneralsConfigPanel() {
   const updateTraitParam = (heroId: string, traitIndex: number, paramKey: string, value: number) => {
     if (!config) return
     const hero = config.heroes[heroId]
-    const traits = [...hero.traits]
-    traits[traitIndex] = {
-      ...traits[traitIndex],
-      params: { ...traits[traitIndex].params, [paramKey]: value },
-    }
+    const key = traitIndex === 0 ? 'specialTrait' : 'bonusTrait'
+    const trait = hero[key]
     setConfig({
       ...config,
       heroes: {
         ...config.heroes,
-        [heroId]: { ...hero, traits },
+        [heroId]: { ...hero, [key]: { ...trait, params: { ...trait.params, [paramKey]: value } } },
+      },
+    })
+  }
+
+  const updateTraitField = (heroId: string, traitIndex: number, field: 'scope' | 'targetUnitType', value: string) => {
+    if (!config) return
+    const hero = config.heroes[heroId]
+    const key = traitIndex === 0 ? 'specialTrait' : 'bonusTrait'
+    const trait = hero[key]
+    setConfig({
+      ...config,
+      heroes: {
+        ...config.heroes,
+        [heroId]: { ...hero, [key]: { ...trait, [field]: value } },
       },
     })
   }
@@ -137,37 +153,11 @@ export default function GeneralsConfigPanel() {
     if (!config) return
     const hero = config.heroes[heroId]
     const meta = traitRegistry.find((item) => item.id === traitId)
+    const key = traitIndex === 0 ? 'specialTrait' : 'bonusTrait'
     const params = Object.fromEntries((meta?.paramSchema ?? []).map((field) => [field.key, field.default]))
-    const traits = [...hero.traits]
-    traits[traitIndex] = { traitId, enabled: true, params }
     setConfig({
       ...config,
-      heroes: { ...config.heroes, [heroId]: { ...hero, traits } },
-    })
-  }
-
-  const addTrait = (heroId: string) => {
-    if (!config) return
-    const hero = config.heroes[heroId]
-    const meta = traitRegistry.find((item) => !hero.traits.some((trait) => trait.traitId === item.id)) ?? traitRegistry[0]
-    if (!meta) return
-    const nextTrait: GeneralTraitConfig = {
-      traitId: meta.id,
-      enabled: true,
-      params: Object.fromEntries(meta.paramSchema.map((field) => [field.key, field.default])),
-    }
-    setConfig({
-      ...config,
-      heroes: { ...config.heroes, [heroId]: { ...hero, traits: [...hero.traits, nextTrait] } },
-    })
-  }
-
-  const removeTrait = (heroId: string, traitIndex: number) => {
-    if (!config) return
-    const hero = config.heroes[heroId]
-    setConfig({
-      ...config,
-      heroes: { ...config.heroes, [heroId]: { ...hero, traits: hero.traits.filter((_, index) => index !== traitIndex) } },
+      heroes: { ...config.heroes, [heroId]: { ...hero, [key]: { traitId, traitType: meta?.traitType ?? (traitIndex === 0 ? 'special' : 'bonus'), enabled: true, params } } },
     })
   }
 
@@ -402,7 +392,8 @@ export default function GeneralsConfigPanel() {
       <div className="grid gap-3">
         {currentHeroes.map((hero) => {
           const isExpanded = expandedHero === hero.id
-          const traitMetas = hero.traits.map((t) => traitRegistry.find((tm) => tm.id === t.traitId))
+          const heroTraits = [hero.specialTrait, hero.bonusTrait]
+          const traitMetas = heroTraits.map((t) => traitRegistry.find((tm) => tm.id === t.traitId))
 
           return (
             <div key={hero.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
@@ -430,7 +421,7 @@ export default function GeneralsConfigPanel() {
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-[10px] text-[var(--color-text-muted)]">
-                        {hero.traits.length} 个特性
+                        特殊特性 + 加成特性
                       </span>
                       {!hero.enabled && (
                         <span className="text-[10px] text-red-600 font-medium">已禁用</span>
@@ -500,15 +491,12 @@ export default function GeneralsConfigPanel() {
                   {/* Traits */}
                   <div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">特性配置</span>
-                      <button type="button" onClick={() => addTrait(hero.id)} className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-2 py-1 text-[10px] font-bold text-[var(--color-accent)]">
-                        <Plus size={10} />
-                        添加特性
-                      </button>
+                      <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">双特性配置</span>
                     </div>
                     <div className="space-y-2 mt-1.5">
-                      {hero.traits.map((trait, traitIndex) => {
+                      {heroTraits.map((trait, traitIndex) => {
                         const meta = traitMetas[traitIndex]
+                        const requiredType = traitIndex === 0 ? 'special' : 'bonus'
                         const hasInvalidParams = meta?.paramSchema.some((field) => {
                           const value = trait.params[field.key] ?? field.default
                           return value < field.min || value > field.max
@@ -526,8 +514,11 @@ export default function GeneralsConfigPanel() {
                             {/* Trait Header */}
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
+                                <span className="rounded bg-[var(--color-surface)] px-2 py-1 text-[10px] font-bold text-[var(--color-text-muted)]">
+                                  {TRAIT_TYPE_LABELS[requiredType]}
+                                </span>
                                 <select value={trait.traitId} onChange={(e) => updateTraitId(hero.id, traitIndex, e.target.value)} className="h-7 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs font-bold text-[var(--color-text-primary)]">
-                                  {traitRegistry.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                                  {traitRegistry.filter((item) => item.traitType === requiredType).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                                   {!meta && <option value={trait.traitId}>{trait.traitId}</option>}
                                 </select>
                                 {hasInvalidParams && (
@@ -546,15 +537,33 @@ export default function GeneralsConfigPanel() {
                                 />
                                 <span className="text-[10px] text-[var(--color-text-muted)]">启用</span>
                               </label>
-                              <button type="button" onClick={() => removeTrait(hero.id, traitIndex)} className="grid h-7 w-7 place-items-center rounded text-red-500 hover:bg-red-500/10">
-                                <Trash2 size={12} />
-                              </button>
                             </div>
 
                             {/* Trait Description */}
                             {meta?.description && (
                               <p className="text-[10px] text-[var(--color-text-muted)] mb-2">{meta.description}</p>
                             )}
+
+                            <div className="mb-2 grid grid-cols-2 gap-2">
+                              <label className="grid gap-0.5">
+                                <span className="text-[10px] text-[var(--color-text-muted)]">作用范围</span>
+                                <input
+                                  value={trait.scope ?? ''}
+                                  onChange={(e) => updateTraitField(hero.id, traitIndex, 'scope', e.target.value)}
+                                  className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                                  placeholder="self_army / reinforcement_self"
+                                />
+                              </label>
+                              <label className="grid gap-0.5">
+                                <span className="text-[10px] text-[var(--color-text-muted)]">目标兵种</span>
+                                <input
+                                  value={trait.targetUnitType ?? ''}
+                                  onChange={(e) => updateTraitField(hero.id, traitIndex, 'targetUnitType', e.target.value)}
+                                  className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                                  placeholder="infantry / cavalry / special"
+                                />
+                              </label>
+                            </div>
 
                             {/* Trait Parameters */}
                             {meta && (

@@ -22,7 +22,8 @@ func init() {
 }
 
 func (r *Rende) ID() string   { return "rende" }
-func (r *Rende) Name() string { return "仁德" }
+func (r *Rende) Name() string { return "仁德天下" }
+func (r *Rende) Type() string { return general.TraitTypeSpecial }
 
 func (r *Rende) Description(p general.Params) string {
 	return "战斗结束后，损失的兵有概率复活归队"
@@ -30,6 +31,8 @@ func (r *Rende) Description(p general.Params) string {
 
 func (r *Rende) ParamSchema() []general.ParamField {
 	return []general.ParamField{
+		{Key: "effectRate", Label: "复活比例", Description: "损失兵的复活比例", Default: 0.5, Min: 0, Max: 1, Step: 0.01},
+		{Key: "maxReviveCount", Label: "单场复活上限", Description: "单场最多复活士兵数量", Default: 10000, Min: 0, Max: 1000000, Step: 100},
 		{Key: "reviveRate", Label: "复活比例", Description: "损失兵的复活比例", Default: 0.2, Min: 0, Max: 1, Step: 0.01},
 		{Key: "triggerChance", Label: "触发概率", Description: "复活技能的发动概率", Default: 0.5, Min: 0, Max: 1, Step: 0.05},
 	}
@@ -58,7 +61,8 @@ func (r *Rende) afterBattle(ctx general.EventContext, p general.Params) {
 	}
 
 	// 复活比例（限制在 0-1 之间，防止复活超过 100%）
-	rate := p.FloatWithBounds("reviveRate", 0.2, 0, 1)
+	rate := p.FloatWithBounds("effectRate", p.FloatOr("reviveRate", 0.2), 0, 1)
+	maxRevive := p.IntWithBounds("maxReviveCount", 10000, 0, 1000000)
 	if rate <= 0 || len(c.PlayerLosses) == 0 {
 		return
 	}
@@ -76,6 +80,12 @@ func (r *Rende) afterBattle(ctx general.EventContext, p general.Params) {
 		if revived <= 0 {
 			continue
 		}
+		if maxRevive > 0 && totalRevived+revived > maxRevive {
+			revived = maxRevive - totalRevived
+		}
+		if revived <= 0 {
+			break
+		}
 		c.Revived[unitType] += revived
 		c.PlayerArmy[unitType] += revived
 		totalRevived += revived
@@ -86,8 +96,13 @@ func (r *Rende) afterBattle(ctx general.EventContext, p general.Params) {
 			c.Triggered = map[string]general.TraitOutcome{}
 		}
 		c.Triggered["rende"] = general.TraitOutcome{
-			TraitID: "rende",
-			Name:    "仁德",
+			TraitID:        "rende",
+			Name:           "仁德天下",
+			TraitType:      general.TraitTypeSpecial,
+			OwnerSide:      c.Actor.Side,
+			OwnerGeneralID: c.Actor.GeneralID,
+			OwnerPlayerID:  c.Actor.PlayerID,
+			Scope:          c.Actor.Scope,
 			Detail: map[string]interface{}{
 				"totalRevived": totalRevived,
 			},

@@ -46,18 +46,24 @@ func applyHeroConfigToGeneral(g *General) {
 		g.Buffs[k] = v
 	}
 
-	for _, tc := range hero.Traits {
+	for _, tc := range activeHeroTraitConfigs(hero) {
 		if !tc.Enabled {
 			continue
+		}
+		if value := tc.Params["productionBonusRate"]; value > 0 {
+			addGeneralAttributeWithSource(g, StatProductionBonus, value, "将领特性")
 		}
 		params := make(map[string]float64, len(tc.Params))
 		for k, v := range tc.Params {
 			params[k] = v
 		}
 		g.Traits = append(g.Traits, GeneralTraitInstance{
-			TraitID: tc.TraitID,
-			Name:    tc.TraitID,
-			Params:  params,
+			TraitID:        tc.TraitID,
+			TraitType:      tc.TraitType,
+			Name:           tc.TraitID,
+			Scope:          tc.Scope,
+			TargetUnitType: tc.TargetUnitType,
+			Params:         params,
 		})
 	}
 }

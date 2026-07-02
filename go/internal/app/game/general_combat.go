@@ -16,8 +16,13 @@ func buildActiveTraits(g *General) []general.ActiveTrait {
 	for _, t := range g.Traits {
 		params := general.Params(t.Params)
 		out = append(out, general.ActiveTrait{
-			TraitID: t.TraitID,
-			Params:  params,
+			TraitID:        t.TraitID,
+			Params:         params,
+			TraitType:      t.TraitType,
+			OwnerSide:      "",
+			OwnerGeneralID: g.ID,
+			Scope:          t.Scope,
+			TargetUnitType: t.TargetUnitType,
 		})
 	}
 	return out
@@ -90,10 +95,136 @@ func buildActiveTraitsForGeneralIDs(state *GameState, generalIDs []string) []gen
 		if owned, ok := findOwnedGeneral(state.Generals, generalID); ok {
 			generalCopy := cloneGeneral(owned)
 			applyHeroConfigToGeneral(&generalCopy)
-			out = append(out, buildActiveTraits(&generalCopy)...)
+			for _, trait := range buildActiveTraits(&generalCopy) {
+				trait.OwnerPlayerID = state.Player.ID
+				out = append(out, trait)
+			}
 		}
 	}
 	return out
+}
+
+// withTraitOwnerSide 给当前玩法批次的特性补充触发方阵营。
+func withTraitOwnerSide(active []general.ActiveTrait, side string) []general.ActiveTrait {
+	if side == "" || len(active) == 0 {
+		return active
+	}
+	out := append([]general.ActiveTrait(nil), active...)
+	for i := range out {
+		out[i].OwnerSide = side
+	}
+	return out
+}
+
+// dispatchMarchCreateTraits 通过核心事件管线应用行军创建类特性。
+func dispatchMarchCreateTraits(baseSeconds int, scene string, state *GameState, generalIDs []string) int {
+	if baseSeconds <= 0 {
+		return baseSeconds
+	}
+	ctx := &general.MarchCreateContext{
+		BaseSeconds:  baseSeconds,
+		FinalSeconds: baseSeconds,
+		Scene:        scene,
+	}
+	general.Dispatch(ctx, buildActiveTraitsForGeneralIDs(state, generalIDs))
+	if ctx.FinalSeconds <= 0 {
+		return 1
+	}
+	return ctx.FinalSeconds
+}
+
+// dispatchRecruitCostTraits 通过核心事件管线应用征兵消耗类特性。
+func dispatchRecruitCostTraits(state *GameState, unitConfig UnitConfig, unitID string, amount int, cost ResourceMap) ResourceMap {
+	if state == nil || len(cost) == 0 {
+		return cost
+	}
+	mainGeneralIDs := pvpDefenseGeneralIDs(state)
+	ctx := &general.RecruitCostContext{
+		UnitType: unitID,
+		Category: unitConfig.Category,
+		Amount:   amount,
+		Cost:     map[string]int(cost),
+	}
+	general.Dispatch(ctx, buildActiveTraitsForGeneralIDs(state, mainGeneralIDs))
+	return ResourceMap(ctx.Cost)
+}
+
+// dispatchPlunderTraits 通过核心事件管线应用掠夺收益类特性。
+func dispatchPlunderTraits(state *GameState, generalIDs []string, rewards map[string]int, scene string, ownerSide string) (map[string]int, map[string]general.TraitOutcome) {
+	if len(rewards) == 0 {
+		return rewards, nil
+	}
+	ctx := &general.PlunderResolveContext{
+		Rewards: rewards,
+		Scene:   scene,
+	}
+	general.Dispatch(ctx, withTraitOwnerSide(buildActiveTraitsForGeneralIDs(state, generalIDs), ownerSide))
+	return ctx.Rewards, ctx.Triggered
+}
+
+// buildActiveTraitsForReinforcement 从增援快照构建核心特性列表。
+func buildActiveTraitsForReinforcement(record Reinforcement) []general.ActiveTrait {
+	out := []general.ActiveTrait{}
+	for _, snapshot := range record.Generals {
+		for _, trait := range snapshot.Traits {
+			params := general.Params(trait.Params)
+			scope := trait.Scope
+			if strings.TrimSpace(scope) == "" {
+				scope = "reinforcement_self"
+			}
+			out = append(out, general.ActiveTrait{
+				TraitID:        trait.TraitID,
+				TraitType:      trait.TraitType,
+				OwnerSide:      "reinforcement",
+				OwnerPlayerID:  record.FromPlayerID,
+				OwnerGeneralID: snapshot.ID,
+				Scope:          scope,
+				TargetUnitType: trait.TargetUnitType,
+				Params:         params,
+			})
+		}
+	}
+	return out
+}
+
+// applyReinforcementAfterBattleTraits 让增援武将特性只修正自己的援军损失。
+func applyReinforcementAfterBattleTraits(records []Reinforcement, losses map[string]map[string]int, winner string) map[string]map[string]int {
+	if len(records) == 0 || len(losses) == 0 {
+		return losses
+	}
+	next := cloneNestedStringIntMap(losses)
+	for _, record := range records {
+		recordLosses := next[record.ID]
+		if len(recordLosses) == 0 {
+			continue
+		}
+		armyAfterLoss := cloneStringIntMap(record.RemainingTroops)
+		for unitType, lost := range recordLosses {
+			armyAfterLoss[unitType] -= lost
+			if armyAfterLoss[unitType] < 0 {
+				armyAfterLoss[unitType] = 0
+			}
+		}
+		ctx := &general.AfterBattleContext{
+			PlayerArmy:   armyAfterLoss,
+			PlayerLosses: cloneStringIntMap(recordLosses),
+			IsAttacker:   false,
+			Won:          winner == "defender",
+			Scene:        "reinforcement_defense",
+		}
+		general.Dispatch(ctx, buildActiveTraitsForReinforcement(record))
+		for unitType, revived := range ctx.Revived {
+			if revived <= 0 {
+				continue
+			}
+			recordLosses[unitType] -= revived
+			if recordLosses[unitType] < 0 {
+				recordLosses[unitType] = 0
+			}
+		}
+		next[record.ID] = recordLosses
+	}
+	return next
 }
 
 // mergeTraitOutcomes 把武将特性触发结果合并到战报。
@@ -106,9 +237,14 @@ func mergeTraitOutcomes(report *BattleReport, outcomes map[string]general.TraitO
 	}
 	for traitID, outcome := range outcomes {
 		report.TraitOutcomes[traitID] = TraitOutcomeReport{
-			TraitID: outcome.TraitID,
-			Name:    outcome.Name,
-			Detail:  outcome.Detail,
+			TraitID:        outcome.TraitID,
+			Name:           outcome.Name,
+			TraitType:      outcome.TraitType,
+			OwnerSide:      outcome.OwnerSide,
+			OwnerGeneralID: outcome.OwnerGeneralID,
+			OwnerPlayerID:  outcome.OwnerPlayerID,
+			Scope:          outcome.Scope,
+			Detail:         outcome.Detail,
 		}
 		alreadyIn := false
 		for _, id := range report.TraitTriggered {

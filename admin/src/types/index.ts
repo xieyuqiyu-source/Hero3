@@ -285,7 +285,10 @@ export interface ModifierConfig {
 
 export interface GeneralTraitConfig {
   traitId: string
+  traitType?: 'special' | 'bonus'
   enabled: boolean
+  scope?: string
+  targetUnitType?: string
   params: Record<string, number>
 }
 
@@ -297,7 +300,9 @@ export interface GeneralHeroConfig {
   rarity: string
   enabled: boolean
   buffs: Record<string, number>
-  traits: GeneralTraitConfig[]
+  traits?: GeneralTraitConfig[]
+  specialTrait: GeneralTraitConfig
+  bonusTrait: GeneralTraitConfig
 }
 
 export interface GeneralsCommonConfig {
@@ -324,6 +329,7 @@ export interface TraitParamField {
 export interface TraitMeta {
   id: string
   name: string
+  traitType: 'special' | 'bonus'
   description: string
   paramSchema: TraitParamField[]
 }
