@@ -283,7 +283,7 @@ func clampInt(value int, min int, max int) int {
 	return value
 }
 
-// ScoutPvpTarget 侦查玩家目标并生成侦查战报。
+// ScoutPvpTarget 派出当前阵营的全部侦察兵前往玩家目标。
 func (s *Service) ScoutPvpTarget(req PvpScoutRequest) (PvpScoutResponse, error) {
 	playerID := strings.TrimSpace(req.PlayerID)
 	targetPlayerID := strings.TrimSpace(req.TargetPlayerID)
@@ -291,129 +291,57 @@ func (s *Service) ScoutPvpTarget(req PvpScoutRequest) (PvpScoutResponse, error) 
 		return PvpScoutResponse{}, err
 	}
 	now := time.Now().UTC()
-	var report BattleReport
-	var defenderReport BattleReport
-	var scoutSuccess bool
-	_, _, err := s.repo.UpdatePvpScoutStates(playerID, targetPlayerID, now, func(scout *GameState, target *GameState) error {
-		settledScout, _ := settleResources(*scout, now)
-		*scout = settledScout
-		settledTarget, _ := settleResources(*target, now)
-		*target = settledTarget
-
-		scoutUnitID := findScoutUnit(scout.Player.Faction)
+	attackerPosition, err := s.ensureWorldPosition(playerID, "lazy_create", nil)
+	if err != nil {
+		return PvpScoutResponse{}, err
+	}
+	defenderPosition, err := s.ensureWorldPosition(targetPlayerID, "lazy_create", nil)
+	if err != nil {
+		return PvpScoutResponse{}, err
+	}
+	distance := worldMapDistance(WorldCoordinate{X: attackerPosition.X, Y: attackerPosition.Y}, WorldCoordinate{X: defenderPosition.X, Y: defenderPosition.Y})
+	nowText := now.Format(resourceDateLayout)
+	attackerState, _, march, err := s.repo.CreatePvpMarchWithState(playerID, targetPlayerID, now, func(attacker *GameState, defender *GameState) (PvpMarch, error) {
+		nextState, _ := settleResources(*attacker, now)
+		*attacker = nextState
+		scoutUnitID := findScoutUnit(attacker.Player.Faction)
 		if scoutUnitID == "" {
-			return ErrNoUnitsSelected
+			return PvpMarch{}, ErrNoUnitsSelected
 		}
-		scoutCount, scoutIdx := armyUnitAmountAndIndex(scout.Army, scoutUnitID)
+		scoutCount, scoutIdx := armyUnitAmountAndIndex(attacker.Army, scoutUnitID)
 		if scoutCount <= 0 {
-			return ErrInsufficientArmy
+			return PvpMarch{}, ErrInsufficientArmy
 		}
-		targetScoutUnitID := findScoutUnit(target.Player.Faction)
-		targetScoutCount, targetScoutIdx := armyUnitAmountAndIndex(target.Army, targetScoutUnitID)
-		scoutUnitsBefore := map[string]int{scoutUnitID: scoutCount}
-		targetUnitsBefore := armySliceToMap(target.Army)
-		scoutLost, targetLost, success := resolveScoutSkirmish(scoutCount, targetScoutCount)
-		scoutSuccess = success
-		if scoutLost > 0 {
-			reduceArmyUnitAt(&scout.Army, scoutIdx, scoutLost)
+		troops := map[string]int{scoutUnitID: scoutCount}
+		durationSeconds, speedMultiplier, err := calculatePvpMarchTravel(distance, attacker.Player.Faction, troops, now, nil)
+		if err != nil {
+			return PvpMarch{}, err
 		}
-		if targetLost > 0 && targetScoutIdx >= 0 {
-			reduceArmyUnitAt(&target.Army, targetScoutIdx, targetLost)
-		}
-		lostUnits := map[string]int{}
-		if scoutLost > 0 {
-			lostUnits[scoutUnitID] = scoutLost
-		}
-		targetLostUnits := map[string]int{}
-		if targetLost > 0 && targetScoutUnitID != "" {
-			targetLostUnits[targetScoutUnitID] = targetLost
-		}
-		result := "attacker_victory"
-		if !success {
-			result = "defender_victory"
-		}
-		report = BattleReport{
-			ID:                "br_pvp_scout_" + randomID(8),
-			PlayerID:          scout.Player.ID,
-			OwnerPlayerID:     scout.Player.ID,
-			ViewType:          ReportViewAttack,
-			PlayerFaction:     scout.Player.Faction,
-			PlayerName:        scout.Player.Nickname,
-			TargetID:          target.Player.ID,
-			TargetName:        target.Player.Nickname + "（玩家）",
-			Type:              "scout",
-			SourceType:        ReportSourcePlayerCity,
-			BattleType:        "scout",
-			Result:            result,
-			PlayerPower:       scoutCount,
-			EnemyPower:        targetScoutCount,
-			DispatchedUnits:   scoutUnitsBefore,
-			LostUnits:         lostUnits,
-			DefenderFaction:   target.Player.Faction,
-			DefenderLostUnits: targetLostUnits,
-			DefenderRevealed:  success,
-			Rewards:           map[string]int{},
-			Read:              false,
-			CreatedAt:         now.Format(resourceDateLayout),
-		}
-		defenderReport = BattleReport{
-			ID:                "br_pvp_scout_def_" + randomID(8),
-			PlayerID:          target.Player.ID,
-			OwnerPlayerID:     target.Player.ID,
-			ViewType:          ReportViewDefense,
-			PlayerFaction:     target.Player.Faction,
-			PlayerName:        target.Player.Nickname,
-			TargetID:          scout.Player.ID,
-			TargetName:        scout.Player.Nickname + "（玩家）",
-			Type:              "scout",
-			SourceType:        ReportSourcePlayerCity,
-			BattleType:        "scout",
-			Title:             scout.Player.Nickname + " 侦查 " + target.Player.Nickname + "（玩家）",
-			Result:            result,
-			PlayerPower:       targetScoutCount,
-			EnemyPower:        scoutCount,
-			DispatchedUnits:   targetUnitsBefore,
-			LostUnits:         targetLostUnits,
-			DefenderFaction:   scout.Player.Faction,
-			DefenderUnits:     scoutUnitsBefore,
-			DefenderLostUnits: lostUnits,
-			DefenderRevealed:  true,
-			DefenderResources: map[string]int{},
-			Rewards:           map[string]int{},
-			Read:              false,
-			CreatedAt:         now.Format(resourceDateLayout),
-		}
-		if success {
-			report.DefenderUnits = armySliceToMap(target.Army)
-			report.DefenderResources = copyResources(target.Resources.Items)
-		} else {
-			report.DefenderUnits = map[string]int{}
-			report.DefenderResources = map[string]int{}
-		}
-		return nil
+		reduceArmyUnitAt(&attacker.Army, scoutIdx, scoutCount)
+		attacker.ServerTime = nowText
+		return PvpMarch{
+			ID:               "pvp_march_" + randomID(12),
+			AttackerPlayerID: attacker.Player.ID,
+			AttackerName:     attacker.Player.Nickname,
+			AttackerFaction:  attacker.Player.Faction,
+			DefenderPlayerID: defender.Player.ID,
+			DefenderName:     defender.Player.Nickname,
+			DefenderFaction:  defender.Player.Faction,
+			MarchType:        PvpMarchTypeScout,
+			Status:           PvpMarchStatusMarching,
+			AttackTroops:     troops,
+			SpeedMultiplier:  speedMultiplier,
+			DurationSeconds:  durationSeconds,
+			StartedAt:        nowText,
+			ArrivesAt:        now.Add(time.Duration(durationSeconds) * time.Second).Format(resourceDateLayout),
+			CreatedAt:        nowText,
+			UpdatedAt:        nowText,
+		}, nil
 	})
 	if err != nil {
 		return PvpScoutResponse{}, err
 	}
-	createResult, err := s.CreateBattleReports(BattleReportCreateInput{
-		EventID:    report.EventID,
-		SourceType: valueOrDefault(report.SourceType, ReportSourcePlayerCity),
-		SourceID:   report.TargetID,
-		BattleType: report.BattleType,
-		Result:     report.Result,
-		OccurredAt: report.CreatedAt,
-		Reports:    []BattleReport{report, defenderReport},
-	})
-	if err != nil {
-		return PvpScoutResponse{}, err
-	}
-	for _, created := range createResult.Reports {
-		if created.PlayerID == playerID {
-			report = created
-			break
-		}
-	}
-	return PvpScoutResponse{Success: scoutSuccess, BattleReport: report, ServerTime: now.Format(resourceDateLayout)}, nil
+	return PvpScoutResponse{March: march, Army: attackerState.Army, ServerTime: attackerState.ServerTime}, nil
 }
 
 // armyUnitAmountAndIndex 返回指定兵种数量和位置。
@@ -1239,7 +1167,7 @@ func (s *Service) CompletePvpRecall(marchID string) (PvpMarchActionResponse, err
 		}
 		releasePvpGenerals(attacker, march)
 		nowText := now.Format(resourceDateLayout)
-		if strings.TrimSpace(march.BattleID) != "" {
+		if strings.TrimSpace(march.AttackerReportID) != "" {
 			march.Status = PvpMarchStatusResolved
 		} else {
 			march.Status = PvpMarchStatusRecalled
@@ -1267,6 +1195,29 @@ func (s *Service) ResolvePvpMarch(marchID string) (PvpBattle, error) {
 		EnsureGeneralRoster(defender, now)
 		nextDefender, _ := settleResources(*defender, now)
 		*defender = nextDefender
+		if march.MarchType == PvpMarchTypeScout {
+			attackerReport, defenderReport, err := resolvePvpScoutMarch(attacker, defender, march, now)
+			if err != nil {
+				return PvpBattle{}, BattleReport{}, BattleReport{}, nil, nil, err
+			}
+			nowText := now.Format(resourceDateLayout)
+			if totalTroops(march.AttackTroops) > 0 {
+				returnSeconds := calculatePvpOutboundTravelSeconds(march)
+				march.Status = PvpMarchStatusReturning
+				march.ReturnStartedAt = nowText
+				march.ReturnsAt = now.Add(time.Duration(returnSeconds) * time.Second).Format(resourceDateLayout)
+				march.SpeedMultiplier = calculatePvpSpeedMultiplier(march)
+			} else {
+				march.Status = PvpMarchStatusResolved
+				march.ResolvedAt = nowText
+			}
+			march.AttackerReportID = attackerReport.ID
+			march.DefenderReportID = defenderReport.ID
+			march.UpdatedAt = nowText
+			attacker.ServerTime = nowText
+			defender.ServerTime = nowText
+			return PvpBattle{}, attackerReport, defenderReport, nil, nil, nil
+		}
 		result, attackerReport, defenderReport, reinforcementReports, changedReinforcements, err := resolvePvpCombat(attacker, defender, reinforcements, march, now)
 		if err != nil {
 			return PvpBattle{}, BattleReport{}, BattleReport{}, nil, nil, err
@@ -1292,11 +1243,109 @@ func (s *Service) ResolvePvpMarch(marchID string) (PvpBattle, error) {
 		defender.ServerTime = nowText
 		return result, attackerReport, defenderReport, reinforcementReports, changedReinforcements, nil
 	})
-	if err == nil {
+	if err == nil && battle.ID != "" {
 		s.applyPvpBattleStateEffects(battle, now)
 		s.applyPvpReinforcementGeneralExp(battle, now)
 	}
 	return battle, err
+}
+
+// resolvePvpScoutMarch 在侦查行军抵达后结算双方侦察兵损耗并生成双视角战报。
+func resolvePvpScoutMarch(attacker *GameState, defender *GameState, march *PvpMarch, now time.Time) (BattleReport, BattleReport, error) {
+	if attacker == nil || defender == nil || march == nil {
+		return BattleReport{}, BattleReport{}, ErrPlayerNotFound
+	}
+	scoutUnitID := findScoutUnit(attacker.Player.Faction)
+	scoutCount := march.AttackTroops[scoutUnitID]
+	if scoutUnitID == "" || scoutCount <= 0 {
+		return BattleReport{}, BattleReport{}, ErrNoUnitsSelected
+	}
+	targetScoutUnitID := findScoutUnit(defender.Player.Faction)
+	targetScoutCount, targetScoutIdx := armyUnitAmountAndIndex(defender.Army, targetScoutUnitID)
+	targetUnitsBefore := armySliceToMap(defender.Army)
+	scoutLost, targetLost, success := resolveScoutSkirmish(scoutCount, targetScoutCount)
+	if targetLost > 0 && targetScoutIdx >= 0 {
+		reduceArmyUnitAt(&defender.Army, targetScoutIdx, targetLost)
+	}
+	scoutSurvived := scoutCount - scoutLost
+	if scoutSurvived > 0 {
+		march.AttackTroops = map[string]int{scoutUnitID: scoutSurvived}
+	} else {
+		march.AttackTroops = map[string]int{}
+	}
+	lostUnits := map[string]int{}
+	if scoutLost > 0 {
+		lostUnits[scoutUnitID] = scoutLost
+	}
+	targetLostUnits := map[string]int{}
+	if targetLost > 0 && targetScoutUnitID != "" {
+		targetLostUnits[targetScoutUnitID] = targetLost
+	}
+	result := "attacker_victory"
+	if !success {
+		result = "defender_victory"
+	}
+	nowText := now.Format(resourceDateLayout)
+	scoutUnitsBefore := map[string]int{scoutUnitID: scoutCount}
+	attackerReport := BattleReport{
+		ID:                "br_pvp_scout_" + randomID(8),
+		PlayerID:          attacker.Player.ID,
+		OwnerPlayerID:     attacker.Player.ID,
+		ViewType:          ReportViewAttack,
+		PlayerFaction:     attacker.Player.Faction,
+		PlayerName:        attacker.Player.Nickname,
+		TargetID:          defender.Player.ID,
+		TargetName:        defender.Player.Nickname + "（玩家）",
+		Type:              PvpMarchTypeScout,
+		SourceType:        ReportSourcePlayerCity,
+		BattleType:        PvpMarchTypeScout,
+		Result:            result,
+		PlayerPower:       scoutCount,
+		EnemyPower:        targetScoutCount,
+		DispatchedUnits:   scoutUnitsBefore,
+		LostUnits:         lostUnits,
+		DefenderFaction:   defender.Player.Faction,
+		DefenderLostUnits: targetLostUnits,
+		DefenderRevealed:  success,
+		Rewards:           map[string]int{},
+		Read:              false,
+		CreatedAt:         nowText,
+	}
+	if success {
+		attackerReport.DefenderUnits = armySliceToMap(defender.Army)
+		attackerReport.DefenderResources = copyResources(defender.Resources.Items)
+	} else {
+		attackerReport.DefenderUnits = map[string]int{}
+		attackerReport.DefenderResources = map[string]int{}
+	}
+	defenderReport := BattleReport{
+		ID:                "br_pvp_scout_def_" + randomID(8),
+		PlayerID:          defender.Player.ID,
+		OwnerPlayerID:     defender.Player.ID,
+		ViewType:          ReportViewDefense,
+		PlayerFaction:     defender.Player.Faction,
+		PlayerName:        defender.Player.Nickname,
+		TargetID:          attacker.Player.ID,
+		TargetName:        attacker.Player.Nickname + "（玩家）",
+		Type:              PvpMarchTypeScout,
+		SourceType:        ReportSourcePlayerCity,
+		BattleType:        PvpMarchTypeScout,
+		Title:             attacker.Player.Nickname + " 侦查 " + defender.Player.Nickname + "（玩家）",
+		Result:            result,
+		PlayerPower:       targetScoutCount,
+		EnemyPower:        scoutCount,
+		DispatchedUnits:   targetUnitsBefore,
+		LostUnits:         targetLostUnits,
+		DefenderFaction:   attacker.Player.Faction,
+		DefenderUnits:     scoutUnitsBefore,
+		DefenderLostUnits: lostUnits,
+		DefenderRevealed:  true,
+		DefenderResources: map[string]int{},
+		Rewards:           map[string]int{},
+		Read:              false,
+		CreatedAt:         nowText,
+	}
+	return NormalizeBattleReport(attackerReport), NormalizeBattleReport(defenderReport), nil
 }
 
 // ensurePvpTargetAllowed 校验 PVP 目标是否允许交互。

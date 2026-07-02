@@ -5,8 +5,7 @@ import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
-import type { ArmyUnit, BattleReport, General, PvpMarch, PvpTargetSummary, PvpTargetsResponse, PvpWorldPosition, Reinforcement, WorldMapTarget } from '@/types/game'
-import ScoutResultModal from './ScoutResultModal'
+import type { ArmyUnit, General, GeneralAssignment, PvpMarch, PvpTargetSummary, PvpTargetsResponse, PvpWorldPosition, Reinforcement, WorldMapTarget } from '@/types/game'
 import WorldMapCoordinateSearch from './WorldMapCoordinateSearch'
 import WorldMapFilters from './WorldMapFilters'
 import WorldMapGrid from './WorldMapGrid'
@@ -14,12 +13,17 @@ import WorldMapLegend from './WorldMapLegend'
 import WorldMapTargetPanel from './WorldMapTargetPanel'
 import { buildNearestWorldMapTargets, buildWorldMapFactionCounts, buildWorldMapMarchBadges, buildWorldMapMarchSummary, buildWorldMapReinforcementMarches, buildWorldMapRelationCounts, buildWorldMapTargetMetrics, clampWorldMapRadius, directionFrom, filterWorldMapTargetsInViewport, findVisibleWorldMapTargetAtCell, findWorldMapTargetAtCell, formatDuration, formatWorldMapSyncTime, isWorldMapRelationVisible, mergeWorldMapTargetCache, moveWorldMapCenter, parseWorldMapCoordinateSearch, worldMapRelationBadge, worldMapRelationBadgeClass, WORLD_MAP_FULL_LOAD_RADIUS } from '../worldMapGridLogic'
 
+// 共享空数组保证 Zustand selector 在存档加载前返回稳定引用，避免刷新页面时触发无限更新。
+const EMPTY_GENERALS: General[] = []
+const EMPTY_GENERAL_ASSIGNMENTS: GeneralAssignment[] = []
+const EMPTY_ARMY: ArmyUnit[] = []
+
 // WorldMapTab 展示世界地图玩家城池、筛选、坐标查找和行军状态。
 const WorldMapTab: FC = () => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
-  const generals = useGameStore((s) => s.state?.generals ?? [])
-  const generalAssignments = useGameStore((s) => s.state?.generalAssignments ?? [])
-  const army = useGameStore((s) => s.state?.army ?? [])
+  const generals = useGameStore((s) => s.state?.generals ?? EMPTY_GENERALS)
+  const generalAssignments = useGameStore((s) => s.state?.generalAssignments ?? EMPTY_GENERAL_ASSIGNMENTS)
+  const army = useGameStore((s) => s.state?.army ?? EMPTY_ARMY)
   const faction = useGameStore((s) => s.state?.player.faction ?? 'wei')
   const units = useConfigStore((s) => s.units)
   const [targets, setTargets] = useState<PvpTargetSummary[]>([])
@@ -36,7 +40,6 @@ const WorldMapTab: FC = () => {
   const [refreshing, setRefreshing] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [busyTarget, setBusyTarget] = useState<string | null>(null)
-  const [scoutReport, setScoutReport] = useState<BattleReport | null>(null)
   const [selectedMarchTarget, setSelectedMarchTarget] = useState<PvpTargetSummary | null>(null)
   const [selectedReinforceTarget, setSelectedReinforceTarget] = useState<PvpTargetSummary | null>(null)
   const [selectedMarchMode, setSelectedMarchMode] = useState<'attack' | 'plunder'>('attack')
@@ -129,7 +132,6 @@ const WorldMapTab: FC = () => {
     setFocusedTargetId(null)
     setSelectedEmptyCell(null)
     setCoordinateSearch({ x: '', y: '' })
-    setScoutReport(null)
     setSelectedMarchTarget(null)
     setSelectedReinforceTarget(null)
     setSelections({})
@@ -299,15 +301,15 @@ const WorldMapTab: FC = () => {
     setSelectedGeneralIds((prev) => prev.includes(generalId) ? [] : [generalId])
   }, [])
 
-  // handleScout 执行玩家侦查。
+  // handleScout 派出玩家侦查行军。
   const handleScout = useCallback(async (target: PvpTargetSummary) => {
     if (!activePlayerId || busyTarget) return
     setBusyTarget(`${target.playerId}:scout`)
-    setScoutReport(null)
     try {
       const result = await gameApi.scoutPvpTarget(activePlayerId, target.playerId)
-      setScoutReport(result.battleReport)
-      toast.success('侦查完成，可在军情查看战报。')
+      useGameStore.getState().patchState({ army: result.army, serverTime: result.serverTime })
+      setMarches((prev) => [result.march, ...prev])
+      toast.success(`侦查队已出发，预计 ${formatDuration(result.march.durationSeconds)} 后抵达。`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '侦查失败')
     } finally {
@@ -626,7 +628,6 @@ const WorldMapTab: FC = () => {
         </div>
       )}
 
-      {scoutReport && <ScoutResultModal key={scoutReport.id} report={scoutReport} onClose={() => setScoutReport(null)} />}
       {selectedReinforceTarget && (
         <TroopSelectionModal
           title={`增援 · ${selectedReinforceTarget.nickname}`}

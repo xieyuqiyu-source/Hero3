@@ -6,6 +6,7 @@ const (
 
 	PvpMarchTypeAttack  = "attack"
 	PvpMarchTypePlunder = "plunder"
+	PvpMarchTypeScout   = "scout"
 
 	PvpMarchStatusMarching  = "marching"
 	PvpMarchStatusReturning = "returning"
@@ -360,9 +361,9 @@ type PvpScoutRequest struct {
 	TargetPlayerID string `json:"targetPlayerId"`
 }
 
-// PvpScoutResponse 是侦查玩家响应。
+// PvpScoutResponse 是发起玩家侦查行军后的响应。
 type PvpScoutResponse struct {
-	Success      bool         `json:"success"`
-	BattleReport BattleReport `json:"battleReport"`
-	ServerTime   string       `json:"serverTime"`
+	March      PvpMarch   `json:"march"`
+	Army       []ArmyUnit `json:"army"`
+	ServerTime string     `json:"serverTime"`
 }

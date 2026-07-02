@@ -234,36 +234,53 @@ func TestPvpScoutUsesFactionScoutUnitsAndRevealsOnSurvival(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ScoutPvpTarget failed: %v", err)
 	}
-	if !result.Success || !result.BattleReport.DefenderRevealed {
-		t.Fatalf("expected successful scout with revealed defender, got %+v", result)
+	if result.March.MarchType != PvpMarchTypeScout || result.March.Status != PvpMarchStatusMarching {
+		t.Fatalf("expected marching scout, got %+v", result.March)
 	}
-	if result.BattleReport.DispatchedUnits["weiScout"] != 5 || result.BattleReport.LostUnits["weiScout"] != 2 {
-		t.Fatalf("unexpected scout losses: %+v", result.BattleReport)
+	if armySliceToMap(result.Army)["weiScout"] != 0 || result.March.AttackTroops["weiScout"] != 5 {
+		t.Fatalf("expected all scouts to leave city, response=%+v", result)
 	}
-	if result.BattleReport.DefenderLostUnits["shuScout"] != 2 {
-		t.Fatalf("expected defender scouts lost, got %+v", result.BattleReport.DefenderLostUnits)
+	if _, total, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: attacker.Player.ID, BattleType: "scout", Page: 1, PageSize: 10}); err != nil || total != 0 {
+		t.Fatalf("scout report must not exist before arrival, total=%d err=%v", total, err)
 	}
-	updatedAttacker, _ := repo.GetState(attacker.Player.ID)
+	march := repo.pvpMarches[result.March.ID]
+	march.ArrivesAt = time.Now().Add(-time.Second).UTC().Format(resourceDateLayout)
+	repo.pvpMarches[march.ID] = march
+	if _, err := svc.ResolvePvpMarch(march.ID); err != nil {
+		t.Fatalf("ResolvePvpMarch scout failed: %v", err)
+	}
+	resolvedMarch := repo.pvpMarches[march.ID]
+	if resolvedMarch.Status != PvpMarchStatusReturning || resolvedMarch.AttackTroops["weiScout"] != 3 {
+		t.Fatalf("expected three surviving scouts to return, got %+v", resolvedMarch)
+	}
+	attackerReports, total, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: attacker.Player.ID, BattleType: "scout", Page: 1, PageSize: 10})
+	if err != nil || total != 1 || len(attackerReports) != 1 {
+		t.Fatalf("expected one attacker scout report, total=%d reports=%+v err=%v", total, attackerReports, err)
+	}
+	report := attackerReports[0]
+	if !report.DefenderRevealed || report.DispatchedUnits["weiScout"] != 5 || report.LostUnits["weiScout"] != 2 {
+		t.Fatalf("unexpected successful scout report: %+v", report)
+	}
+	if report.DefenderLostUnits["shuScout"] != 2 {
+		t.Fatalf("expected defender scouts lost, got %+v", report.DefenderLostUnits)
+	}
 	updatedDefender, _ := repo.GetState(defender.Player.ID)
-	if armySliceToMap(updatedAttacker.Army)["weiScout"] != 3 {
-		t.Fatalf("expected 3 scout units remain, got %+v", updatedAttacker.Army)
-	}
 	if armySliceToMap(updatedDefender.Army)["shuScout"] != 0 {
 		t.Fatalf("expected defender scout units removed, got %+v", updatedDefender.Army)
 	}
-	if updatedDefender.Resources.Items["wood"] <= 0 || result.BattleReport.DefenderResources["wood"] <= 0 {
-		t.Fatalf("expected scout to settle defender resources into report, state=%+v report=%+v", updatedDefender.Resources.Items, result.BattleReport.DefenderResources)
+	if updatedDefender.Resources.Items["wood"] <= 0 || report.DefenderResources["wood"] <= 0 {
+		t.Fatalf("expected scout to settle defender resources into report, state=%+v report=%+v", updatedDefender.Resources.Items, report.DefenderResources)
 	}
 	settledAt, err := time.Parse(resourceDateLayout, updatedDefender.ResourceSettledAt)
 	if err != nil || !settledAt.After(oldSettledAt) {
 		t.Fatalf("expected defender resource settlement timestamp to advance, got %s err=%v", updatedDefender.ResourceSettledAt, err)
 	}
-	if result.BattleReport.Detail == nil || !result.BattleReport.Detail.Visibility.ShowEnemyResources {
-		t.Fatalf("expected standard scout detail to reveal resources, got %+v", result.BattleReport.Detail)
+	if report.Detail == nil || !report.Detail.Visibility.ShowEnemyResources {
+		t.Fatalf("expected standard scout detail to reveal resources, got %+v", report.Detail)
 	}
-	scoutExtra, ok := result.BattleReport.Detail.Extra["scout"].(map[string]interface{})
+	scoutExtra, ok := report.Detail.Extra["scout"].(map[string]interface{})
 	if !ok || scoutExtra["success"] != true || scoutExtra["scoutUnitType"] != "weiScout" {
-		t.Fatalf("expected scout extra snapshot, got %+v", result.BattleReport.Detail.Extra)
+		t.Fatalf("expected scout extra snapshot, got %+v", report.Detail.Extra)
 	}
 	defenderReports, total, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: defender.Player.ID, ViewType: ReportViewDefense, BattleType: "scout", Page: 1, PageSize: 10})
 	if err != nil {
@@ -274,6 +291,15 @@ func TestPvpScoutUsesFactionScoutUnitsAndRevealsOnSurvival(t *testing.T) {
 	}
 	if defenderReports[0].PlayerID != defender.Player.ID || defenderReports[0].TargetID != attacker.Player.ID || defenderReports[0].Title == "" {
 		t.Fatalf("unexpected defender scout report: %+v", defenderReports[0])
+	}
+	resolvedMarch.ReturnsAt = time.Now().Add(-time.Second).UTC().Format(resourceDateLayout)
+	repo.pvpMarches[resolvedMarch.ID] = resolvedMarch
+	if _, err := svc.CompletePvpRecall(resolvedMarch.ID); err != nil {
+		t.Fatalf("CompletePvpRecall scout failed: %v", err)
+	}
+	updatedAttacker, _ := repo.GetState(attacker.Player.ID)
+	if armySliceToMap(updatedAttacker.Army)["weiScout"] != 3 || repo.pvpMarches[resolvedMarch.ID].Status != PvpMarchStatusResolved {
+		t.Fatalf("expected surviving scouts to return to city, army=%+v march=%+v", updatedAttacker.Army, repo.pvpMarches[resolvedMarch.ID])
 	}
 }
 
@@ -289,18 +315,26 @@ func TestPvpScoutFailureHidesTargetIntel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ScoutPvpTarget failed: %v", err)
 	}
-	if result.Success || result.BattleReport.DefenderRevealed {
-		t.Fatalf("expected failed scout, got %+v", result)
+	march := repo.pvpMarches[result.March.ID]
+	march.ArrivesAt = time.Now().Add(-time.Second).UTC().Format(resourceDateLayout)
+	repo.pvpMarches[march.ID] = march
+	if _, err := svc.ResolvePvpMarch(march.ID); err != nil {
+		t.Fatalf("ResolvePvpMarch scout failed: %v", err)
 	}
-	if len(result.BattleReport.DefenderUnits) != 0 || len(result.BattleReport.DefenderResources) != 0 {
-		t.Fatalf("failed scout should hide target intel, got units=%+v resources=%+v", result.BattleReport.DefenderUnits, result.BattleReport.DefenderResources)
+	reports, total, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: attacker.Player.ID, BattleType: "scout", Page: 1, PageSize: 10})
+	if err != nil || total != 1 || len(reports) != 1 {
+		t.Fatalf("expected failed scout report, total=%d reports=%+v err=%v", total, reports, err)
 	}
-	if result.BattleReport.Detail == nil || result.BattleReport.Detail.Visibility.ShowEnemyResources {
-		t.Fatalf("expected standard detail to hide scout intel, got %+v", result.BattleReport.Detail)
+	report := reports[0]
+	if report.DefenderRevealed || len(report.DefenderUnits) != 0 || len(report.DefenderResources) != 0 {
+		t.Fatalf("failed scout should hide target intel, got %+v", report)
+	}
+	if report.Detail == nil || report.Detail.Visibility.ShowEnemyResources {
+		t.Fatalf("expected standard detail to hide scout intel, got %+v", report.Detail)
 	}
 	updatedAttacker, _ := repo.GetState(attacker.Player.ID)
-	if armySliceToMap(updatedAttacker.Army)["weiScout"] != 0 {
-		t.Fatalf("expected attacker scouts annihilated, got %+v", updatedAttacker.Army)
+	if armySliceToMap(updatedAttacker.Army)["weiScout"] != 0 || repo.pvpMarches[march.ID].Status != PvpMarchStatusResolved {
+		t.Fatalf("expected attacker scouts annihilated without return, army=%+v march=%+v", updatedAttacker.Army, repo.pvpMarches[march.ID])
 	}
 }
 

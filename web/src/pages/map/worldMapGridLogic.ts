@@ -87,6 +87,7 @@ export interface WorldMapViewportBounds {
 export interface WorldMapMarchLike {
   attackerPlayerId: string
   defenderPlayerId: string
+  marchType?: string
   status: string
   arrivesAt?: string
   returnsAt?: string
@@ -146,8 +147,10 @@ export const WORLD_MAP_FACTION_LEGEND = [
 
 export const WORLD_MAP_MARCH_BADGE_LEGEND = [
   { badge: '出', label: '出征' },
+  { badge: '侦', label: '侦查' },
   { badge: '返', label: '返程' },
   { badge: '袭', label: '被袭' },
+  { badge: '探', label: '被侦查' },
   { badge: '结', label: '结算' },
 ]
 
@@ -470,9 +473,9 @@ export function buildWorldMapMarchBadges<T extends WorldMapMarchLike>(marches: T
   for (const march of marches) {
     if (march.status !== 'marching' && march.status !== 'returning' && march.status !== 'resolving') continue
     if (march.attackerPlayerId === activePlayerId) {
-      badges[march.defenderPlayerId] = march.status === 'returning' ? '返' : march.status === 'resolving' ? '结' : '出'
+      badges[march.defenderPlayerId] = march.status === 'returning' ? '返' : march.status === 'resolving' ? '结' : march.marchType === 'scout' ? '侦' : '出'
     } else if (march.defenderPlayerId === activePlayerId) {
-      badges[march.attackerPlayerId] = march.status === 'resolving' ? '结' : '袭'
+      badges[march.attackerPlayerId] = march.status === 'resolving' ? '结' : march.marchType === 'scout' ? '探' : '袭'
     }
   }
   return badges

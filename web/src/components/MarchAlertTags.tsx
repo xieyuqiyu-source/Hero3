@@ -9,7 +9,7 @@ import type { PvpMarch, Reinforcement } from '@/types/game'
 const PVP_RECALL_WINDOW_MS = 120_000
 const PVP_MAX_ACCELERATE_TIMES = 2
 
-type MarchTag = '出征' | '返程' | '增援' | '被攻击' | '被侦查'
+type MarchTag = '出征' | '侦查' | '返程' | '增援' | '被攻击' | '被侦查'
 
 interface MarchAlertItem {
   id: string
@@ -31,6 +31,7 @@ interface MarchAlertTagsProps {
 const ALERT_PRIORITY: Record<MarchTag, number> = {
   被攻击: 0,
   出征: 1,
+  侦查: 1,
   返程: 2,
   被侦查: 3,
   增援: 4,
@@ -302,7 +303,7 @@ function buildPvpAlertItem(march: PvpMarch, activePlayerId: string): MarchAlertI
     const returning = march.status === 'returning'
     return {
       id: `pvp:${march.id}:attack`,
-      tag: returning ? '返程' : '出征',
+      tag: returning ? '返程' : march.marchType === 'scout' ? '侦查' : '出征',
       playerName: march.defenderName,
       endsAt: returning ? march.returnsAt : march.arrivesAt,
       fallbackText: march.status === 'resolving' ? '结算中' : undefined,
@@ -316,12 +317,12 @@ function buildPvpAlertItem(march: PvpMarch, activePlayerId: string): MarchAlertI
     if (march.status !== 'marching' && march.status !== 'resolving') return null
     return {
       id: `pvp:${march.id}:defense`,
-      tag: '被攻击',
+      tag: march.marchType === 'scout' ? '被侦查' : '被攻击',
       playerName: march.attackerName,
       endsAt: march.arrivesAt,
       fallbackText: march.status === 'resolving' ? '结算中' : undefined,
       sortAt: toTime(march.arrivesAt),
-      priority: ALERT_PRIORITY.被攻击,
+      priority: march.marchType === 'scout' ? ALERT_PRIORITY.被侦查 : ALERT_PRIORITY.被攻击,
     }
   }
 
@@ -368,7 +369,7 @@ function alertClass(tag: MarchTag) {
       time: 'text-red-600',
     }
   }
-  if (tag === '出征' || tag === '被侦查') {
+  if (tag === '出征' || tag === '侦查' || tag === '被侦查') {
     return {
       row: 'border-rose-500/45 bg-rose-500/10 shadow-[inset_0_0_14px_rgba(244,63,94,0.12)]',
       tag: 'bg-rose-500 text-white',

@@ -405,8 +405,8 @@ test('世界地图关系状态和行军角标图例固定展示', () => {
   assert.deepEqual(WORLD_MAP_RELATION_BADGE_LEGEND.map((item) => item.label), ['自己', '同盟', '其他'])
   assert.deepEqual(WORLD_MAP_STATUS_BADGE_LEGEND.map((item) => item.badge), ['保', '免', '禁'])
   assert.deepEqual(WORLD_MAP_STATUS_BADGE_LEGEND.map((item) => item.label), ['保护', '免战', '不可操作'])
-  assert.deepEqual(WORLD_MAP_MARCH_BADGE_LEGEND.map((item) => item.badge), ['出', '返', '袭', '结'])
-  assert.deepEqual(WORLD_MAP_MARCH_BADGE_LEGEND.map((item) => item.label), ['出征', '返程', '被袭', '结算'])
+  assert.deepEqual(WORLD_MAP_MARCH_BADGE_LEGEND.map((item) => item.badge), ['出', '侦', '返', '袭', '探', '结'])
+  assert.deepEqual(WORLD_MAP_MARCH_BADGE_LEGEND.map((item) => item.label), ['出征', '侦查', '返程', '被袭', '被侦查', '结算'])
   const source = readFileSync(new URL('../src/pages/map/components/WorldMapLegend.tsx', import.meta.url), 'utf8')
   assert.match(source, /WORLD_MAP_RELATION_BADGE_LEGEND/)
   assert.match(source, /WORLD_MAP_STATUS_BADGE_LEGEND/)
@@ -512,6 +512,8 @@ test('世界地图行军角标按当前玩家视角生成', () => {
     { attackerPlayerId: 'targetC', defenderPlayerId: 'me', status: 'marching' },
     { attackerPlayerId: 'me', defenderPlayerId: 'targetD', status: 'resolving' },
     { attackerPlayerId: 'me', defenderPlayerId: 'targetE', status: 'resolved' },
+    { attackerPlayerId: 'me', defenderPlayerId: 'targetF', marchType: 'scout', status: 'marching' },
+    { attackerPlayerId: 'targetG', defenderPlayerId: 'me', marchType: 'scout', status: 'marching' },
   ]
   const badges = buildWorldMapMarchBadges(marches, 'me')
   assert.equal(badges.targetA, '出')
@@ -519,10 +521,12 @@ test('世界地图行军角标按当前玩家视角生成', () => {
   assert.equal(badges.targetC, '袭')
   assert.equal(badges.targetD, '结')
   assert.equal(badges.targetE, undefined)
+  assert.equal(badges.targetF, '侦')
+  assert.equal(badges.targetG, '探')
   assert.deepEqual(buildWorldMapMarchSummary(marches, 'me'), {
-    outgoing: 1,
+    outgoing: 2,
     returning: 1,
-    incoming: 1,
+    incoming: 2,
     resolving: 1,
   })
 })
@@ -652,7 +656,7 @@ test('世界地图切换玩家存档时清空旧地图重新加载', () => {
   assert.match(source, /const shouldSyncInitialCoordinate = switchingPlayer \|\| !hasLoadedMapRef\.current/)
   assert.match(source, /if \(shouldSyncInitialCoordinate\) setCoordinateSearch\(\{ x: String\(selfPosition\.x\), y: String\(selfPosition\.y\) \}\)/)
   assert.match(source, /loadedPlayerRef\.current = activePlayerId/)
-  assert.match(source, /useEffect\(\(\) => \{[\s\S]*setCoordinateSearch\(\{ x: '', y: '' \}\)[\s\S]*setScoutReport\(null\)[\s\S]*setSelectedMarchTarget\(null\)[\s\S]*setSelectedReinforceTarget\(null\)[\s\S]*setSelections\(\{\}\)[\s\S]*setSelectedGeneralIds\(\[\]\)[\s\S]*setBusyTarget\(null\)[\s\S]*\}, \[activePlayerId\]\)/)
+  assert.match(source, /useEffect\(\(\) => \{[\s\S]*setCoordinateSearch\(\{ x: '', y: '' \}\)[\s\S]*setSelectedMarchTarget\(null\)[\s\S]*setSelectedReinforceTarget\(null\)[\s\S]*setSelections\(\{\}\)[\s\S]*setSelectedGeneralIds\(\[\]\)[\s\S]*setBusyTarget\(null\)[\s\S]*\}, \[activePlayerId\]\)/)
 })
 
 test('世界地图没有玩家存档时显示空状态', () => {
@@ -1163,6 +1167,8 @@ test('世界地图主组件不再沿用旧 PVP 地图文案', () => {
 
 test('世界地图操作成功后静默刷新目标缓存', () => {
   const source = readFileSync(new URL('../src/pages/map/components/WorldMapTab.tsx', import.meta.url), 'utf8')
+  assert.match(source, /const result = await gameApi\.scoutPvpTarget[\s\S]*patchState\(\{ army: result\.army, serverTime: result\.serverTime \}\)[\s\S]*setMarches\(\(prev\) => \[result\.march, \.\.\.prev\]\)[\s\S]*侦查队已出发/)
+  assert.doesNotMatch(source, /setScoutReport/)
   assert.match(source, /const result = await gameApi\.startPvpAttack[\s\S]*setMarches\(\(prev\) => \[result\.march, \.\.\.prev\]\)[\s\S]*void useGameStore\.getState\(\)\.loadMilitaryView\(\)[\s\S]*void load\(true\)[\s\S]*toast\.success\(`已向 \$\{target\.nickname\} 发起/)
   assert.match(source, /const result = await gameApi\.sendReinforcement[\s\S]*setReinforcements\(\(prev\) => mergeWorldMapReinforcements\(prev, \[result\.reinforcement\]\)\)[\s\S]*setSelectedReinforceTarget\(null\)[\s\S]*void useGameStore\.getState\(\)\.loadMilitaryView\(\)[\s\S]*void load\(true\)[\s\S]*toast\.success\(`已向 \$\{target\.nickname\} 派出增援。`\)/)
 })
@@ -1175,4 +1181,15 @@ test('世界地图空地面板显示方位和距离', () => {
   assert.match(source, /const estimatedSeconds = estimateWorldMarchSeconds\(distance, 1\)/)
   assert.match(source, /速度1 预计行军/)
   assert.match(source, /第一版暂无操作/)
+})
+
+test('世界地图存档加载前的 Zustand selector 使用稳定空数组', () => {
+  const source = readFileSync(new URL('../src/pages/map/components/WorldMapTab.tsx', import.meta.url), 'utf8')
+  assert.match(source, /const EMPTY_GENERALS: General\[\] = \[\]/)
+  assert.match(source, /const EMPTY_GENERAL_ASSIGNMENTS: GeneralAssignment\[\] = \[\]/)
+  assert.match(source, /const EMPTY_ARMY: ArmyUnit\[\] = \[\]/)
+  assert.match(source, /s\.state\?\.generals \?\? EMPTY_GENERALS/)
+  assert.match(source, /s\.state\?\.generalAssignments \?\? EMPTY_GENERAL_ASSIGNMENTS/)
+  assert.match(source, /s\.state\?\.army \?\? EMPTY_ARMY/)
+  assert.doesNotMatch(source, /useGameStore\(\(s\) => s\.state\?\.(?:generals|generalAssignments|army) \?\? \[\]\)/)
 })

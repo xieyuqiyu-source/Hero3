@@ -235,8 +235,10 @@ func (r *MySQLRepository) ResolvePvpBattleTransaction(marchID string, updatedAt 
 			return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
 		}
 	}
-	if err := insertPvpBattleTx(tx, battle); err != nil && !isDuplicateEntry(err) {
-		return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
+	if battle.ID != "" {
+		if err := insertPvpBattleTx(tx, battle); err != nil && !isDuplicateEntry(err) {
+			return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
+		}
 	}
 	if err := updatePvpMarchTx(tx, march); err != nil {
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err

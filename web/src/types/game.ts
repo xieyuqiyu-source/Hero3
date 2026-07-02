@@ -876,7 +876,7 @@ export interface PvpMarch {
   defenderPlayerId: string
   defenderName: string
   defenderFaction: string
-  marchType: 'attack' | 'plunder'
+  marchType: 'attack' | 'plunder' | 'scout'
   status: 'marching' | 'returning' | 'resolving' | 'resolved' | 'recalled' | 'cancelled' | 'failed'
   attackTroops: Record<string, number>
   attackGenerals?: string[]
@@ -999,6 +999,12 @@ export interface PvpAttackResponse {
   army: ArmyUnit[]
   generals?: General[]
   generalAssignments?: GeneralAssignment[]
+  serverTime: string
+}
+
+export interface PvpScoutResponse {
+  march: PvpMarch
+  army: ArmyUnit[]
   serverTime: string
 }
 

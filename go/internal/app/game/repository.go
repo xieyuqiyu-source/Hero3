@@ -1761,7 +1761,9 @@ func (r *MemoryRepository) ResolvePvpBattleTransaction(marchID string, updatedAt
 	r.playerUpdatedAt[attacker.Player.ID] = updatedAt.UTC()
 	r.playerUpdatedAt[defender.Player.ID] = updatedAt.UTC()
 	r.pvpMarches[march.ID] = march
-	r.pvpBattles[battle.ID] = battle
+	if battle.ID != "" {
+		r.pvpBattles[battle.ID] = battle
+	}
 	if attackerReport.ID != "" {
 		r.reports[attackerReport.PlayerID] = append([]BattleReport{attackerReport}, r.reports[attackerReport.PlayerID]...)
 	}

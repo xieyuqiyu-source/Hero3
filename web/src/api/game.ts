@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, PlayerDeletionResult, NpcCity, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, GamblingRoundResult, SlotRoundResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, ReinforcementActionResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, WorldMapTarget, WorldMapViewResponse, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, PlayerDeletionResult, NpcCity, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, GamblingRoundResult, SlotRoundResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, ReinforcementActionResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, WorldMapTarget, WorldMapViewResponse, PvpAttackResponse, PvpScoutResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult } from '@/types/game'
 import type { BalanceConfig, CombatConfig, FactionConfig, FishingConfig, SlotConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -458,9 +458,9 @@ export const gameApi = {
     return api.get<WorldMapTarget>(`/world-map/targets/player_city/${encodeURIComponent(playerId)}?${query.toString()}`)
   },
 
-  /** 侦查 PVP 玩家 */
+  /** 发起 PVP 玩家侦查行军 */
   scoutPvpTarget(playerId: string, targetPlayerId: string) {
-    return api.post<{ success: boolean; battleReport: BattleReport; serverTime: string }>('/pvp/scout', { playerId, targetPlayerId })
+    return api.post<PvpScoutResponse>('/pvp/scout', { playerId, targetPlayerId })
   },
 
   /** 发起 PVP 攻击或掠夺行军 */
