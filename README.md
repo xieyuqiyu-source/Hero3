@@ -65,7 +65,7 @@ go build ./cmd/server
 - `make clone-data` 可从 `HERO3_SOURCE_DATABASE_DSN` 复制数据到当前 `test_` 目标库，复制后自动回填并校验资源、背包、建筑、资源田格子、兵力、征兵队列、武将、Buff、玩家货币和旧 NPC 状态权威表。
 - `make healthcheck-authority` 是当前权威表健康检查；`verify-*` 仍保留为旧快照迁移期校验，不作为轻量 `state_json` 后的日常通过标准。
 - `make backfill-currencies` / `make verify-currencies` 和 `make backfill-npc-states` / `make verify-npc-states` 用于把旧玩家的城金、兑换冷却和旧 NPC 快照迁移到新权威表；正式库执行回填需直接调用 dbtool 并显式传 `--allow-non-test`，回填按小批次提交，可重复执行。
-- `make backfill-world-positions` 用于在测试库为老玩家补齐世界地图权威坐标；正式库执行需直接调用 `hero3-dbtool backfill-world-positions --allow-non-test`，命令可重复执行，已有坐标会跳过，输出创建、跳过、冲突和失败数量。
+- `make backfill-world-positions` 用于在测试库为老玩家补齐世界地图权威坐标；正式库执行需直接调用 `hero3-dbtool backfill-world-positions --allow-non-test --batch-size=500`，命令只分页扫描缺坐标的 `players.id`，不读取大存档、不复制大表，可重复执行，已有坐标会跳过，输出创建、跳过、冲突、失败和剩余数量；线上试跑可加 `--max-batches=1`。
 - `make report-stats`、`make lock-snapshot` 和 `make cleanup-battle-reports-dry-run` 用于战报增长、锁等待和过期战报清理观测；生产部署会安装 `hero3-dbtool`，并启用战报清理与每小时维护巡检 systemd timer。
 - 战报清理默认按差异化保留执行：普通/NPC/扫荡 72 小时，PVP/玩家城池来源、防守/侦查 168 小时，玩家软删除 24 小时；有效分享链接会被保护。
 - `make ensure-report-cleanup-indexes-dry-run` 用于检查战报清理和可见上限所需索引；正式库创建缺失索引需直接调用 dbtool 并显式传 `--execute --allow-non-test`，建议低峰执行。

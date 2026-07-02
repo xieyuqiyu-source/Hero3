@@ -18,13 +18,25 @@ func TestBackfillWorldPositionsCommandOptions(t *testing.T) {
 	for _, required := range []string{
 		`flags.String("dsn"`,
 		`flags.Bool("allow-non-test"`,
+		`flags.Int("batch-size"`,
+		`flags.Int("max-batches"`,
 		"resolveWritableDbtoolDSN(*dsn, *allowNonTest)",
 		"context.WithTimeout(context.Background(), longCommandTimeout)",
-		"database=%s total=%d created=%d skipped=%d conflicts=%d failed=%d",
+		"ensureWorldPositionsTable(ctx, db)",
+		"CREATE TABLE IF NOT EXISTS player_world_positions",
+		"backfillWorldPositions(ctx, db, worldPositionBackfillOptions{BatchSize: *batchSize, MaxBatches: *maxBatches})",
+		"database=%s totalPlayers=%d missingBefore=%d created=%d skipped=%d conflicts=%d failed=%d remaining=%d batches=%d",
+		"SELECT p.id",
+		"LEFT JOIN player_world_positions w ON w.player_id = p.id",
+		"WHERE w.player_id IS NULL AND p.id > ?",
+		"ORDER BY p.id ASC",
 	} {
 		if !strings.Contains(content, required) {
 			t.Fatalf("backfill-world-positions missing %q", required)
 		}
+	}
+	if strings.Contains(content, "MigrateMySQL") {
+		t.Fatalf("backfill-world-positions must not run full database migration")
 	}
 
 	makefile, err := os.ReadFile(filepath.Join("..", "..", "..", "Makefile"))

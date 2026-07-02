@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -4730,6 +4731,22 @@ func loadRecruitItemProductionConfig(t *testing.T) {
 		itemsConfig = originalItems
 		itemsMu.Unlock()
 	})
+}
+
+func factionUnitIDsByCategory(faction string, category string, mode string) []string {
+	units := GetFactionUnits(faction)
+	ids := []string{}
+	for unitID, unit := range units {
+		if unit.Category != category {
+			continue
+		}
+		if mode == "all" && (unit.Role == "scout" || unit.Role == "transport") {
+			continue
+		}
+		ids = append(ids, unitID)
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 func loadTestItemsConfig(t *testing.T) {
