@@ -81,6 +81,18 @@
       "biteWindowMs": 2600,
       "sweetStart": 48,
       "sweetEnd": 90
+    },
+    {
+      "id": "shenlong",
+      "name": "神龙饵",
+      "tier": "五阶",
+      "description": "神龙显灵，可钓获五万兵种大奖",
+      "rarityBoost": 99,
+      "cityGoldCost": 5000,
+      "biteChance": 0.99,
+      "biteWindowMs": 3000,
+      "sweetStart": 35,
+      "sweetEnd": 95
     }
   ],
   "fishPool": [
@@ -108,6 +120,35 @@
     { "name": "鲲鹏", "rarity": "legendary", "reward": "汉室宗亲", "rewardAmount": 4000, "description": "北冥有鱼，其名为鲲", "emoji": "🌌" },
     { "name": "江东龙王", "rarity": "legendary", "reward": "太平士", "rewardAmount": 2000, "description": "镇守江东水脉的传说灵物", "emoji": "🐉" },
     { "name": "神龙", "rarity": "legendary", "reward": "士族", "rewardAmount": 2000, "description": "万灵之首，至高无上", "emoji": "🐉" },
-    { "name": "混沌", "rarity": "legendary", "reward": "汉室宗亲", "rewardAmount": 8000, "description": "天地未分之初的原始神兽", "emoji": "🌀" }
+    { "name": "混沌", "rarity": "legendary", "reward": "汉室宗亲", "rewardAmount": 8000, "description": "天地未分之初的原始神兽", "emoji": "🌀" },
+    { "name": "神龙·青龙军", "rarity": "legendary", "reward": "青龙军", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换青龙军五万。", "emoji": "🐉" },
+    { "name": "神龙·飞鸢", "rarity": "legendary", "reward": "飞鸢", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换飞鸢五万。", "emoji": "🐉" },
+    { "name": "神龙·贪狼营", "rarity": "legendary", "reward": "贪狼营", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换贪狼营五万。", "emoji": "🐉" },
+    { "name": "神龙·汉室宗亲", "rarity": "legendary", "reward": "汉室宗亲", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换汉室宗亲五万。", "emoji": "🐉" },
+    { "name": "神龙·麒麟卫", "rarity": "legendary", "reward": "麒麟卫", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换麒麟卫五万。", "emoji": "🐉" },
+    { "name": "神龙·临冲车", "rarity": "legendary", "reward": "临冲车", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换临冲车五万。", "emoji": "🐉" },
+    { "name": "神龙·南蛮象", "rarity": "legendary", "reward": "南蛮象", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换南蛮象五万。", "emoji": "🐉" },
+    { "name": "神龙·霹天雷", "rarity": "legendary", "reward": "霹天雷", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换霹天雷五万。", "emoji": "🐉" },
+    { "name": "神龙·木牛流马", "rarity": "legendary", "reward": "木牛流马", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换木牛流马五万。", "emoji": "🐉" },
+    { "name": "神龙·西凉铁骑", "rarity": "legendary", "reward": "西凉铁骑", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换西凉铁骑五万。", "emoji": "🐉" },
+    { "name": "神龙·冲撞车", "rarity": "legendary", "reward": "冲撞车", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换冲撞车五万。", "emoji": "🐉" },
+    { "name": "神龙·虎豹骑", "rarity": "legendary", "reward": "虎豹骑", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换虎豹骑五万。", "emoji": "🐉" },
+    { "name": "神龙·虎卫", "rarity": "legendary", "reward": "虎卫", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换虎卫五万。", "emoji": "🐉" },
+    { "name": "神龙·建筑师", "rarity": "legendary", "reward": "建筑师", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换建筑师五万。", "emoji": "🐉" },
+    { "name": "神龙·禁卫甲士", "rarity": "legendary", "reward": "禁卫甲士", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换禁卫甲士五万。", "emoji": "🐉" },
+    { "name": "神龙·露雷车", "rarity": "legendary", "reward": "露雷车", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换露雷车五万。", "emoji": "🐉" },
+    { "name": "神龙·骁骑营", "rarity": "legendary", "reward": "骁骑营", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换骁骑营五万。", "emoji": "🐉" },
+    { "name": "神龙·青州军", "rarity": "legendary", "reward": "青州军", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换青州军五万。", "emoji": "🐉" },
+    { "name": "神龙·士族", "rarity": "legendary", "reward": "士族", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换士族五万。", "emoji": "🐉" },
+    { "name": "神龙·战鹰探马", "rarity": "legendary", "reward": "战鹰探马", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换战鹰探马五万。", "emoji": "🐉" },
+    { "name": "神龙·神风", "rarity": "legendary", "reward": "神风", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换神风五万。", "emoji": "🐉" },
+    { "name": "神龙·风水师", "rarity": "legendary", "reward": "风水师", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换风水师五万。", "emoji": "🐉" },
+    { "name": "神龙·巨石车", "rarity": "legendary", "reward": "巨石车", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换巨石车五万。", "emoji": "🐉" },
+    { "name": "神龙·霸王骑", "rarity": "legendary", "reward": "霸王骑", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换霸王骑五万。", "emoji": "🐉" },
+    { "name": "神龙·密探", "rarity": "legendary", "reward": "密探", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换密探五万。", "emoji": "🐉" },
+    { "name": "神龙·影卫", "rarity": "legendary", "reward": "影卫", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换影卫五万。", "emoji": "🐉" },
+    { "name": "神龙·太平士", "rarity": "legendary", "reward": "太平士", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换太平士五万。", "emoji": "🐉" },
+    { "name": "神龙·修罗", "rarity": "legendary", "reward": "修罗", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换修罗五万。", "emoji": "🐉" },
+    { "name": "神龙·朱雀骑", "rarity": "legendary", "reward": "朱雀骑", "rewardAmount": 50000, "description": "神龙赐福，钓获后可兑换朱雀骑五万。", "emoji": "🐉" }
   ]
 }
