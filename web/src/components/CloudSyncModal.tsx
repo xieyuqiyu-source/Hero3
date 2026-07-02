@@ -1,6 +1,7 @@
+// 云同步弹窗负责账号登录、注册和云端存档选择。
 import { useState, useEffect, type FC } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Cloud, LogIn, UserPlus, ArrowLeft, Check, Trash2 } from 'lucide-react'
+import { Cloud, LogIn, UserPlus, ArrowLeft, Check, Trash2, LogOut } from 'lucide-react'
 import { Modal } from '@/components/ui'
 import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
@@ -16,7 +17,7 @@ interface CloudSyncModalProps {
 
 const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
   const navigate = useNavigate()
-  const { account, players, login, register, loadPlayers, deletePlayer, restorePlayerDeletion } = useAccountStore()
+  const { account, players, login, register, logout, loadPlayers, deletePlayer, restorePlayerDeletion } = useAccountStore()
   const { setActivePlayer, loadGameState } = useGameStore()
 
   const [view, setView] = useState<View>(account ? 'saves' : 'login')
@@ -108,6 +109,14 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
     navigate('/city')
   }
 
+  // 退出当前云同步账号并回到登录视图。
+  const handleLogout = () => {
+    logout()
+    setError('')
+    setView('login')
+  }
+
+  // 申请删除云端存档，进入删除冷静期。
   const handleDeletePlayer = async (e: React.MouseEvent, player: PlayerSummary) => {
     e.stopPropagation()
     if (!confirm(`确定申请删除存档「${player.nickname}」吗？\n\n确认后会进入 1 小时冷静期，期间可以恢复。`)) return
@@ -339,12 +348,26 @@ const CloudSyncModal: FC<CloudSyncModalProps> = ({ open, onClose }) => {
 
       {activeView === 'saves' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-[var(--color-text-secondary)]">选择存档继续游戏</p>
-            <span className="flex items-center gap-1 text-[10px] text-green-500 font-medium">
-              <Cloud size={12} />
-              已同步
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:flex items-center gap-1 text-[10px] text-green-500 font-medium">
+                <Cloud size={12} />
+                已同步
+              </span>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="
+                  flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold
+                  text-[var(--color-text-muted)] hover:text-red-500 hover:bg-red-500/10
+                  cursor-pointer transition-colors
+                "
+              >
+                <LogOut size={12} />
+                退出登录
+              </button>
+            </div>
           </div>
 
           {players.length > 0 ? (

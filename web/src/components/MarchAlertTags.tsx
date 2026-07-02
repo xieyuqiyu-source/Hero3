@@ -77,9 +77,12 @@ const MarchAlertTags: FC<MarchAlertTagsProps> = ({ limit = 5 }) => {
     let cancelled = false
 
     void loadMarches(() => cancelled)
+    const handleMarchesUpdated = () => void loadMarches(() => cancelled)
+    window.addEventListener('hero3:marches-updated', handleMarchesUpdated)
     const refreshTimer = window.setInterval(() => void loadMarches(() => cancelled), 12_000)
     return () => {
       cancelled = true
+      window.removeEventListener('hero3:marches-updated', handleMarchesUpdated)
       window.clearInterval(refreshTimer)
     }
   }, [loadMarches])

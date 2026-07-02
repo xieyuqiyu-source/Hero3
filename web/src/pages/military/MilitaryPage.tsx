@@ -1,23 +1,28 @@
+// 本文件实现军事主页面，集中管理战争、征兵、将领和科技页签。
 import { useState, useEffect, type FC } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Swords, FlaskConical, Users } from 'lucide-react'
+import { Swords, FlaskConical, Users, ShieldPlus } from 'lucide-react'
 import RecruitTab from './components/RecruitTab'
 import GeneralPanel from './components/GeneralPanel'
+import WarTab from './components/WarTab'
 import { useGameStore } from '@/store/gameStore'
 
-type MainTab = 'recruit' | 'generals' | 'tech'
+type MainTab = 'war' | 'recruit' | 'generals' | 'tech'
+
+const MAIN_TABS: MainTab[] = ['war', 'recruit', 'generals', 'tech']
 
 const MilitaryPage: FC = () => {
   const [searchParams, setSearchParams] = useSearchParams()
-  const initialTab = (searchParams.get('tab') as MainTab) || 'recruit'
+  const rawInitialTab = searchParams.get('tab')
+  const initialTab = normalizeTab(rawInitialTab)
   const [activeTab, setActiveTab] = useState<MainTab>(initialTab)
   const loadMilitaryView = useGameStore((s) => s.loadMilitaryView)
   const loadGeneralsView = useGameStore((s) => s.loadGeneralsView)
 
-  // URL ?tab=generals 变化时同步切换
+  // URL tab 变化时同步切换，兼容历史 reinforcements 参数。
   useEffect(() => {
-    const t = searchParams.get('tab') as MainTab | null
-    if (t && t !== activeTab && (t === 'recruit' || t === 'generals' || t === 'tech')) {
+    const t = normalizeTab(searchParams.get('tab'))
+    if (t !== activeTab) {
       setActiveTab(t)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -33,10 +38,11 @@ const MilitaryPage: FC = () => {
 
   const handleTabChange = (key: MainTab) => {
     setActiveTab(key)
-    setSearchParams(key === 'recruit' ? {} : { tab: key }, { replace: true })
+    setSearchParams(key === 'war' ? {} : { tab: key }, { replace: true })
   }
 
   const tabs = [
+    { key: 'war' as const, label: '战争', icon: ShieldPlus },
     { key: 'recruit' as const, label: '征兵', icon: Swords },
     { key: 'generals' as const, label: '将领', icon: Users },
     { key: 'tech' as const, label: '科技', icon: FlaskConical },
@@ -71,6 +77,7 @@ const MilitaryPage: FC = () => {
       </div>
 
       {/* Tab Content */}
+      {activeTab === 'war' && <WarTab />}
       {activeTab === 'recruit' && <RecruitTab />}
       {activeTab === 'generals' && <GeneralPanel />}
       {activeTab === 'tech' && (
@@ -80,6 +87,12 @@ const MilitaryPage: FC = () => {
       )}
     </div>
   )
+}
+
+// normalizeTab 规范化军事页签，旧增援入口默认落到战争模块。
+function normalizeTab(value: string | null): MainTab {
+  if (value === 'reinforcements') return 'war'
+  return MAIN_TABS.includes(value as MainTab) ? value as MainTab : 'war'
 }
 
 export default MilitaryPage

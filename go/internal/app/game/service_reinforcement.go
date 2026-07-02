@@ -238,6 +238,7 @@ func (s *Service) ListReceivedReinforcements(playerID string) (ReinforcementList
 		return ReinforcementListResponse{}, err
 	}
 	normalizeGarrisonRecords(items)
+	items = filterReceivedGarrisonRecords(items)
 	items = aggregateObtainedGarrisons(playerID, items)
 	sortReinforcements(items)
 	return ReinforcementListResponse{Items: items}, nil
@@ -726,11 +727,38 @@ func normalizeGarrisonRecords(records []Reinforcement) {
 func filterTrueReinforcements(records []Reinforcement) []Reinforcement {
 	result := make([]Reinforcement, 0, len(records))
 	for _, record := range records {
-		if record.SourceType == GarrisonSourceReinforcement {
+		if record.SourceType == GarrisonSourceReinforcement && isVisibleReinforcementStatus(record.Status) {
 			result = append(result, record)
 		}
 	}
 	return result
+}
+
+// filterReceivedGarrisonRecords 过滤被增援方可见驻防，返程队伍只归派出方可见。
+func filterReceivedGarrisonRecords(records []Reinforcement) []Reinforcement {
+	result := make([]Reinforcement, 0, len(records))
+	for _, record := range records {
+		if !isVisibleReceivedGarrisonStatus(record.Status) {
+			continue
+		}
+		result = append(result, record)
+	}
+	return result
+}
+
+// isVisibleReinforcementStatus 判断派出方增援状态面板需要展示的进行中状态。
+func isVisibleReinforcementStatus(status string) bool {
+	return status == ReinforcementStatusMarching ||
+		status == ReinforcementStatusStationed ||
+		status == ReinforcementStatusFighting ||
+		status == ReinforcementStatusReturning
+}
+
+// isVisibleReceivedGarrisonStatus 判断被增援方仍可管理的驻防状态。
+func isVisibleReceivedGarrisonStatus(status string) bool {
+	return status == ReinforcementStatusMarching ||
+		status == ReinforcementStatusStationed ||
+		status == ReinforcementStatusFighting
 }
 
 func aggregateObtainedGarrisons(playerID string, records []Reinforcement) []Reinforcement {
@@ -852,7 +880,10 @@ func reserveReinforcementGenerals(state *GameState, generalIDs []string, reinfor
 			ID:         general.ID,
 			Name:       general.Name,
 			Level:      general.Level,
+			Stats:      cloneStringIntMap(general.Stats),
+			Attributes: cloneFloatMap(general.Attributes),
 			Buffs:      cloneFloatMap(general.Buffs),
+			Traits:     append([]GeneralTraitInstance(nil), general.Traits...),
 			Assignment: assignmentID,
 		})
 		if len(result) > 1 {
@@ -1095,7 +1126,10 @@ func cloneReinforcementGenerals(src []ReinforcementGeneralSnapshot) []Reinforcem
 	dst := make([]ReinforcementGeneralSnapshot, len(src))
 	for i, item := range src {
 		dst[i] = item
+		dst[i].Stats = cloneStringIntMap(item.Stats)
+		dst[i].Attributes = cloneFloatMap(item.Attributes)
 		dst[i].Buffs = cloneFloatMap(item.Buffs)
+		dst[i].Traits = append([]GeneralTraitInstance(nil), item.Traits...)
 	}
 	return dst
 }

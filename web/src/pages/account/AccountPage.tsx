@@ -1,6 +1,7 @@
+// 账户页负责账户资产、城池存档和云同步信息管理。
 import { useState, useEffect, type FC } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Coins, Crown, Scroll, Users, Castle, KeyRound, Sparkles, Cloud, LogOut, Check } from 'lucide-react'
+import { Coins, Crown, Scroll, Users, Castle, KeyRound, Sparkles, Cloud, LogOut, Check, Trash2 } from 'lucide-react'
 import { useAccountStore } from '@/store/accountStore'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
@@ -89,6 +90,20 @@ const AccountPage: FC = () => {
     await restorePlayerDeletion(playerId)
   }
 
+  // 申请删除城池存档，进入删除冷静期。
+  const handleDeletePlayer = async (e: React.MouseEvent, player: { id: string; nickname: string }) => {
+    e.stopPropagation()
+    if (!confirm(`确定申请删除存档「${player.nickname}」吗？\n\n确认后会进入 1 小时冷静期，期间可以恢复。`)) return
+    if (!confirm(`请再次确认：存档「${player.nickname}」将在 1 小时后删除。\n\n冷静期结束后刷新列表会自动删除。`)) return
+    try {
+      await deletePlayer(player.id)
+      toast.success('已进入删除冷静期')
+    } catch {
+      toast.error('删除申请失败，请稍后重试')
+    }
+  }
+
+  // 冷静期结束后永久删除城池存档。
   const handleHardDeletePlayer = async (e: React.MouseEvent, player: { id: string; nickname: string }) => {
     e.stopPropagation()
     if (!confirm(`冷静期已结束，确定永久删除存档「${player.nickname}」吗？`)) return
@@ -201,6 +216,21 @@ const AccountPage: FC = () => {
                         恢复
                       </button>
                       )
+                    )}
+                    {!pendingDelete && (
+                      <button
+                        type="button"
+                        onClick={(e) => void handleDeletePlayer(e, p)}
+                        className="
+                          flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold
+                          text-red-500 bg-red-500/10 hover:bg-red-500/20
+                          cursor-pointer transition-colors
+                        "
+                        aria-label={`删除存档 ${p.nickname}`}
+                      >
+                        <Trash2 size={11} />
+                        删除
+                      </button>
                     )}
                     <span className="text-[10px] text-[var(--color-text-muted)]">{p.updatedAt}</span>
                   </div>

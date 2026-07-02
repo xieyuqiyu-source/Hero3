@@ -298,6 +298,13 @@ func TestReinforcementArrivalBattleLossAndReturnIdempotent(t *testing.T) {
 	if _, err := svc.CompleteReinforcementReturn(result.Reinforcement.ID); err != nil {
 		t.Fatalf("second CompleteReinforcementReturn should be idempotent: %v", err)
 	}
+	sent, err := svc.ListSentReinforcements(from.Player.ID)
+	if err != nil {
+		t.Fatalf("ListSentReinforcements failed: %v", err)
+	}
+	if len(sent.Items) != 0 {
+		t.Fatalf("expected completed reinforcement hidden from sender, got %+v", sent.Items)
+	}
 	next, err := repo.GetState(from.Player.ID)
 	if err != nil {
 		t.Fatalf("GetState failed: %v", err)
@@ -363,6 +370,20 @@ func TestExpelReinforcementOnRoadUsesElapsedReturnSeconds(t *testing.T) {
 	}
 	if expelled.Reinforcement.ReturnSeconds < 420 || expelled.Reinforcement.ReturnSeconds > 425 {
 		t.Fatalf("expected road expel return around 420 seconds, got %d", expelled.Reinforcement.ReturnSeconds)
+	}
+	received, err := svc.ListReceivedReinforcements(to.Player.ID)
+	if err != nil {
+		t.Fatalf("ListReceivedReinforcements failed: %v", err)
+	}
+	if len(received.Items) != 0 {
+		t.Fatalf("expected expelled reinforcement hidden from receiver, got %+v", received.Items)
+	}
+	sent, err := svc.ListSentReinforcements(from.Player.ID)
+	if err != nil {
+		t.Fatalf("ListSentReinforcements failed: %v", err)
+	}
+	if len(sent.Items) != 1 || sent.Items[0].Status != ReinforcementStatusReturning {
+		t.Fatalf("expected sender to see returning reinforcement, got %+v", sent.Items)
 	}
 }
 

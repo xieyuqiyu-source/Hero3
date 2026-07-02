@@ -537,7 +537,7 @@ func savePvpPlayerStateTx(tx *sql.Tx, playerID string, state game.GameState, pre
 	if err := syncPlayerCurrencyTx(tx, playerID, &state, updatedAt.UTC()); err != nil {
 		return err
 	}
-	if err := saveReinforcementPlayerStateTx(tx, playerID, state, previousJSON, updatedAt, previousArmy, previousAssignments); err != nil {
+	if err := saveReinforcementPlayerStateTx(tx, playerID, state, previousJSON, updatedAt, previousArmy, previousAssignments, currencySnapshotFromState(state)); err != nil {
 		return err
 	}
 	return nil

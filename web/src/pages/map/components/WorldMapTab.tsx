@@ -440,6 +440,8 @@ const WorldMapTab: FC = () => {
       setSelectedGeneralIds([])
       void useGameStore.getState().loadMilitaryView()
       void load(true)
+      window.dispatchEvent(new Event('hero3:marches-updated'))
+      window.dispatchEvent(new Event('hero3:garrison-updated'))
       toast.success(`已向 ${target.nickname} 派出增援。`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '发起增援失败')

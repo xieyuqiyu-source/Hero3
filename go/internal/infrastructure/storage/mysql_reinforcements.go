@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"hero3/internal/app/game"
@@ -30,6 +31,10 @@ func (r *MySQLRepository) CreateReinforcementWithState(fromPlayerID string, toPl
 
 	previousFromArmy := armySnapshotsFromStorageState(from.Army)
 	previousFromAssignments := generalAssignmentSnapshotsFromStorageState(from.GeneralAssignments)
+	previousFromCurrency := currencySnapshotFromState(from)
+	previousToArmy := armySnapshotsFromStorageState(to.Army)
+	previousToAssignments := generalAssignmentSnapshotsFromStorageState(to.GeneralAssignments)
+	previousToCurrency := currencySnapshotFromState(to)
 	record, err := update(&from, &to, targetRecords)
 	if err != nil {
 		return game.GameState{}, game.GameState{}, game.Reinforcement{}, err
@@ -37,10 +42,10 @@ func (r *MySQLRepository) CreateReinforcementWithState(fromPlayerID string, toPl
 	if err := insertReinforcementTx(tx, record); err != nil {
 		return game.GameState{}, game.GameState{}, game.Reinforcement{}, err
 	}
-	if err := saveReinforcementPlayerStateTx(tx, fromPlayerID, from, fromJSON, updatedAt, previousFromArmy, previousFromAssignments); err != nil {
+	if err := saveReinforcementPlayerStateTx(tx, fromPlayerID, from, fromJSON, updatedAt, previousFromArmy, previousFromAssignments, previousFromCurrency); err != nil {
 		return game.GameState{}, game.GameState{}, game.Reinforcement{}, err
 	}
-	if err := saveReinforcementPlayerStateTx(tx, toPlayerID, to, toJSON, updatedAt, armySnapshotsFromStorageState(to.Army), generalAssignmentSnapshotsFromStorageState(to.GeneralAssignments)); err != nil {
+	if err := saveReinforcementPlayerStateTx(tx, toPlayerID, to, toJSON, updatedAt, previousToArmy, previousToAssignments, previousToCurrency); err != nil {
 		return game.GameState{}, game.GameState{}, game.Reinforcement{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -67,8 +72,10 @@ func (r *MySQLRepository) UpdateReinforcement(reinforcementID string, updatedAt 
 	}
 	previousFromArmy := armySnapshotsFromStorageState(from.Army)
 	previousFromAssignments := generalAssignmentSnapshotsFromStorageState(from.GeneralAssignments)
+	previousFromCurrency := currencySnapshotFromState(from)
 	previousToArmy := armySnapshotsFromStorageState(to.Army)
 	previousToAssignments := generalAssignmentSnapshotsFromStorageState(to.GeneralAssignments)
+	previousToCurrency := currencySnapshotFromState(to)
 	previousReinforcementID := record.ID
 	if update != nil {
 		if err := update(&from, &to, &record); err != nil {
@@ -78,10 +85,10 @@ func (r *MySQLRepository) UpdateReinforcement(reinforcementID string, updatedAt 
 	if err := updateReinforcementTx(tx, previousReinforcementID, record); err != nil {
 		return game.GameState{}, game.GameState{}, game.Reinforcement{}, err
 	}
-	if err := saveReinforcementPlayerStateTx(tx, record.FromPlayerID, from, fromJSON, updatedAt, previousFromArmy, previousFromAssignments); err != nil {
+	if err := saveReinforcementPlayerStateTx(tx, record.FromPlayerID, from, fromJSON, updatedAt, previousFromArmy, previousFromAssignments, previousFromCurrency); err != nil {
 		return game.GameState{}, game.GameState{}, game.Reinforcement{}, err
 	}
-	if err := saveReinforcementPlayerStateTx(tx, record.ToPlayerID, to, toJSON, updatedAt, previousToArmy, previousToAssignments); err != nil {
+	if err := saveReinforcementPlayerStateTx(tx, record.ToPlayerID, to, toJSON, updatedAt, previousToArmy, previousToAssignments, previousToCurrency); err != nil {
 		return game.GameState{}, game.GameState{}, game.Reinforcement{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -108,7 +115,14 @@ func (r *MySQLRepository) ListSentReinforcements(playerID string) ([]game.Reinfo
 		return nil, err
 	}
 	defer rows.Close()
-	return scanReinforcementRows(rows)
+	records, err := scanReinforcementRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := enrichReinforcementPlayerLabels(r.db, records); err != nil {
+		return nil, err
+	}
+	return records, nil
 }
 
 // ListReceivedReinforcements 读取玩家收到的增援。
@@ -139,10 +153,13 @@ func loadReinforcementPlayerStateTx(tx *sql.Tx, playerID string) (game.GameState
 	if err := overlayAuthoritativeGeneralsTx(tx, &state, playerID); err != nil {
 		return game.GameState{}, nil, err
 	}
+	if err := overlayAuthoritativeCurrencyTx(tx, &state, playerID, time.Now().UTC()); err != nil {
+		return game.GameState{}, nil, err
+	}
 	return state, stateJSON, nil
 }
 
-func saveReinforcementPlayerStateTx(tx *sql.Tx, playerID string, state game.GameState, previousJSON []byte, updatedAt time.Time, previousArmy map[string]storageArmySnapshot, previousAssignments map[string]storageGeneralAssignmentSnapshot) error {
+func saveReinforcementPlayerStateTx(tx *sql.Tx, playerID string, state game.GameState, previousJSON []byte, updatedAt time.Time, previousArmy map[string]storageArmySnapshot, previousAssignments map[string]storageGeneralAssignmentSnapshot, previousCurrency playerCurrencySnapshot) error {
 	if armySnapshotChanged(previousArmy, state.Army) {
 		if err := syncPlayerArmyTx(tx, playerID, state.Army, updatedAt.UTC()); err != nil {
 			return err
@@ -150,6 +167,11 @@ func saveReinforcementPlayerStateTx(tx *sql.Tx, playerID string, state game.Game
 	}
 	if generalAssignmentSnapshotChanged(previousAssignments, state.GeneralAssignments) {
 		if err := syncPlayerGeneralAssignmentsTx(tx, playerID, state.GeneralAssignments, updatedAt.UTC()); err != nil {
+			return err
+		}
+	}
+	if currencySnapshotChanged(previousCurrency, state) {
+		if err := syncPlayerCurrencyTx(tx, playerID, &state, updatedAt.UTC()); err != nil {
 			return err
 		}
 	}
@@ -187,13 +209,21 @@ type reinforcementQueryer interface {
 }
 
 func getReinforcementTx(queryer reinforcementQueryer, reinforcementID string, lockClause string) (game.Reinforcement, error) {
-	return scanReinforcement(queryer.QueryRow(
+	record, err := scanReinforcement(queryer.QueryRow(
 		`SELECT `+reinforcementColumns+`
 		 FROM player_reinforcements
 		 WHERE reinforcement_id = ?
 		 LIMIT 1`+lockClause,
 		reinforcementID,
 	))
+	if err != nil {
+		return game.Reinforcement{}, err
+	}
+	records := []game.Reinforcement{record}
+	if err := enrichReinforcementPlayerLabels(queryer, records); err != nil {
+		return game.Reinforcement{}, err
+	}
+	return records[0], nil
 }
 
 func listReceivedReinforcementsTx(queryer resourceQueryer, playerID string, lockClause string) ([]game.Reinforcement, error) {
@@ -208,7 +238,14 @@ func listReceivedReinforcementsTx(queryer resourceQueryer, playerID string, lock
 		return nil, err
 	}
 	defer rows.Close()
-	return scanReinforcementRows(rows)
+	records, err := scanReinforcementRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := enrichReinforcementPlayerLabels(queryer, records); err != nil {
+		return nil, err
+	}
+	return records, nil
 }
 
 func insertReinforcementTx(tx *sql.Tx, record game.Reinforcement) error {
@@ -346,6 +383,189 @@ func scanReinforcement(scanner reinforcementScanner) (game.Reinforcement, error)
 		}
 	}
 	return record, nil
+}
+
+type reinforcementPlayerLabel struct {
+	Nickname string
+	Faction  string
+}
+
+// enrichReinforcementPlayerLabels 为增援记录补齐双方玩家展示名和阵营。
+func enrichReinforcementPlayerLabels(queryer resourceQueryer, records []game.Reinforcement) error {
+	if len(records) == 0 {
+		return nil
+	}
+	seen := map[string]bool{}
+	ids := []string{}
+	for _, record := range records {
+		for _, id := range []string{record.FromPlayerID, record.ToPlayerID, record.OwnerPlayerID, record.HostPlayerID} {
+			id = strings.TrimSpace(id)
+			if id == "" || seen[id] {
+				continue
+			}
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := queryer.Query(
+		`SELECT id, nickname, faction
+		 FROM players
+		 WHERE id IN (`+placeholders+`)`,
+		args...,
+	)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	labels := map[string]reinforcementPlayerLabel{}
+	for rows.Next() {
+		var id string
+		var label reinforcementPlayerLabel
+		if err := rows.Scan(&id, &label.Nickname, &label.Faction); err != nil {
+			return err
+		}
+		labels[id] = label
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	applyReinforcementPlayerLabels(records, labels)
+	if err := enrichReinforcementGeneralSnapshots(queryer, records); err != nil {
+		return err
+	}
+	return nil
+}
+
+// applyReinforcementPlayerLabels 把玩家展示信息写回增援记录。
+func applyReinforcementPlayerLabels(records []game.Reinforcement, labels map[string]reinforcementPlayerLabel) {
+	for i := range records {
+		if label, ok := labels[records[i].FromPlayerID]; ok {
+			if records[i].FromPlayerName == "" {
+				records[i].FromPlayerName = label.Nickname
+			}
+			if records[i].FromPlayerFaction == "" {
+				records[i].FromPlayerFaction = label.Faction
+			}
+		}
+		if label, ok := labels[records[i].ToPlayerID]; ok {
+			if records[i].ToPlayerName == "" {
+				records[i].ToPlayerName = label.Nickname
+			}
+			if records[i].ToPlayerFaction == "" {
+				records[i].ToPlayerFaction = label.Faction
+			}
+		}
+	}
+}
+
+// enrichReinforcementGeneralSnapshots 为历史增援武将快照补齐四维、属性和特性。
+func enrichReinforcementGeneralSnapshots(queryer resourceQueryer, records []game.Reinforcement) error {
+	playerGeneralIDs := map[string]map[string]bool{}
+	for _, record := range records {
+		if strings.TrimSpace(record.FromPlayerID) == "" || len(record.Generals) == 0 {
+			continue
+		}
+		for _, general := range record.Generals {
+			if !reinforcementGeneralNeedsDetail(general) {
+				continue
+			}
+			generalID := strings.TrimSpace(general.ID)
+			if generalID == "" {
+				continue
+			}
+			if playerGeneralIDs[record.FromPlayerID] == nil {
+				playerGeneralIDs[record.FromPlayerID] = map[string]bool{}
+			}
+			playerGeneralIDs[record.FromPlayerID][generalID] = true
+		}
+	}
+	if len(playerGeneralIDs) == 0 {
+		return nil
+	}
+	byPlayer := map[string]map[string]game.General{}
+	for playerID := range playerGeneralIDs {
+		generals, _, err := loadPlayerGenerals(queryer, playerID)
+		if err != nil {
+			return err
+		}
+		byPlayer[playerID] = map[string]game.General{}
+		for _, general := range generals {
+			byPlayer[playerID][general.ID] = general
+		}
+	}
+	for recordIndex := range records {
+		playerGenerals := byPlayer[records[recordIndex].FromPlayerID]
+		if len(playerGenerals) == 0 {
+			continue
+		}
+		for generalIndex := range records[recordIndex].Generals {
+			general, ok := playerGenerals[records[recordIndex].Generals[generalIndex].ID]
+			if !ok {
+				continue
+			}
+			applyGeneralDetailToReinforcementSnapshot(&records[recordIndex].Generals[generalIndex], general)
+		}
+	}
+	return nil
+}
+
+// reinforcementGeneralNeedsDetail 判断快照是否缺少详情。
+func reinforcementGeneralNeedsDetail(snapshot game.ReinforcementGeneralSnapshot) bool {
+	return len(snapshot.Stats) == 0 || len(snapshot.Attributes) == 0 || len(snapshot.Traits) == 0 || len(snapshot.Buffs) == 0
+}
+
+// applyGeneralDetailToReinforcementSnapshot 将当前武将详情补入旧快照，不覆盖已有名称等级。
+func applyGeneralDetailToReinforcementSnapshot(snapshot *game.ReinforcementGeneralSnapshot, general game.General) {
+	if snapshot.Name == "" {
+		snapshot.Name = general.Name
+	}
+	if snapshot.Level <= 0 {
+		snapshot.Level = general.Level
+	}
+	if len(snapshot.Stats) == 0 {
+		snapshot.Stats = cloneReinforcementIntMap(general.Stats)
+	}
+	if len(snapshot.Attributes) == 0 {
+		snapshot.Attributes = cloneReinforcementFloatMap(general.Attributes)
+	}
+	if len(snapshot.Buffs) == 0 {
+		snapshot.Buffs = cloneReinforcementFloatMap(general.Buffs)
+	}
+	if len(snapshot.Traits) == 0 {
+		snapshot.Traits = append([]game.GeneralTraitInstance(nil), general.Traits...)
+	}
+}
+
+// cloneReinforcementIntMap 拷贝增援武将整型映射。
+func cloneReinforcementIntMap(src map[string]int) map[string]int {
+	if src == nil {
+		return nil
+	}
+	dst := make(map[string]int, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
+}
+
+// cloneReinforcementFloatMap 拷贝增援武将浮点映射。
+func cloneReinforcementFloatMap(src map[string]float64) map[string]float64 {
+	if src == nil {
+		return nil
+	}
+	dst := make(map[string]float64, len(src))
+	for key, value := range src {
+		dst[key] = value
+	}
+	return dst
 }
 
 func nullableJSON(data []byte) any {

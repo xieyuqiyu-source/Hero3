@@ -699,7 +699,10 @@ export interface ReinforcementGeneralSnapshot {
   id: string
   name?: string
   level?: number
+  stats?: Record<string, number>
+  attributes?: Record<string, number>
   buffs?: Record<string, number>
+  traits?: GeneralTraitInstance[]
   assignment?: string
 }
 
