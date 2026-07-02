@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import type { BattleReport, BattleReportSweepDefender } from '@/types/game'
 import { useConfigStore } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
-import { getTraitMeta } from '@/utils/traits'
+import { formatTraitOutcomeDetail, getTraitMeta } from '@/utils/traits'
 import { sortUnitEntries } from '@/utils/unitOrder'
 import { mergeBattleReportDrops } from '@/utils/reportDrops'
 
@@ -54,35 +54,6 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
       if (f[unitType]?.name) return f[unitType].name
     }
     return factionUnits[unitType]?.name ?? unitType
-  }
-
-  const formatOutcomeDetail = (key: string, value: number | string | Record<string, number>): string => {
-    const labels: Record<string, string> = {
-      totalCaptured: '俘虏',
-      totalRevived: '复活',
-      extraDamage: '额外伤害',
-      damagePercent: '伤害比例',
-      foodRatio: '口粮比',
-      triggerChance: '触发概率',
-      suppressRate: '震慑比例',
-      totalSuppressed: '震慑兵力',
-      suppressedUnits: '震慑明细',
-    }
-    const label = labels[key] ?? key
-    if (typeof value === 'number') {
-      if (key.endsWith('Percent') || key.endsWith('Rate') || key.endsWith('Chance')) {
-        return `${label}: ${Math.round(value * 100)}%`
-      }
-      return `${label}: ${value.toLocaleString()}`
-    }
-    if (typeof value === 'object' && value !== null) {
-      const text = sortUnitEntries(value, faction, units ?? undefined)
-        .filter(([, amount]) => amount > 0)
-        .map(([unitType, amount]) => `${getUnitName(unitType)} ${amount.toLocaleString()}`)
-        .join('、')
-      return `${label}: ${text || '无'}`
-    }
-    return `${label}: ${value}`
   }
 
   const hasRewards = Object.values(report.rewards).some(v => v > 0)
@@ -313,7 +284,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
                           <div className="mt-0.5 text-[10px] text-[var(--color-text-secondary)]">
                             {Object.entries(outcome.detail).map(([k, v]) => (
                               <span key={k} className="mr-2">
-                                {formatOutcomeDetail(k, v)}
+                                {formatTraitOutcomeDetail(k, v, { faction, units: units ?? undefined, sortUnitEntries })}
                               </span>
                             ))}
                           </div>

@@ -17,6 +17,14 @@ export interface TraitMeta {
   }
 }
 
+export type TraitOutcomeValue = number | string | Record<string, number>
+
+export interface TraitOutcomeFormatOptions {
+  faction?: string
+  units?: Record<string, Record<string, { name?: string }>>
+  sortUnitEntries?: (troops?: Record<string, number>, faction?: string, units?: Record<string, Record<string, { name?: string }>>) => Array<[string, number]>
+}
+
 const trait = (id: string, name: string, traitType: 'special' | 'bonus', description: string, trigger: string): TraitMeta => ({
   id,
   name,
@@ -131,16 +139,91 @@ const PARAM_LABELS: Record<string, string> = {
   maxCapturePerUnit: '单兵种俘虏上限',
   resourceCostReduction: '资源消耗降低',
   guardPerMinute: '每分钟产兵',
+  maxGuardPerDay: '单次产兵上限',
   attackBonusRate: '攻击加成',
+  attackReductionRate: '攻击降低',
   defenseBonusRate: '防御加成',
   speedBonusRate: '速度加成',
   generalAttackFlat: '武将攻击',
   generalDefenseFlat: '武将防御',
   unitAttackFlat: '兵种攻击',
   enemyDefenseReductionRate: '敌方防御降低',
+  lossReductionRate: '损失降低',
+  reviveRate: '复活比例',
+  maxReviveCount: '复活上限',
+  returnRate: '返还比例',
+  maxReturnCount: '返还上限',
+  plunderBonusRate: '掠夺修正',
+  disableTraitRate: '压制比例',
+  disableTraitCount: '压制特性数',
+  damagePercent: '伤害比例',
+  productionBonusRate: '资源产量提升',
   maxAffectedRate: '最大影响比例',
   maxAffectedCount: '最大影响数量',
   minMarchSeconds: '最短行军秒数',
+  baseChance: '基础触发率',
+  chancePerRatio: '兵力差触发加成',
+  maxChance: '最高触发率',
+  baseSuppressRate: '基础震慑比例',
+  suppressPerRatio: '兵力差震慑加成',
+  maxSuppressRate: '最高震慑比例',
+}
+
+const OUTCOME_LABELS: Record<string, string> = {
+  totalCaptured: '俘虏',
+  capturedUnits: '俘虏明细',
+  totalRevived: '复活',
+  revivedUnits: '复活明细',
+  returnedUnits: '返还兵力',
+  extraDamage: '额外伤害',
+  extraLosses: '追加损失',
+  targetExtraLosses: '目标兵种追加损失',
+  reducedLosses: '减少损失',
+  damagePercent: '伤害比例',
+  foodRatio: '口粮比',
+  triggerChance: '触发概率',
+  effectRate: '效果比例',
+  suppressRate: '震慑比例',
+  totalSuppressed: '震慑兵力',
+  suppressedUnits: '震慑明细',
+  preBattleAffected: '战前影响兵力',
+  modifiedUnits: '攻防修正',
+  disabledTraits: '压制特性',
+  disabledTraitCount: '压制特性数',
+  marchSeconds: '行军时间',
+  beforeSeconds: '原行军秒数',
+  afterSeconds: '调整后秒数',
+  costReduced: '征兵消耗降低',
+  plunderDelta: '掠夺收益变化',
+}
+
+export const TRAIT_SCOPE_LABELS: Record<string, string> = {
+  self_army: '自己的参战队伍',
+  enemy_army: '敌方参战队伍',
+  all_army: '全体参战队伍',
+  reinforcement_self: '自己的增援队伍',
+  defense_self: '守城队伍',
+  attack_self: '出征队伍',
+}
+
+export const TRAIT_TARGET_LABELS: Record<string, string> = {
+  infantry: '步兵',
+  cavalry: '骑兵',
+  archer: '弓兵',
+  special: '特殊兵',
+  huWei: '虎卫',
+  huBaoQi: '虎豹骑',
+  baWangQi: '霸王骑',
+}
+
+const VALUE_LABELS: Record<string, string> = {
+  attacker: '进攻方',
+  defender: '防守方',
+  reinforcement: '增援方',
+  special: '特殊特性',
+  bonus: '加成特性',
+  ...TRAIT_SCOPE_LABELS,
+  ...TRAIT_TARGET_LABELS,
 }
 
 export function formatParamLabel(key: string): string {
@@ -152,4 +235,63 @@ export function formatParamValue(key: string, value: number): string {
     return `${Math.round(value * 100)}%`
   }
   return value.toLocaleString()
+}
+
+export function formatTraitScope(value?: string): string {
+  if (!value) return '默认'
+  return TRAIT_SCOPE_LABELS[value] ?? value
+}
+
+export function formatTraitTarget(value?: string): string {
+  if (!value) return '不限'
+  return TRAIT_TARGET_LABELS[value] ?? value
+}
+
+export function formatTraitOutcomeDetail(key: string, value: TraitOutcomeValue, options: TraitOutcomeFormatOptions = {}): string {
+  const label = OUTCOME_LABELS[key] ?? PARAM_LABELS[key] ?? key
+  if (typeof value === 'number') {
+    if (key.endsWith('Percent') || key.endsWith('Rate') || key.endsWith('Chance') || key === 'effectRate') {
+      return `${label}: ${Math.round(value * 100)}%`
+    }
+    if (key.endsWith('Seconds')) {
+      return `${label}: ${formatSeconds(value)}`
+    }
+    return `${label}: ${value.toLocaleString()}`
+  }
+  if (typeof value === 'object' && value !== null) {
+    return `${label}: ${formatTraitUnitMap(value, options)}`
+  }
+  return `${label}: ${VALUE_LABELS[value] ?? value}`
+}
+
+function formatTraitUnitMap(value: Record<string, number>, options: TraitOutcomeFormatOptions): string {
+  const entries = options.sortUnitEntries
+    ? options.sortUnitEntries(value, options.faction, options.units)
+    : Object.entries(value)
+  const text = entries
+    .filter(([, amount]) => amount !== 0)
+    .map(([unitType, amount]) => {
+      const sign = amount > 0 ? '+' : ''
+      return `${formatTraitUnitName(unitType, options)} ${sign}${amount.toLocaleString()}`
+    })
+    .join('、')
+  return text || '无'
+}
+
+function formatTraitUnitName(unitType: string, options: TraitOutcomeFormatOptions): string {
+  if (TRAIT_TARGET_LABELS[unitType]) return TRAIT_TARGET_LABELS[unitType]
+  for (const factionUnits of Object.values(options.units ?? {})) {
+    if (factionUnits[unitType]?.name) return factionUnits[unitType].name
+  }
+  return unitType
+}
+
+function formatSeconds(value: number): string {
+  if (value < 60) return `${value.toLocaleString()} 秒`
+  const minutes = Math.floor(value / 60)
+  const seconds = value % 60
+  if (minutes < 60) return seconds > 0 ? `${minutes} 分 ${seconds} 秒` : `${minutes} 分`
+  const hours = Math.floor(minutes / 60)
+  const restMinutes = minutes % 60
+  return restMinutes > 0 ? `${hours} 小时 ${restMinutes} 分` : `${hours} 小时`
 }

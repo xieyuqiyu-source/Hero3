@@ -42,6 +42,25 @@ const TRAIT_TYPE_LABELS: Record<'special' | 'bonus', string> = {
   bonus: '加成特性',
 }
 
+const TRAIT_SCOPE_LABELS: Record<string, string> = {
+  self_army: '自己的参战队伍',
+  enemy_army: '敌方参战队伍',
+  all_army: '全体参战队伍',
+  reinforcement_self: '自己的增援队伍',
+  defense_self: '守城队伍',
+  attack_self: '出征队伍',
+}
+
+const TRAIT_TARGET_LABELS: Record<string, string> = {
+  infantry: '步兵',
+  cavalry: '骑兵',
+  archer: '弓兵',
+  special: '特殊兵',
+  huWei: '虎卫',
+  huBaoQi: '虎豹骑',
+  baWangQi: '霸王骑',
+}
+
 export default function GeneralsConfigPanel() {
   const [config, setConfig] = useState<GeneralsConfig | null>(null)
   const [traitRegistry, setTraitRegistry] = useState<TraitMeta[]>([])
@@ -547,20 +566,26 @@ export default function GeneralsConfigPanel() {
                             <div className="mb-2 grid grid-cols-2 gap-2">
                               <label className="grid gap-0.5">
                                 <span className="text-[10px] text-[var(--color-text-muted)]">作用范围</span>
+                                <span className="text-[9px] font-medium text-[var(--color-accent)]">
+                                  {formatTraitScope(trait.scope)}
+                                </span>
                                 <input
                                   value={trait.scope ?? ''}
                                   onChange={(e) => updateTraitField(hero.id, traitIndex, 'scope', e.target.value)}
                                   className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
-                                  placeholder="self_army / reinforcement_self"
+                                  placeholder="留空默认；可填自己的参战队伍、自己的增援队伍"
                                 />
                               </label>
                               <label className="grid gap-0.5">
                                 <span className="text-[10px] text-[var(--color-text-muted)]">目标兵种</span>
+                                <span className="text-[9px] font-medium text-[var(--color-accent)]">
+                                  {formatTraitTarget(trait.targetUnitType)}
+                                </span>
                                 <input
                                   value={trait.targetUnitType ?? ''}
                                   onChange={(e) => updateTraitField(hero.id, traitIndex, 'targetUnitType', e.target.value)}
                                   className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
-                                  placeholder="infantry / cavalry / special"
+                                  placeholder="留空不限；可填步兵、骑兵、特殊兵或具体兵种"
                                 />
                               </label>
                             </div>
@@ -626,4 +651,16 @@ export default function GeneralsConfigPanel() {
       )}
     </div>
   )
+}
+
+// formatTraitScope 把核心作用范围值转成 GM 可读中文。
+function formatTraitScope(value?: string) {
+  if (!value) return '默认范围'
+  return TRAIT_SCOPE_LABELS[value] ?? value
+}
+
+// formatTraitTarget 把核心目标兵种值转成 GM 可读中文。
+function formatTraitTarget(value?: string) {
+  if (!value) return '不限制兵种'
+  return TRAIT_TARGET_LABELS[value] ?? value
 }
