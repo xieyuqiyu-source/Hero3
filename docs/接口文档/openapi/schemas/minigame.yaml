@@ -201,6 +201,7 @@ SlotRoundResult:
   - winningLines
   - freeSpins
   - bonusRewards
+  - allPayRewards
   - betUnitId
   - betUnit
   - betAmount
@@ -231,13 +232,15 @@ SlotRoundResult:
       - [scatter, jade_seal, bonus]
     lineBet:
       type: integer
+      description: 单次押注数量；历史字段名保留为 lineBet，但本局扣兵不再乘以线数。
       example: 10000
     lineCount:
       type: integer
       example: 5
     totalBet:
       type: integer
-      example: 50000
+      description: 本局实际扣除数量，当前与 lineBet 相同。
+      example: 10000
     winningLines:
       type: array
       items:
@@ -250,6 +253,11 @@ SlotRoundResult:
       type: array
       items:
         $ref: '#/components/schemas/SlotBonusReward'
+    allPayRewards:
+      type: array
+      description: 满天星奖励；同局只返回收益最高的一组。
+      items:
+        $ref: '#/components/schemas/SlotAllPayReward'
     betUnitId:
       type: string
       example: qiQiYing
@@ -259,7 +267,7 @@ SlotRoundResult:
     betAmount:
       type: integer
       description: 与 totalBet 相同，用于兼容小游戏记录展示。
-      example: 50000
+      example: 10000
     winAmount:
       type: integer
       example: 120000
@@ -297,7 +305,7 @@ SlotWinningLine:
       - [1, 2]
 SlotBonusReward:
   type: object
-  required: [multiplier, amount]
+  required: [multiplier, amount, positions]
   properties:
     multiplier:
       type: integer
@@ -305,9 +313,54 @@ SlotBonusReward:
     amount:
       type: integer
       example: 200000
+    positions:
+      type: array
+      description: 触发宝匣奖励的 3 个坐标；天机令补齐宝匣时会包含天机令坐标。
+      items:
+        type: array
+        items:
+          type: integer
+      example:
+      - [0, 0]
+      - [1, 1]
+      - [2, 2]
+SlotAllPayReward:
+  type: object
+  required: [symbol, symbolName, count, multiplier, amount, positions]
+  properties:
+    symbol:
+      type: string
+      example: gold_charm
+    symbolName:
+      type: string
+      example: 赤金符
+    count:
+      type: integer
+      description: 同类普通图案加天机令补齐后的数量。
+      example: 5
+    multiplier:
+      type: integer
+      description: 最终奖励倍率，已包含图案倍率和满天星数量系数。
+      example: 24
+    amount:
+      type: integer
+      example: 240000
+    positions:
+      type: array
+      description: 满天星使用的图案坐标；天机令补齐时会包含天机令坐标。
+      items:
+        type: array
+        items:
+          type: integer
+      example:
+      - [0, 0]
+      - [1, 2]
+      - [2, 0]
+      - [2, 2]
+      - [1, 0]
 SlotFreeSpinResult:
   type: object
-  required: [spinIndex, grid, winningLines, bonusRewards, scatterCount, retriggeredFreeSpins, winAmount]
+  required: [spinIndex, grid, winningLines, bonusRewards, allPayRewards, scatterCount, retriggeredFreeSpins, winAmount]
   properties:
     spinIndex:
       type: integer
@@ -326,6 +379,10 @@ SlotFreeSpinResult:
       type: array
       items:
         $ref: '#/components/schemas/SlotBonusReward'
+    allPayRewards:
+      type: array
+      items:
+        $ref: '#/components/schemas/SlotAllPayReward'
     scatterCount:
       type: integer
       example: 3

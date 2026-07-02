@@ -14,3 +14,9 @@ Original prompt: [天机轮转老虎机系统设计.md](/Users/xieyuqiyu/Documen
 - 用户继续反馈“慢慢停下来后内容变了、滚动看不清、没有紧张感”：已把滚轴长条末尾固定为后端最终 3x3 grid，避免停轮后随机换图；滚轴加长到 14 行填充，三列按约 2.6s、4.0s、5.5s 依次停稳，前段逐格滑动、后段减速停靠。已用 Playwright 代码执行工具拦截假结算，按 0.45s、2.95s、4.55s、6.45s 截图检查，确认 0/3、1/3、2/3、3/3 锁轮过程和最终 grid 一致，控制台无 error。
 - 用户反馈停轮有抖动、规则不清楚、中奖反馈不明显：已移除停轮容器回弹动画和末端 overshoot；新增“查看天机轮转玩法”说明弹窗；中奖格按 `winningLines.positions` 加 `animate-slot-win-flash` 快速闪烁约 3 秒后再弹结算；未中奖弹窗改为“很遗憾，未中奖”和“再来一局”。验证：`cd web && npm run build` 通过；Playwright 验证规则弹窗文案、中奖 3 格闪烁且弹窗延后、未中奖弹窗文案，控制台无 error。
 - 用户要求不同符号增加小图片：已新增 `web/src/assets/minigames/slot/` 下 9 个 SVG 小图标，分别对应玄铜符、白银符、赤金符、玉玺、虎符、天命令、天机令、星陨、宝匣；`SlotMachineGame.tsx` 滚轴格和结果弹窗矩阵已统一显示这些图标。验证：`cd web && npm run build` 通过；Playwright 截图检查待机滚轴与中奖结果弹窗图标清晰，控制台无 error。
+
+## 2026-07-02
+
+- 用户确认天机令应按“大小王”理解：已把后端规则改为天机令可替代普通图案，也可补齐星陨/宝匣的 3 个触发条件；至少需要 1 个真实星陨或宝匣，纯 3 天机令仍按天命令三连。对角线 `天机令 + 天机令 + 宝匣` 现在触发宝匣奖励，`bonusRewards` 返回触发坐标用于前端高亮。验证：`go test ./internal/app/game -run 'TestResolveSlotRound|TestRedeemSlot|TestRedeemAllSlot|TestSaveMiniGameRecordRejectsSlot' -count=1`、`make openapi`、`cd web && npm run build` 均通过。
+- 用户接受“满天星”补齐：已新增满天星/All Pay 结算，普通图案在全盘任意位置加天机令达到 5/6/7/8/9 个时获得额外奖励，倍率系数为 2/4/8/15/30；同局只取收益最高的一组满天星。前端结算弹窗和滚轴高亮已接入 `allPayRewards`，系统设计文档与 OpenAPI 已同步。
+- 用户要求“押注单线就行，能连五条线”：已把天机轮转扣费口径改为单次押注，`totalBet = lineBet`，不再乘以固定 5 线扣兵；5 条线仍全部参与中奖结算。前端押注区、玩法说明、结果弹窗、OpenAPI 和系统设计文档已同步为“单次押注 / 可中奖线 / 本局扣除”。验证：`go test ./internal/app/game -run 'TestResolveSlotRound|TestRedeemSlot|TestRedeemAllSlot|TestSaveMiniGameRecordRejectsSlot' -count=1`、`make openapi`、`cd web && npm run build` 均通过。

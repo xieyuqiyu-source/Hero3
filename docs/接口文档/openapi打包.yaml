@@ -2319,8 +2319,8 @@ paths:
       tags:
       - MiniGame
       summary: 结算一局天机轮转
-      description: 后端校验押注兵种和每线押注，按固定 5 线扣除总押注；不设置额外押注上限，只有当前兵力不足支付总押注时拒绝。服务器生成 3x3
-        图案、赔付线、免费旋转和宝匣奖励，并写入一条 slot 小游戏记录。
+      description: 后端校验押注兵种和单次押注，固定结算 5 条中奖线，但本局只扣除一次押注；不设置额外押注上限，只有当前兵力不足支付本局押注时拒绝。服务器生成
+        3x3 图案、赔付线、免费旋转、宝匣奖励和满天星奖励，并写入一条 slot 小游戏记录。
       requestBody:
         required: true
         content:
@@ -2340,7 +2340,7 @@ paths:
                   example: qiQiYing
                 lineBet:
                   type: integer
-                  description: 每线押注；总押注为 lineBet × 5。
+                  description: 单次押注；历史字段名保留为 lineBet，本局实际扣除与 lineBet 相同。
                   minimum: 1000
                   example: 10000
       responses:
@@ -5316,6 +5316,7 @@ components:
       - winningLines
       - freeSpins
       - bonusRewards
+      - allPayRewards
       - betUnitId
       - betUnit
       - betAmount
@@ -5352,13 +5353,15 @@ components:
             - bonus
         lineBet:
           type: integer
+          description: 单次押注数量；历史字段名保留为 lineBet，但本局扣兵不再乘以线数。
           example: 10000
         lineCount:
           type: integer
           example: 5
         totalBet:
           type: integer
-          example: 50000
+          description: 本局实际扣除数量，当前与 lineBet 相同。
+          example: 10000
         winningLines:
           type: array
           items:
@@ -5371,6 +5374,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SlotBonusReward'
+        allPayRewards:
+          type: array
+          description: 满天星奖励；同局只返回收益最高的一组。
+          items:
+            $ref: '#/components/schemas/SlotAllPayReward'
         betUnitId:
           type: string
           example: qiQiYing
@@ -5380,7 +5388,7 @@ components:
         betAmount:
           type: integer
           description: 与 totalBet 相同，用于兼容小游戏记录展示。
-          example: 50000
+          example: 10000
         winAmount:
           type: integer
           example: 120000

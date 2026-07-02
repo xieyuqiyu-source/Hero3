@@ -142,6 +142,8 @@ export interface ItemStack {
 export interface ItemEffect {
   type: 'general_exp' | 'resources' | 'unit_by_faction' | string
   amount?: number
+  category?: string
+  pool?: string
   resources?: Record<string, number>
   unitByFaction?: Record<string, string>
   protectionType?: string
@@ -590,6 +592,7 @@ export interface SlotRoundResult {
   winningLines: SlotWinningLine[]
   freeSpins: SlotFreeSpinResult[]
   bonusRewards: SlotBonusReward[]
+  allPayRewards: SlotAllPayReward[]
   betUnitId: string
   betUnit: string
   betAmount: number
@@ -609,6 +612,16 @@ export interface SlotWinningLine {
 export interface SlotBonusReward {
   multiplier: number
   amount: number
+  positions: number[][]
+}
+
+export interface SlotAllPayReward {
+  symbol: string
+  symbolName: string
+  count: number
+  multiplier: number
+  amount: number
+  positions: number[][]
 }
 
 export interface SlotFreeSpinResult {
@@ -616,6 +629,7 @@ export interface SlotFreeSpinResult {
   grid: string[][]
   winningLines: SlotWinningLine[]
   bonusRewards: SlotBonusReward[]
+  allPayRewards: SlotAllPayReward[]
   scatterCount: number
   retriggeredFreeSpins: number
   winAmount: number

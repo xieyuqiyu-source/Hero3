@@ -82,7 +82,7 @@
   post:
     tags: [MiniGame]
     summary: 结算一局天机轮转
-    description: 后端校验押注兵种和每线押注，按固定 5 线扣除总押注；不设置额外押注上限，只有当前兵力不足支付总押注时拒绝。服务器生成 3x3 图案、赔付线、免费旋转和宝匣奖励，并写入一条 slot 小游戏记录。
+    description: 后端校验押注兵种和单次押注，固定结算 5 条中奖线，但本局只扣除一次押注；不设置额外押注上限，只有当前兵力不足支付本局押注时拒绝。服务器生成 3x3 图案、赔付线、免费旋转、宝匣奖励和满天星奖励，并写入一条 slot 小游戏记录。
     requestBody:
       required: true
       content:
@@ -99,7 +99,7 @@
                 example: qiQiYing
               lineBet:
                 type: integer
-                description: 每线押注；总押注为 lineBet × 5。
+                description: 单次押注；历史字段名保留为 lineBet，本局实际扣除与 lineBet 相同。
                 minimum: 1000
                 example: 10000
     responses:

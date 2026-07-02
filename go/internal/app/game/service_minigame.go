@@ -76,22 +76,23 @@ type GamblingRoundResult struct {
 }
 
 type SlotRoundResult struct {
-	Record       MiniGameRecord       `json:"record"`
-	Army         []ArmyUnit           `json:"army,omitempty"`
-	ServerTime   string               `json:"serverTime"`
-	Won          bool                 `json:"won"`
-	Grid         [][]string           `json:"grid"`
-	LineBet      int                  `json:"lineBet"`
-	LineCount    int                  `json:"lineCount"`
-	TotalBet     int                  `json:"totalBet"`
-	WinningLines []SlotWinningLine    `json:"winningLines"`
-	FreeSpins    []SlotFreeSpinResult `json:"freeSpins"`
-	BonusRewards []SlotBonusReward    `json:"bonusRewards"`
-	BetUnitID    string               `json:"betUnitId"`
-	BetUnit      string               `json:"betUnit"`
-	BetAmount    int                  `json:"betAmount"`
-	WinAmount    int                  `json:"winAmount"`
-	RewardRarity string               `json:"rewardRarity"`
+	Record        MiniGameRecord       `json:"record"`
+	Army          []ArmyUnit           `json:"army,omitempty"`
+	ServerTime    string               `json:"serverTime"`
+	Won           bool                 `json:"won"`
+	Grid          [][]string           `json:"grid"`
+	LineBet       int                  `json:"lineBet"`
+	LineCount     int                  `json:"lineCount"`
+	TotalBet      int                  `json:"totalBet"`
+	WinningLines  []SlotWinningLine    `json:"winningLines"`
+	FreeSpins     []SlotFreeSpinResult `json:"freeSpins"`
+	BonusRewards  []SlotBonusReward    `json:"bonusRewards"`
+	AllPayRewards []SlotAllPayReward   `json:"allPayRewards"`
+	BetUnitID     string               `json:"betUnitId"`
+	BetUnit       string               `json:"betUnit"`
+	BetAmount     int                  `json:"betAmount"`
+	WinAmount     int                  `json:"winAmount"`
+	RewardRarity  string               `json:"rewardRarity"`
 }
 
 type SlotWinningLine struct {
@@ -104,18 +105,29 @@ type SlotWinningLine struct {
 }
 
 type SlotBonusReward struct {
-	Multiplier int `json:"multiplier"`
-	Amount     int `json:"amount"`
+	Multiplier int     `json:"multiplier"`
+	Amount     int     `json:"amount"`
+	Positions  [][]int `json:"positions"`
+}
+
+type SlotAllPayReward struct {
+	Symbol     string  `json:"symbol"`
+	SymbolName string  `json:"symbolName"`
+	Count      int     `json:"count"`
+	Multiplier int     `json:"multiplier"`
+	Amount     int     `json:"amount"`
+	Positions  [][]int `json:"positions"`
 }
 
 type SlotFreeSpinResult struct {
-	SpinIndex            int               `json:"spinIndex"`
-	Grid                 [][]string        `json:"grid"`
-	WinningLines         []SlotWinningLine `json:"winningLines"`
-	BonusRewards         []SlotBonusReward `json:"bonusRewards"`
-	ScatterCount         int               `json:"scatterCount"`
-	RetriggeredFreeSpins int               `json:"retriggeredFreeSpins"`
-	WinAmount            int               `json:"winAmount"`
+	SpinIndex            int                `json:"spinIndex"`
+	Grid                 [][]string         `json:"grid"`
+	WinningLines         []SlotWinningLine  `json:"winningLines"`
+	BonusRewards         []SlotBonusReward  `json:"bonusRewards"`
+	AllPayRewards        []SlotAllPayReward `json:"allPayRewards"`
+	ScatterCount         int                `json:"scatterCount"`
+	RetriggeredFreeSpins int                `json:"retriggeredFreeSpins"`
+	WinAmount            int                `json:"winAmount"`
 }
 
 type FishingBaitUseResult struct {
@@ -159,6 +171,14 @@ var slotPaylines = []struct {
 	{id: "bottom", positions: [][2]int{{2, 0}, {2, 1}, {2, 2}}},
 	{id: "diagonal_down", positions: [][2]int{{0, 0}, {1, 1}, {2, 2}}},
 	{id: "diagonal_up", positions: [][2]int{{2, 0}, {1, 1}, {0, 2}}},
+}
+
+var slotAllPayCountMultipliers = map[int]int{
+	5: 2,
+	6: 4,
+	7: 8,
+	8: 15,
+	9: 30,
 }
 
 // ResolveGamblingRound 由后端完成赌场一局结算：扣押注、掷骰、写记录并返回最新军队。
@@ -253,7 +273,7 @@ func (s *Service) ResolveGamblingRound(playerID string, betUnitType string, betA
 	return result, nil
 }
 
-// ResolveSlotRound 由后端完成天机轮转一局结算：扣总押注、生成 3x3 图案、展开免费旋转、写入一条库存记录。
+// ResolveSlotRound 由后端完成天机轮转一局结算：扣单次押注、生成 3x3 图案、展开免费旋转、写入一条库存记录。
 func (s *Service) ResolveSlotRound(playerID string, betUnitType string, lineBet int) (SlotRoundResult, error) {
 	playerID = strings.TrimSpace(playerID)
 	betUnitType = strings.TrimSpace(betUnitType)
@@ -291,7 +311,7 @@ func (s *Service) ResolveSlotRound(playerID string, betUnitType string, lineBet 
 		if currentAmount <= 0 {
 			return nil, ErrInsufficientArmy
 		}
-		totalBet := lineBet * cfg.LineCount
+		totalBet := lineBet
 		if _, err := validateAndConsumeArmy(state, map[string]int{betUnitType: totalBet}); err != nil {
 			return nil, err
 		}
@@ -328,6 +348,7 @@ func (s *Service) ResolveSlotRound(playerID string, betUnitType string, lineBet 
 				Grid:                 slotGridIDs(freeGrid),
 				WinningLines:         nonNilSlotWinningLines(spin.winningLines),
 				BonusRewards:         nonNilSlotBonusRewards(spin.bonusRewards),
+				AllPayRewards:        nonNilSlotAllPayRewards(spin.allPayRewards),
 				ScatterCount:         spin.scatterCount,
 				RetriggeredFreeSpins: retriggered,
 				WinAmount:            spin.winAmount,
@@ -364,21 +385,22 @@ func (s *Service) ResolveSlotRound(playerID string, betUnitType string, lineBet 
 		state.ServerTime = nowText
 		records = append([]MiniGameRecord{record}, records...)
 		result = SlotRoundResult{
-			Record:       record,
-			ServerTime:   nowText,
-			Won:          totalWin > 0,
-			Grid:         slotGridIDs(grid),
-			LineBet:      lineBet,
-			LineCount:    cfg.LineCount,
-			TotalBet:     totalBet,
-			WinningLines: nonNilSlotWinningLines(mainSpin.winningLines),
-			FreeSpins:    nonNilSlotFreeSpins(freeSpins),
-			BonusRewards: nonNilSlotBonusRewards(mainSpin.bonusRewards),
-			BetUnitID:    betUnitType,
-			BetUnit:      unitCfg.Name,
-			BetAmount:    totalBet,
-			WinAmount:    totalWin,
-			RewardRarity: rarity,
+			Record:        record,
+			ServerTime:    nowText,
+			Won:           totalWin > 0,
+			Grid:          slotGridIDs(grid),
+			LineBet:       lineBet,
+			LineCount:     cfg.LineCount,
+			TotalBet:      totalBet,
+			WinningLines:  nonNilSlotWinningLines(mainSpin.winningLines),
+			FreeSpins:     nonNilSlotFreeSpins(freeSpins),
+			BonusRewards:  nonNilSlotBonusRewards(mainSpin.bonusRewards),
+			AllPayRewards: nonNilSlotAllPayRewards(mainSpin.allPayRewards),
+			BetUnitID:     betUnitType,
+			BetUnit:       unitCfg.Name,
+			BetAmount:     totalBet,
+			WinAmount:     totalWin,
+			RewardRarity:  rarity,
 		}
 		return records, nil
 	})
@@ -402,6 +424,14 @@ func nonNilSlotWinningLines(lines []SlotWinningLine) []SlotWinningLine {
 func nonNilSlotBonusRewards(rewards []SlotBonusReward) []SlotBonusReward {
 	if rewards == nil {
 		return []SlotBonusReward{}
+	}
+	return rewards
+}
+
+// nonNilSlotAllPayRewards 保证接口空满天星奖励编码为 [] 而不是 null。
+func nonNilSlotAllPayRewards(rewards []SlotAllPayReward) []SlotAllPayReward {
+	if rewards == nil {
+		return []SlotAllPayReward{}
 	}
 	return rewards
 }
@@ -498,6 +528,7 @@ func rollSlotBonusMultiplier(symbol SlotSymbol) (int, error) {
 type slotSpinEvaluation struct {
 	winningLines       []SlotWinningLine
 	bonusRewards       []SlotBonusReward
+	allPayRewards      []SlotAllPayReward
 	scatterCount       int
 	triggeredFreeSpins int
 	retriggerFreeSpins int
@@ -529,38 +560,59 @@ func evaluateSlotSpin(cfg SlotConfig, grid [3][3]SlotSymbol, lineBet int) (slotS
 	var scatterSymbol *SlotSymbol
 	var bonusSymbol *SlotSymbol
 	bonusCount := 0
+	wildPositions := [][2]int{}
+	bonusPositions := [][2]int{}
+	normalPositions := map[string][][2]int{}
 	for row := range grid {
 		for col := range grid[row] {
 			symbol := grid[row][col]
 			switch symbol.Type {
+			case "normal":
+				normalPositions[symbol.ID] = append(normalPositions[symbol.ID], [2]int{row, col})
+			case "wild":
+				wildPositions = append(wildPositions, [2]int{row, col})
 			case "scatter":
 				result.scatterCount++
 				scatterCopy := symbol
 				scatterSymbol = &scatterCopy
 			case "bonus":
 				bonusCount++
+				bonusPositions = append(bonusPositions, [2]int{row, col})
 				bonusCopy := symbol
 				bonusSymbol = &bonusCopy
 			}
 		}
 	}
-	if result.scatterCount >= 3 && scatterSymbol != nil {
+	effectiveScatterCount := result.scatterCount
+	if result.scatterCount > 0 && result.scatterCount+len(wildPositions) >= 3 {
+		effectiveScatterCount = 3
+	}
+	if effectiveScatterCount >= 3 && scatterSymbol != nil {
+		result.scatterCount = effectiveScatterCount
 		result.triggeredFreeSpins = scatterSymbol.FreeSpins
 		result.retriggerFreeSpins = scatterSymbol.RetriggerFreeSpins
 		if slotRarityRank(scatterSymbol.Rarity) > slotRarityRank(result.bestRarity) {
 			result.bestRarity = scatterSymbol.Rarity
 		}
 	}
-	if bonusCount >= 3 && bonusSymbol != nil {
+	bonusTriggerPositions := slotSpecialTriggerPositions(bonusPositions, wildPositions)
+	if len(bonusTriggerPositions) >= 3 && bonusSymbol != nil {
 		multiplier, err := slotBonusRoller(*bonusSymbol)
 		if err != nil {
 			return result, err
 		}
 		amount := lineBet * multiplier
-		result.bonusRewards = append(result.bonusRewards, SlotBonusReward{Multiplier: multiplier, Amount: amount})
+		result.bonusRewards = append(result.bonusRewards, SlotBonusReward{Multiplier: multiplier, Amount: amount, Positions: bonusTriggerPositions})
 		result.winAmount += amount
 		if slotRarityRank(bonusSymbol.Rarity) > slotRarityRank(result.bestRarity) {
 			result.bestRarity = bonusSymbol.Rarity
+		}
+	}
+	if reward, ok := evaluateSlotAllPay(symbols, normalPositions, wildPositions, lineBet); ok {
+		result.allPayRewards = append(result.allPayRewards, reward)
+		result.winAmount += reward.Amount
+		if slotRarityRank(symbols[reward.Symbol].Rarity) > slotRarityRank(result.bestRarity) {
+			result.bestRarity = symbols[reward.Symbol].Rarity
 		}
 	}
 	return result, nil
@@ -601,6 +653,40 @@ func evaluateSlotPayline(grid [3][3]SlotSymbol, symbols map[string]SlotSymbol, l
 	}, true
 }
 
+// evaluateSlotAllPay 计算全屏满天星奖励，天机令可补齐，但同局只取最佳一组。
+func evaluateSlotAllPay(symbols map[string]SlotSymbol, normalPositions map[string][][2]int, wildPositions [][2]int, lineBet int) (SlotAllPayReward, bool) {
+	best := SlotAllPayReward{}
+	hasBest := false
+	for symbolID, positions := range normalPositions {
+		symbol, ok := symbols[symbolID]
+		if !ok || symbol.Type != "normal" || symbol.Multiplier <= 0 {
+			continue
+		}
+		effectiveCount := len(positions) + len(wildPositions)
+		if effectiveCount > 9 {
+			effectiveCount = 9
+		}
+		countMultiplier, ok := slotAllPayCountMultipliers[effectiveCount]
+		if !ok {
+			continue
+		}
+		triggerPositions := slotAllPayPositions(positions, wildPositions, effectiveCount)
+		reward := SlotAllPayReward{
+			Symbol:     symbol.ID,
+			SymbolName: symbol.Name,
+			Count:      effectiveCount,
+			Multiplier: symbol.Multiplier * countMultiplier,
+			Amount:     lineBet * symbol.Multiplier * countMultiplier,
+			Positions:  triggerPositions,
+		}
+		if !hasBest || reward.Amount > best.Amount || (reward.Amount == best.Amount && slotRarityRank(symbol.Rarity) > slotRarityRank(symbols[best.Symbol].Rarity)) {
+			best = reward
+			hasBest = true
+		}
+	}
+	return best, hasBest
+}
+
 // slotGridIDs 转换 3x3 图案为接口约定的行优先 ID 矩阵。
 func slotGridIDs(grid [3][3]SlotSymbol) [][]string {
 	result := make([][]string, 3)
@@ -613,6 +699,22 @@ func slotGridIDs(grid [3][3]SlotSymbol) [][]string {
 	return result
 }
 
+// slotAllPayPositions 组合真实普通图案和必要天机令坐标。
+func slotAllPayPositions(normalPositions [][2]int, wildPositions [][2]int, count int) [][]int {
+	combined := make([][2]int, 0, count)
+	combined = append(combined, normalPositions...)
+	for _, pos := range wildPositions {
+		if len(combined) >= count {
+			break
+		}
+		combined = append(combined, pos)
+	}
+	if len(combined) > count {
+		combined = combined[:count]
+	}
+	return slotLinePositions(combined)
+}
+
 // slotLinePositions 转换赔付线坐标，避免共享底层数组。
 func slotLinePositions(positions [][2]int) [][]int {
 	result := make([][]int, 0, len(positions))
@@ -620,6 +722,22 @@ func slotLinePositions(positions [][2]int) [][]int {
 		result = append(result, []int{pos[0], pos[1]})
 	}
 	return result
+}
+
+// slotSpecialTriggerPositions 返回特殊图案被天机令补齐后的触发坐标。
+func slotSpecialTriggerPositions(specialPositions [][2]int, wildPositions [][2]int) [][]int {
+	if len(specialPositions) == 0 || len(specialPositions)+len(wildPositions) < 3 {
+		return [][]int{}
+	}
+	combined := make([][2]int, 0, 3)
+	combined = append(combined, specialPositions...)
+	for _, pos := range wildPositions {
+		if len(combined) >= 3 {
+			break
+		}
+		combined = append(combined, pos)
+	}
+	return slotLinePositions(combined[:3])
 }
 
 // slotSymbolsByID 建立图案索引，便于赔付线解析。
@@ -638,6 +756,11 @@ func highestSlotRarity(main slotSpinEvaluation, freeSpins []SlotFreeSpinResult) 
 		for _, line := range spin.WinningLines {
 			if slotRarityRank(lineRarityFromName(line.Symbol)) > slotRarityRank(rarity) {
 				rarity = lineRarityFromName(line.Symbol)
+			}
+		}
+		for _, reward := range spin.AllPayRewards {
+			if slotRarityRank(lineRarityFromName(reward.Symbol)) > slotRarityRank(rarity) {
+				rarity = lineRarityFromName(reward.Symbol)
 			}
 		}
 		if len(spin.BonusRewards) > 0 && slotRarityRank("rare") > slotRarityRank(rarity) {
@@ -676,12 +799,20 @@ func slotResultName(main slotSpinEvaluation, freeSpins []SlotFreeSpinResult) str
 	if len(main.bonusRewards) > 0 {
 		parts = append(parts, "宝匣奖励 ×"+strconv.Itoa(main.bonusRewards[0].Multiplier))
 	}
+	if len(main.allPayRewards) > 0 {
+		reward := main.allPayRewards[0]
+		parts = append(parts, reward.SymbolName+"满天星"+strconv.Itoa(reward.Count)+" ×"+strconv.Itoa(reward.Multiplier))
+	}
 	if main.bestLine != nil {
 		parts = append(parts, main.bestLine.SymbolName+"三连 ×"+strconv.Itoa(main.bestLine.Multiplier))
 	}
 	for _, spin := range freeSpins {
 		if len(spin.BonusRewards) > 0 {
 			parts = append(parts, "宝匣奖励 ×"+strconv.Itoa(spin.BonusRewards[0].Multiplier))
+		}
+		if len(spin.AllPayRewards) > 0 {
+			reward := spin.AllPayRewards[0]
+			parts = append(parts, reward.SymbolName+"满天星"+strconv.Itoa(reward.Count)+" ×"+strconv.Itoa(reward.Multiplier))
 		}
 		if len(spin.WinningLines) > 0 {
 			line := spin.WinningLines[0]
