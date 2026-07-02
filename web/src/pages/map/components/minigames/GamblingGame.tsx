@@ -20,10 +20,10 @@ interface BetOption {
 }
 
 const BET_OPTIONS: BetOption[] = [
-  { id: 'big', label: '大', description: '总点数 11-18', odds: 2, chance: 0.486, color: 'text-red-500', bg: 'bg-red-500/10' },
-  { id: 'small', label: '小', description: '总点数 3-10', odds: 2, chance: 0.486, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-  { id: 'odd', label: '单', description: '总点数为奇数', odds: 2, chance: 0.50, color: 'text-green-500', bg: 'bg-green-500/10' },
-  { id: 'even', label: '双', description: '总点数为偶数', odds: 2, chance: 0.50, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+  { id: 'big', label: '大', description: '总点数 11-18，豹子通杀', odds: 2, chance: 0.486, color: 'text-red-500', bg: 'bg-red-500/10' },
+  { id: 'small', label: '小', description: '总点数 3-10，豹子通杀', odds: 2, chance: 0.486, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  { id: 'odd', label: '单', description: '总点数为奇数，豹子通杀', odds: 2, chance: 0.486, color: 'text-green-500', bg: 'bg-green-500/10' },
+  { id: 'even', label: '双', description: '总点数为偶数，豹子通杀', odds: 2, chance: 0.486, color: 'text-purple-500', bg: 'bg-purple-500/10' },
   { id: 'triple', label: '豹子', description: '三颗骰子相同', odds: 30, chance: 0.028, color: 'text-amber-500', bg: 'bg-amber-500/10' },
   { id: 'exact', label: '猜点数', description: '猜中总点数', odds: 0, chance: 0, color: 'text-pink-500', bg: 'bg-pink-500/10' },
 ]

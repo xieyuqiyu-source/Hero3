@@ -48,6 +48,8 @@ type ItemEffect struct {
 	Type            string            `json:"type"`
 	ID              string            `json:"id,omitempty"`
 	Amount          int               `json:"amount,omitempty"`
+	Category        string            `json:"category,omitempty"`
+	Pool            string            `json:"pool,omitempty"`
 	GeneralID       string            `json:"generalId,omitempty"`
 	Resources       map[string]int    `json:"resources,omitempty"`
 	UnitByFaction   map[string]string `json:"unitByFaction,omitempty"`
@@ -184,6 +186,16 @@ func ValidateItemsConfig(cfg ItemsConfig) error {
 						return errors.New("按阵营发兵效果必须覆盖魏蜀吴: " + id)
 					}
 				}
+			case "random_unit_by_faction_category", "all_units_by_faction_category":
+				if effect.Amount <= 0 {
+					return errors.New("分类发兵效果数量必须大于 0: " + id)
+				}
+				if !validRecruitUnitCategory(effect.Category) {
+					return errors.New("分类发兵效果兵种分类不合法: " + id)
+				}
+				if !validRecruitUnitPool(effect.Pool) {
+					return errors.New("分类发兵效果兵种池不合法: " + id)
+				}
 			case "pvp_protection":
 				if effect.DurationSeconds <= 0 {
 					return errors.New("免战效果必须配置正数持续时间: " + id)
@@ -274,6 +286,8 @@ func inferItemCategory(id string, item ItemDefinition) string {
 		case "resources":
 			return "resource_pack"
 		case "unit_by_faction":
+			return "recruit_ticket"
+		case "random_unit_by_faction_category", "all_units_by_faction_category":
 			return "recruit_ticket"
 		case "pvp_protection":
 			return "pvp_item"

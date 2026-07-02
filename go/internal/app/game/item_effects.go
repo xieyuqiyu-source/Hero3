@@ -1,6 +1,10 @@
 package game
 
 import (
+	"crypto/rand"
+	"encoding/json"
+	"math/big"
+	"sort"
 	"strings"
 	"time"
 )
@@ -56,6 +60,22 @@ func itemEffectsToPipelineEffects(state *GameState, item ItemDefinition, count i
 				return nil, ErrUnitNotFound
 			}
 			rewards = append(rewards, Reward{Type: RewardTypeUnit, ID: unitID, Amount: effect.Amount * count})
+		case "random_unit_by_faction_category":
+			for i := 0; i < count; i++ {
+				unitID, err := randomFactionUnitIDByEffect(state.Player.Faction, effect)
+				if err != nil {
+					return nil, err
+				}
+				rewards = append(rewards, Reward{Type: RewardTypeUnit, ID: unitID, Amount: effect.Amount})
+			}
+		case "all_units_by_faction_category":
+			unitIDs := factionUnitIDsByEffect(state.Player.Faction, effect)
+			if len(unitIDs) == 0 {
+				return nil, ErrUnitNotFound
+			}
+			for _, unitID := range unitIDs {
+				rewards = append(rewards, Reward{Type: RewardTypeUnit, ID: unitID, Amount: effect.Amount * count})
+			}
 		case "currency":
 			rewards = append(rewards, Reward{Type: strings.TrimSpace(effect.CurrencyType), ID: strings.TrimSpace(effect.CurrencyType), Amount: effect.Amount * count})
 		case "buff":
@@ -84,4 +104,116 @@ func itemEffectsToPipelineEffects(state *GameState, item ItemDefinition, count i
 		}
 	}
 	return rewardsToEffects("item", rewards), nil
+}
+
+// validRecruitUnitCategory 判断招募券允许发放的兵种分类。
+func validRecruitUnitCategory(category string) bool {
+	switch strings.TrimSpace(category) {
+	case "infantry", "cavalry", "siege", "special":
+		return true
+	default:
+		return false
+	}
+}
+
+// validRecruitUnitPool 判断招募券允许使用的兵种池范围。
+func validRecruitUnitPool(pool string) bool {
+	switch strings.TrimSpace(pool) {
+	case "", "base", "all":
+		return true
+	default:
+		return false
+	}
+}
+
+// baseFactionUnitIDsByCategory 返回指定阵营、指定分类下最低解锁等级的作战兵种。
+func baseFactionUnitIDsByCategory(faction string, category string) []string {
+	return factionUnitIDsByCategory(faction, category, "base")
+}
+
+// factionUnitIDsByEffect 根据道具效果返回候选兵种池。
+func factionUnitIDsByEffect(faction string, effect ItemEffect) []string {
+	return factionUnitIDsByCategory(faction, effect.Category, effect.Pool)
+}
+
+// factionUnitIDsByCategory 返回指定阵营、分类和池范围下的作战兵种。
+func factionUnitIDsByCategory(faction string, category string, pool string) []string {
+	category = strings.TrimSpace(category)
+	if !validRecruitUnitCategory(category) {
+		return nil
+	}
+	units := GetFactionUnits(strings.TrimSpace(faction))
+	bestLevel := 0
+	result := []string{}
+	for unitID, config := range units {
+		if strings.TrimSpace(config.Category) != category || !isRecruitCombatUnit(config) {
+			continue
+		}
+		if strings.TrimSpace(pool) == "all" {
+			result = append(result, unitID)
+			continue
+		}
+		level := unitUnlockLevel(config)
+		if len(result) == 0 || level < bestLevel {
+			bestLevel = level
+			result = []string{unitID}
+			continue
+		}
+		if level == bestLevel {
+			result = append(result, unitID)
+		}
+	}
+	sort.Strings(result)
+	return result
+}
+
+// isRecruitCombatUnit 过滤侦察、运输等功能兵，避免招募券发放非作战单位。
+func isRecruitCombatUnit(config UnitConfig) bool {
+	switch strings.TrimSpace(config.Role) {
+	case "scout", "transport":
+		return false
+	default:
+		return true
+	}
+}
+
+// unitUnlockLevel 从兵种配置中读取解锁等级，用于识别基础兵种。
+func unitUnlockLevel(config UnitConfig) int {
+	if config.Unlock == nil {
+		return 9999
+	}
+	value, ok := config.Unlock["level"]
+	if !ok {
+		return 9999
+	}
+	switch v := value.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	case json.Number:
+		level, err := v.Int64()
+		if err == nil {
+			return int(level)
+		}
+	}
+	return 9999
+}
+
+// randomFactionUnitIDByEffect 从道具效果指定的兵种池里随机选出一个兵种。
+func randomFactionUnitIDByEffect(faction string, effect ItemEffect) (string, error) {
+	unitIDs := factionUnitIDsByEffect(faction, effect)
+	if len(unitIDs) == 0 {
+		return "", ErrUnitNotFound
+	}
+	if len(unitIDs) == 1 {
+		return unitIDs[0], nil
+	}
+	index, err := rand.Int(rand.Reader, big.NewInt(int64(len(unitIDs))))
+	if err != nil {
+		return "", err
+	}
+	return unitIDs[int(index.Int64())], nil
 }

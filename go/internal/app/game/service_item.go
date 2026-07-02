@@ -248,6 +248,8 @@ func itemUseRewardAssetScope(item ItemDefinition) RewardAssetScope {
 					scope.UnitTypes = append(scope.UnitTypes, unitID)
 				}
 			}
+		case "random_unit_by_faction_category", "all_units_by_faction_category":
+			scope.AllArmy = true
 		case "buff":
 			scope.Buffs = true
 		case "random_reward":

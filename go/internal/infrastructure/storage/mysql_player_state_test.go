@@ -52,6 +52,8 @@ func TestCompactPlayerStateSnapshotDropsAuthoritativeAssets(t *testing.T) {
 		ProductionBoost:    2,
 		ProductionBoostEnd: "2026-06-27T00:00:00Z",
 		ServerTime:         "2026-06-26T00:00:00Z",
+		DeleteRequestedAt:  "2026-07-02T03:11:44Z",
+		DeleteScheduledAt:  "2026-07-02T04:11:44Z",
 	}
 
 	snapshotJSON, err := marshalPlayerStateSnapshot(state)
@@ -71,6 +73,12 @@ func TestCompactPlayerStateSnapshotDropsAuthoritativeAssets(t *testing.T) {
 	}
 	if snapshot["resourceSettledAt"] != state.ResourceSettledAt {
 		t.Fatalf("expected resourceSettledAt to be preserved")
+	}
+	if snapshot["deleteRequestedAt"] != state.DeleteRequestedAt {
+		t.Fatalf("expected deleteRequestedAt to be preserved")
+	}
+	if snapshot["deleteScheduledAt"] != state.DeleteScheduledAt {
+		t.Fatalf("expected deleteScheduledAt to be preserved")
 	}
 }
 

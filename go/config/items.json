@@ -110,7 +110,7 @@
   "recruit_ticket_small": {
     "id": "recruit_ticket_small",
     "name": "小征募券",
-    "description": "使用后获得本阵营基础步兵 50 名。",
+    "description": "使用后随机获得本阵营基础步兵 5000 名。",
     "category": "recruit_ticket",
     "quality": "common",
     "usable": true,
@@ -121,13 +121,160 @@
     "confirmOnUse": "auto",
     "effects": [
       {
-        "type": "unit_by_faction",
-        "amount": 50,
-        "unitByFaction": {
-          "shu": "greedyWolf",
-          "wei": "qingZhouArmy",
-          "wu": "shadowGuard"
-        }
+        "type": "random_unit_by_faction_category",
+        "category": "infantry",
+        "amount": 5000
+      }
+    ],
+    "metadata": {
+      "version": 1
+    }
+  },
+  "recruit_ticket_medium": {
+    "id": "recruit_ticket_medium",
+    "name": "中征募券",
+    "description": "使用后随机获得本阵营基础步兵 20000 名，并随机获得基础骑兵 5000 名。",
+    "category": "recruit_ticket",
+    "quality": "rare",
+    "usable": true,
+    "stackable": true,
+    "maxStack": 999,
+    "bindType": "bound",
+    "useTarget": "player",
+    "confirmOnUse": "auto",
+    "effects": [
+      {
+        "type": "random_unit_by_faction_category",
+        "category": "infantry",
+        "amount": 20000
+      },
+      {
+        "type": "random_unit_by_faction_category",
+        "category": "cavalry",
+        "amount": 5000
+      }
+    ],
+    "metadata": {
+      "version": 1
+    }
+  },
+  "recruit_ticket_large": {
+    "id": "recruit_ticket_large",
+    "name": "大征募券",
+    "description": "使用后随机获得本阵营基础步兵 50000 名、基础骑兵 15000 名和基础攻城兵 3000 名。",
+    "category": "recruit_ticket",
+    "quality": "epic",
+    "usable": true,
+    "stackable": true,
+    "maxStack": 999,
+    "bindType": "bound",
+    "useTarget": "player",
+    "confirmOnUse": "auto",
+    "effects": [
+      {
+        "type": "random_unit_by_faction_category",
+        "category": "infantry",
+        "amount": 50000
+      },
+      {
+        "type": "random_unit_by_faction_category",
+        "category": "cavalry",
+        "amount": 15000
+      },
+      {
+        "type": "random_unit_by_faction_category",
+        "category": "siege",
+        "amount": 3000
+      }
+    ],
+    "metadata": {
+      "version": 1
+    }
+  },
+  "recruit_ticket_extra_large": {
+    "id": "recruit_ticket_extra_large",
+    "name": "特大征募券",
+    "description": "使用后随机获得本阵营基础步兵 120000 名、基础骑兵 40000 名和基础攻城兵 10000 名。",
+    "category": "recruit_ticket",
+    "quality": "legendary",
+    "usable": true,
+    "stackable": true,
+    "maxStack": 999,
+    "bindType": "bound",
+    "useTarget": "player",
+    "confirmOnUse": "auto",
+    "effects": [
+      {
+        "type": "random_unit_by_faction_category",
+        "category": "infantry",
+        "amount": 120000
+      },
+      {
+        "type": "random_unit_by_faction_category",
+        "category": "cavalry",
+        "amount": 40000
+      },
+      {
+        "type": "random_unit_by_faction_category",
+        "category": "siege",
+        "amount": 10000
+      }
+    ],
+    "metadata": {
+      "version": 1
+    }
+  },
+  "conscription_order": {
+    "id": "conscription_order",
+    "name": "征召令",
+    "description": "最高级征募道具，使用后获得本阵营全部基础步兵各 50000 名、全部基础骑兵各 15000 名和全部基础攻城兵各 4000 名。",
+    "category": "recruit_ticket",
+    "quality": "mythic",
+    "usable": true,
+    "stackable": true,
+    "maxStack": 999,
+    "bindType": "bound",
+    "useTarget": "player",
+    "confirmOnUse": "auto",
+    "effects": [
+      {
+        "type": "all_units_by_faction_category",
+        "category": "infantry",
+        "amount": 50000
+      },
+      {
+        "type": "all_units_by_faction_category",
+        "category": "cavalry",
+        "amount": 15000
+      },
+      {
+        "type": "all_units_by_faction_category",
+        "category": "siege",
+        "amount": 4000
+      }
+    ],
+    "metadata": {
+      "version": 1
+    }
+  },
+  "special_conscription_order": {
+    "id": "special_conscription_order",
+    "name": "特殊征召令",
+    "description": "与征召令同级的特殊征募道具，使用后在本阵营两个特殊作战兵中等概率随机 1 个，获得 10000 名，不包含商人。",
+    "category": "recruit_ticket",
+    "quality": "mythic",
+    "usable": true,
+    "stackable": true,
+    "maxStack": 999,
+    "bindType": "bound",
+    "useTarget": "player",
+    "confirmOnUse": "auto",
+    "effects": [
+      {
+        "type": "random_unit_by_faction_category",
+        "category": "special",
+        "pool": "all",
+        "amount": 10000
       }
     ],
     "metadata": {

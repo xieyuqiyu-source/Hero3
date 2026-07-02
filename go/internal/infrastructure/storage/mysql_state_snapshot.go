@@ -18,6 +18,8 @@ type playerStateSnapshot struct {
 	MapTargets         []game.MapTarget `json:"mapTargets,omitempty"`
 	UnreadMessageCount int              `json:"unreadMessageCount,omitempty"`
 	UnreadMailCount    int              `json:"unreadMailCount,omitempty"`
+	DeleteRequestedAt  string           `json:"deleteRequestedAt,omitempty"`
+	DeleteScheduledAt  string           `json:"deleteScheduledAt,omitempty"`
 }
 
 // marshalPlayerStateSnapshot 生成轻量兼容快照，避免把已有权威表承载的大字段反复写入 players.state_json。
@@ -37,5 +39,7 @@ func compactPlayerStateSnapshot(state game.GameState) playerStateSnapshot {
 		MapTargets:         state.MapTargets,
 		UnreadMessageCount: state.UnreadMessageCount,
 		UnreadMailCount:    state.UnreadMailCount,
+		DeleteRequestedAt:  state.DeleteRequestedAt,
+		DeleteScheduledAt:  state.DeleteScheduledAt,
 	}
 }
