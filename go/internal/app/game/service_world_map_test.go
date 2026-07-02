@@ -361,7 +361,7 @@ func TestWorldMapTargetDisablesReinforceWhenTargetSourceSlotsFull(t *testing.T) 
 	}
 }
 
-func TestWorldMapViewLazyCreatesMissingPositions(t *testing.T) {
+func TestWorldMapViewOnlyLazyCreatesViewerPosition(t *testing.T) {
 	svc, repo, attacker, defender := newPvpTestService(t)
 	if _, err := repo.GetWorldPosition(attacker.Player.ID); !errors.Is(err, ErrPlayerNotFound) {
 		t.Fatalf("expected attacker to start without world position, got %v", err)
@@ -377,12 +377,11 @@ func TestWorldMapViewLazyCreatesMissingPositions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected lazy self world position: %v", err)
 	}
-	targetPosition, err := repo.GetWorldPosition(defender.Player.ID)
-	if err != nil {
-		t.Fatalf("expected lazy target world position: %v", err)
+	if selfPosition.AssignedBy != "lazy_create" {
+		t.Fatalf("expected viewer to receive lazy_create assignment, got %+v", selfPosition)
 	}
-	if selfPosition.AssignedBy != "lazy_create" || targetPosition.AssignedBy != "lazy_create" {
-		t.Fatalf("expected lazy_create assignments, self=%+v target=%+v", selfPosition, targetPosition)
+	if _, err := repo.GetWorldPosition(defender.Player.ID); !errors.Is(err, ErrPlayerNotFound) {
+		t.Fatalf("map read must not scan and mutate unrelated players, got %v", err)
 	}
 	if view.Self.X != selfPosition.X || view.Self.Y != selfPosition.Y {
 		t.Fatalf("expected response self to use lazy position, view=%+v saved=%+v", view.Self, selfPosition)
@@ -393,8 +392,8 @@ func TestWorldMapViewLazyCreatesMissingPositions(t *testing.T) {
 			foundTarget = true
 		}
 	}
-	if !foundTarget {
-		t.Fatalf("expected lazy-created defender target in full map view, got %+v", view.Targets)
+	if foundTarget {
+		t.Fatalf("player without migrated world position must stay out of read-only map result, got %+v", view.Targets)
 	}
 }
 

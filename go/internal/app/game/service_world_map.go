@@ -42,15 +42,12 @@ func (s *Service) GetWorldMapView(playerID string, centerX int, centerY int, rad
 	if centerY < 0 || centerY >= defaultWorldHeight {
 		centerY = self.Y
 	}
-	if err := s.ensureWorldPositionsForAllPlayers(); err != nil {
-		return WorldMapViewResponse{}, err
-	}
 	minX, maxX, minY, maxY := worldMapViewBounds(centerX, centerY, radius)
-	positions, err := s.repo.ListWorldPositions(defaultWorldID, minX, maxX, minY, maxY)
+	cities, err := s.repo.ListWorldMapPlayerCities(defaultWorldID, minX, maxX, minY, maxY)
 	if err != nil {
 		return WorldMapViewResponse{}, err
 	}
-	targets, err := s.buildWorldMapTargets(playerID, self, positions, now)
+	targets, err := s.buildWorldMapTargets(playerID, self, cities, now)
 	if err != nil {
 		return WorldMapViewResponse{}, err
 	}
@@ -83,7 +80,11 @@ func (s *Service) GetWorldMapPlayerCityTarget(viewerID string, targetPlayerID st
 	if err != nil {
 		return WorldMapTarget{}, err
 	}
-	targets, err := s.buildWorldMapTargets(viewerID, self, []WorldPosition{target}, now)
+	cities, err := s.repo.ListWorldMapPlayerCities(target.WorldID, target.X, target.X, target.Y, target.Y)
+	if err != nil {
+		return WorldMapTarget{}, err
+	}
+	targets, err := s.buildWorldMapTargets(viewerID, self, cities, now)
 	if err != nil {
 		return WorldMapTarget{}, err
 	}
@@ -198,22 +199,6 @@ func (s *Service) MigrateWorldPositions() (WorldMapMigrationResult, error) {
 	return result, nil
 }
 
-// ensureWorldPositionsForAllPlayers 为历史玩家懒补世界坐标。
-func (s *Service) ensureWorldPositionsForAllPlayers() error {
-	accounts, err := s.repo.ListAccounts()
-	if err != nil {
-		return err
-	}
-	for _, account := range accounts {
-		for _, player := range account.Players {
-			if _, err := s.ensureWorldPosition(player.ID, "lazy_create", nil); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 // ensureWorldPosition 确保玩家有权威坐标。
 func (s *Service) ensureWorldPosition(playerID string, assignedBy string, preferred *WorldCoordinate) (WorldPosition, error) {
 	position, err := s.repo.EnsureWorldPosition(playerID, assignedBy, preferred)
@@ -223,36 +208,21 @@ func (s *Service) ensureWorldPosition(playerID string, assignedBy string, prefer
 	return position, nil
 }
 
-// buildWorldMapTargets 把权威坐标转换为地图玩家城池目标。
-func (s *Service) buildWorldMapTargets(viewerID string, self WorldPosition, positions []WorldPosition, now time.Time) ([]WorldMapTarget, error) {
-	accounts, err := s.repo.ListAccounts()
-	if err != nil {
-		return nil, err
-	}
+// buildWorldMapTargets 把当前范围内的轻量玩家城池投影转换为地图目标。
+func (s *Service) buildWorldMapTargets(viewerID string, self WorldPosition, cities []WorldMapPlayerCity, now time.Time) ([]WorldMapTarget, error) {
 	requestAccountID, _ := s.repo.GetAccountIDByPlayerID(viewerID)
 	requestPvpState, err := s.repo.GetPvpPlayerState(viewerID, now)
 	if err != nil {
 		return nil, err
 	}
 	attackLimitReached := requestPvpState.DailyAttackLimit > 0 && requestPvpState.DailyAttackCount >= requestPvpState.DailyAttackLimit
-	players := map[string]PlayerSummary{}
-	accountByPlayer := map[string]string{}
-	for _, account := range accounts {
-		for _, player := range account.Players {
-			players[player.ID] = player
-			accountByPlayer[player.ID] = account.ID
-		}
-	}
-	targets := make([]WorldMapTarget, 0, len(positions))
-	for _, position := range positions {
-		player, ok := players[position.PlayerID]
-		if !ok {
-			continue
-		}
+	targets := make([]WorldMapTarget, 0, len(cities))
+	for _, city := range cities {
+		position := city.Position
 		relation := WorldRelationOther
 		status := WorldTargetStatusNormal
 		canScout := true
-		canAttack := accountByPlayer[position.PlayerID] != requestAccountID
+		canAttack := city.AccountID != requestAccountID
 		canPlunder := canAttack
 		canReinforce := true
 		scoutReason := ""
@@ -270,7 +240,7 @@ func (s *Service) buildWorldMapTargets(viewerID string, self WorldPosition, posi
 			attackReason = "自己的城池"
 			plunderReason = "自己的城池"
 			reinforceReason = "自己的城池"
-		} else if accountByPlayer[position.PlayerID] == requestAccountID {
+		} else if city.AccountID == requestAccountID {
 			canScout = false
 			canAttack = false
 			canPlunder = false
@@ -303,7 +273,7 @@ func (s *Service) buildWorldMapTargets(viewerID string, self WorldPosition, posi
 		} else if canAttack {
 			status = WorldTargetStatusAttackable
 		}
-		if attackLimitReached && position.PlayerID != viewerID && accountByPlayer[position.PlayerID] != requestAccountID {
+		if attackLimitReached && position.PlayerID != viewerID && city.AccountID != requestAccountID {
 			canAttack = false
 			canPlunder = false
 			attackReason = "今日攻击次数已用完"
@@ -315,10 +285,10 @@ func (s *Service) buildWorldMapTargets(viewerID string, self WorldPosition, posi
 			TargetType:      WorldMapTargetPlayerCity,
 			TargetID:        position.PlayerID,
 			PlayerID:        position.PlayerID,
-			Name:            player.Nickname,
-			Faction:         player.Faction,
+			Name:            city.Name,
+			Faction:         city.Faction,
 			Relation:        relation,
-			Level:           player.BuildingLevel,
+			Level:           city.BuildingLevel,
 			Status:          status,
 			X:               position.X,
 			Y:               position.Y,

@@ -85,6 +85,63 @@ func (r *MySQLRepository) ListWorldPositions(worldID string, minX int, maxX int,
 	return positions, rows.Err()
 }
 
+// ListWorldMapPlayerCities 通过范围索引直接读取地图需要的玩家城池轻量字段。
+func (r *MySQLRepository) ListWorldMapPlayerCities(worldID string, minX int, maxX int, minY int, maxY int) ([]game.WorldMapPlayerCity, error) {
+	if worldID == "" {
+		worldID = "world_1"
+	}
+	rows, err := r.db.Query(
+		`SELECT
+			w.player_id,
+			w.world_id,
+			w.x,
+			w.y,
+			w.assigned_by,
+			w.created_at,
+			w.updated_at,
+			p.account_id,
+			p.nickname,
+			p.faction,
+			COALESCE(SUM(b.level), 0)
+		 FROM player_world_positions w
+		 INNER JOIN players p ON p.id = w.player_id
+		 LEFT JOIN player_buildings b ON b.player_id = p.id
+		 WHERE w.world_id = ? AND w.x BETWEEN ? AND ? AND w.y BETWEEN ? AND ?
+		 GROUP BY w.player_id, w.world_id, w.x, w.y, w.assigned_by, w.created_at, w.updated_at, p.account_id, p.nickname, p.faction
+		 ORDER BY w.y ASC, w.x ASC`,
+		worldID, minX, maxX, minY, maxY,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []game.WorldMapPlayerCity{}
+	for rows.Next() {
+		var item game.WorldMapPlayerCity
+		var createdAt time.Time
+		var updatedAt time.Time
+		if err := rows.Scan(
+			&item.Position.PlayerID,
+			&item.Position.WorldID,
+			&item.Position.X,
+			&item.Position.Y,
+			&item.Position.AssignedBy,
+			&createdAt,
+			&updatedAt,
+			&item.AccountID,
+			&item.Name,
+			&item.Faction,
+			&item.BuildingLevel,
+		); err != nil {
+			return nil, err
+		}
+		item.Position.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+		item.Position.UpdatedAt = updatedAt.UTC().Format(time.RFC3339)
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 // CountWorldPositions 统计指定世界已占用坐标数量。
 func (r *MySQLRepository) CountWorldPositions(worldID string) (int, error) {
 	if worldID == "" {

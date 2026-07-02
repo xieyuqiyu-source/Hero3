@@ -1,8 +1,12 @@
 // 本文件实现世界地图的精准坐标网格，每个草地格等于世界距离 1。
-import { useMemo, useRef, useState, type FC, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
-import { Castle, House, LocateFixed, Minus, Plus } from 'lucide-react'
+import { useMemo, useRef, type FC, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react'
+import { LocateFixed, Minus, Plus } from 'lucide-react'
+import tileCityShu from '@/assets/map/tiles/tile-city-shu.png'
+import tileCityWei from '@/assets/map/tiles/tile-city-wei.png'
+import tileCityWu from '@/assets/map/tiles/tile-city-wu.png'
+import tileGrass from '@/assets/map/tiles/tile-grass.png'
 import type { PvpTargetSummary, PvpTargetsResponse, PvpWorldPosition } from '@/types/game'
-import { buildVisibleCells, buildWorldMapAxisTicks, buildWorldMapDistanceGuides, buildWorldMapTargetMetrics, buildWorldMapViewportBounds, directionFrom, factionCityClass, formatDuration, isPositionInView, isSameGridPosition, shouldShowCellCoordinate, worldMapDragGridDelta, worldMapGrassCellClass, worldMapOverviewCoordinateFromPoint, worldMapOverviewPointStyle, worldMapOverviewTargetClass, worldMapOverviewViewportStyle, worldMapRelationBadge, worldMapRelationBadgeClass, worldMapRelationRingClass, worldMapStatusBadge, worldMapStatusBadgeClass, WORLD_MAP_MAX_VIEW_RADIUS, WORLD_MAP_MIN_VIEW_RADIUS, WORLD_MAP_VIEW_PRESETS, type GridPosition, type WorldMapAxisTick } from '../worldMapGridLogic'
+import { buildVisibleCells, buildWorldMapAxisTicks, buildWorldMapDistanceGuides, buildWorldMapTargetMetrics, buildWorldMapViewportBounds, directionFrom, formatDuration, isPositionInView, isSameGridPosition, shouldShowCellCoordinate, worldMapDragGridDelta, worldMapOverviewCoordinateFromPoint, worldMapOverviewPointStyle, worldMapOverviewTargetClass, worldMapOverviewViewportStyle, worldMapRelationBadge, worldMapRelationBadgeClass, worldMapRelationRingClass, worldMapStatusBadge, worldMapStatusBadgeClass, WORLD_MAP_MAX_VIEW_RADIUS, WORLD_MAP_MIN_VIEW_RADIUS, WORLD_MAP_VIEW_PRESETS, type GridPosition, type WorldMapAxisTick } from '../worldMapGridLogic'
 
 interface WorldMapGridProps {
   view: PvpTargetsResponse
@@ -24,13 +28,25 @@ interface WorldMapGridProps {
   onClearSelection: () => void
 }
 
+const CITY_TILE_BY_FACTION = {
+  wei: tileCityWei,
+  shu: tileCityShu,
+  wu: tileCityWu,
+} as const
+
+// cityTileSrc 按国家返回城池图片，未知国家使用魏城池作为安全兜底。
+function cityTileSrc(faction?: string) {
+  if (faction === 'shu') return CITY_TILE_BY_FACTION.shu
+  if (faction === 'wu') return CITY_TILE_BY_FACTION.wu
+  return CITY_TILE_BY_FACTION.wei
+}
+
 // WorldMapGrid 渲染玩家可拖动的一格一坐标世界地图。
 const WorldMapGrid: FC<WorldMapGridProps> = ({ view, targets, overviewTargets, hiddenInViewportCount, focusedTargetId, focusedTargetPosition, selectedCell, marchBadges, showSelf, onFocusTarget, onFocusSelf, onPan, onZoom, onSetRadius, onJump, onSelectCell, onClearSelection }) => {
   const radius = Math.max(1, view.radius)
   const step = 1
   const dragRef = useRef<{ startX: number; startY: number; gridX: number; gridY: number; moved: boolean } | null>(null)
   const suppressClickRef = useRef(false)
-  const [hoveredCell, setHoveredCell] = useState<GridPosition | null>(null)
   const viewportBounds = useMemo(() => buildWorldMapViewportBounds({ x: view.centerX, y: view.centerY }, radius, view.worldSize), [radius, view.centerX, view.centerY, view.worldSize])
   const { gridSize, minX, minY, maxX: boundedMaxX, maxY: boundedMaxY, centerOffsetX, centerOffsetY } = viewportBounds
   const boundedMinX = minX
@@ -55,7 +71,7 @@ const WorldMapGrid: FC<WorldMapGridProps> = ({ view, targets, overviewTargets, h
   const viewportTargetCount = targets.length + hiddenInViewportCount
   const canZoomIn = radius > WORLD_MAP_MIN_VIEW_RADIUS
   const canZoomOut = radius < WORLD_MAP_MAX_VIEW_RADIUS
-  const inspectedCell = hoveredCell ?? selectedCell ?? focusedTargetPosition
+  const inspectedCell = selectedCell ?? focusedTargetPosition
   const centerCell = { x: view.centerX, y: view.centerY }
   const centerDirection = directionFrom(view.self, centerCell)
   const centerDistance = Math.abs(centerCell.x - view.self.x) + Math.abs(centerCell.y - view.self.y)
@@ -234,10 +250,9 @@ const WorldMapGrid: FC<WorldMapGridProps> = ({ view, targets, overviewTargets, h
           onPointerCancel={handleMapPointerUp}
           onKeyDown={handleMapKeyDown}
         >
-          <MapCompassRose />
           <MapAxisLabels view={view} gridSize={gridSize} minX={minX} minY={minY} maxX={boundedMaxX} maxY={boundedMaxY} />
           <div
-            className="relative h-full w-full border border-emerald-950/30 bg-transparent shadow-inner"
+            className="relative h-full w-full border border-emerald-950/20 bg-[#5f8f3e] shadow-inner"
             style={{
               display: 'grid',
               gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
@@ -249,25 +264,13 @@ const WorldMapGrid: FC<WorldMapGridProps> = ({ view, targets, overviewTargets, h
                 key={`${cell.x}:${cell.y}`}
                 type="button"
                 onClick={() => handleGrassClick(cell.x, cell.y)}
-                onPointerEnter={() => setHoveredCell(cell)}
-                onPointerLeave={() => setHoveredCell(null)}
                 aria-label={`草地坐标格 (${cell.x}, ${cell.y})，距离按 1 格计算`}
-                className={`relative h-full w-full border border-white/20 p-0 hover:brightness-110 ${worldMapGrassCellClass(cell)} ${isInspectedAxisCell(cell) ? 'brightness-110 saturate-125' : ''} ${isSameGridPosition(centerCell, cell) ? 'ring-2 ring-emerald-950/45 ring-inset' : ''} ${isSameGridPosition(selectedCell, cell) ? 'z-10 outline outline-2 outline-amber-300 outline-offset-[-2px]' : ''}`}
-                style={{ gridColumn: cell.x - minX + 1, gridRow: cell.y - minY + 1 }}
+                className={`relative h-full w-full border border-emerald-950/10 bg-[#6f9b52] bg-cover bg-center bg-no-repeat p-0 hover:brightness-110 ${isInspectedAxisCell(cell) ? 'brightness-110 saturate-125' : ''} ${isSameGridPosition(centerCell, cell) ? 'ring-2 ring-emerald-950/45 ring-inset' : ''} ${isSameGridPosition(selectedCell, cell) ? 'z-10 outline outline-2 outline-amber-300 outline-offset-[-2px]' : ''}`}
+                style={{ gridColumn: cell.x - minX + 1, gridRow: cell.y - minY + 1, backgroundImage: `url(${tileGrass})` }}
                 title={`草地坐标格 (${cell.x}, ${cell.y})`}
               >
                 {isSameGridPosition(centerCell, cell) && (
                   <span className="pointer-events-none absolute left-1/2 top-1/2 z-20 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70 bg-emerald-950/70 shadow-sm" title="中心格" />
-                )}
-                {showCellCoordinate && (
-                  <span className="pointer-events-none absolute left-0.5 top-0.5 text-[7px] font-bold leading-none text-emerald-950/55">
-                    {cell.x},{cell.y}
-                  </span>
-                )}
-                {isSameGridPosition(selectedCell, cell) && (
-                  <span className="pointer-events-none absolute inset-x-0 bottom-0 z-30 truncate bg-amber-400/90 px-0.5 py-px text-[7px] font-black leading-none text-amber-950 shadow-sm">
-                    {cell.x},{cell.y}
-                  </span>
                 )}
                 {inspectedCell && cell.x === inspectedCell.x && (
                   <span className="pointer-events-none absolute inset-y-0 left-1/2 z-10 w-px -translate-x-1/2 bg-amber-300/50" aria-hidden="true" />
@@ -287,15 +290,14 @@ const WorldMapGrid: FC<WorldMapGridProps> = ({ view, targets, overviewTargets, h
                 title={`我的城池 (${view.self.x}, ${view.self.y})`}
                 aria-label={`我的城池，坐标 (${view.self.x}, ${view.self.y})`}
                 onPointerDown={(event) => event.stopPropagation()}
-                onPointerEnter={() => setHoveredCell(view.self)}
-                onPointerLeave={() => setHoveredCell(null)}
                 onClick={(event) => {
                   event.stopPropagation()
                   onFocusSelf()
                 }}
               >
-                <span className={`flex aspect-square h-full w-full min-h-3 items-center justify-center rounded-[1px] border border-sky-800 bg-sky-500 text-[9px] font-black text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25)] ${worldMapRelationRingClass('self')}`}>
-                  {showCityDetail ? <House size={12} strokeWidth={2.5} aria-hidden="true" /> : <span aria-hidden="true">我</span>}
+                <span className={`relative flex aspect-square h-full w-full min-h-3 items-center justify-center overflow-hidden rounded-[1px] border border-sky-800 text-[9px] font-black text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25)] ${worldMapRelationRingClass('self')}`}>
+                  <img className="pointer-events-none absolute inset-0 h-full w-full object-cover" src={cityTileSrc()} alt="" aria-hidden="true" />
+                  {!showCityDetail && <span className="relative z-20 rounded bg-sky-950/75 px-0.5 leading-none" aria-hidden="true">我</span>}
                 </span>
               </button>
             )}
@@ -310,8 +312,6 @@ const WorldMapGrid: FC<WorldMapGridProps> = ({ view, targets, overviewTargets, h
                   key={target.playerId}
                   type="button"
                   onPointerDown={(event) => event.stopPropagation()}
-                  onPointerEnter={() => setHoveredCell(target.position)}
-                  onPointerLeave={() => setHoveredCell(null)}
                   onClick={(event) => {
                     event.stopPropagation()
                     onFocusTarget(target.playerId)
@@ -321,19 +321,20 @@ const WorldMapGrid: FC<WorldMapGridProps> = ({ view, targets, overviewTargets, h
                   title={`${target.nickname} · ${metrics.direction} · (${target.position.x}, ${target.position.y}) 距离 ${metrics.distance} · 行军约 ${formatDuration(metrics.seconds)}`}
                   aria-label={`选中${target.nickname}，${metrics.direction}，坐标 (${target.position.x}, ${target.position.y})，距离 ${metrics.distance} 格，行军约 ${formatDuration(metrics.seconds)}`}
                 >
-                  <span className={`relative flex aspect-square h-full w-full min-h-3 items-center justify-center rounded-[1px] border text-[8px] font-black shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25)] ${worldMapRelationRingClass(target.relation)} ${self ? 'border-sky-800 bg-sky-500 text-white' : factionCityClass(target.faction)}`}>
+                  <span className={`relative flex aspect-square h-full w-full min-h-3 items-center justify-center overflow-hidden rounded-[1px] border border-white/40 text-[8px] font-black text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25)] ${worldMapRelationRingClass(target.relation)} ${self ? 'border-sky-800' : ''}`}>
+                    <img className="pointer-events-none absolute inset-0 h-full w-full object-cover" src={cityTileSrc(target.faction)} alt="" aria-hidden="true" />
                     {showCityDetail && (
-                      <span className={`absolute right-0 top-0 flex h-3 min-w-3 items-center justify-center rounded-bl-[1px] px-0.5 text-[7px] leading-none ${worldMapRelationBadgeClass(target.relation)}`}>
+                      <span className={`absolute right-0 top-0 z-20 flex h-3 min-w-3 items-center justify-center rounded-bl-[1px] px-0.5 text-[7px] leading-none ${worldMapRelationBadgeClass(target.relation)}`}>
                         {worldMapRelationBadge(target.relation)}
                       </span>
                     )}
                     {showCityDetail && statusBadge && (
-                      <span className={`absolute bottom-0 right-0 flex h-3 min-w-3 items-center justify-center rounded-tl-[1px] px-0.5 text-[7px] leading-none ${worldMapStatusBadgeClass(target.status)}`}>
+                      <span className={`absolute bottom-0 right-0 z-20 flex h-3 min-w-3 items-center justify-center rounded-tl-[1px] px-0.5 text-[7px] leading-none ${worldMapStatusBadgeClass(target.status)}`}>
                         {statusBadge}
                       </span>
                     )}
                     {showCityDetail && marchBadge && (
-                      <span className="absolute bottom-0 left-0 flex h-3 min-w-3 items-center justify-center rounded-tr-[1px] bg-violet-600 px-0.5 text-[7px] leading-none text-white">
+                      <span className="absolute bottom-0 left-0 z-20 flex h-3 min-w-3 items-center justify-center rounded-tr-[1px] bg-violet-600 px-0.5 text-[7px] leading-none text-white">
                         {marchBadge}
                       </span>
                     )}
@@ -342,7 +343,7 @@ const WorldMapGrid: FC<WorldMapGridProps> = ({ view, targets, overviewTargets, h
                         {target.nickname} · {metrics.distance}格
                       </span>
                     )}
-                    {self ? (showCityDetail ? <House size={12} strokeWidth={2.5} aria-hidden="true" /> : <span aria-hidden="true">我</span>) : showCityDetail && <Castle size={12} strokeWidth={2.5} aria-hidden="true" />}
+                    {self && !showCityDetail && <span className="relative z-20 rounded bg-sky-950/75 px-0.5 leading-none" aria-hidden="true">我</span>}
                   </span>
                 </button>
               )
@@ -359,19 +360,6 @@ const WorldMapGrid: FC<WorldMapGridProps> = ({ view, targets, overviewTargets, h
     </section>
   )
 }
-
-// MapCompassRose 渲染地图四向罗盘，不参与格子点击。
-const MapCompassRose: FC = () => (
-  <div className="pointer-events-none absolute left-3 top-3 z-30 h-16 w-16 rounded-full border border-emerald-950/25 bg-white/70 text-[9px] font-black leading-none text-emerald-950/80 shadow-sm backdrop-blur-sm" aria-hidden="true">
-    <span className="absolute left-1/2 top-1 -translate-x-1/2">北</span>
-    <span className="absolute bottom-1 left-1/2 -translate-x-1/2">南</span>
-    <span className="absolute left-1 top-1/2 -translate-y-1/2">西</span>
-    <span className="absolute right-1 top-1/2 -translate-y-1/2">东</span>
-    <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-950/65" />
-    <span className="absolute left-1/2 top-4 h-6 w-px -translate-x-1/2 bg-emerald-950/35" />
-    <span className="absolute left-4 top-1/2 h-px w-6 -translate-y-1/2 bg-emerald-950/35" />
-  </div>
-)
 
 // MapSelectedRoute 渲染从自己城池到当前指向格的曼哈顿距离折线。
 const MapSelectedRoute: FC<{ self: GridPosition; target: GridPosition | null | undefined; minX: number; minY: number; gridSize: number }> = ({ self, target, minX, minY, gridSize }) => {
@@ -427,7 +415,7 @@ const MapOverview: FC<{ view: PvpTargetsResponse; radius: number; selectedPositi
       type="button"
       onClick={handleOverviewClick}
       onPointerDown={(event) => event.stopPropagation()}
-      className="absolute bottom-3 right-3 z-30 h-24 w-24 cursor-crosshair border border-emerald-950/40 bg-[#6f9b52]/90 p-0 shadow-md"
+      className="absolute bottom-3 right-3 z-30 h-32 w-32 cursor-crosshair border border-emerald-950/40 bg-[#6f9b52]/90 p-0 shadow-md sm:h-36 sm:w-36"
       title={`点击概览跳转地图坐标，当前中心 (${view.centerX}, ${view.centerY})，我的城池 (${view.self.x}, ${view.self.y})`}
       aria-label={`世界地图概览，点击跳转坐标，当前中心 (${view.centerX}, ${view.centerY})，我的城池 (${view.self.x}, ${view.self.y})`}
     >
@@ -442,7 +430,7 @@ const MapOverview: FC<{ view: PvpTargetsResponse; radius: number; selectedPositi
         return (
           <div
             key={target.playerId}
-            className={`absolute z-10 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-[1px] border border-white/70 shadow-sm ${worldMapOverviewTargetClass(target.faction)}`}
+            className={`absolute z-10 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-[1px] border border-white/70 shadow-sm ${worldMapOverviewTargetClass(target.faction)}`}
             style={worldMapOverviewPointStyle(target.position, view.worldSize)}
             title={`${target.nickname} (${target.position.x}, ${target.position.y})`}
             aria-hidden="true"
@@ -450,10 +438,10 @@ const MapOverview: FC<{ view: PvpTargetsResponse; radius: number; selectedPositi
         )
       })}
       {showSelf && (
-        <div className="absolute z-20 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-[1px] border border-white bg-sky-500 shadow-sm" style={selfStyle} title={`我的城池 (${view.self.x}, ${view.self.y})`} aria-hidden="true" />
+        <div className="absolute z-20 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-[1px] border border-white bg-sky-500 shadow-sm" style={selfStyle} title={`我的城池 (${view.self.x}, ${view.self.y})`} aria-hidden="true" />
       )}
       {selectedStyle && (
-        <div className="absolute z-30 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-[1px] border border-white bg-amber-400 shadow-sm" style={selectedStyle} title={`当前选中 (${selectedPosition?.x}, ${selectedPosition?.y})`} aria-hidden="true" />
+        <div className="absolute z-30 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-[1px] border border-white bg-amber-400 shadow-sm" style={selectedStyle} title={`当前选中 (${selectedPosition?.x}, ${selectedPosition?.y})`} aria-hidden="true" />
       )}
     </button>
   )

@@ -42,6 +42,15 @@ type WorldPosition struct {
 	UpdatedAt  string `json:"updatedAt,omitempty"`
 }
 
+// WorldMapPlayerCity 是地图范围查询直接返回的玩家城池轻量投影。
+type WorldMapPlayerCity struct {
+	Position      WorldPosition
+	AccountID     string
+	Name          string
+	Faction       string
+	BuildingLevel int
+}
+
 // WorldMapTarget 是世界地图视图中可点击的目标。
 type WorldMapTarget struct {
 	TargetType      string `json:"targetType"`

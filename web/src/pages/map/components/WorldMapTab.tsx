@@ -5,18 +5,19 @@ import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
-import type { ArmyUnit, General, GeneralAssignment, PvpMarch, PvpTargetSummary, PvpTargetsResponse, PvpWorldPosition, Reinforcement, WorldMapTarget } from '@/types/game'
+import type { ArmyUnit, General, GeneralAssignment, PvpMarch, PvpTargetSummary, PvpTargetsResponse, PvpWorldPosition, Reinforcement, WorldMapTarget, WorldMapViewResponse } from '@/types/game'
 import WorldMapCoordinateSearch from './WorldMapCoordinateSearch'
 import WorldMapFilters from './WorldMapFilters'
 import WorldMapGrid from './WorldMapGrid'
 import WorldMapLegend from './WorldMapLegend'
 import WorldMapTargetPanel from './WorldMapTargetPanel'
-import { buildNearestWorldMapTargets, buildWorldMapFactionCounts, buildWorldMapMarchBadges, buildWorldMapMarchSummary, buildWorldMapReinforcementMarches, buildWorldMapRelationCounts, buildWorldMapTargetMetrics, clampWorldMapRadius, directionFrom, filterWorldMapTargetsInViewport, findVisibleWorldMapTargetAtCell, findWorldMapTargetAtCell, formatDuration, formatWorldMapSyncTime, isWorldMapRelationVisible, mergeWorldMapTargetCache, moveWorldMapCenter, parseWorldMapCoordinateSearch, worldMapRelationBadge, worldMapRelationBadgeClass, WORLD_MAP_FULL_LOAD_RADIUS } from '../worldMapGridLogic'
+import { buildNearestWorldMapTargets, buildWorldMapFactionCounts, buildWorldMapMarchBadges, buildWorldMapMarchSummary, buildWorldMapReinforcementMarches, buildWorldMapRelationCounts, buildWorldMapTargetMetrics, clampWorldMapRadius, directionFrom, filterWorldMapTargetsInViewport, findVisibleWorldMapTargetAtCell, findWorldMapTargetAtCell, formatDuration, formatWorldMapSyncTime, isWorldMapRelationVisible, mergeWorldMapTargetCache, moveWorldMapCenter, parseWorldMapCoordinateSearch, worldMapRelationBadge, worldMapRelationBadgeClass, WORLD_MAP_FULL_LOAD_RADIUS, WORLD_MAP_MIN_VIEW_RADIUS } from '../worldMapGridLogic'
 
 // 共享空数组保证 Zustand selector 在存档加载前返回稳定引用，避免刷新页面时触发无限更新。
 const EMPTY_GENERALS: General[] = []
 const EMPTY_GENERAL_ASSIGNMENTS: GeneralAssignment[] = []
 const EMPTY_ARMY: ArmyUnit[] = []
+const DEFAULT_VIEW_RADIUS = WORLD_MAP_MIN_VIEW_RADIUS
 
 // WorldMapTab 展示世界地图玩家城池、筛选、坐标查找和行军状态。
 const WorldMapTab: FC = () => {
@@ -30,7 +31,7 @@ const WorldMapTab: FC = () => {
   const [targetView, setTargetView] = useState<PvpTargetsResponse | null>(null)
   const [marches, setMarches] = useState<PvpMarch[]>([])
   const [reinforcements, setReinforcements] = useState<Reinforcement[]>([])
-  const [viewport, setViewport] = useState<{ centerX?: number; centerY?: number; radius: number }>({ radius: 10 })
+  const [viewport, setViewport] = useState<{ centerX?: number; centerY?: number; radius: number }>({ radius: DEFAULT_VIEW_RADIUS })
   const [focusedTargetId, setFocusedTargetId] = useState<string | null>(null)
   const [selectedEmptyCell, setSelectedEmptyCell] = useState<{ x: number; y: number } | null>(null)
   const [relationFilters, setRelationFilters] = useState<Record<string, boolean>>({ self: true, ally: true, other: true })
@@ -48,12 +49,83 @@ const WorldMapTab: FC = () => {
   const autoRefreshingRef = useRef(false)
   const lastAutoRefreshAtRef = useRef(0)
   const loadRequestRef = useRef(0)
+  const globalLoadRequestRef = useRef(0)
+  const auxiliaryLoadRequestRef = useRef(0)
+  const globalLoadTimerRef = useRef<number | null>(null)
   const targetDetailRequestRef = useRef(0)
   const hasLoadedMapRef = useRef(false)
   const loadedPlayerRef = useRef<string | null>(null)
 
+  // applyWorldMapResult 将世界地图接口结果写入目标缓存，视野半径仍由本地近中远控件控制。
+  const applyWorldMapResult = useCallback((targetResult: WorldMapViewResponse, shouldSyncInitialCoordinate: boolean) => {
+    const selfPosition = { worldId: targetResult.self.worldId, x: targetResult.self.x, y: targetResult.self.y, regionId: 0 }
+    setTargets((targetResult.targets ?? []).map((target) => worldTargetToPvpTarget(target, targetResult.worldId, selfPosition)))
+    setTargetView({
+      items: [],
+      self: selfPosition,
+      worldSize: Math.min(targetResult.width, targetResult.height),
+      worldWidth: targetResult.width,
+      worldHeight: targetResult.height,
+      centerX: targetResult.centerX,
+      centerY: targetResult.centerY,
+      radius: DEFAULT_VIEW_RADIUS,
+    })
+    if (shouldSyncInitialCoordinate) setCoordinateSearch({ x: String(selfPosition.x), y: String(selfPosition.y) })
+    setMapServerTime(targetResult.serverTime)
+  }, [])
+
+  // loadGlobalWorldMapTargets 在首屏近景渲染后懒加载全局目标，避免大范围地图阻塞首次显示。
+  const loadGlobalWorldMapTargets = useCallback(async (playerId: string, parentRequestId: number) => {
+    const requestId = globalLoadRequestRef.current + 1
+    globalLoadRequestRef.current = requestId
+    try {
+      const targetResult = await gameApi.getWorldMapView(playerId, { radius: WORLD_MAP_FULL_LOAD_RADIUS })
+      if (requestId !== globalLoadRequestRef.current) return
+      if (parentRequestId !== loadRequestRef.current) return
+      if (loadedPlayerRef.current !== playerId) return
+      applyWorldMapResult(targetResult, false)
+    } catch {
+      // 全局缓存只影响缩略图、统计和最近城池，不阻塞首屏地图使用。
+    }
+  }, [applyWorldMapResult])
+
+  // scheduleGlobalWorldMapTargets 等首屏完成并留出渲染时间后再请求全局缓存。
+  const scheduleGlobalWorldMapTargets = useCallback((playerId: string, parentRequestId: number) => {
+    if (globalLoadTimerRef.current !== null) window.clearTimeout(globalLoadTimerRef.current)
+    globalLoadTimerRef.current = window.setTimeout(() => {
+      globalLoadTimerRef.current = null
+      void loadGlobalWorldMapTargets(playerId, parentRequestId)
+    }, 1200)
+  }, [loadGlobalWorldMapTargets])
+
+  // loadAuxiliaryWorldMapData 后台读取行军和增援，不再阻塞近景地图首屏。
+  const loadAuxiliaryWorldMapData = useCallback(async (playerId: string, parentRequestId: number) => {
+    const requestId = auxiliaryLoadRequestRef.current + 1
+    auxiliaryLoadRequestRef.current = requestId
+    try {
+      const [marchResult, sentReinforcementResult, receivedReinforcementResult] = await Promise.all([
+        gameApi.listPvpMarches(playerId),
+        gameApi.listSentReinforcements(playerId),
+        gameApi.listReceivedReinforcements(playerId),
+      ])
+      if (requestId !== auxiliaryLoadRequestRef.current) return
+      if (parentRequestId !== loadRequestRef.current) return
+      if (loadedPlayerRef.current !== playerId) return
+      setMarches(marchResult.items ?? [])
+      setReinforcements(mergeWorldMapReinforcements(sentReinforcementResult.items ?? [], receivedReinforcementResult.items ?? []))
+    } catch {
+      // 行军和增援状态可稍后刷新，失败时不阻塞地图本体。
+    }
+  }, [])
+
   const load = useCallback(async (silent = false) => {
     if (!activePlayerId) {
+      globalLoadRequestRef.current += 1
+      auxiliaryLoadRequestRef.current += 1
+      if (globalLoadTimerRef.current !== null) {
+        window.clearTimeout(globalLoadTimerRef.current)
+        globalLoadTimerRef.current = null
+      }
       hasLoadedMapRef.current = false
       loadedPlayerRef.current = null
       setTargets([])
@@ -68,6 +140,12 @@ const WorldMapTab: FC = () => {
     }
     const requestId = loadRequestRef.current + 1
     loadRequestRef.current = requestId
+    globalLoadRequestRef.current += 1
+    auxiliaryLoadRequestRef.current += 1
+    if (globalLoadTimerRef.current !== null) {
+      window.clearTimeout(globalLoadTimerRef.current)
+      globalLoadTimerRef.current = null
+    }
     const switchingPlayer = loadedPlayerRef.current !== activePlayerId
     if (!silent) {
       if (switchingPlayer) {
@@ -86,32 +164,14 @@ const WorldMapTab: FC = () => {
     }
     if (!silent) setLoadError('')
     try {
-      const [targetResult, marchResult, sentReinforcementResult, receivedReinforcementResult] = await Promise.all([
-        gameApi.getWorldMapView(activePlayerId, { radius: WORLD_MAP_FULL_LOAD_RADIUS }),
-        gameApi.listPvpMarches(activePlayerId),
-        gameApi.listSentReinforcements(activePlayerId),
-        gameApi.listReceivedReinforcements(activePlayerId),
-      ])
+      const targetResult = await gameApi.getWorldMapView(activePlayerId, { radius: DEFAULT_VIEW_RADIUS })
       if (requestId !== loadRequestRef.current) return
       const shouldSyncInitialCoordinate = switchingPlayer || !hasLoadedMapRef.current
-      const selfPosition = { worldId: targetResult.self.worldId, x: targetResult.self.x, y: targetResult.self.y, regionId: 0 }
-      setTargets((targetResult.targets ?? []).map((target) => worldTargetToPvpTarget(target, targetResult.worldId, selfPosition)))
-      setTargetView({
-        items: [],
-        self: selfPosition,
-        worldSize: Math.min(targetResult.width, targetResult.height),
-        worldWidth: targetResult.width,
-        worldHeight: targetResult.height,
-        centerX: targetResult.centerX,
-        centerY: targetResult.centerY,
-        radius: 10,
-      })
-      if (shouldSyncInitialCoordinate) setCoordinateSearch({ x: String(selfPosition.x), y: String(selfPosition.y) })
-      setMapServerTime(targetResult.serverTime)
+      applyWorldMapResult(targetResult, shouldSyncInitialCoordinate)
       hasLoadedMapRef.current = true
       loadedPlayerRef.current = activePlayerId
-      setMarches(marchResult.items ?? [])
-      setReinforcements(mergeWorldMapReinforcements(sentReinforcementResult.items ?? [], receivedReinforcementResult.items ?? []))
+      void loadAuxiliaryWorldMapData(activePlayerId, requestId)
+      scheduleGlobalWorldMapTargets(activePlayerId, requestId)
     } catch (err) {
       if (requestId !== loadRequestRef.current) return
       const message = err instanceof Error ? err.message : '世界地图加载失败'
@@ -121,14 +181,20 @@ const WorldMapTab: FC = () => {
       if (requestId === loadRequestRef.current && !silent) setLoading(false)
       if (requestId === loadRequestRef.current && !silent) setRefreshing(false)
     }
-  }, [activePlayerId])
+  }, [activePlayerId, applyWorldMapResult, loadAuxiliaryWorldMapData, scheduleGlobalWorldMapTargets])
 
   useEffect(() => {
     void load()
   }, [load])
 
   useEffect(() => {
-    setViewport({ radius: 10 })
+    return () => {
+      if (globalLoadTimerRef.current !== null) window.clearTimeout(globalLoadTimerRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    setViewport({ radius: DEFAULT_VIEW_RADIUS })
     setFocusedTargetId(null)
     setSelectedEmptyCell(null)
     setCoordinateSearch({ x: '', y: '' })
@@ -165,7 +231,8 @@ const WorldMapTab: FC = () => {
     return () => window.clearInterval(timer)
   }, [activeMarches, activePlayerId, load])
 
-  const factionUnits = units?.[faction] ?? {}
+  // factionUnits 保持稳定引用，避免地图交互触发无关的行军预览重算。
+  const factionUnits = useMemo(() => units?.[faction] ?? {}, [faction, units])
   const availableArmy = useMemo(() => army.filter((unit) => unit.amount > 0), [army])
   const armyAmountByType = useMemo(() => {
     return Object.fromEntries(army.map((unit) => [unit.unitType, unit.amount])) as Record<string, number>

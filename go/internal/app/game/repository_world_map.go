@@ -72,6 +72,46 @@ func (r *MemoryRepository) ListWorldPositions(worldID string, minX int, maxX int
 	return items, nil
 }
 
+// ListWorldMapPlayerCities 只投影当前地图范围内的玩家城池，避免读取全服账号列表。
+func (r *MemoryRepository) ListWorldMapPlayerCities(worldID string, minX int, maxX int, minY int, maxY int) ([]WorldMapPlayerCity, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if worldID == "" {
+		worldID = defaultWorldID
+	}
+	accountByPlayer := make(map[string]string, len(r.players))
+	for accountID, playerIDs := range r.accountPlayers {
+		for _, playerID := range playerIDs {
+			accountByPlayer[playerID] = accountID
+		}
+	}
+	items := []WorldMapPlayerCity{}
+	for playerID, position := range r.worldPositions {
+		if position.WorldID != worldID || position.X < minX || position.X > maxX || position.Y < minY || position.Y > maxY {
+			continue
+		}
+		state, exists := r.players[playerID]
+		if !exists {
+			continue
+		}
+		summary := buildPlayerSummary(state, r.playerUpdatedAt[playerID])
+		items = append(items, WorldMapPlayerCity{
+			Position:      position,
+			AccountID:     accountByPlayer[playerID],
+			Name:          summary.Nickname,
+			Faction:       summary.Faction,
+			BuildingLevel: summary.BuildingLevel,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Position.Y == items[j].Position.Y {
+			return items[i].Position.X < items[j].Position.X
+		}
+		return items[i].Position.Y < items[j].Position.Y
+	})
+	return items, nil
+}
+
 // CountWorldPositions 统计指定世界已占用坐标数量。
 func (r *MemoryRepository) CountWorldPositions(worldID string) (int, error) {
 	r.mu.RLock()

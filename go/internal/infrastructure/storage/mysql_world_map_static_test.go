@@ -53,6 +53,31 @@ func TestMySQLWorldMapUsesSharedCoordinateCandidates(t *testing.T) {
 	}
 }
 
+// TestMySQLWorldMapViewUsesBoundedProjection 防止地图视野退化为全服账号和资产聚合查询。
+func TestMySQLWorldMapViewUsesBoundedProjection(t *testing.T) {
+	content, err := os.ReadFile("mysql_world_map.go")
+	if err != nil {
+		t.Fatalf("read mysql_world_map.go: %v", err)
+	}
+	section := worldMapStorageFunctionSection(t, string(content), "ListWorldMapPlayerCities")
+	for _, required := range []string{
+		"FROM player_world_positions w",
+		"INNER JOIN players p ON p.id = w.player_id",
+		"w.world_id = ?",
+		"w.x BETWEEN ? AND ?",
+		"w.y BETWEEN ? AND ?",
+	} {
+		if !strings.Contains(section, required) {
+			t.Fatalf("bounded world map projection missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{"FROM accounts", "player_army_units", "state_json"} {
+		if strings.Contains(section, forbidden) {
+			t.Fatalf("bounded world map projection must not read %q", forbidden)
+		}
+	}
+}
+
 // TestMySQLWorldMapSchemaKeepsCoordinateConstraints 防止权威坐标表丢失唯一键和查询索引。
 func TestMySQLWorldMapSchemaKeepsCoordinateConstraints(t *testing.T) {
 	content, err := os.ReadFile("mysql.go")
@@ -85,11 +110,12 @@ func TestMySQLWorldMapSchemaKeepsCoordinateConstraints(t *testing.T) {
 // worldMapStorageFunctionSection 截取 MySQL 世界地图仓储中的单个函数。
 func worldMapStorageFunctionSection(t *testing.T, source string, name string) string {
 	t.Helper()
-	marker := "func "
-	if strings.Contains(name, "WorldPosition") {
-		marker = "func (r *MySQLRepository) "
-	}
+	marker := "func (r *MySQLRepository) "
 	start := strings.Index(source, marker+name)
+	if start < 0 {
+		marker = "func "
+		start = strings.Index(source, marker+name)
+	}
 	if start < 0 {
 		t.Fatalf("%s not found", name)
 	}

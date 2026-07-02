@@ -184,6 +184,7 @@ type WorldMapRepository interface {
 	GetWorldPosition(playerID string) (WorldPosition, error)
 	EnsureWorldPosition(playerID string, assignedBy string, preferred *WorldCoordinate) (WorldPosition, error)
 	ListWorldPositions(worldID string, minX int, maxX int, minY int, maxY int) ([]WorldPosition, error)
+	ListWorldMapPlayerCities(worldID string, minX int, maxX int, minY int, maxY int) ([]WorldMapPlayerCity, error)
 	CountWorldPositions(worldID string) (int, error)
 	AssignWorldPosition(playerID string, worldID string, x int, y int, assignedBy string) (WorldPosition, error)
 }

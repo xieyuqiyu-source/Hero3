@@ -1,3 +1,4 @@
+// 登录页负责阵营、将领选择和云同步登录入口展示。
 import { useState, useEffect, useRef, useCallback, type FC, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Cloud, ChevronDown } from 'lucide-react'
@@ -296,8 +297,8 @@ const LoginPage: FC = () => {
                 )}
                   {/* Sync reminder */}
                   {showSyncReminder && !account && isActive && (
-                    <div className="mb-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
-                      <p className="text-xs text-amber-200 mb-2">需要先登录才能开始游戏，登录后可云端同步进度。</p>
+                    <div className="mb-3 p-3 rounded-xl border border-amber-400/60 bg-amber-100/90 shadow-[0_8px_22px_rgba(120,53,15,0.14)] dark:border-amber-500/30 dark:bg-amber-500/10">
+                      <p className="text-xs font-semibold text-amber-950 mb-2 dark:text-amber-100">需要先登录才能开始游戏，登录后可云端同步进度。</p>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
