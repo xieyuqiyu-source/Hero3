@@ -116,6 +116,8 @@ export interface ItemStack {
 export interface ItemEffect {
   type: string
   amount?: number
+  category?: string
+  pool?: string
   resources?: Record<string, number>
   unitByFaction?: Record<string, string>
   protectionType?: string
@@ -264,6 +266,9 @@ export interface CombatRuleConfig {
 
 export interface CombatWallEntry {
   base: number
+  hardness?: number
+  minDamagedLevelFrom20?: number
+  maxDamagedLevelFrom20?: number
 }
 
 export interface CombatConfig {

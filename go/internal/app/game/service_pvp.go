@@ -2103,6 +2103,8 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	}
 	attackerArmy := buildCombatArmy(attacker.Player.Faction, attackerUnits)
 	defenderArmy := combat.Army{Faction: defender.Player.Faction, Units: defenderUnits}
+	wallLevel := pvpDefenderCityWallLevel(defender)
+	wallSnapshot := buildPvpWallSnapshot(defender.Player.Faction, wallLevel)
 	attackerTraits := buildActiveTraitsForGeneralIDs(attacker, march.AttackGenerals)
 	defenderGeneralIDs := pvpDefenseGeneralIDs(defender)
 	defenderTraits := buildActiveTraitsForGeneralIDs(defender, defenderGeneralIDs)
@@ -2124,9 +2126,11 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		applyArmyLosses(defender, capturedDefenderLosses)
 	}
 	result := combat.Resolve(combat.CombatInput{
-		RuleID:   activeCombatRuleID(combatSceneForPVP(march.MarchType)),
-		Attacker: attackerArmy,
-		Defender: defenderArmy,
+		RuleID:      activeCombatRuleID(combatSceneForPVP(march.MarchType)),
+		Attacker:    attackerArmy,
+		Defender:    defenderArmy,
+		WallLevel:   wallLevel,
+		WallFaction: defender.Player.Faction,
 	})
 	afterCombatCtx := &general.AfterCombatResolveContext{
 		Result:            &result,
@@ -2218,6 +2222,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	attackerReport.PvpDefenderGenerals = defenderGenerals
 	attackerReport.PvpReinforcements = reinforcementSnapshot
 	attackerReport.PvpReinforcementLosses = cloneNestedStringIntMap(totalReinforcementLosses)
+	attackerReport.PvpWall = wallSnapshot
 	attackerReport.CapturedUnits = cloneStringIntMap(beforeCtx.CapturedToArmy)
 	attackerReport.CapturedToGarrison = cloneStringIntMap(beforeCtx.CapturedToGarrison)
 	if len(attackerAfterBattleCtx.Revived) > 0 {
@@ -2244,6 +2249,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	defenderReport.PvpDefenderGenerals = defenderGenerals
 	defenderReport.PvpReinforcements = reinforcementSnapshot
 	defenderReport.PvpReinforcementLosses = cloneNestedStringIntMap(totalReinforcementLosses)
+	defenderReport.PvpWall = wallSnapshot
 	defenderReport.CapturedUnits = cloneStringIntMap(beforeCtx.CapturedToArmy)
 	defenderReport.CapturedToGarrison = cloneStringIntMap(beforeCtx.CapturedToGarrison)
 	if len(defenderAfterBattleCtx.Revived) > 0 {
@@ -2332,12 +2338,67 @@ func pvpModifierSourcesForHomeDefense(state *GameState) []ModifierSource {
 	}
 	base := *state
 	base.General = nil
+	base.Buildings = buildingsWithoutType(state.Buildings, "city_wall")
 	sources := CollectModifierSources(&base)
 	if general := pvpHomeDefenseGeneral(state); general != nil {
 		applyHeroConfigToGeneral(general)
 		sources = append(sources, &GeneralModifierSource{General: general})
 	}
 	return sources
+}
+
+// pvpDefenderCityWallLevel 返回守城方当前生效城墙等级。
+func pvpDefenderCityWallLevel(state *GameState) int {
+	if state == nil {
+		return 0
+	}
+	level := 0
+	for _, building := range state.Buildings {
+		if building.Type != "city_wall" || !buildingIsOperational(building) {
+			continue
+		}
+		if building.Level > level {
+			level = building.Level
+		}
+	}
+	return level
+}
+
+// buildPvpWallSnapshot 生成城墙系数与硬度预留快照，供战报和后续攻城破坏逻辑复用。
+func buildPvpWallSnapshot(faction string, level int) *PvpWallSnapshot {
+	if level <= 0 || strings.TrimSpace(faction) == "" {
+		return nil
+	}
+	cfg := combat.GetCombatConfig()
+	entry, ok := cfg.WallConfig[faction]
+	if !ok || entry.Base <= 0 {
+		return nil
+	}
+	multiplier := math.Pow(entry.Base, float64(level))
+	factionDefenseBonus := multiplier - 1
+	return &PvpWallSnapshot{
+		Faction:               faction,
+		Level:                 level,
+		Base:                  entry.Base,
+		Multiplier:            multiplier,
+		FactionDefenseBonus:   factionDefenseBonus,
+		TotalDefenseBonus:     factionDefenseBonus,
+		Hardness:              entry.Hardness,
+		MinDamagedLevelFrom20: entry.MinDamagedLevelFrom20,
+		MaxDamagedLevelFrom20: entry.MaxDamagedLevelFrom20,
+	}
+}
+
+// buildingsWithoutType 返回排除指定类型后的建筑列表。
+func buildingsWithoutType(buildings []Building, buildingType string) []Building {
+	next := make([]Building, 0, len(buildings))
+	for _, building := range buildings {
+		if building.Type == buildingType {
+			continue
+		}
+		next = append(next, building)
+	}
+	return next
 }
 
 type pvpDefenseSourceGroup struct {

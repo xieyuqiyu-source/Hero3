@@ -28,8 +28,23 @@
     }
   },
   "wallConfig": {
-    "wei": { "base": 1.03 },
-    "shu": { "base": 1.02 },
-    "wu": { "base": 1.025 }
+    "wei": {
+      "base": 1.03,
+      "hardness": 0.75,
+      "minDamagedLevelFrom20": 5,
+      "maxDamagedLevelFrom20": 5
+    },
+    "shu": {
+      "base": 1.02,
+      "hardness": 1.35,
+      "minDamagedLevelFrom20": 16,
+      "maxDamagedLevelFrom20": 17
+    },
+    "wu": {
+      "base": 1.025,
+      "hardness": 1,
+      "minDamagedLevelFrom20": 9,
+      "maxDamagedLevelFrom20": 12
+    }
   }
 }

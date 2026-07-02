@@ -360,7 +360,7 @@ func buildReportVisibility(report BattleReport) BattleReportVisibility {
 // buildReportExtra 汇总旧字段中的玩法扩展信息。
 func buildReportExtra(report BattleReport, visibility BattleReportVisibility) map[string]interface{} {
 	extra := map[string]interface{}{}
-	if len(report.PvpPointsDelta) > 0 || len(report.PvpReinforcements) > 0 || len(report.PvpReinforcementLosses) > 0 {
+	if len(report.PvpPointsDelta) > 0 || len(report.PvpReinforcements) > 0 || len(report.PvpReinforcementLosses) > 0 || report.PvpWall != nil {
 		extra["pvp"] = map[string]interface{}{
 			"pointsDelta":              report.PvpPointsDelta,
 			"reinforcements":           report.PvpReinforcements,
@@ -368,6 +368,7 @@ func buildReportExtra(report BattleReport, visibility BattleReportVisibility) ma
 			"enemyLossRevealThreshold": visibility.Threshold,
 			"enemyLossRatio":           visibility.ActualLossRatio,
 			"enemyRemainingRevealed":   visibility.ShowEnemyRemainingUnits,
+			"wall":                     report.PvpWall,
 		}
 	}
 	if len(report.CapturedUnits) > 0 || len(report.CapturedToGarrison) > 0 {

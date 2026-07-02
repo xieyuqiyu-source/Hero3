@@ -206,9 +206,23 @@ type BattleReport struct {
 	PvpDefenderGenerals      []PvpGeneralSnapshot          `json:"pvpDefenderGenerals,omitempty"`    // PVP 防守方参战武将
 	PvpReinforcements        []DefenseReinforcementUnit    `json:"pvpReinforcements,omitempty"`      // PVP 参战驻防/援军摘要
 	PvpReinforcementLosses   map[string]map[string]int     `json:"pvpReinforcementLosses,omitempty"` // PVP 援军损耗
+	PvpWall                  *PvpWallSnapshot              `json:"pvpWall,omitempty"`                // PVP 城墙系数和硬度预留快照
 	Read                     bool                          `json:"read"`
 	DeletedByPlayer          bool                          `json:"deletedByPlayer,omitempty"`
 	CreatedAt                string                        `json:"createdAt"`
+}
+
+// PvpWallSnapshot 保存 PVP 战斗发生时的防守方城墙配置快照。
+type PvpWallSnapshot struct {
+	Faction               string  `json:"faction"`
+	Level                 int     `json:"level"`
+	Base                  float64 `json:"base"`
+	Multiplier            float64 `json:"multiplier"`
+	FactionDefenseBonus   float64 `json:"factionDefenseBonus"`
+	TotalDefenseBonus     float64 `json:"totalDefenseBonus"`
+	Hardness              float64 `json:"hardness,omitempty"`
+	MinDamagedLevelFrom20 int     `json:"minDamagedLevelFrom20"`
+	MaxDamagedLevelFrom20 int     `json:"maxDamagedLevelFrom20"`
 }
 
 type BattleReportPage struct {

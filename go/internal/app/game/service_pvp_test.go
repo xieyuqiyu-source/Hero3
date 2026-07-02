@@ -1327,6 +1327,63 @@ func TestPvpMaintenanceProtectionHasPriority(t *testing.T) {
 	}
 }
 
+func TestPvpCityWallAppliesFactionDefense(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	originalCombat := combat.GetCombatConfig()
+	t.Cleanup(func() {
+		if err := combat.SaveCombatConfig("", originalCombat); err != nil {
+			t.Fatalf("restore combat config: %v", err)
+		}
+	})
+
+	cfg := combat.GetCombatConfig()
+	cfg.WallConfig["shu"] = combat.WallEntry{Base: 1.02, Hardness: 1.35, MinDamagedLevelFrom20: 16, MaxDamagedLevelFrom20: 17}
+	if err := combat.SaveCombatConfig("", cfg); err != nil {
+		t.Fatalf("set combat config: %v", err)
+	}
+
+	now := time.Now()
+	attacker := newPlayerState("player_pvp_wall_attacker", "攻方", "wei", "", now)
+	defender := newPlayerState("player_pvp_wall_defender", "守方", "shu", "", now)
+	attacker.Buildings = nil
+	defender.Buildings = []Building{{ID: "city_wall-1", Type: "city_wall", Level: 20}}
+	defender.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 10}}
+	march := &PvpMarch{
+		ID:             "pvp_wall_march",
+		MarchType:      "attack",
+		AttackTroops:   map[string]int{"weiInfantry": 10},
+		AttackGenerals: nil,
+	}
+
+	battle, attackerReport, defenderReport, _, _, err := resolvePvpCombat(&attacker, &defender, nil, march, now)
+	if err != nil {
+		t.Fatalf("resolvePvpCombat failed: %v", err)
+	}
+
+	factionBonus := math.Pow(1.02, 20) - 1
+	if attackerReport.PvpWall == nil || defenderReport.PvpWall == nil {
+		t.Fatalf("expected pvp wall snapshot, attacker=%+v defender=%+v", attackerReport.PvpWall, defenderReport.PvpWall)
+	}
+	if math.Abs(attackerReport.PvpWall.FactionDefenseBonus-factionBonus) > 1e-6 {
+		t.Fatalf("expected wall faction bonus %.4f, got %+v", factionBonus, attackerReport.PvpWall)
+	}
+	if math.Abs(attackerReport.PvpWall.TotalDefenseBonus-factionBonus) > 1e-6 {
+		t.Fatalf("expected wall total bonus %.4f, got %+v", factionBonus, attackerReport.PvpWall)
+	}
+	if attackerReport.PvpWall.Hardness != 1.35 || attackerReport.PvpWall.MinDamagedLevelFrom20 != 16 || attackerReport.PvpWall.MaxDamagedLevelFrom20 != 17 {
+		t.Fatalf("expected wall hardness snapshot, got %+v", attackerReport.PvpWall)
+	}
+
+	defensePower, ok := battle.Result["defensePower"].(float64)
+	if !ok {
+		t.Fatalf("expected numeric defense power, got %+v", battle.Result["defensePower"])
+	}
+	expectedDefensePower := 100 * math.Pow(1.02, 20)
+	if math.Abs(defensePower-expectedDefensePower) > 1e-6 {
+		t.Fatalf("expected defense power %.4f, got %.4f", expectedDefensePower, defensePower)
+	}
+}
+
 func newPvpTestService(t *testing.T) (*Service, *MemoryRepository, GameState, GameState) {
 	t.Helper()
 	setTestCombatUnitsConfig(t)

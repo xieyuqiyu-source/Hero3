@@ -2,7 +2,7 @@
 
 import { api } from './client'
 import type { AccountSession, GameState, BattleReport, PlayerSummary, PlayerDeletionResult, NpcCity, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, GamblingRoundResult, SlotRoundResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, ReinforcementActionResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, WorldMapTarget, WorldMapViewResponse, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult } from '@/types/game'
-import type { BalanceConfig, FactionConfig, FishingConfig, SlotConfig, UnitConfig } from '@/store/configStore'
+import type { BalanceConfig, CombatConfig, FactionConfig, FishingConfig, SlotConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
   id: string
@@ -80,6 +80,7 @@ export const gameApi = {
       factions: Record<string, FactionConfig>
       units: Record<string, Record<string, UnitConfig>>
       items: Record<string, ItemDefinition>
+      combat: CombatConfig
       reincarnation: ReincarnationConfig
       fishing: FishingConfig
       slot: SlotConfig

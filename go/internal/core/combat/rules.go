@@ -29,7 +29,10 @@ type CombatConfig struct {
 
 // WallEntry 城墙配置
 type WallEntry struct {
-	Base float64 `json:"base"` // 城墙系数底数
+	Base                  float64 `json:"base"`                  // 城墙系数底数
+	Hardness              float64 `json:"hardness,omitempty"`    // 城墙硬度预留，后续用于攻城武器损坏判定
+	MinDamagedLevelFrom20 int     `json:"minDamagedLevelFrom20"` // 20 级被攻城武器破坏后的最低预期等级
+	MaxDamagedLevelFrom20 int     `json:"maxDamagedLevelFrom20"` // 20 级被攻城武器破坏后的最高预期等级
 }
 
 const (
@@ -235,9 +238,9 @@ func defaultCombatConfig() CombatConfig {
 			},
 		},
 		WallConfig: map[string]WallEntry{
-			"wei": {Base: 1.03},
-			"shu": {Base: 1.02},
-			"wu":  {Base: 1.025},
+			"wei": {Base: 1.03, Hardness: 0.75, MinDamagedLevelFrom20: 5, MaxDamagedLevelFrom20: 5},
+			"shu": {Base: 1.02, Hardness: 1.35, MinDamagedLevelFrom20: 16, MaxDamagedLevelFrom20: 17},
+			"wu":  {Base: 1.025, Hardness: 1.0, MinDamagedLevelFrom20: 9, MaxDamagedLevelFrom20: 12},
 		},
 	}
 }
@@ -272,5 +275,28 @@ func normalizeCombatConfig(config *CombatConfig) {
 			rule.DefenseFormula = "weighted"
 		}
 		config.Rules[id] = rule
+	}
+	defaults := defaultCombatConfig()
+	if config.WallConfig == nil {
+		config.WallConfig = map[string]WallEntry{}
+	}
+	for faction, fallback := range defaults.WallConfig {
+		entry := config.WallConfig[faction]
+		if entry.Base <= 0 {
+			entry.Base = fallback.Base
+		}
+		if entry.Hardness <= 0 {
+			entry.Hardness = fallback.Hardness
+		}
+		if entry.MinDamagedLevelFrom20 <= 0 {
+			entry.MinDamagedLevelFrom20 = fallback.MinDamagedLevelFrom20
+		}
+		if entry.MaxDamagedLevelFrom20 <= 0 {
+			entry.MaxDamagedLevelFrom20 = fallback.MaxDamagedLevelFrom20
+		}
+		if entry.MinDamagedLevelFrom20 > entry.MaxDamagedLevelFrom20 {
+			entry.MinDamagedLevelFrom20, entry.MaxDamagedLevelFrom20 = entry.MaxDamagedLevelFrom20, entry.MinDamagedLevelFrom20
+		}
+		config.WallConfig[faction] = entry
 	}
 }

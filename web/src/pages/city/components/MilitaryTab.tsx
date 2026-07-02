@@ -14,7 +14,7 @@ import {
   Store,
 } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
-import { getBuildingModifierProgressText, useConfigStore } from '@/store/configStore'
+import { getBuildingModifierProgressText, getCityWallDefenseBreakdownText, useConfigStore } from '@/store/configStore'
 import BuildingCard from './BuildingCard'
 import type { Building } from '@/types/game'
 
@@ -154,11 +154,12 @@ interface BuildingGroupProps {
   icon: FC<{ size?: number; className?: string }>
   configs: BuildingConfig[]
   buildings: Building[]
+  faction?: string
   highlightedType?: string | null
 }
 
 /** 渲染单个建筑分组 */
-const BuildingGroup: FC<BuildingGroupProps> = ({ title, icon: GroupIcon, configs, buildings, highlightedType }) => (
+const BuildingGroup: FC<BuildingGroupProps> = ({ title, icon: GroupIcon, configs, buildings, faction, highlightedType }) => (
   <section>
     <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3 flex items-center gap-2">
       <GroupIcon size={16} className="text-[var(--color-accent)]" />
@@ -190,7 +191,7 @@ const BuildingGroup: FC<BuildingGroupProps> = ({ title, icon: GroupIcon, configs
               description={config.description}
               level={building?.level ?? 0}
               production={building ? `Lv.${building.level}` : '未建造'}
-              effectText={building ? getBuildingModifierProgressText(config.type, building.level) : undefined}
+              effectText={building ? buildingEffectText(config.type, building.level, faction) : undefined}
               upgradeEndsAt={building?.upgradeEndsAt}
               color={config.color}
               bgColor={config.bgColor}
@@ -210,8 +211,9 @@ interface MilitaryTabProps {
 /** 渲染军事建筑页签 */
 const MilitaryTab: FC<MilitaryTabProps> = ({ focusConstructionNonce = 0 }) => {
   const buildings = useGameStore((s) => s.state?.buildings ?? EMPTY_BUILDINGS)
+  const faction = useGameStore((s) => s.state?.player.faction)
   const [highlightedType, setHighlightedType] = useState<string | null>(null)
-  useConfigStore((s) => s.balance)
+  useConfigStore((s) => Boolean(s.balance && s.combat))
 
   useEffect(() => {
     if (focusConstructionNonce <= 0) return
@@ -230,11 +232,19 @@ const MilitaryTab: FC<MilitaryTabProps> = ({ focusConstructionNonce = 0 }) => {
 
   return (
     <div className="space-y-6">
-      <BuildingGroup title="防御" icon={Shield} configs={DEFENSE_BUILDINGS} buildings={buildings} highlightedType={highlightedType} />
-      <BuildingGroup title="军事" icon={Swords} configs={MILITARY_BUILDINGS} buildings={buildings} highlightedType={highlightedType} />
-      <BuildingGroup title="内政" icon={Landmark} configs={CIVIL_BUILDINGS} buildings={buildings} highlightedType={highlightedType} />
+      <BuildingGroup title="防御" icon={Shield} configs={DEFENSE_BUILDINGS} buildings={buildings} faction={faction} highlightedType={highlightedType} />
+      <BuildingGroup title="军事" icon={Swords} configs={MILITARY_BUILDINGS} buildings={buildings} faction={faction} highlightedType={highlightedType} />
+      <BuildingGroup title="内政" icon={Landmark} configs={CIVIL_BUILDINGS} buildings={buildings} faction={faction} highlightedType={highlightedType} />
     </div>
   )
 }
 
 export default MilitaryTab
+
+/** 返回建筑卡片展示的效果文本。 */
+function buildingEffectText(buildingType: string, level: number, faction?: string): string {
+  if (buildingType === 'city_wall') {
+    return getCityWallDefenseBreakdownText(level, faction)
+  }
+  return getBuildingModifierProgressText(buildingType, level)
+}

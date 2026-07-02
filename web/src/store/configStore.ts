@@ -118,6 +118,18 @@ export interface SlotConfig {
   symbols: SlotSymbolConfig[]
 }
 
+export interface CombatWallEntry {
+  base: number
+  hardness?: number
+  minDamagedLevelFrom20?: number
+  maxDamagedLevelFrom20?: number
+}
+
+export interface CombatConfig {
+  activeCombatRules: Record<string, string>
+  wallConfig: Record<string, CombatWallEntry>
+}
+
 export interface FactionConfig {
   name: string
   description: string
@@ -131,6 +143,7 @@ interface ConfigStore {
   factions: Record<string, FactionConfig> | null
   units: Record<string, Record<string, UnitConfig>> | null
   items: Record<string, ItemDefinition> | null
+  combat: CombatConfig | null
   fishing: FishingConfig | null
   slot: SlotConfig | null
   reincarnation: ReincarnationConfig | null
@@ -143,6 +156,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   factions: null,
   units: null,
   items: null,
+  combat: null,
   fishing: null,
   slot: null,
   reincarnation: null,
@@ -157,6 +171,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         factions: data.factions,
         units: data.units,
         items: data.items,
+        combat: data.combat,
         fishing: data.fishing,
         slot: data.slot,
         reincarnation: data.reincarnation,
@@ -228,6 +243,16 @@ export function getBuildingModifierProgressText(buildingType: string, level: num
   return current || next
 }
 
+/** 获取城墙阵营系数防御加成说明 */
+export function getCityWallDefenseBreakdownText(level: number, faction?: string): string {
+  const combat = useConfigStore.getState().combat
+  if (level < 0) return ''
+  const wallBase = faction ? combat?.wallConfig?.[faction]?.base : undefined
+  const factionBonus = wallBase && wallBase > 0 && level > 0 ? Math.pow(wallBase, level) - 1 : 0
+  if (!wallBase || wallBase <= 0 || level <= 0) return ''
+  return `城墙倍率 ${formatCompactNumber(Math.pow(wallBase, level))}  阵营防御 ${formatPercent(factionBonus)}`
+}
+
 /** 格式化建筑加成数值 */
 function formatModifierAmount(value: number, mode: string): string {
   if (mode === 'percentAdd' || mode === 'percentMultiply') {
@@ -235,6 +260,16 @@ function formatModifierAmount(value: number, mode: string): string {
   }
   if (value > 0) return `+${formatCompactNumber(value)}`
   return formatCompactNumber(value)
+}
+
+/** 格式化百分比 */
+function formatPercent(value: number): string {
+  const percent = value * 100
+  const rounded = Math.round(percent * 10) / 10
+  const text = Math.abs(rounded - Math.round(rounded)) < 0.000001
+    ? String(Math.round(rounded))
+    : rounded.toFixed(1)
+  return `+${text}%`
 }
 
 /** 格式化紧凑数值 */

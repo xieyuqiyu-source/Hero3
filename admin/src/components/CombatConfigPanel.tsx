@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Swords, Save, Plus, Trash2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
-import type { CombatConfig, CombatRuleConfig } from '@/types'
+import type { CombatConfig, CombatRuleConfig, CombatWallEntry } from '@/types'
 
 const SCENE_LABELS: Record<string, string> = {
   pve_attack: 'PVE 攻击',
@@ -100,11 +100,11 @@ export default function CombatConfigPanel() {
     })
   }
 
-  const updateWall = (faction: string, base: number) => {
+  const updateWall = (faction: string, patch: Partial<CombatWallEntry>) => {
     if (!config) return
     setConfig({
       ...config,
-      wallConfig: { ...config.wallConfig, [faction]: { base } },
+      wallConfig: { ...config.wallConfig, [faction]: { ...config.wallConfig[faction], ...patch } },
     })
   }
 
@@ -241,19 +241,48 @@ export default function CombatConfigPanel() {
 
       {/* Wall Config */}
       <section>
-        <h3 className="text-xs font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2">城墙系数</h3>
+        <h3 className="text-xs font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2">城墙系数与硬度预留</h3>
         <div className="grid grid-cols-3 gap-2">
           {Object.entries(config.wallConfig).map(([faction, entry]) => (
-            <label key={faction} className="grid gap-1 px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+            <div key={faction} className="grid gap-1 px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
               <span className="text-[10px] font-bold text-[var(--color-text-muted)]">{FACTION_LABELS[faction] ?? faction}</span>
+              <span className="text-[10px] text-[var(--color-text-muted)]">系数底数</span>
               <input
                 type="number"
                 step="0.001"
                 value={entry.base}
-                onChange={(e) => updateWall(faction, parseFloat(e.target.value) || 1)}
+                onChange={(e) => updateWall(faction, { base: parseFloat(e.target.value) || 1 })}
                 className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
               />
-            </label>
+              <span className="text-[10px] text-[var(--color-text-muted)]">硬度</span>
+              <input
+                type="number"
+                step="0.01"
+                value={entry.hardness ?? 1}
+                onChange={(e) => updateWall(faction, { hardness: parseFloat(e.target.value) || 1 })}
+                className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+              />
+              <div className="grid grid-cols-2 gap-1">
+                <label className="grid gap-1">
+                  <span className="text-[10px] text-[var(--color-text-muted)]">20级破坏低</span>
+                  <input
+                    type="number"
+                    value={entry.minDamagedLevelFrom20 ?? 1}
+                    onChange={(e) => updateWall(faction, { minDamagedLevelFrom20: parseInt(e.target.value) || 1 })}
+                    className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-[10px] text-[var(--color-text-muted)]">20级破坏高</span>
+                  <input
+                    type="number"
+                    value={entry.maxDamagedLevelFrom20 ?? 1}
+                    onChange={(e) => updateWall(faction, { maxDamagedLevelFrom20: parseInt(e.target.value) || 1 })}
+                    className="h-7 px-2 rounded-lg text-xs border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)]"
+                  />
+                </label>
+              </div>
+            </div>
           ))}
         </div>
       </section>

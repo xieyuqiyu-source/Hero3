@@ -122,6 +122,7 @@ type BootstrapResponse struct {
 	Units         UnitsConfig         `json:"units"`
 	Items         ItemsConfig         `json:"items"`
 	DropPools     DropPoolsConfig     `json:"dropPools"`
+	Combat        combat.CombatConfig `json:"combat"`
 	Fishing       FishingConfig       `json:"fishing"`
 	Slot          SlotConfig          `json:"slot"`
 	Reincarnation ReincarnationConfig `json:"reincarnation"`
@@ -660,6 +661,7 @@ func (s *Service) Bootstrap() BootstrapResponse {
 	units := GetUnitsConfig()
 	items := GetItemsConfig()
 	dropPools := GetDropPoolsConfig()
+	combatConfig := combat.GetCombatConfig()
 	fishing := GetFishingConfig()
 	slot := GetSlotConfig()
 	reincarnation := GetReincarnationConfig()
@@ -680,6 +682,7 @@ func (s *Service) Bootstrap() BootstrapResponse {
 		Units:         units,
 		Items:         items,
 		DropPools:     dropPools,
+		Combat:        combatConfig,
 		Fishing:       fishing,
 		Slot:          slot,
 		Reincarnation: reincarnation,

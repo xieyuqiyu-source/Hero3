@@ -65,6 +65,10 @@ BootstrapResponse:
       type: object
       additionalProperties: true
       description: 道具配置。
+    combat:
+      type: object
+      additionalProperties: true
+      description: 战斗规则配置，包含场景规则映射、阵营城墙系数和硬度预留参数。
     fishing:
       $ref: '#/components/schemas/FishingConfig'
     slot:

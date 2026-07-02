@@ -347,6 +347,28 @@ func TestWallBonus(t *testing.T) {
 	}
 }
 
+func TestNormalizeCombatConfigFillsWallHardnessDefaults(t *testing.T) {
+	cfg := CombatConfig{
+		Rules: map[string]RuleConfig{
+			RuleOfficialAttack: {ID: RuleOfficialAttack, Mode: "attack"},
+		},
+		WallConfig: map[string]WallEntry{
+			"wei": {Base: 1.03},
+		},
+	}
+
+	normalizeCombatConfig(&cfg)
+
+	wei := cfg.WallConfig["wei"]
+	if wei.Hardness <= 0 || wei.MinDamagedLevelFrom20 != 5 || wei.MaxDamagedLevelFrom20 != 5 {
+		t.Fatalf("expected wei wall hardness defaults, got %+v", wei)
+	}
+	shu := cfg.WallConfig["shu"]
+	if shu.Hardness <= wei.Hardness || shu.MinDamagedLevelFrom20 != 16 || shu.MaxDamagedLevelFrom20 != 17 {
+		t.Fatalf("expected shu wall hardness defaults, got %+v", shu)
+	}
+}
+
 func TestSurvivingCarryCapacity(t *testing.T) {
 	input := CombatInput{
 		RuleID: "official_attack",
