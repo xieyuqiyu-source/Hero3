@@ -44,7 +44,13 @@ func TestPvpAttackRejectsSelfAndSameAccount(t *testing.T) {
 }
 
 func TestPvpTargetsExposeStableWorldPositions(t *testing.T) {
-	svc, _, attacker, _ := newPvpTestService(t)
+	svc, repo, attacker, defender := newPvpTestService(t)
+	if _, err := repo.AssignWorldPosition(attacker.Player.ID, defaultWorldID, 0, 0, "test"); err != nil {
+		t.Fatalf("AssignWorldPosition attacker failed: %v", err)
+	}
+	if _, err := repo.AssignWorldPosition(defender.Player.ID, defaultWorldID, 3, 4, "test"); err != nil {
+		t.Fatalf("AssignWorldPosition defender failed: %v", err)
+	}
 
 	first, err := svc.ListPvpTargets(attacker.Player.ID)
 	if err != nil {
@@ -57,21 +63,135 @@ func TestPvpTargetsExposeStableWorldPositions(t *testing.T) {
 	if first.Self != second.Self {
 		t.Fatalf("expected stable self position, first=%+v second=%+v", first.Self, second.Self)
 	}
-	if first.Self.X <= 0 || first.Self.Y <= 0 || first.WorldSize != defaultPvpWorldSize {
+	if first.Self.X != 0 || first.Self.Y != 0 || first.WorldSize != defaultPvpWorldSize {
 		t.Fatalf("unexpected self world position: %+v world=%d", first.Self, first.WorldSize)
 	}
-	if len(first.Items) == 0 || first.Items[0].Position.X <= 0 || first.Items[0].Distance <= 0 {
+	if len(first.Items) == 0 || first.Items[0].PlayerID != defender.Player.ID || first.Items[0].Position.X != 3 || first.Items[0].Position.Y != 4 || first.Items[0].Distance != 7 {
 		t.Fatalf("expected target positions and distance, got %+v", first.Items)
+	}
+	if first.Items[0].Direction == "" || first.Items[0].ReinforceSeconds <= 0 {
+		t.Fatalf("expected target direction and reinforcement estimate, got %+v", first.Items[0])
 	}
 }
 
+func TestPvpTargetsExposeWorldMapActionFields(t *testing.T) {
+	svc, repo, attacker, defender := newPvpTestService(t)
+	now := time.Now().UTC()
+	sameAccount := newPlayerState("player_pvp_target_same_account", "同账号城", "wu", "sunquan", now)
+	if err := repo.CreatePlayer("account_pvp_a", sameAccount, now); err != nil {
+		t.Fatalf("CreatePlayer same account failed: %v", err)
+	}
+	if _, err := repo.AssignWorldPosition(attacker.Player.ID, defaultWorldID, 10, 10, "test"); err != nil {
+		t.Fatalf("AssignWorldPosition attacker failed: %v", err)
+	}
+	if _, err := repo.AssignWorldPosition(defender.Player.ID, defaultWorldID, 12, 10, "test"); err != nil {
+		t.Fatalf("AssignWorldPosition defender failed: %v", err)
+	}
+	if _, err := repo.AssignWorldPosition(sameAccount.Player.ID, defaultWorldID, 11, 10, "test"); err != nil {
+		t.Fatalf("AssignWorldPosition same account failed: %v", err)
+	}
+	targets, err := svc.ListPvpTargets(attacker.Player.ID)
+	if err != nil {
+		t.Fatalf("ListPvpTargets failed: %v", err)
+	}
+	normal := findPvpTargetSummaryForTest(targets.Items, defender.Player.ID)
+	if normal.PlayerID == "" {
+		t.Fatalf("expected defender target, got %+v", targets.Items)
+	}
+	if normal.Relation != WorldRelationOther || normal.Status != WorldTargetStatusAttackable || !normal.CanScout || !normal.CanAttack || !normal.CanPlunder || !normal.CanReinforce {
+		t.Fatalf("expected normal target to expose world map action fields, got %+v", normal)
+	}
+	if _, err := svc.SetPvpProtection(defender.Player.ID, PvpProtectionTypeManual, time.Hour, "test", now); err != nil {
+		t.Fatalf("SetPvpProtection defender failed: %v", err)
+	}
+	truceTargets, err := svc.ListPvpTargets(attacker.Player.ID)
+	if err != nil {
+		t.Fatalf("ListPvpTargets truce failed: %v", err)
+	}
+	truce := findPvpTargetSummaryForTest(truceTargets.Items, defender.Player.ID)
+	if truce.Status != WorldTargetStatusTruce || truce.CanAttack || truce.CanPlunder {
+		t.Fatalf("expected manual protection to expose truce status, got %+v", truce)
+	}
+	if truce.AttackReason != "目标处于免战保护" || truce.PlunderReason != "目标处于免战保护" {
+		t.Fatalf("expected truce action reasons, got %+v", truce)
+	}
+	defenderState, err := repo.GetPvpPlayerState(defender.Player.ID, now)
+	if err != nil {
+		t.Fatalf("GetPvpPlayerState defender failed: %v", err)
+	}
+	defenderState.ProtectionType = ""
+	defenderState.ProtectedUntil = ""
+	if err := repo.SavePvpPlayerState(defenderState, now); err != nil {
+		t.Fatalf("SavePvpPlayerState defender clear failed: %v", err)
+	}
+	same := findPvpTargetSummaryForTest(targets.Items, sameAccount.Player.ID)
+	if same.PlayerID == "" {
+		t.Fatalf("expected same account target, got %+v", targets.Items)
+	}
+	if same.CanScout || same.CanAttack || same.CanPlunder || !same.CanReinforce {
+		t.Fatalf("expected same account target action fields, got %+v", same)
+	}
+	if same.ScoutReason != "同账号存档不能侦查" || same.AttackReason != "同账号存档不能攻击" || same.PlunderReason != "同账号存档不能掠夺" {
+		t.Fatalf("expected same account action reasons, got %+v", same)
+	}
+	if _, err := svc.SetPvpProtection(sameAccount.Player.ID, PvpProtectionTypeManual, time.Hour, "same account truce", now); err != nil {
+		t.Fatalf("SetPvpProtection same account failed: %v", err)
+	}
+	sameTruceTargets, err := svc.ListPvpTargets(attacker.Player.ID)
+	if err != nil {
+		t.Fatalf("ListPvpTargets same account truce failed: %v", err)
+	}
+	sameTruce := findPvpTargetSummaryForTest(sameTruceTargets.Items, sameAccount.Player.ID)
+	if sameTruce.Status != WorldTargetStatusTruce {
+		t.Fatalf("expected same account truce status to be visible, got %+v", sameTruce)
+	}
+	if sameTruce.AttackReason != "同账号存档不能攻击" || sameTruce.PlunderReason != "同账号存档不能掠夺" {
+		t.Fatalf("expected same account reasons not to be overridden by truce, got %+v", sameTruce)
+	}
+	state := newDefaultPvpPlayerState(attacker.Player.ID, now)
+	state.DailyAttackCount = state.DailyAttackLimit
+	if err := repo.SavePvpPlayerState(state, now); err != nil {
+		t.Fatalf("SavePvpPlayerState daily limit failed: %v", err)
+	}
+	limitedTargets, err := svc.ListPvpTargets(attacker.Player.ID)
+	if err != nil {
+		t.Fatalf("ListPvpTargets daily limit failed: %v", err)
+	}
+	limited := findPvpTargetSummaryForTest(limitedTargets.Items, defender.Player.ID)
+	if limited.CanAttack || limited.CanPlunder || !limited.CanScout || !limited.CanReinforce || limited.Status != WorldTargetStatusUnavailable {
+		t.Fatalf("expected daily limit to disable attack and plunder only, got %+v", limited)
+	}
+	if limited.AttackReason != "今日攻击次数已用完" || limited.PlunderReason != "今日攻击次数已用完" {
+		t.Fatalf("expected daily limit action reasons, got %+v", limited)
+	}
+	limitedSame := findPvpTargetSummaryForTest(limitedTargets.Items, sameAccount.Player.ID)
+	if limitedSame.AttackReason != "同账号存档不能攻击" || limitedSame.PlunderReason != "同账号存档不能掠夺" {
+		t.Fatalf("expected daily limit not to override same account reasons, got %+v", limitedSame)
+	}
+}
+
+// findPvpTargetSummaryForTest 在测试目标列表中查找指定玩家。
+func findPvpTargetSummaryForTest(items []PvpTargetSummary, playerID string) PvpTargetSummary {
+	for _, item := range items {
+		if item.PlayerID == playerID {
+			return item
+		}
+	}
+	return PvpTargetSummary{}
+}
+
 func TestPvpTargetsFilterByMapViewport(t *testing.T) {
-	svc, _, attacker, defender := newPvpTestService(t)
-	defenderPosition := pvpWorldPositionForPlayer(defender.Player.ID)
+	svc, repo, attacker, defender := newPvpTestService(t)
+	if _, err := repo.AssignWorldPosition(attacker.Player.ID, defaultWorldID, 0, 0, "test"); err != nil {
+		t.Fatalf("AssignWorldPosition attacker failed: %v", err)
+	}
+	if _, err := repo.AssignWorldPosition(defender.Player.ID, defaultWorldID, 3, 4, "test"); err != nil {
+		t.Fatalf("AssignWorldPosition defender failed: %v", err)
+	}
 
 	near, err := svc.ListPvpTargetsInArea(attacker.Player.ID, PvpTargetFilter{
-		CenterX: defenderPosition.X,
-		CenterY: defenderPosition.Y,
+		CenterX: 3,
+		CenterY: 4,
 		Radius:  1,
 		Limit:   10,
 	})
@@ -82,17 +202,9 @@ func TestPvpTargetsFilterByMapViewport(t *testing.T) {
 		t.Fatalf("expected defender in near viewport, got %+v", near.Items)
 	}
 
-	farX := 1
-	if defenderPosition.X < defaultPvpWorldSize/2 {
-		farX = defaultPvpWorldSize
-	}
-	farY := 1
-	if defenderPosition.Y < defaultPvpWorldSize/2 {
-		farY = defaultPvpWorldSize
-	}
 	far, err := svc.ListPvpTargetsInArea(attacker.Player.ID, PvpTargetFilter{
-		CenterX: farX,
-		CenterY: farY,
+		CenterX: 0,
+		CenterY: 0,
 		Radius:  1,
 		Limit:   10,
 	})
@@ -846,6 +958,12 @@ func TestPvpMarchDurationUsesSlowestUnitSpeed(t *testing.T) {
 	defender.Army = nil
 	repo.players[attacker.Player.ID] = attacker
 	repo.players[defender.Player.ID] = defender
+	if _, err := repo.AssignWorldPosition(attacker.Player.ID, defaultWorldID, 10, 10, "test"); err != nil {
+		t.Fatalf("AssignWorldPosition attacker failed: %v", err)
+	}
+	if _, err := repo.AssignWorldPosition(defender.Player.ID, defaultWorldID, 46, 10, "test"); err != nil {
+		t.Fatalf("AssignWorldPosition defender failed: %v", err)
+	}
 
 	fast, err := svc.StartPvpAttack(PvpAttackRequest{
 		PlayerID:       attacker.Player.ID,

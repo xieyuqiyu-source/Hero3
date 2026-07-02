@@ -59,8 +59,18 @@ func TestHealthcheckAuthorityAcceptsEmptyOptionalTables(t *testing.T) {
 	if err != nil {
 		t.Fatalf("healthcheck authority: %v", err)
 	}
-	if result.Players != 1 || result.MissingResources != 0 || result.MissingBuildings != 0 || result.MissingResourceSlots != 0 || result.MissingGenerals != 0 || result.MissingCurrencies != 0 || result.MissingLegacyNpc != 0 || result.BigSnapshotPlayers != 0 {
+	if result.Players != 1 || result.MissingResources != 0 || result.MissingBuildings != 0 || result.MissingResourceSlots != 0 || result.MissingGenerals != 0 || result.MissingCurrencies != 0 || result.MissingWorldPositions != 0 || result.MissingLegacyNpc != 0 || result.BigSnapshotPlayers != 0 {
 		t.Fatalf("unexpected healthcheck result: %+v", result)
+	}
+	if _, err := db.Exec(`DELETE FROM player_world_positions WHERE player_id = ?`, player.Player.ID); err != nil {
+		t.Fatalf("delete world position: %v", err)
+	}
+	result, err = healthcheckAuthority(ctx, dsn)
+	if err != nil {
+		t.Fatalf("healthcheck authority missing world position: %v", err)
+	}
+	if result.MissingWorldPositions != 1 {
+		t.Fatalf("expected missing world position to be reported, got %+v", result)
 	}
 }
 
@@ -116,5 +126,9 @@ func insertAuthorityHealthcheckPlayer(t *testing.T, db *sql.DB, state game.GameS
 	if _, err := db.Exec(`INSERT INTO player_currencies (player_id, city_gold, last_exchange_at, updated_at) VALUES (?, ?, ?, ?)`,
 		state.Player.ID, int(state.CityGold), nil, now); err != nil {
 		t.Fatalf("insert currency: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO player_world_positions (player_id, world_id, x, y, assigned_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		state.Player.ID, "world_1", 0, 0, "healthcheck_test", now, now); err != nil {
+		t.Fatalf("insert world position: %v", err)
 	}
 }

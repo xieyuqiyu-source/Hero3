@@ -38,8 +38,8 @@ const (
 	PvpSeasonRewardMailType = "pvp_season_reward"
 
 	defaultPvpWorldID      = "world_1"
-	defaultPvpWorldSize    = 2000
-	defaultPvpTargetRadius = 420
+	defaultPvpWorldSize    = 100
+	defaultPvpTargetRadius = 10
 	defaultPvpTargetLimit  = 80
 )
 
@@ -61,19 +61,29 @@ type PvpTargetFilter struct {
 
 // PvpTargetSummary 是 PVP 目标列表中的玩家摘要。
 type PvpTargetSummary struct {
-	PlayerID       string           `json:"playerId"`
-	Nickname       string           `json:"nickname"`
-	Faction        string           `json:"faction"`
-	Position       PvpWorldPosition `json:"position"`
-	Distance       int              `json:"distance"`
-	TotalArmy      int              `json:"totalArmy"`
-	BuildingLevel  int              `json:"buildingLevel"`
-	CanAttack      bool             `json:"canAttack"`
-	CanReinforce   bool             `json:"canReinforce"`
-	Protected      bool             `json:"protected"`
-	ProtectedUntil string           `json:"protectedUntil,omitempty"`
-	CooldownUntil  string           `json:"cooldownUntil,omitempty"`
-	Reason         string           `json:"reason,omitempty"`
+	PlayerID         string           `json:"playerId"`
+	Nickname         string           `json:"nickname"`
+	Faction          string           `json:"faction"`
+	Position         PvpWorldPosition `json:"position"`
+	Distance         int              `json:"distance"`
+	Direction        string           `json:"direction,omitempty"`
+	ReinforceSeconds int              `json:"reinforceSeconds"`
+	TotalArmy        int              `json:"totalArmy"`
+	BuildingLevel    int              `json:"buildingLevel"`
+	Relation         string           `json:"relation,omitempty"`
+	Status           string           `json:"status,omitempty"`
+	CanScout         bool             `json:"canScout"`
+	CanAttack        bool             `json:"canAttack"`
+	CanPlunder       bool             `json:"canPlunder"`
+	CanReinforce     bool             `json:"canReinforce"`
+	Protected        bool             `json:"protected"`
+	ProtectedUntil   string           `json:"protectedUntil,omitempty"`
+	CooldownUntil    string           `json:"cooldownUntil,omitempty"`
+	Reason           string           `json:"reason,omitempty"`
+	ScoutReason      string           `json:"scoutReason,omitempty"`
+	AttackReason     string           `json:"attackReason,omitempty"`
+	PlunderReason    string           `json:"plunderReason,omitempty"`
+	ReinforceReason  string           `json:"reinforceReason,omitempty"`
 }
 
 // PvpPlayerState 保存玩家 PVP 保护、冷却和每日次数状态。

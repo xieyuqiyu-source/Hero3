@@ -139,6 +139,7 @@ func countAuthorityHealthcheckProblems(result authorityHealthcheckResult) int {
 		result.MissingResourceSlots +
 		result.MissingGenerals +
 		result.MissingCurrencies +
+		result.MissingWorldPositions +
 		result.MissingLegacyNpc +
 		result.BigSnapshotPlayers
 }
@@ -167,13 +168,14 @@ func printMaintenanceStatus(result maintenanceStatusResult) {
 		fmt.Printf("  缺失 %s.%s (%s)\n", definition.Table, definition.Name, joinDisplayColumns(definition.Columns))
 	}
 	fmt.Println("权威表:")
-	fmt.Printf("  玩家=%d 缺资源=%d 缺建筑=%d 缺资源田=%d 缺武将=%d 缺货币=%d 旧NPC缺权威=%d state_json残留=%d\n",
+	fmt.Printf("  玩家=%d 缺资源=%d 缺建筑=%d 缺资源田=%d 缺武将=%d 缺货币=%d 缺世界坐标=%d 旧NPC缺权威=%d state_json残留=%d\n",
 		result.Authority.Players,
 		result.Authority.MissingResources,
 		result.Authority.MissingBuildings,
 		result.Authority.MissingResourceSlots,
 		result.Authority.MissingGenerals,
 		result.Authority.MissingCurrencies,
+		result.Authority.MissingWorldPositions,
 		result.Authority.MissingLegacyNpc,
 		result.Authority.BigSnapshotPlayers,
 	)

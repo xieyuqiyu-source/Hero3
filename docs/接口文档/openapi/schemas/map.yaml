@@ -1,3 +1,229 @@
+WorldPosition:
+  type: object
+  required:
+  - playerId
+  - worldId
+  - x
+  - y
+  - assignedBy
+  properties:
+    playerId:
+      type: string
+    worldId:
+      type: string
+      example: world_1
+    x:
+      type: integer
+      minimum: 0
+      maximum: 99
+    y:
+      type: integer
+      minimum: 0
+      maximum: 99
+    assignedBy:
+      type: string
+      enum: [create, migration, lazy_create, admin, relocate, test]
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+WorldMapOccupancyStats:
+  type: object
+  required:
+  - worldId
+  - width
+  - height
+  - totalCells
+  - occupiedCells
+  - availableCells
+  - occupancyRate
+  properties:
+    worldId:
+      type: string
+      example: world_1
+    width:
+      type: integer
+      example: 100
+    height:
+      type: integer
+      example: 100
+    totalCells:
+      type: integer
+      example: 10000
+    occupiedCells:
+      type: integer
+      example: 123
+    availableCells:
+      type: integer
+      example: 9877
+    occupancyRate:
+      type: number
+      format: double
+      example: 0.0123
+WorldMapCoordinateCheck:
+  type: object
+  required:
+  - worldId
+  - x
+  - y
+  - occupied
+  properties:
+    worldId:
+      type: string
+      example: world_1
+    x:
+      type: integer
+      minimum: 0
+      maximum: 99
+    y:
+      type: integer
+      minimum: 0
+      maximum: 99
+    occupied:
+      type: boolean
+      description: 该格是否已有玩家城池。
+    playerId:
+      type: string
+      description: 已占用时返回占用该格的玩家 ID。
+WorldMapTarget:
+  type: object
+  required:
+  - targetType
+  - targetId
+  - name
+  - faction
+  - relation
+  - level
+  - status
+  - x
+  - y
+  - distance
+  - direction
+  - canScout
+  - canAttack
+  - canPlunder
+  - canReinforce
+  properties:
+    targetType:
+      type: string
+      example: player_city
+    targetId:
+      type: string
+    playerId:
+      type: string
+    name:
+      type: string
+    faction:
+      type: string
+      example: shu
+    relation:
+      type: string
+      enum: [self, ally, other]
+    level:
+      type: integer
+    status:
+      type: string
+      enum: [self, ally, normal, protected, truce, attackable, unavailable]
+    x:
+      type: integer
+      minimum: 0
+      maximum: 99
+    y:
+      type: integer
+      minimum: 0
+      maximum: 99
+    distance:
+      type: integer
+      minimum: 0
+    direction:
+      type: string
+      example: 东南
+    canScout:
+      type: boolean
+    canAttack:
+      type: boolean
+    canPlunder:
+      type: boolean
+    canReinforce:
+      type: boolean
+    reason:
+      type: string
+    scoutReason:
+      type: string
+    attackReason:
+      type: string
+    plunderReason:
+      type: string
+    reinforceReason:
+      type: string
+WorldMapViewResponse:
+  type: object
+  required:
+  - worldId
+  - width
+  - height
+  - self
+  - centerX
+  - centerY
+  - radius
+  - targets
+  - serverTime
+  properties:
+    worldId:
+      type: string
+      example: world_1
+    width:
+      type: integer
+      example: 100
+    height:
+      type: integer
+      example: 100
+    self:
+      $ref: '#/components/schemas/WorldPosition'
+    centerX:
+      type: integer
+    centerY:
+      type: integer
+    radius:
+      type: integer
+    targets:
+      type: array
+      items:
+        $ref: '#/components/schemas/WorldMapTarget'
+    serverTime:
+      type: string
+      format: date-time
+WorldMapMigrationResult:
+  type: object
+  required:
+  - total
+  - created
+  - skipped
+  - conflicts
+  - failed
+  properties:
+    total:
+      type: integer
+    created:
+      type: integer
+    skipped:
+      type: integer
+    conflicts:
+      type: integer
+      description: 旧坐标被占用后改分配到附近空格的玩家数量。
+    conflictDetails:
+      type: array
+      description: '旧坐标冲突玩家的迁移明细，格式为 playerId: (oldX,oldY) -> (newX,newY)。'
+      items:
+        type: string
+    failed:
+      type: integer
+    failures:
+      type: array
+      items:
+        type: string
 NpcState:
   type: object
   required:

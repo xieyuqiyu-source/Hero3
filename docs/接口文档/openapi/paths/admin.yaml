@@ -50,6 +50,136 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/world-map/occupancy:
+  get:
+    tags:
+    - Admin
+    summary: GM 查看世界地图占用率
+    operationId: adminGetWorldMapOccupancy
+    security:
+    - adminToken: []
+    responses:
+      '200':
+        description: 世界地图坐标占用统计
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorldMapOccupancyStats'
+/api/v1/admin/world-map/positions/check:
+  get:
+    tags:
+    - Admin
+    summary: GM 检查世界坐标占用
+    description: 保存玩家世界坐标前，检查指定 0-99 坐标格是否已被玩家占用。
+    operationId: adminCheckWorldCoordinate
+    security:
+    - adminToken: []
+    parameters:
+    - name: x
+      in: query
+      required: true
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 99
+    - name: y
+      in: query
+      required: true
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 99
+    responses:
+      '200':
+        description: 世界坐标占用状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorldMapCoordinateCheck'
+      '400':
+        description: 坐标越界
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/world-map/positions/{playerId}:
+  get:
+    tags:
+    - Admin
+    summary: GM 查看玩家世界坐标
+    operationId: adminGetWorldPosition
+    security:
+    - adminToken: []
+    parameters:
+    - name: playerId
+      in: path
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 玩家权威世界坐标
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorldPosition'
+      '404':
+        description: 玩家不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+  put:
+    tags:
+    - Admin
+    summary: GM 调整玩家世界坐标
+    description: 将玩家城池移动到指定世界格子。坐标范围为 0-99，目标格已被其他玩家占用时会失败。
+    operationId: adminUpdateWorldPosition
+    security:
+    - adminToken: []
+    parameters:
+    - name: playerId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - x
+            - y
+            properties:
+              x:
+                type: integer
+                minimum: 0
+                maximum: 99
+              y:
+                type: integer
+                minimum: 0
+                maximum: 99
+    responses:
+      '200':
+        description: 调整后的玩家权威世界坐标
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorldPosition'
+      '400':
+        description: 坐标越界或目标格已占用
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 玩家不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
 /api/v1/admin/resources/adjust:
   post:
     tags:

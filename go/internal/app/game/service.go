@@ -74,6 +74,8 @@ var (
 	ErrReinforcementBusy           = errors.New("reinforcement is busy")
 	ErrReinforcementNotAccelerable = errors.New("reinforcement cannot be accelerated")
 	ErrGeneralBusy                 = errors.New("general is already assigned")
+	ErrWorldMapFull                = errors.New("world map is full")
+	ErrInvalidWorldCoordinate      = errors.New("invalid world coordinate")
 	ErrOperationTooFast            = errors.New("操作太快，请稍后再试")
 )
 
@@ -428,7 +430,17 @@ func (s *Service) CreatePlayer(accountID string, nickname string, faction string
 	if err := s.repo.CreatePlayer(accountID, state, now); err != nil {
 		return "", GameState{}, err
 	}
+	createCoordinate, err := generateWorldMapCreateCoordinate()
+	if err != nil {
+		s.cleanupFailedPlayerCreate(playerID)
+		return "", GameState{}, err
+	}
+	if _, err := s.ensureWorldPosition(playerID, "create", &createCoordinate); err != nil {
+		s.cleanupFailedPlayerCreate(playerID)
+		return "", GameState{}, err
+	}
 	if _, err := s.sendNewPlayerRewardMail(playerID); err != nil {
+		s.cleanupFailedPlayerCreate(playerID)
 		return "", GameState{}, err
 	}
 	s.publishEvent(GameEvent{
@@ -446,6 +458,11 @@ func (s *Service) CreatePlayer(accountID string, nickname string, faction string
 	})
 
 	return playerID, state, nil
+}
+
+// cleanupFailedPlayerCreate 清理创建流程后半段失败时已经写入的玩家记录。
+func (s *Service) cleanupFailedPlayerCreate(playerID string) {
+	_ = s.repo.DeletePlayer(playerID)
 }
 
 // sendNewPlayerRewardMail 给新建角色投递可领取的新手奖励信函。

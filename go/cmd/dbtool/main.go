@@ -93,6 +93,8 @@ func main() {
 		err = runEnsureReportCleanupIndexes(os.Args[2:])
 	case "maintenance-status":
 		err = runMaintenanceStatus(os.Args[2:])
+	case "backfill-world-positions":
+		err = runBackfillWorldPositions(os.Args[2:])
 	default:
 		printUsage()
 		err = fmt.Errorf("unknown command: %s", os.Args[1])
@@ -145,4 +147,5 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  lock-snapshot 只读输出活跃连接、InnoDB 事务和锁等待")
 	fmt.Fprintln(os.Stderr, "  ensure-report-cleanup-indexes 检查或创建战报清理专用索引，默认 dry-run")
 	fmt.Fprintln(os.Stderr, "  maintenance-status 只读汇总战报、清理索引和权威表健康状态")
+	fmt.Fprintln(os.Stderr, "  backfill-world-positions 为已有玩家补齐世界地图权威坐标")
 }

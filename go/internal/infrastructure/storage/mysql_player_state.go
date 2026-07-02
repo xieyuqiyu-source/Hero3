@@ -161,6 +161,7 @@ func deletePlayerRelatedRowsTx(tx *sql.Tx, playerID string) error {
 		{`DELETE FROM pvp_battles WHERE attacker_player_id = ? OR defender_player_id = ?`, []any{playerID, playerID}},
 		{`DELETE FROM pvp_player_states WHERE player_id = ?`, []any{playerID}},
 		{`DELETE FROM pvp_season_players WHERE player_id = ?`, []any{playerID}},
+		{`DELETE FROM player_world_positions WHERE player_id = ?`, []any{playerID}},
 		{`DELETE FROM minigame_records WHERE player_id = ?`, []any{playerID}},
 		{`DELETE FROM mails WHERE player_id = ?`, []any{playerID}},
 		{`DELETE FROM gold_ledger WHERE player_id = ?`, []any{playerID}},

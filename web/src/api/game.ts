@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, PlayerDeletionResult, NpcCity, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, GamblingRoundResult, SlotRoundResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, ReinforcementActionResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, PlayerDeletionResult, NpcCity, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, GamblingRoundResult, SlotRoundResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, ReinforcementActionResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, WorldMapTarget, WorldMapViewResponse, PvpAttackResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult } from '@/types/game'
 import type { BalanceConfig, FactionConfig, FishingConfig, SlotConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -435,11 +435,26 @@ export const gameApi = {
   /** 获取 PVP 玩家目标 */
   listPvpTargets(playerId: string, params?: { centerX?: number; centerY?: number; radius?: number; limit?: number }) {
     const query = new URLSearchParams({ playerId })
-    if (params?.centerX) query.set('centerX', String(params.centerX))
-    if (params?.centerY) query.set('centerY', String(params.centerY))
-    if (params?.radius) query.set('radius', String(params.radius))
-    if (params?.limit) query.set('limit', String(params.limit))
+    if (params?.centerX !== undefined) query.set('centerX', String(params.centerX))
+    if (params?.centerY !== undefined) query.set('centerY', String(params.centerY))
+    if (params?.radius !== undefined) query.set('radius', String(params.radius))
+    if (params?.limit !== undefined) query.set('limit', String(params.limit))
     return api.get<PvpTargetsResponse>(`/pvp/targets?${query.toString()}`)
+  },
+
+  /** 获取世界地图玩家城池视图 */
+  getWorldMapView(playerId: string, params?: { centerX?: number; centerY?: number; radius?: number }) {
+    const query = new URLSearchParams({ playerId })
+    if (params?.centerX !== undefined) query.set('centerX', String(params.centerX))
+    if (params?.centerY !== undefined) query.set('centerY', String(params.centerY))
+    if (params?.radius !== undefined) query.set('radius', String(params.radius))
+    return api.get<WorldMapViewResponse>(`/world-map/view?${query.toString()}`)
+  },
+
+  /** 获取世界地图单个玩家城池目标详情 */
+  getWorldMapPlayerCityTarget(viewerId: string, playerId: string) {
+    const query = new URLSearchParams({ viewerId })
+    return api.get<WorldMapTarget>(`/world-map/targets/player_city/${encodeURIComponent(playerId)}?${query.toString()}`)
   },
 
   /** 侦查 PVP 玩家 */

@@ -65,6 +65,7 @@ go build ./cmd/server
 - `make clone-data` 可从 `HERO3_SOURCE_DATABASE_DSN` 复制数据到当前 `test_` 目标库，复制后自动回填并校验资源、背包、建筑、资源田格子、兵力、征兵队列、武将、Buff、玩家货币和旧 NPC 状态权威表。
 - `make healthcheck-authority` 是当前权威表健康检查；`verify-*` 仍保留为旧快照迁移期校验，不作为轻量 `state_json` 后的日常通过标准。
 - `make backfill-currencies` / `make verify-currencies` 和 `make backfill-npc-states` / `make verify-npc-states` 用于把旧玩家的城金、兑换冷却和旧 NPC 快照迁移到新权威表；正式库执行回填需直接调用 dbtool 并显式传 `--allow-non-test`，回填按小批次提交，可重复执行。
+- `make backfill-world-positions` 用于在测试库为老玩家补齐世界地图权威坐标；正式库执行需直接调用 `hero3-dbtool backfill-world-positions --allow-non-test`，命令可重复执行，已有坐标会跳过，输出创建、跳过、冲突和失败数量。
 - `make report-stats`、`make lock-snapshot` 和 `make cleanup-battle-reports-dry-run` 用于战报增长、锁等待和过期战报清理观测；生产部署会安装 `hero3-dbtool`，并启用战报清理与每小时维护巡检 systemd timer。
 - 战报清理默认按差异化保留执行：普通/NPC/扫荡 72 小时，PVP/玩家城池来源、防守/侦查 168 小时，玩家软删除 24 小时；有效分享链接会被保护。
 - `make ensure-report-cleanup-indexes-dry-run` 用于检查战报清理和可见上限所需索引；正式库创建缺失索引需直接调用 dbtool 并显式传 `--execute --allow-non-test`，建议低峰执行。
@@ -79,6 +80,7 @@ go build ./cmd/server
 - 购买产量/容量加成时，同倍率续订只叠加剩余时间；不同倍率购买会按新倍率和新时长重新计算。
 - 轮回绝境副本使用 `go/config/reincarnation.json` 配置层级、波次、加成、金币重置随机加成价格和奖励；玩家入口位于“地图 -> 副本”，GM 后台可编辑 JSON 配置、查看实例并处理异常结算。
 - NPC、PVP 和副本等真实战斗统一使用“参战武将”规则：每次最多携带 1 名武将；出征或副本波次显式携带武将时才享受武将加成、触发对应战斗特性并在杀敌后获得经验；不带武将时只享受玩家自身基础加成。玩家被攻击时，只有留在家中且未出征/增援的主将参与守城加成、战斗特性和经验。
+- 世界地图第一版使用 `100 x 100` 权威坐标网格，每个玩家城池占一个格子；前端草地也必须按同一坐标格渲染，一块草地就是距离 1，城池只能覆盖自己的格子；玩家端地图只保留世界地图主视图，PVP 攻击、掠夺和增援统一按世界地图曼哈顿距离与最低兵种速度计算行军时间，速度 1 为一格 5 分钟且最终时间封顶 3 小时。
 - 增援行军支持正式城金加速入口，每批最多加速 2 次、每次消耗 10 城金并写入 `reinforcement_accelerate` 流水；客户端传入的 `speedMultiplier` 会被服务端忽略，召回/遣返会按实际已行进或实际去程时间计算返程。
 - 城池 -> 军事建筑 -> 军事 分组展示攻城武器营和特殊建筑营，两者只能消耗账户金币升级，提供攻城/特殊兵种征兵速度提升和征兵消耗减免。
 - 左侧主菜单预留“联盟”入口，当前展示占位页，后续接入联盟系统。

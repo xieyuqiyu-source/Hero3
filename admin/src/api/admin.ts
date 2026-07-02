@@ -33,6 +33,9 @@ import type {
   SlotConfig,
   TraitRegistryResponse,
   UnitsConfig,
+  WorldMapCoordinateCheck,
+  WorldMapOccupancyStats,
+  WorldPosition,
 } from '@/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1'
@@ -68,6 +71,23 @@ export const adminApi = {
   },
   getPlayerState(playerId: string) {
     return request<GameState>(`${API_BASE}/admin/players/${playerId}/state`)
+  },
+  getWorldPosition(playerId: string) {
+    return request<WorldPosition>(`${API_BASE}/admin/world-map/positions/${encodeURIComponent(playerId)}`)
+  },
+  getWorldMapOccupancy() {
+    return request<WorldMapOccupancyStats>(`${API_BASE}/admin/world-map/occupancy`)
+  },
+  checkWorldCoordinate(x: number, y: number) {
+    const query = new URLSearchParams({ x: String(x), y: String(y) })
+    return request<WorldMapCoordinateCheck>(`${API_BASE}/admin/world-map/positions/check?${query.toString()}`)
+  },
+  updateWorldPosition(playerId: string, x: number, y: number) {
+    return request<WorldPosition>(`${API_BASE}/admin/world-map/positions/${encodeURIComponent(playerId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x, y }),
+    })
   },
   getPvpOverview(playerId = '', limit = 100) {
     const params = new URLSearchParams()

@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import type { GameState } from '@/types'
 import ResourceAdjustForm from '@/components/ResourceAdjustForm'
+import WorldPositionPanel from '@/components/WorldPositionPanel'
 
 interface PlayerDetailPanelProps {
   playerId: string
@@ -87,6 +88,9 @@ export default function PlayerDetailPanel({ playerId, onClose }: PlayerDetailPan
 
             {/* Resource Adjust */}
             <ResourceAdjustForm playerId={playerId} onSuccess={(s) => setState(s)} />
+
+            {/* 世界坐标 */}
+            <WorldPositionPanel playerId={playerId} />
 
             {/* Inventory */}
             {state.inventory && Object.keys(state.inventory).length > 0 && (

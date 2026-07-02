@@ -96,6 +96,10 @@ paths:
     $ref: ./paths/reinforcement.yaml#/~1api~1v1~1reinforcements~1{reinforcementId}~1expel
   /api/v1/reinforcements/{reinforcementId}/accelerate:
     $ref: ./paths/reinforcement.yaml#/~1api~1v1~1reinforcements~1{reinforcementId}~1accelerate
+  /api/v1/world-map/view:
+    $ref: ./paths/map.yaml#/~1api~1v1~1world-map~1view
+  /api/v1/world-map/targets/player_city/{playerId}:
+    $ref: ./paths/map.yaml#/~1api~1v1~1world-map~1targets~1player_city~1{playerId}
   /api/v1/map/npc-cities:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities
   /api/v1/map/npc-cities/refresh:
@@ -232,6 +236,12 @@ paths:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1accounts
   /api/v1/admin/players/{playerId}/state:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1players~1{playerId}~1state
+  /api/v1/admin/world-map/occupancy:
+    $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1world-map~1occupancy
+  /api/v1/admin/world-map/positions/check:
+    $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1world-map~1positions~1check
+  /api/v1/admin/world-map/positions/{playerId}:
+    $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1world-map~1positions~1{playerId}
   /api/v1/admin/resources/adjust:
     $ref: ./paths/admin.yaml#/~1api~1v1~1admin~1resources~1adjust
   /api/v1/admin/balance:
@@ -253,6 +263,15 @@ paths:
   /api/v1/admin/dungeons/reincarnation/runs/{runId}/repair-reward:
     $ref: ./paths/dungeon.yaml#/~1api~1v1~1admin~1dungeons~1reincarnation~1runs~1{runId}~1repair-reward
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    adminToken:
+      type: apiKey
+      in: header
+      name: X-Admin-Token
   schemas:
     HealthState:
       $ref: ./schemas/system.yaml#/HealthState
@@ -476,6 +495,18 @@ components:
       $ref: ./schemas/map.yaml#/ScoutNpcRequest
     ScoutNpcResponse:
       $ref: ./schemas/map.yaml#/ScoutNpcResponse
+    WorldPosition:
+      $ref: ./schemas/map.yaml#/WorldPosition
+    WorldMapOccupancyStats:
+      $ref: ./schemas/map.yaml#/WorldMapOccupancyStats
+    WorldMapCoordinateCheck:
+      $ref: ./schemas/map.yaml#/WorldMapCoordinateCheck
+    WorldMapTarget:
+      $ref: ./schemas/map.yaml#/WorldMapTarget
+    WorldMapViewResponse:
+      $ref: ./schemas/map.yaml#/WorldMapViewResponse
+    WorldMapMigrationResult:
+      $ref: ./schemas/map.yaml#/WorldMapMigrationResult
     Reward:
       $ref: ./schemas/reincarnation.yaml#/Reward
     ReincarnationConfig:

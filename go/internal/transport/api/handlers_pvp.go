@@ -16,8 +16,8 @@ func (h *Handlers) PvpTargets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filter := game.PvpTargetFilter{
-		CenterX: queryInt(r, "centerX", 0),
-		CenterY: queryInt(r, "centerY", 0),
+		CenterX: queryInt(r, "centerX", -1),
+		CenterY: queryInt(r, "centerY", -1),
 		Radius:  queryInt(r, "radius", 0),
 		Limit:   queryInt(r, "limit", 0),
 	}

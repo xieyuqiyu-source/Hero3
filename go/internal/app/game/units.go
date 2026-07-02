@@ -1,8 +1,10 @@
+// 本文件管理兵种和阵营配置的加载、保存和基础加成。
 package game
 
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -122,11 +124,40 @@ func LoadUnitsConfig(dir string) error {
 		}
 		config[faction] = units
 	}
+	if err := ValidateUnitsConfig(config); err != nil {
+		return err
+	}
 
 	unitsMu.Lock()
 	activeUnits = config
 	unitsMu.Unlock()
 	return nil
+}
+
+// ValidateUnitsConfig 校验兵种配置中世界地图行军需要的关键字段。
+func ValidateUnitsConfig(config UnitsConfig) error {
+	for faction, units := range config {
+		for unitID, unit := range units {
+			if !unitRequiresMarchSpeed(unit) {
+				continue
+			}
+			if unit.Stats == nil || unit.Stats["speed"] <= 0 {
+				return fmt.Errorf("unit %s/%s missing positive stats.speed for world map march", faction, unitID)
+			}
+		}
+	}
+	return nil
+}
+
+// unitRequiresMarchSpeed 判断兵种是否会参与世界地图行军速度计算。
+func unitRequiresMarchSpeed(unit UnitConfig) bool {
+	if unit.Role == "transport" {
+		return false
+	}
+	if unit.Stats == nil {
+		return false
+	}
+	return unit.Stats["upkeep"] > 0 || unit.Stats["attack"] > 0 || unit.Stats["infantryDefense"] > 0 || unit.Stats["cavalryDefense"] > 0
 }
 
 // ApplyTrait 应用阵营加成到基础值

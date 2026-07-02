@@ -791,23 +791,81 @@ export interface PvpTargetSummary {
   faction: string
   position: PvpWorldPosition
   distance: number
+  direction?: string
+  reinforceSeconds: number
   totalArmy: number
   buildingLevel: number
+  relation?: 'self' | 'ally' | 'other' | string
+  status?: string
+  canScout?: boolean
+  canPlunder?: boolean
   canAttack: boolean
   canReinforce: boolean
   protected: boolean
   protectedUntil?: string
   cooldownUntil?: string
   reason?: string
+  scoutReason?: string
+  attackReason?: string
+  plunderReason?: string
+  reinforceReason?: string
 }
 
 export interface PvpTargetsResponse {
   items: PvpTargetSummary[]
   self: PvpWorldPosition
   worldSize: number
+  worldWidth?: number
+  worldHeight?: number
   centerX: number
   centerY: number
   radius: number
+}
+
+export interface WorldPosition {
+  playerId: string
+  worldId: string
+  x: number
+  y: number
+  assignedBy: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface WorldMapTarget {
+  targetType: 'player_city' | string
+  targetId: string
+  playerId?: string
+  name: string
+  faction: string
+  relation: 'self' | 'ally' | 'other' | string
+  level: number
+  status: string
+  x: number
+  y: number
+  distance: number
+  direction: string
+  canScout: boolean
+  canAttack: boolean
+  canPlunder: boolean
+  canReinforce: boolean
+  reason?: string
+  scoutReason?: string
+  attackReason?: string
+  plunderReason?: string
+  reinforceReason?: string
+}
+
+export interface WorldMapViewResponse {
+  worldId: string
+  width: number
+  height: number
+  self: WorldPosition
+  centerX: number
+  centerY: number
+  radius: number
+  targets: WorldMapTarget[]
+  serverTime: string
 }
 
 export interface PvpMarch {

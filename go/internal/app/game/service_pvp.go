@@ -28,7 +28,7 @@ var (
 
 // ListPvpTargets 返回可展示的玩家目标列表。
 func (s *Service) ListPvpTargets(playerID string) (PvpTargetsResponse, error) {
-	return s.ListPvpTargetsInArea(playerID, PvpTargetFilter{})
+	return s.ListPvpTargetsInArea(playerID, PvpTargetFilter{CenterX: -1, CenterY: -1, Radius: pvpMaxViewRadius(), Limit: 1000})
 }
 
 // ListPvpTargetsInArea 返回指定地图视野内的玩家目标列表。
@@ -48,51 +48,102 @@ func (s *Service) ListPvpTargetsInArea(playerID string, filter PvpTargetFilter) 
 	items := []PvpTargetSummary{}
 	now := time.Now().UTC()
 	requestPvpState, _ := s.repo.GetPvpPlayerState(playerID, now)
-	selfPosition := pvpWorldPositionForPlayer(playerID)
+	selfWorldPosition, err := s.ensureWorldPosition(playerID, "lazy_create", nil)
+	if err != nil {
+		return PvpTargetsResponse{}, err
+	}
+	selfPosition := pvpWorldToPvpPosition(selfWorldPosition)
 	filter = normalizePvpTargetFilter(filter, selfPosition)
 	for _, account := range accounts {
 		for _, player := range account.Players {
 			if player.ID == playerID {
 				continue
 			}
-			position := pvpWorldPositionForPlayer(player.ID)
+			worldPosition, err := s.ensureWorldPosition(player.ID, "lazy_create", nil)
+			if err != nil {
+				return PvpTargetsResponse{}, err
+			}
+			position := pvpWorldToPvpPosition(worldPosition)
 			distance := pvpCoordinateDistance(selfPosition, position)
 			if filter.Radius > 0 {
-				centerDistance := pvpCoordinateDistance(PvpWorldPosition{X: filter.CenterX, Y: filter.CenterY}, position)
-				if centerDistance > filter.Radius {
+				if int(math.Abs(float64(position.X-filter.CenterX))) > filter.Radius || int(math.Abs(float64(position.Y-filter.CenterY))) > filter.Radius {
 					continue
 				}
 			}
+			relation := WorldRelationOther
+			status := WorldTargetStatusNormal
+			canScout := true
 			canAttack := account.ID != requestAccountID
-			reason := ""
+			canPlunder := canAttack
+			canReinforce := true
+			scoutReason := ""
+			attackReason := ""
+			plunderReason := ""
+			reinforceReason := ""
 			protectedUntil := ""
+			if account.ID == requestAccountID {
+				canScout = false
+				canAttack = false
+				canPlunder = false
+				scoutReason = "同账号存档不能侦查"
+				attackReason = "同账号存档不能攻击"
+				plunderReason = "同账号存档不能掠夺"
+			}
+			available, err := s.canReinforceWorldMapTarget(playerID, player.ID)
+			if err != nil {
+				return PvpTargetsResponse{}, err
+			}
+			if !available {
+				canReinforce = false
+				reinforceReason = "目标增援来源已满"
+			}
 			targetPvpState, _ := s.repo.GetPvpPlayerState(player.ID, now)
 			protected, protectionType, activeUntil := activePvpProtection(targetPvpState, now)
 			if protected {
+				status = worldTargetStatusForProtection(protectionType)
 				canAttack = false
+				canPlunder = false
 				protectedUntil = activeUntil
-				reason = pvpProtectionReason(protectionType)
+				if attackReason == "" {
+					attackReason = pvpProtectionReason(protectionType)
+				}
+				if plunderReason == "" {
+					plunderReason = pvpProtectionReason(protectionType)
+				}
+			} else if canAttack {
+				status = WorldTargetStatusAttackable
 			}
-			if requestPvpState.DailyAttackLimit > 0 && requestPvpState.DailyAttackCount >= requestPvpState.DailyAttackLimit {
+			if requestPvpState.DailyAttackLimit > 0 && requestPvpState.DailyAttackCount >= requestPvpState.DailyAttackLimit && account.ID != requestAccountID {
 				canAttack = false
-				reason = "今日攻击次数已用完"
+				canPlunder = false
+				attackReason = "今日攻击次数已用完"
+				plunderReason = "今日攻击次数已用完"
+				status = WorldTargetStatusUnavailable
 			}
-			if account.ID == requestAccountID {
-				reason = "同账号存档不能攻击"
-			}
+			reason := firstNonEmpty(scoutReason, attackReason, plunderReason, reinforceReason)
 			items = append(items, PvpTargetSummary{
-				PlayerID:       player.ID,
-				Nickname:       player.Nickname,
-				Faction:        player.Faction,
-				Position:       position,
-				Distance:       distance,
-				TotalArmy:      player.TotalArmy,
-				BuildingLevel:  player.BuildingLevel,
-				CanAttack:      canAttack,
-				CanReinforce:   true,
-				Protected:      protectedUntil != "",
-				ProtectedUntil: protectedUntil,
-				Reason:         reason,
+				PlayerID:         player.ID,
+				Nickname:         player.Nickname,
+				Faction:          player.Faction,
+				Position:         position,
+				Distance:         distance,
+				Direction:        pvpCoordinateDirection(selfPosition, position),
+				ReinforceSeconds: reinforcementTravelSecondsForDistance(distance, 1, now, nil),
+				TotalArmy:        player.TotalArmy,
+				BuildingLevel:    player.BuildingLevel,
+				Relation:         relation,
+				Status:           status,
+				CanScout:         canScout,
+				CanAttack:        canAttack,
+				CanPlunder:       canPlunder,
+				CanReinforce:     canReinforce,
+				Protected:        protectedUntil != "",
+				ProtectedUntil:   protectedUntil,
+				Reason:           reason,
+				ScoutReason:      scoutReason,
+				AttackReason:     attackReason,
+				PlunderReason:    plunderReason,
+				ReinforceReason:  reinforceReason,
 			})
 		}
 	}
@@ -120,7 +171,7 @@ func (s *Service) ListPvpTargetsInArea(playerID string, filter PvpTargetFilter) 
 
 // GetPvpTarget 返回单个玩家 PVP 目标摘要。
 func (s *Service) GetPvpTarget(playerID string, targetPlayerID string) (PvpTargetSummary, error) {
-	targets, err := s.ListPvpTargetsInArea(playerID, PvpTargetFilter{Radius: defaultPvpWorldSize, Limit: 200})
+	targets, err := s.ListPvpTargetsInArea(playerID, PvpTargetFilter{CenterX: -1, CenterY: -1, Radius: pvpMaxViewRadius(), Limit: 200})
 	if err != nil {
 		return PvpTargetSummary{}, err
 	}
@@ -134,28 +185,28 @@ func (s *Service) GetPvpTarget(playerID string, targetPlayerID string) (PvpTarge
 
 // normalizePvpTargetFilter 规范化 PVP 地图视野筛选参数。
 func normalizePvpTargetFilter(filter PvpTargetFilter, self PvpWorldPosition) PvpTargetFilter {
-	if filter.CenterX <= 0 {
+	if filter.CenterX < 0 {
 		filter.CenterX = self.X
 	}
-	if filter.CenterY <= 0 {
+	if filter.CenterY < 0 {
 		filter.CenterY = self.Y
 	}
-	filter.CenterX = clampInt(filter.CenterX, 1, defaultPvpWorldSize)
-	filter.CenterY = clampInt(filter.CenterY, 1, defaultPvpWorldSize)
+	filter.CenterX = clampInt(filter.CenterX, 0, defaultWorldWidth-1)
+	filter.CenterY = clampInt(filter.CenterY, 0, defaultWorldHeight-1)
 	if filter.Radius < 0 {
 		filter.Radius = 0
 	}
 	if filter.Radius == 0 {
 		filter.Radius = defaultPvpTargetRadius
 	}
-	if filter.Radius > defaultPvpWorldSize {
-		filter.Radius = defaultPvpWorldSize
+	if filter.Radius > pvpMaxViewRadius() {
+		filter.Radius = pvpMaxViewRadius()
 	}
 	if filter.Limit <= 0 {
 		filter.Limit = defaultPvpTargetLimit
 	}
-	if filter.Limit > 200 {
-		filter.Limit = 200
+	if filter.Limit > 1000 {
+		filter.Limit = 1000
 	}
 	return filter
 }
@@ -165,8 +216,8 @@ func pvpWorldPositionForPlayer(playerID string) PvpWorldPosition {
 	hash := fnv.New64a()
 	_, _ = hash.Write([]byte(strings.TrimSpace(playerID)))
 	value := hash.Sum64()
-	x := int(value%uint64(defaultPvpWorldSize)) + 1
-	y := int((value/uint64(defaultPvpWorldSize))%uint64(defaultPvpWorldSize)) + 1
+	x := int(value % uint64(defaultWorldWidth))
+	y := int((value / uint64(defaultWorldWidth)) % uint64(defaultWorldHeight))
 	return PvpWorldPosition{
 		WorldID:  defaultPvpWorldID,
 		X:        x,
@@ -175,19 +226,50 @@ func pvpWorldPositionForPlayer(playerID string) PvpWorldPosition {
 	}
 }
 
-// pvpRegionID 把世界地图按 200x200 切块，生成区域编号。
+// pvpRegionID 为旧 PVP 兼容字段按 20 格区块生成区域编号。
 func pvpRegionID(x int, y int) int {
-	regionSize := 200
-	col := (clampInt(x, 1, defaultPvpWorldSize) - 1) / regionSize
-	row := (clampInt(y, 1, defaultPvpWorldSize) - 1) / regionSize
-	return row*10 + col + 1
+	regionSize := 20
+	regionColumns := defaultWorldWidth / regionSize
+	col := clampInt(x, 0, defaultWorldWidth-1) / regionSize
+	row := clampInt(y, 0, defaultWorldHeight-1) / regionSize
+	return row*regionColumns + col + 1
+}
+
+// pvpMaxViewRadius 返回足够覆盖整张中心坐标地图的视野半径。
+func pvpMaxViewRadius() int {
+	return defaultWorldWidth + defaultWorldHeight
 }
 
 // pvpCoordinateDistance 返回两个地图坐标之间的直线距离。
 func pvpCoordinateDistance(a PvpWorldPosition, b PvpWorldPosition) int {
-	dx := float64(a.X - b.X)
-	dy := float64(a.Y - b.Y)
-	return int(math.Round(math.Sqrt(dx*dx + dy*dy)))
+	return worldMapDistance(WorldCoordinate{X: a.X, Y: a.Y}, WorldCoordinate{X: b.X, Y: b.Y})
+}
+
+// pvpCoordinateDirection 返回目标相对自己的八方向文本。
+func pvpCoordinateDirection(a PvpWorldPosition, b PvpWorldPosition) string {
+	dx := b.X - a.X
+	dy := b.Y - a.Y
+	if dx == 0 && dy == 0 {
+		return "原地"
+	}
+	vertical := ""
+	if dy < 0 {
+		vertical = "北"
+	} else if dy > 0 {
+		vertical = "南"
+	}
+	horizontal := ""
+	if dx < 0 {
+		horizontal = "西"
+	} else if dx > 0 {
+		horizontal = "东"
+	}
+	return horizontal + vertical
+}
+
+// pvpWorldToPvpPosition 转换权威世界坐标到旧 PVP 兼容结构。
+func pvpWorldToPvpPosition(position WorldPosition) PvpWorldPosition {
+	return PvpWorldPosition{WorldID: position.WorldID, X: position.X, Y: position.Y, RegionID: pvpRegionID(position.X, position.Y)}
 }
 
 // clampInt 限制整数范围。
@@ -384,6 +466,15 @@ func (s *Service) StartPvpAttack(req PvpAttackRequest) (PvpAttackResponse, error
 	if err != nil {
 		return PvpAttackResponse{}, err
 	}
+	attackerPosition, err := s.ensureWorldPosition(playerID, "lazy_create", nil)
+	if err != nil {
+		return PvpAttackResponse{}, err
+	}
+	defenderPosition, err := s.ensureWorldPosition(targetPlayerID, "lazy_create", nil)
+	if err != nil {
+		return PvpAttackResponse{}, err
+	}
+	distance := worldMapDistance(WorldCoordinate{X: attackerPosition.X, Y: attackerPosition.Y}, WorldCoordinate{X: defenderPosition.X, Y: defenderPosition.Y})
 	troops := normalizePositiveTroops(req.Troops)
 	if len(troops) == 0 {
 		return PvpAttackResponse{}, ErrNoUnitsSelected
@@ -402,7 +493,7 @@ func (s *Service) StartPvpAttack(req PvpAttackRequest) (PvpAttackResponse, error
 		if err != nil {
 			return PvpMarch{}, err
 		}
-		durationSeconds, speedMultiplier, err := calculatePvpMarchTravel(attacker.Player.Faction, troops, now, pvpModifierSourcesForGenerals(attacker, generalIDs))
+		durationSeconds, speedMultiplier, err := calculatePvpMarchTravel(distance, attacker.Player.Faction, troops, now, pvpModifierSourcesForGenerals(attacker, generalIDs))
 		if err != nil {
 			return PvpMarch{}, err
 		}
@@ -1836,7 +1927,7 @@ func combatSceneForPVP(mode string) string {
 }
 
 // calculatePvpMarchTravel 按出征队伍最慢兵种速度和行军加成计算 PVP 单程行军时间。
-func calculatePvpMarchTravel(preferredFaction string, troops map[string]int, now time.Time, sources []ModifierSource) (int, float64, error) {
+func calculatePvpMarchTravel(distance int, preferredFaction string, troops map[string]int, now time.Time, sources []ModifierSource) (int, float64, error) {
 	if len(troops) == 0 {
 		return 0, 0, ErrNoUnitsSelected
 	}
@@ -1863,8 +1954,7 @@ func calculatePvpMarchTravel(preferredFaction string, troops map[string]int, now
 	if minSpeed <= 0 {
 		return 0, 0, ErrNoUnitsSelected
 	}
-	baseSeconds := int(math.Round(float64(defaultPvpMarchSeconds) / float64(minSpeed)))
-	seconds := applySpeedBonus(baseSeconds, StatMarchSpeedBonus, now, sources)
+	seconds := CalculateWorldMarchSeconds(distance, minSpeed, now, sources)
 	if seconds <= 0 {
 		seconds = 1
 	}

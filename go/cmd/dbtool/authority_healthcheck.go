@@ -12,14 +12,15 @@ import (
 )
 
 type authorityHealthcheckResult struct {
-	Players              int
-	MissingResources     int
-	MissingBuildings     int
-	MissingResourceSlots int
-	MissingGenerals      int
-	MissingCurrencies    int
-	MissingLegacyNpc     int
-	BigSnapshotPlayers   int
+	Players               int
+	MissingResources      int
+	MissingBuildings      int
+	MissingResourceSlots  int
+	MissingGenerals       int
+	MissingCurrencies     int
+	MissingWorldPositions int
+	MissingLegacyNpc      int
+	BigSnapshotPlayers    int
 }
 
 // runHealthcheckAuthority 检查当前权威表覆盖和轻量 state_json 是否干净。
@@ -43,19 +44,20 @@ func runHealthcheckAuthority(args []string) error {
 	if err != nil {
 		return err
 	}
-	if result.MissingResources > 0 || result.MissingBuildings > 0 || result.MissingResourceSlots > 0 || result.MissingGenerals > 0 || result.MissingCurrencies > 0 || result.MissingLegacyNpc > 0 || result.BigSnapshotPlayers > 0 {
-		return fmt.Errorf("权威表健康检查失败：玩家 %d，缺资源 %d，缺建筑 %d，缺资源田 %d，缺武将 %d，缺货币 %d，旧 NPC 快照缺权威行 %d，state_json 大字段残留玩家 %d",
+	if result.MissingResources > 0 || result.MissingBuildings > 0 || result.MissingResourceSlots > 0 || result.MissingGenerals > 0 || result.MissingCurrencies > 0 || result.MissingWorldPositions > 0 || result.MissingLegacyNpc > 0 || result.BigSnapshotPlayers > 0 {
+		return fmt.Errorf("权威表健康检查失败：玩家 %d，缺资源 %d，缺建筑 %d，缺资源田 %d，缺武将 %d，缺货币 %d，缺世界坐标 %d，旧 NPC 快照缺权威行 %d，state_json 大字段残留玩家 %d",
 			result.Players,
 			result.MissingResources,
 			result.MissingBuildings,
 			result.MissingResourceSlots,
 			result.MissingGenerals,
 			result.MissingCurrencies,
+			result.MissingWorldPositions,
 			result.MissingLegacyNpc,
 			result.BigSnapshotPlayers,
 		)
 	}
-	fmt.Printf("权威表健康检查通过：玩家 %d，基础权威表和玩家辅助权威表完整，state_json 无大字段残留\n", result.Players)
+	fmt.Printf("权威表健康检查通过：玩家 %d，基础权威表、玩家辅助权威表和世界坐标完整，state_json 无大字段残留\n", result.Players)
 	return nil
 }
 
@@ -80,6 +82,7 @@ func healthcheckAuthority(ctx context.Context, dsn string) (authorityHealthcheck
 		{target: &result.MissingResourceSlots, table: "player_resource_slots"},
 		{target: &result.MissingGenerals, table: "player_generals"},
 		{target: &result.MissingCurrencies, table: "player_currencies"},
+		{target: &result.MissingWorldPositions, table: "player_world_positions"},
 	}
 	for _, check := range checks {
 		query := fmt.Sprintf(`SELECT COUNT(*)

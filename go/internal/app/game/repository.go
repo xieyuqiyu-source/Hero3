@@ -180,6 +180,14 @@ type PvpRepository interface {
 	ListPvpSeasonPlayers(seasonID string) ([]PvpSeasonPlayerRecord, error)
 }
 
+type WorldMapRepository interface {
+	GetWorldPosition(playerID string) (WorldPosition, error)
+	EnsureWorldPosition(playerID string, assignedBy string, preferred *WorldCoordinate) (WorldPosition, error)
+	ListWorldPositions(worldID string, minX int, maxX int, minY int, maxY int) ([]WorldPosition, error)
+	CountWorldPositions(worldID string) (int, error)
+	AssignWorldPosition(playerID string, worldID string, x int, y int, assignedBy string) (WorldPosition, error)
+}
+
 type AnnouncementRepository interface {
 	PromoteDueScheduledAnnouncements(now time.Time) error
 	GetAnnouncementPlayerContext(playerID string) (AnnouncementPlayerContext, error)
@@ -236,6 +244,7 @@ type Repository interface {
 	PlayerViewRepository
 	ReinforcementRepository
 	PvpRepository
+	WorldMapRepository
 	AnnouncementRepository
 	GoldLedgerRepository
 	ItemLedgerRepository
@@ -259,6 +268,7 @@ type MemoryRepository struct {
 	pvpPlayerStates   map[string]PvpPlayerState
 	pvpSeasons        map[string]PvpSeasonRecord
 	pvpSeasonPlayers  map[string][]PvpSeasonPlayerRecord
+	worldPositions    map[string]WorldPosition
 	announcements     map[string]Announcement
 	announcementReads map[string]AnnouncementReadState
 	ledger            []GoldLedgerEntry
@@ -284,6 +294,7 @@ func NewMemoryRepository() *MemoryRepository {
 		pvpPlayerStates:   make(map[string]PvpPlayerState),
 		pvpSeasons:        make(map[string]PvpSeasonRecord),
 		pvpSeasonPlayers:  make(map[string][]PvpSeasonPlayerRecord),
+		worldPositions:    make(map[string]WorldPosition),
 		announcements:     make(map[string]Announcement),
 		announcementReads: make(map[string]AnnouncementReadState),
 		eventClaims:       make(map[string]struct{}),
@@ -515,6 +526,7 @@ func (r *MemoryRepository) DeletePlayer(playerID string) error {
 
 	delete(r.players, playerID)
 	delete(r.playerUpdatedAt, playerID)
+	delete(r.worldPositions, playerID)
 	delete(r.reports, playerID)
 	delete(r.mails, playerID)
 	for accountID, playerIDs := range r.accountPlayers {

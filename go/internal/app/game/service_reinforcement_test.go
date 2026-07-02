@@ -3,6 +3,8 @@ package game
 
 import (
 	"errors"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -256,7 +258,7 @@ func TestReinforcementArrivalBattleLossAndReturnIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SendReinforcement failed: %v", err)
 	}
-	if result.Reinforcement.SpeedMultiplier != 1 || result.Reinforcement.MarchSeconds < defaultReinforcementMarchSeconds-200 {
+	if result.Reinforcement.SpeedMultiplier != 1 || result.Reinforcement.MarchSeconds <= 0 {
 		t.Fatalf("client speedMultiplier should be ignored, got speed %.2f seconds %d", result.Reinforcement.SpeedMultiplier, result.Reinforcement.MarchSeconds)
 	}
 	forceReinforcementDue(t, repo, result.Reinforcement.ID, true)
@@ -463,6 +465,137 @@ func TestAccelerateReinforcementRequiresSenderAndCityGold(t *testing.T) {
 	}
 	if _, err := svc.AccelerateReinforcement(from.Player.ID, result.Reinforcement.ID); !errors.Is(err, ErrInsufficientCityGold) {
 		t.Fatalf("expected insufficient city gold, got %v", err)
+	}
+}
+
+func TestHistoricalSlowClientSpeedReinforcementIsClamped(t *testing.T) {
+	svc, repo, from, to := newReinforcementTestService(t)
+	from.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	repo.players[from.Player.ID] = from
+	result, err := svc.SendReinforcement(SendReinforcementRequest{
+		FromPlayerID:   from.Player.ID,
+		TargetPlayerID: to.Player.ID,
+		Troops:         map[string]int{"weiInfantry": 40},
+	})
+	if err != nil {
+		t.Fatalf("SendReinforcement failed: %v", err)
+	}
+	mutateReinforcementForTest(t, repo, result.Reinforcement.ID, func(record *Reinforcement) {
+		record.MarchSeconds = 179 * 3600
+		record.ReturnSeconds = 179 * 3600
+		record.SentAt = time.Now().UTC().Add(-4 * time.Hour).Format(resourceDateLayout)
+	})
+	if err := svc.SettleReinforcementsForPlayer(from.Player.ID); err != nil {
+		t.Fatalf("SettleReinforcementsForPlayer failed: %v", err)
+	}
+	record, err := svc.GetReinforcement(from.Player.ID, result.Reinforcement.ID)
+	if err != nil {
+		t.Fatalf("GetReinforcement failed: %v", err)
+	}
+	if record.Status != ReinforcementStatusStationed {
+		t.Fatalf("expected historical slow reinforcement to arrive after clamp, got %s", record.Status)
+	}
+	if record.MarchSeconds != maxReinforcementMarchSeconds {
+		t.Fatalf("expected march seconds clamped to max, got %d", record.MarchSeconds)
+	}
+}
+
+func TestReinforcementTravelSecondsUsesFiveMinutesPerGrid(t *testing.T) {
+	now := time.Now()
+	if got := reinforcementTravelSecondsForDistance(1, 1, now, nil); got != 5*60 {
+		t.Fatalf("expected one grid with speed 1 to take 5 minutes, got %d", got)
+	}
+	if got := reinforcementTravelSecondsForDistance(1, 5, now, nil); got != 60 {
+		t.Fatalf("expected one grid with speed 5 to take 1 minute, got %d", got)
+	}
+	if got := reinforcementTravelSecondsForDistance(36, 1, now, nil); got != maxReinforcementMarchSeconds {
+		t.Fatalf("expected 36 grids with speed 1 to reach max 3 hours, got %d", got)
+	}
+	if got := reinforcementTravelSecondsForDistance(100, 5, now, nil); got != 6000 {
+		t.Fatalf("expected far speed 5 reinforcement to use real distance under max, got %d", got)
+	}
+	if got := reinforcementTravelSecondsForDistance(2000, 1, now, nil); got != maxReinforcementMarchSeconds {
+		t.Fatalf("expected far distance clamped to 3 hours, got %d", got)
+	}
+}
+
+func TestReinforcementTravelUsesSlowestSelectedUnitSpeed(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	unitsMu.Lock()
+	weiUnits := activeUnits["wei"]
+	infantry := weiUnits["weiInfantry"]
+	infantry.Stats["speed"] = 1
+	weiUnits["weiInfantry"] = infantry
+	cavalry := weiUnits["weiCavalry"]
+	cavalry.Stats["speed"] = 5
+	weiUnits["weiCavalry"] = cavalry
+	activeUnits["wei"] = weiUnits
+	unitsMu.Unlock()
+
+	if got := reinforcementSlowestUnitSpeed("wei", map[string]int{"weiCavalry": 10}); got != 5 {
+		t.Fatalf("expected cavalry-only speed 5, got %.2f", got)
+	}
+	if got := reinforcementSlowestUnitSpeed("wei", map[string]int{"weiInfantry": 10, "weiCavalry": 10}); got != 1 {
+		t.Fatalf("expected mixed troops to use slowest speed 1, got %.2f", got)
+	}
+}
+
+func TestSendReinforcementUsesWorldMapDistanceAndUnitSpeed(t *testing.T) {
+	svc, repo, from, to := newReinforcementTestService(t)
+	unitsMu.Lock()
+	weiUnits := activeUnits["wei"]
+	infantry := weiUnits["weiInfantry"]
+	infantry.Stats["speed"] = 5
+	weiUnits["weiInfantry"] = infantry
+	activeUnits["wei"] = weiUnits
+	unitsMu.Unlock()
+	from.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	for i := range from.Buildings {
+		if from.Buildings[i].Type == "relay_station" {
+			from.Buildings[i].Level = 0
+		}
+	}
+	repo.players[from.Player.ID] = from
+	if _, err := repo.AssignWorldPosition(from.Player.ID, defaultWorldID, 10, 10, "test"); err != nil {
+		t.Fatalf("AssignWorldPosition from failed: %v", err)
+	}
+	if _, err := repo.AssignWorldPosition(to.Player.ID, defaultWorldID, 13, 14, "test"); err != nil {
+		t.Fatalf("AssignWorldPosition to failed: %v", err)
+	}
+
+	result, err := svc.SendReinforcement(SendReinforcementRequest{
+		FromPlayerID:   from.Player.ID,
+		TargetPlayerID: to.Player.ID,
+		Troops:         map[string]int{"weiInfantry": 20},
+	})
+	if err != nil {
+		t.Fatalf("SendReinforcement failed: %v", err)
+	}
+	if result.Reinforcement.MarchSeconds != 420 {
+		t.Fatalf("expected distance 7 with speed 5 to take 420 seconds, got %+v", result.Reinforcement)
+	}
+	if result.Reinforcement.ReturnSeconds != 420 {
+		t.Fatalf("expected return seconds to use same world map travel seconds, got %+v", result.Reinforcement)
+	}
+}
+
+func TestReinforcementDistanceTravelReusesWorldMarchFormula(t *testing.T) {
+	source, err := os.ReadFile("service_reinforcement.go")
+	if err != nil {
+		t.Fatalf("read service_reinforcement.go: %v", err)
+	}
+	body := string(source)
+	start := strings.Index(body, "func reinforcementTravelSecondsForDistance")
+	if start < 0 {
+		t.Fatalf("missing reinforcementTravelSecondsForDistance")
+	}
+	end := strings.Index(body[start:], "\n}\n\n// reinforcementSlowestUnitSpeed")
+	if end < 0 {
+		t.Fatalf("could not locate reinforcementTravelSecondsForDistance body")
+	}
+	fn := body[start : start+end]
+	if !strings.Contains(fn, "CalculateWorldMarchSeconds(distance, int(math.Floor(unitSpeed)), now, sources)") {
+		t.Fatalf("reinforcement distance travel should reuse world march formula, got:\n%s", fn)
 	}
 }
 

@@ -22,6 +22,9 @@ const (
 	ReinforcementStatusFailed    = "failed"
 
 	defaultReinforcementMarchSeconds = 10800
+	minReinforcementMarchSeconds     = 1
+	maxReinforcementMarchSeconds     = defaultReinforcementMarchSeconds
+	reinforcementSecondsPerGrid      = 300
 	defaultReinforcementMaxSources   = 5
 )
 

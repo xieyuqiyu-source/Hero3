@@ -1,3 +1,115 @@
+/api/v1/world-map/view:
+  get:
+    tags:
+    - Map
+    summary: 获取世界地图玩家城池视野
+    description: 按玩家权威世界坐标返回指定格子视野内的玩家城池。接口不返回兵力、资源、武将或驻防详情。
+    security:
+    - bearerAuth: []
+    operationId: getWorldMapView
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      description: 查看地图的玩家存档 ID。
+      schema:
+        type: string
+    - name: centerX
+      in: query
+      required: false
+      description: 视野中心 X；不传或越界时使用自己城池 X。
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 99
+    - name: centerY
+      in: query
+      required: false
+      description: 视野中心 Y；不传或越界时使用自己城池 Y。
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 99
+    - name: radius
+      in: query
+      required: false
+      description: 视野半径，默认 10，最大 100；前端可用 100 一次加载第一版 100x100 地图玩家城池并本地裁剪显示。
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+    responses:
+      '200':
+        description: 世界地图玩家城池视图
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorldMapViewResponse'
+      '401':
+        description: 未登录或登录凭证无效
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '403':
+        description: 当前账号不拥有该玩家存档
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 玩家不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/world-map/targets/player_city/{playerId}:
+  get:
+    tags:
+    - Map
+    summary: 获取世界地图玩家城池目标详情
+    description: 返回指定玩家城池在查看者视角下的地图目标详情。第一版不返回兵力、资源、武将或驻防详情。
+    security:
+    - bearerAuth: []
+    operationId: getWorldMapPlayerCityTarget
+    parameters:
+    - name: playerId
+      in: path
+      required: true
+      description: 目标玩家存档 ID。
+      schema:
+        type: string
+    - name: viewerId
+      in: query
+      required: true
+      description: 查看地图的玩家存档 ID。
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 玩家城池目标详情
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorldMapTarget'
+      '401':
+        description: 未登录或登录凭证无效
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '403':
+        description: 当前账号不拥有查看者玩家存档
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 查看者或目标玩家不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
 /api/v1/map/npc-cities:
   get:
     tags:

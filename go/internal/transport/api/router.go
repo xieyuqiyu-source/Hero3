@@ -149,6 +149,8 @@ func registerPvpRoutes(mux *http.ServeMux, handlers *Handlers) {
 
 // registerMapRoutes 注册地图和 NPC 城池路由。
 func registerMapRoutes(mux *http.ServeMux, handlers *Handlers) {
+	mux.HandleFunc("GET /api/v1/world-map/view", handlers.WorldMapView)
+	mux.HandleFunc("GET /api/v1/world-map/targets/player_city/{playerId}", handlers.WorldMapPlayerCityTarget)
 	mux.HandleFunc("GET /api/v1/map/npc-cities", handlers.NpcCities)
 	mux.HandleFunc("POST /api/v1/map/npc-cities/refresh", handlers.RefreshNpcCities)
 	mux.HandleFunc("POST /api/v1/map/npc-cities/attack", handlers.AttackNpc)
@@ -245,6 +247,10 @@ func registerAdminRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("POST /api/v1/admin/announcements/{announcementId}/archive", handlers.AdminArchiveAnnouncement)
 	mux.HandleFunc("DELETE /api/v1/admin/announcements/{announcementId}", handlers.AdminDeleteAnnouncement)
 	mux.HandleFunc("GET /api/v1/admin/players/{playerId}/state", handlers.AdminPlayerState)
+	mux.HandleFunc("GET /api/v1/admin/world-map/occupancy", handlers.AdminWorldMapOccupancy)
+	mux.HandleFunc("GET /api/v1/admin/world-map/positions/check", handlers.AdminWorldCoordinateCheck)
+	mux.HandleFunc("GET /api/v1/admin/world-map/positions/{playerId}", handlers.AdminWorldPosition)
+	mux.HandleFunc("PUT /api/v1/admin/world-map/positions/{playerId}", handlers.UpdateAdminWorldPosition)
 	mux.HandleFunc("GET /api/v1/admin/pvp/overview", handlers.AdminPvpOverview)
 	mux.HandleFunc("GET /api/v1/admin/pvp/marches", handlers.AdminPvpMarches)
 	mux.HandleFunc("GET /api/v1/admin/pvp/battles", handlers.AdminPvpBattles)

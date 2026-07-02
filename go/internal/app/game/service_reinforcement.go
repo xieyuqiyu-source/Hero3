@@ -29,6 +29,15 @@ func (s *Service) SendReinforcement(req SendReinforcementRequest) (Reinforcement
 	speed := normalizeReinforcementSpeed(req.SpeedMultiplier)
 	now := time.Now()
 	nowText := now.UTC().Format(resourceDateLayout)
+	fromPosition, err := s.ensureWorldPosition(fromPlayerID, "lazy_create", nil)
+	if err != nil {
+		return ReinforcementResponse{}, err
+	}
+	toPosition, err := s.ensureWorldPosition(toPlayerID, "lazy_create", nil)
+	if err != nil {
+		return ReinforcementResponse{}, err
+	}
+	distance := worldMapDistance(WorldCoordinate{X: fromPosition.X, Y: fromPosition.Y}, WorldCoordinate{X: toPosition.X, Y: toPosition.Y})
 
 	fromState, _, record, err := s.repo.CreateReinforcementWithState(fromPlayerID, toPlayerID, now, func(from *GameState, to *GameState, targetRecords []Reinforcement) (Reinforcement, error) {
 		if err := ensureReinforcementSourceSlot(fromPlayerID, targetRecords); err != nil {
@@ -37,7 +46,7 @@ func (s *Service) SendReinforcement(req SendReinforcementRequest) (Reinforcement
 		if _, err := validateAndConsumeArmy(from, troops); err != nil {
 			return Reinforcement{}, err
 		}
-		marchSeconds := reinforcementTravelSeconds(speed, now, CollectModifierSources(from))
+		marchSeconds := reinforcementTravelSecondsForDistance(distance, reinforcementSlowestUnitSpeed(from.Player.Faction, troops), now, CollectModifierSources(from))
 		expectedArriveAt := now.Add(time.Duration(marchSeconds) * time.Second).UTC().Format(resourceDateLayout)
 		EnsureGeneralRoster(from, now)
 		reinforcementID := "reinforcement_" + randomID(12)
@@ -379,6 +388,7 @@ func (s *Service) AccelerateReinforcement(playerID string, reinforcementID strin
 func (s *Service) MarkReinforcementArrived(reinforcementID string) (Reinforcement, error) {
 	now := time.Now()
 	_, _, record, err := s.repo.UpdateReinforcement(strings.TrimSpace(reinforcementID), now, func(from *GameState, to *GameState, record *Reinforcement) error {
+		normalizeGarrisonRecord(record)
 		return markReinforcementArrived(record, now)
 	})
 	return record, err
@@ -388,6 +398,7 @@ func (s *Service) MarkReinforcementArrived(reinforcementID string) (Reinforcemen
 func (s *Service) CompleteReinforcementReturn(reinforcementID string) (Reinforcement, error) {
 	now := time.Now()
 	_, _, record, err := s.repo.UpdateReinforcement(strings.TrimSpace(reinforcementID), now, func(from *GameState, to *GameState, record *Reinforcement) error {
+		normalizeGarrisonRecord(record)
 		return completeReinforcementReturn(from, record, now)
 	})
 	return record, err
@@ -405,6 +416,7 @@ func (s *Service) SettleReinforcementsForPlayer(playerID string) error {
 	}
 	seen := map[string]bool{}
 	for _, record := range append(sent, received...) {
+		normalizeGarrisonRecord(&record)
 		if seen[record.ID] {
 			continue
 		}
@@ -536,10 +548,43 @@ func normalizeReinforcementSpeed(speed float64) float64 {
 func reinforcementTravelSeconds(speed float64, now time.Time, sources []ModifierSource) int {
 	baseSeconds := int(math.Round(float64(defaultReinforcementMarchSeconds) / normalizeReinforcementSpeed(speed)))
 	seconds := applySpeedBonus(baseSeconds, StatMarchSpeedBonus, now, sources)
+	seconds = clampInt(seconds, minReinforcementMarchSeconds, maxReinforcementMarchSeconds)
 	if seconds <= 0 {
 		return 1
 	}
 	return seconds
+}
+
+// reinforcementTravelSecondsForDistance 按地图距离缩放增援行军时间。
+func reinforcementTravelSecondsForDistance(distance int, unitSpeed float64, now time.Time, sources []ModifierSource) int {
+	if distance < 1 {
+		distance = 1
+	}
+	if unitSpeed < 1 {
+		unitSpeed = 1
+	}
+	return CalculateWorldMarchSeconds(distance, int(math.Floor(unitSpeed)), now, sources)
+}
+
+// reinforcementSlowestUnitSpeed 返回携带部队中最慢兵种速度，缺省按速度 1 处理。
+func reinforcementSlowestUnitSpeed(preferredFaction string, troops map[string]int) float64 {
+	slowest := 0
+	for unitType, amount := range troops {
+		if strings.TrimSpace(unitType) == "" || amount <= 0 {
+			continue
+		}
+		speed := 1
+		if cfg, _, ok := findAnyUnitConfig(preferredFaction, unitType); ok && cfg.Stats["speed"] > 0 {
+			speed = cfg.Stats["speed"]
+		}
+		if slowest == 0 || speed < slowest {
+			slowest = speed
+		}
+	}
+	if slowest <= 0 {
+		return 1
+	}
+	return float64(slowest)
 }
 
 func ensureReinforcementSourceSlot(fromPlayerID string, records []Reinforcement) error {
@@ -645,6 +690,30 @@ func normalizeGarrisonRecord(record *Reinforcement) {
 	}
 	if !record.Rules.CanRecall && !record.Rules.CanExpel && !record.Rules.CanReturn && !record.Rules.CanFight && !record.Rules.CanConvert && !record.Rules.CanRelease {
 		record.Rules = defaultGarrisonRules(record.SourceType)
+	}
+	normalizeReinforcementTiming(record)
+}
+
+// normalizeReinforcementTiming 修正历史客户端倍率导致的异常长行军时间。
+func normalizeReinforcementTiming(record *Reinforcement) {
+	if record == nil || record.SourceType != GarrisonSourceReinforcement {
+		return
+	}
+	if record.MarchSeconds > maxReinforcementMarchSeconds {
+		record.MarchSeconds = maxReinforcementMarchSeconds
+	}
+	if record.ReturnSeconds > maxReinforcementMarchSeconds {
+		record.ReturnSeconds = maxReinforcementMarchSeconds
+	}
+	if record.Status == ReinforcementStatusMarching && record.SentAt != "" && record.MarchSeconds > 0 {
+		if sentAt, err := time.Parse(resourceDateLayout, strings.TrimSpace(record.SentAt)); err == nil {
+			record.ExpectedArriveAt = sentAt.Add(time.Duration(record.MarchSeconds) * time.Second).UTC().Format(resourceDateLayout)
+		}
+	}
+	if record.Status == ReinforcementStatusReturning && record.ReturnStartedAt != "" && record.ReturnSeconds > 0 {
+		if startedAt, err := time.Parse(resourceDateLayout, strings.TrimSpace(record.ReturnStartedAt)); err == nil {
+			record.ExpectedReturnedAt = startedAt.Add(time.Duration(record.ReturnSeconds) * time.Second).UTC().Format(resourceDateLayout)
+		}
 	}
 }
 

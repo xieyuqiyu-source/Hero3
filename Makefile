@@ -1,7 +1,7 @@
 # Hero3 项目 Makefile
 # 统一开发环境启动、构建、部署命令
 
-.PHONY: dev dev-go dev-web dev-admin build build-go build-dbtool build-web build-admin clean install migrate migrate-test print-test-dsn clone-data cleanup-battle-reports-dry-run cleanup-battle-reports report-stats lock-snapshot ensure-report-cleanup-indexes-dry-run ensure-report-cleanup-indexes maintenance-status backfill-resources verify-resources backfill-inventory verify-inventory backfill-buildings verify-buildings backfill-resource-slots verify-resource-slots backfill-army verify-army verify-recruit-queues backfill-recruit-queues backfill-generals verify-generals backfill-buffs verify-buffs backfill-currencies verify-currencies backfill-npc-states verify-npc-states healthcheck-authority openapi openapi-lint openapi-bundle
+.PHONY: dev dev-go dev-web dev-admin build build-go build-dbtool build-web build-admin clean install migrate migrate-test print-test-dsn clone-data cleanup-battle-reports-dry-run cleanup-battle-reports report-stats lock-snapshot ensure-report-cleanup-indexes-dry-run ensure-report-cleanup-indexes maintenance-status backfill-resources verify-resources backfill-inventory verify-inventory backfill-buildings verify-buildings backfill-resource-slots verify-resource-slots backfill-army verify-army verify-recruit-queues backfill-recruit-queues backfill-generals verify-generals backfill-buffs verify-buffs backfill-currencies verify-currencies backfill-npc-states verify-npc-states backfill-world-positions healthcheck-authority openapi openapi-lint openapi-bundle
 
 # ===== 开发 =====
 
@@ -156,6 +156,10 @@ backfill-npc-states:
 verify-npc-states:
 	cd go && go run ./cmd/dbtool verify-npc-states
 
+## 为已有玩家补齐世界地图权威坐标
+backfill-world-positions:
+	cd go && go run ./cmd/dbtool backfill-world-positions
+
 ## 检查当前权威表覆盖和 state_json 轻量化状态
 healthcheck-authority:
 	cd go && go run ./cmd/dbtool healthcheck-authority
@@ -215,6 +219,7 @@ help:
 	@echo "  make build        构建所有"
 	@echo "  make clean        清理构建产物"
 	@echo "  make migrate      运行数据库迁移"
+	@echo "  make backfill-world-positions 补齐玩家世界地图权威坐标"
 	@echo "  make healthcheck-authority 检查权威表覆盖"
 	@echo "  make report-stats 统计战报增长"
 	@echo "  make lock-snapshot 查看数据库锁等待"

@@ -451,6 +451,22 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 				FOREIGN KEY (player_id) REFERENCES players(id)
 				ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS player_world_positions (
+			player_id VARCHAR(64) NOT NULL,
+			world_id VARCHAR(64) NOT NULL DEFAULT 'world_1',
+			x INT NOT NULL,
+			y INT NOT NULL,
+			assigned_by VARCHAR(32) NOT NULL DEFAULT 'create',
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			PRIMARY KEY (player_id),
+			UNIQUE KEY uk_player_world_positions_world_xy (world_id, x, y),
+			INDEX idx_player_world_positions_world_xy (world_id, x, y),
+			INDEX idx_player_world_positions_world_player (world_id, player_id),
+			CONSTRAINT fk_player_world_positions_player
+				FOREIGN KEY (player_id) REFERENCES players(id)
+				ON DELETE CASCADE
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS player_generals (
 			player_id VARCHAR(64) NOT NULL,
 			general_id VARCHAR(64) NOT NULL,

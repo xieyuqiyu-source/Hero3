@@ -173,21 +173,25 @@ func TestMySQLDeletePlayerRemovesRelatedRows(t *testing.T) {
 	); err != nil {
 		t.Fatalf("insert item ledger: %v", err)
 	}
+	if _, err := repo.AssignWorldPosition(playerID, "world_1", 7, 8, "test"); err != nil {
+		t.Fatalf("insert world position: %v", err)
+	}
 
 	if err := repo.DeletePlayer(playerID); err != nil {
 		t.Fatalf("DeletePlayer failed: %v", err)
 	}
 
 	checks := map[string]string{
-		"players":              `SELECT COUNT(*) FROM players WHERE id = ?`,
-		"battle_reports":       `SELECT COUNT(*) FROM battle_reports WHERE player_id = ?`,
-		"battle_report_states": `SELECT COUNT(*) FROM battle_report_states WHERE player_id = ?`,
-		"battle_report_links":  `SELECT COUNT(*) FROM battle_report_links WHERE report_id = ?`,
-		"mails":                `SELECT COUNT(*) FROM mails WHERE player_id = ?`,
-		"minigame_records":     `SELECT COUNT(*) FROM minigame_records WHERE player_id = ?`,
-		"pvp_player_states":    `SELECT COUNT(*) FROM pvp_player_states WHERE player_id = ?`,
-		"gold_ledger":          `SELECT COUNT(*) FROM gold_ledger WHERE player_id = ?`,
-		"item_ledger":          `SELECT COUNT(*) FROM item_ledger WHERE player_id = ?`,
+		"players":                `SELECT COUNT(*) FROM players WHERE id = ?`,
+		"battle_reports":         `SELECT COUNT(*) FROM battle_reports WHERE player_id = ?`,
+		"battle_report_states":   `SELECT COUNT(*) FROM battle_report_states WHERE player_id = ?`,
+		"battle_report_links":    `SELECT COUNT(*) FROM battle_report_links WHERE report_id = ?`,
+		"mails":                  `SELECT COUNT(*) FROM mails WHERE player_id = ?`,
+		"minigame_records":       `SELECT COUNT(*) FROM minigame_records WHERE player_id = ?`,
+		"pvp_player_states":      `SELECT COUNT(*) FROM pvp_player_states WHERE player_id = ?`,
+		"player_world_positions": `SELECT COUNT(*) FROM player_world_positions WHERE player_id = ?`,
+		"gold_ledger":            `SELECT COUNT(*) FROM gold_ledger WHERE player_id = ?`,
+		"item_ledger":            `SELECT COUNT(*) FROM item_ledger WHERE player_id = ?`,
 	}
 	for table, query := range checks {
 		arg := playerID

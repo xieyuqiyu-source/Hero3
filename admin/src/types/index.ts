@@ -491,6 +491,34 @@ export interface AccountSummary {
   players: PlayerSummary[]
 }
 
+export interface WorldPosition {
+  playerId: string
+  worldId: string
+  x: number
+  y: number
+  assignedBy: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface WorldMapOccupancyStats {
+  worldId: string
+  width: number
+  height: number
+  totalCells: number
+  occupiedCells: number
+  availableCells: number
+  occupancyRate: number
+}
+
+export interface WorldMapCoordinateCheck {
+  worldId: string
+  x: number
+  y: number
+  occupied: boolean
+  playerId?: string
+}
+
 export interface NpcTrait {
   id: string
   name: string
