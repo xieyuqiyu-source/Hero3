@@ -180,6 +180,10 @@ jobs:
             mkdir -p "$BUILD_DIR/deploy/systemd"
             rsync -a "$SOURCE_DIR/deploy/systemd/" "$BUILD_DIR/deploy/systemd/"
           fi
+          if [ -d "$SOURCE_DIR/deploy/journald" ]; then
+            mkdir -p "$BUILD_DIR/deploy/journald"
+            rsync -a "$SOURCE_DIR/deploy/journald/" "$BUILD_DIR/deploy/journald/"
+          fi
 
           log "Backing up current release"
           if [ -f /opt/hero3/go/bin/hero3-server ]; then
@@ -201,6 +205,12 @@ jobs:
           printf '%s %s\n' "${HERO3_SHA:0:7}" "deployed from ${HERO3_REF_NAME}" > /opt/hero3/RELEASE
 
           log "Restarting services"
+          if [ -d "$BUILD_DIR/deploy/journald" ]; then
+            mkdir -p /etc/systemd/journald.conf.d /var/log/journal
+            install -m 644 "$BUILD_DIR/deploy/journald/hero3-retention.conf" /etc/systemd/journald.conf.d/hero3-retention.conf
+            systemd-tmpfiles --create --prefix /var/log/journal || true
+            timeout --kill-after=10s 30s systemctl restart systemd-journald || true
+          fi
           if [ -d "$BUILD_DIR/deploy/systemd" ]; then
             install -m 644 "$BUILD_DIR/deploy/systemd/hero3-battle-report-cleanup.service" /etc/systemd/system/hero3-battle-report-cleanup.service
             install -m 644 "$BUILD_DIR/deploy/systemd/hero3-battle-report-cleanup.timer" /etc/systemd/system/hero3-battle-report-cleanup.timer
