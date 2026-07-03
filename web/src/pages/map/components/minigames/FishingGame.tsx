@@ -1,3 +1,4 @@
+// 本文件实现仙池垂钓的投杆、咬钩、抽鱼和库存兑换主流程。
 import { useCallback, useEffect, useMemo, useRef, useState, type FC } from 'react'
 import { Award, TrendingUp } from 'lucide-react'
 import { gameApi } from '@/api/game'
@@ -16,6 +17,71 @@ import type { BaitType, Bubble, FishCatch, FishShadow, GamePhase, FishingStats }
 
 const RECORD_PAGE_SIZE = 100
 const BULK_REDEEM_ID = '__all__'
+const FISHING_RARITY_ORDER = ['common', 'rare', 'epic', 'legendary', 'mythic']
+
+// getRarityRank 返回品质排序，用于最低/最高品质限制和展示逻辑。
+const getRarityRank = (rarity: string): number => {
+  const rank = FISHING_RARITY_ORDER.indexOf(rarity)
+  return rank >= 0 ? rank : FISHING_RARITY_ORDER.length
+}
+
+// isRarityAllowed 判断某品质是否满足当前鱼饵配置的品质范围。
+const isRarityAllowed = (rarity: string, bait: BaitType): boolean => {
+  const rank = getRarityRank(rarity)
+  if (bait.minRarity && rank < getRarityRank(bait.minRarity)) return false
+  if (bait.maxRarity && rank > getRarityRank(bait.maxRarity)) return false
+  return true
+}
+
+// buildLegacyRarityWeights 将旧版 rarityBoost 转换为可抽取权重，保证线上旧配置兼容。
+const buildLegacyRarityWeights = (
+  bait: BaitType,
+  rarityConfig: Record<string, { weight: number }>,
+): Record<string, number> => {
+  const weights: Record<string, number> = {}
+  for (const [rarity, config] of Object.entries(rarityConfig)) {
+    const baseWeight = config.weight ?? 0
+    weights[rarity] = rarity === 'common' ? baseWeight : baseWeight * bait.rarityBoost
+  }
+  return weights
+}
+
+// buildBaitRarityWeights 生成最终抽鱼权重，新 GM 字段优先，旧倍率作为兜底。
+const buildBaitRarityWeights = (
+  bait: BaitType,
+  rarityConfig: Record<string, { weight: number }>,
+  fishPool: FishCatch[],
+  combo: number,
+): Record<string, number> => {
+  const hasCustomWeights = bait.rarityWeights && Object.values(bait.rarityWeights).some(weight => weight > 0)
+  const sourceWeights = hasCustomWeights ? bait.rarityWeights ?? {} : buildLegacyRarityWeights(bait, rarityConfig)
+  const availableRarities = new Set(fishPool.map(fish => fish.rarity))
+  const comboBonus = 1 + Math.floor(combo / 3) * 0.1
+  const weights: Record<string, number> = {}
+
+  for (const rarity of Object.keys(rarityConfig)) {
+    if (!availableRarities.has(rarity) || !isRarityAllowed(rarity, bait)) {
+      weights[rarity] = 0
+      continue
+    }
+    const configuredWeight = Math.max(0, sourceWeights[rarity] ?? 0)
+    weights[rarity] = rarity === 'common' ? configuredWeight : configuredWeight * comboBonus
+  }
+
+  return weights
+}
+
+// pickWeightedRarity 根据权重随机选择鱼品质。
+const pickWeightedRarity = (weights: Record<string, number>): string => {
+  const totalWeight = Object.values(weights).reduce((sum, weight) => sum + weight, 0)
+  if (totalWeight <= 0) return 'common'
+  let roll = Math.random() * totalWeight
+  for (const [rarity, weight] of Object.entries(weights).sort((a, b) => getRarityRank(a[0]) - getRarityRank(b[0]))) {
+    roll -= weight
+    if (roll <= 0) return rarity
+  }
+  return 'common'
+}
 
 const FishingGame: FC = () => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
@@ -31,7 +97,7 @@ const FishingGame: FC = () => {
   const [castPower, setCastPower] = useState(0)
   const [selectedBait, setSelectedBait] = useState<BaitType>(DEFAULT_BAITS[0])
   const [stats, setStats] = useState<FishingStats>({
-    totalCasts: 0, totalCaught: 0, combo: 0, bestCombo: 0, legendaryCount: 0, epicCount: 0,
+    totalCasts: 0, totalCaught: 0, combo: 0, bestCombo: 0, legendaryCount: 0, mythicCount: 0, epicCount: 0,
   })
   const [recentCatches, setRecentCatches] = useState<FishCatch[]>([])
   const [showBaitSelect, setShowBaitSelect] = useState(false)
@@ -179,29 +245,10 @@ const FishingGame: FC = () => {
   }
 
   const rollFish = (): FishCatch => {
-    const weights = {
-      common: rarityConfig.common?.weight ?? DEFAULT_RARITY_CONFIG.common.weight,
-      rare: (rarityConfig.rare?.weight ?? DEFAULT_RARITY_CONFIG.rare.weight) * selectedBait.rarityBoost,
-      epic: (rarityConfig.epic?.weight ?? DEFAULT_RARITY_CONFIG.epic.weight) * selectedBait.rarityBoost,
-      legendary: (rarityConfig.legendary?.weight ?? DEFAULT_RARITY_CONFIG.legendary.weight) * selectedBait.rarityBoost,
-    }
-    const comboBonus = 1 + Math.floor(stats.combo / 3) * 0.1
-    weights.rare *= comboBonus
-    weights.epic *= comboBonus
-    weights.legendary *= comboBonus
-
-    const totalWeight = Object.values(weights).reduce((sum, weight) => sum + weight, 0)
-    let roll = Math.random() * totalWeight
-    let selectedRarity: FishCatch['rarity'] = 'common'
-    for (const [rarity, weight] of Object.entries(weights)) {
-      roll -= weight
-      if (roll <= 0) {
-        selectedRarity = rarity as FishCatch['rarity']
-        break
-      }
-    }
+    const weights = buildBaitRarityWeights(selectedBait, rarityConfig, fishPool, stats.combo)
+    const selectedRarity = pickWeightedRarity(weights)
     const candidates = fishPool.filter(fish => fish.rarity === selectedRarity)
-    const fallbackCandidates = candidates.length > 0 ? candidates : fishPool
+    const fallbackCandidates = candidates.length > 0 ? candidates : fishPool.filter(fish => isRarityAllowed(fish.rarity, selectedBait))
     return fallbackCandidates[Math.floor(Math.random() * fallbackCandidates.length)] ?? DEFAULT_FISH_POOL[0]
   }
 
@@ -300,7 +347,9 @@ const FishingGame: FC = () => {
     setTimeout(() => startFishShadow(), 800 + Math.random() * 1000)
 
     const baseDelay = 2000 + Math.random() * 3000
-    const delay = baseDelay / (selectedBait.rarityBoost * 0.7 + 0.3)
+    const delay = selectedBait.biteDelayMultiplier && selectedBait.biteDelayMultiplier > 0
+      ? baseDelay * selectedBait.biteDelayMultiplier
+      : baseDelay / (selectedBait.rarityBoost * 0.7 + 0.3)
     biteTimerRef.current = setTimeout(() => {
       stopEffects()
       if (Math.random() > selectedBait.biteChance) {
@@ -347,7 +396,7 @@ const FishingGame: FC = () => {
         const fish = rollFish()
         setCatchResult(fish)
         setPhase('caught')
-        const suspenseDelay = fish.rarity === 'legendary' ? 2000 : fish.rarity === 'epic' ? 1200 : fish.rarity === 'rare' ? 700 : 400
+        const suspenseDelay = fish.rarity === 'mythic' ? 2400 : fish.rarity === 'legendary' ? 2000 : fish.rarity === 'epic' ? 1200 : fish.rarity === 'rare' ? 700 : 400
         setTimeout(() => setShowResult(true), suspenseDelay)
         setRecentCatches(prev => [fish, ...prev].slice(0, 10))
         setStats(s => ({
@@ -356,6 +405,7 @@ const FishingGame: FC = () => {
           combo: s.combo + 1,
           bestCombo: Math.max(s.bestCombo, s.combo + 1),
           legendaryCount: s.legendaryCount + (fish.rarity === 'legendary' ? 1 : 0),
+          mythicCount: s.mythicCount + (fish.rarity === 'mythic' ? 1 : 0),
           epicCount: s.epicCount + (fish.rarity === 'epic' ? 1 : 0),
         }))
         if (activePlayerId) {
@@ -394,6 +444,7 @@ const FishingGame: FC = () => {
           <span>抛竿 <b className="text-[var(--color-text-primary)]">{stats.totalCasts}</b></span>
           <span>钓获 <b className="text-[var(--color-text-primary)]">{stats.totalCaught}</b></span>
           <span>最佳 <b className="text-amber-600">{stats.bestCombo}</b></span>
+          {stats.mythicCount > 0 && <span>神话 <b className="text-rose-500">{stats.mythicCount}</b></span>}
           {stats.legendaryCount > 0 && <span>传说 <b className="text-amber-500">{stats.legendaryCount}</b></span>}
         </div>
 
@@ -443,7 +494,7 @@ const FishingGame: FC = () => {
           </div>
           <div className="flex flex-wrap gap-1">
             {recentCatches.map((fish, i) => {
-              const cfg = rarityConfig[fish.rarity] ?? DEFAULT_RARITY_CONFIG[fish.rarity]
+              const cfg = rarityConfig[fish.rarity] ?? DEFAULT_RARITY_CONFIG[fish.rarity] ?? DEFAULT_RARITY_CONFIG.common
               return (
                 <span key={`${fish.name}-${i}`} className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${cfg.bg} ${cfg.color}`}>
                   {fish.emoji} {fish.name}

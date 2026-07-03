@@ -1,4 +1,14 @@
+// 本文件提供仙池垂钓在配置未加载时使用的前端兜底模板。
 import type { BaitType, FishCatch } from './types'
+
+export interface FishingRarityStyle {
+  label: string
+  color: string
+  bg: string
+  border: string
+  weight: number
+  glow: string
+}
 
 export const FISH_POOL: FishCatch[] = [
   { name: '草鱼', rarity: 'common', reward: '青州军', rewardAmount: 300, description: '常见的淡水鱼，肉质鲜美', emoji: '🐟' },
@@ -26,18 +36,23 @@ export const FISH_POOL: FishCatch[] = [
   { name: '江东龙王', rarity: 'legendary', reward: '太平士', rewardAmount: 2000, description: '镇守江东水脉的传说灵物', emoji: '🐉' },
   { name: '神龙', rarity: 'legendary', reward: '士族', rewardAmount: 2000, description: '万灵之首，至高无上', emoji: '🐉' },
   { name: '混沌', rarity: 'legendary', reward: '汉室宗亲', rewardAmount: 8000, description: '天地未分之初的原始神兽', emoji: '🌀' },
+  { name: '神龙·青龙军', rarity: 'mythic', reward: '青龙军', rewardAmount: 50000, description: '神龙赐福，钓获后可兑换青龙军五万。', emoji: '🐉' },
+  { name: '神龙·虎豹骑', rarity: 'mythic', reward: '虎豹骑', rewardAmount: 50000, description: '神龙赐福，钓获后可兑换虎豹骑五万。', emoji: '🐉' },
+  { name: '神龙·木牛流马', rarity: 'mythic', reward: '木牛流马', rewardAmount: 50000, description: '神龙赐福，钓获后可兑换木牛流马五万。', emoji: '🐉' },
 ]
 
-export const RARITY_CONFIG = {
+export const RARITY_CONFIG: Record<string, FishingRarityStyle> = {
   common: { label: '普通', color: 'text-slate-500', bg: 'bg-slate-500/10', border: 'border-slate-500/20', weight: 65, glow: '' },
   rare: { label: '稀有', color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20', weight: 22, glow: 'shadow-[0_0_15px_rgba(59,130,246,0.3)]' },
   epic: { label: '史诗', color: 'text-purple-500', bg: 'bg-purple-500/10', border: 'border-purple-500/20', weight: 8, glow: 'shadow-[0_0_25px_rgba(168,85,247,0.4)]' },
   legendary: { label: '传说', color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20', weight: 1.5, glow: 'shadow-[0_0_40px_rgba(245,158,11,0.5)]' },
+  mythic: { label: '神话', color: 'text-rose-500', bg: 'bg-rose-500/10', border: 'border-rose-500/20', weight: 0.1, glow: 'shadow-[0_0_55px_rgba(244,63,94,0.45)]' },
 }
 
 export const BAITS: BaitType[] = [
-  { id: 'coarse', name: '粗饵', tier: '一阶', description: '低成本，命中框较窄', rarityBoost: 1, cityGoldCost: 0, biteChance: 0.72, biteWindowMs: 1500, sweetStart: 67, sweetEnd: 77 },
-  { id: 'shrimp', name: '灵虾', tier: '二阶', description: '稀有提升，命中更稳', rarityBoost: 1.2, cityGoldCost: 30, biteChance: 0.8, biteWindowMs: 1850, sweetStart: 62, sweetEnd: 82 },
-  { id: 'golden', name: '金鳞饵', tier: '三阶', description: '史诗提升，容错更高', rarityBoost: 1.55, cityGoldCost: 120, biteChance: 0.88, biteWindowMs: 2200, sweetStart: 56, sweetEnd: 86 },
-  { id: 'dragon', name: '龙涎饵', tier: '四阶', description: '传说提升，命中框最大', rarityBoost: 2.15, cityGoldCost: 500, biteChance: 0.95, biteWindowMs: 2600, sweetStart: 48, sweetEnd: 90 },
+  { id: 'coarse', name: '粗饵', tier: '一阶', description: '低成本，多数为普通鱼', rarityBoost: 1, rarityWeights: { common: 85, rare: 13, epic: 1.8, legendary: 0.2, mythic: 0 }, minRarity: 'common', maxRarity: 'legendary', biteDelayMultiplier: 1.15, cityGoldCost: 10, biteChance: 0.62, biteWindowMs: 1400, sweetStart: 68, sweetEnd: 76 },
+  { id: 'shrimp', name: '灵虾', tier: '二阶', description: '小半普通，多数稀有', rarityBoost: 1.2, rarityWeights: { common: 45, rare: 40, epic: 13.5, legendary: 1.5, mythic: 0 }, minRarity: 'common', maxRarity: 'legendary', biteDelayMultiplier: 1, cityGoldCost: 50, biteChance: 0.76, biteWindowMs: 1800, sweetStart: 62, sweetEnd: 82 },
+  { id: 'golden', name: '金鳞饵', tier: '三阶', description: '史诗提升，极小概率神话', rarityBoost: 1.55, rarityWeights: { common: 18, rare: 42, epic: 34, legendary: 5.8, mythic: 0.2 }, minRarity: 'common', maxRarity: 'mythic', biteDelayMultiplier: 0.88, cityGoldCost: 250, biteChance: 0.86, biteWindowMs: 2200, sweetStart: 56, sweetEnd: 86 },
+  { id: 'dragon', name: '龙涎饵', tier: '四阶', description: '史诗与传说为主', rarityBoost: 2.15, rarityWeights: { common: 5, rare: 20, epic: 50, legendary: 24, mythic: 1 }, minRarity: 'common', maxRarity: 'mythic', biteDelayMultiplier: 0.75, cityGoldCost: 1200, biteChance: 0.93, biteWindowMs: 2600, sweetStart: 48, sweetEnd: 90 },
+  { id: 'shenlong', name: '神龙饵', tier: '五阶', description: '顶级饵料，传说与神话为主', rarityBoost: 6, rarityWeights: { common: 0, rare: 5, epic: 25, legendary: 65, mythic: 5 }, minRarity: 'rare', maxRarity: 'mythic', biteDelayMultiplier: 0.65, cityGoldCost: 12000, biteChance: 0.98, biteWindowMs: 3000, sweetStart: 35, sweetEnd: 95 },
 ]

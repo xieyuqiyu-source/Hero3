@@ -1,3 +1,4 @@
+// 本文件展示仙池垂钓库存，并支持按奖励兵种分组兑换。
 import { Loader2, PackageCheck, X } from 'lucide-react'
 import { useMemo, type FC } from 'react'
 import type { MiniGameRecord } from '@/types/game'
@@ -32,11 +33,12 @@ type InventoryGroup = {
   target: 'army' | 'garrison'
 }
 
-const rarityRank: Record<FishCatch['rarity'], number> = {
+const rarityRank: Record<string, number> = {
   common: 1,
   rare: 2,
   epic: 3,
   legendary: 4,
+  mythic: 5,
 }
 
 export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
@@ -67,11 +69,11 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
       let highestRarity: FishCatch['rarity'] = 'common'
       for (const record of groupRecords) {
         const rarity = (record.rarity in RARITY_CONFIG ? record.rarity : 'common') as FishCatch['rarity']
-        if (rarityRank[rarity] > rarityRank[highestRarity]) highestRarity = rarity
+        if ((rarityRank[rarity] ?? 0) > (rarityRank[highestRarity] ?? 0)) highestRarity = rarity
         const tag = fishMap.get(record.resultName) ?? { name: record.resultName, count: 0, amount: 0, rarity }
         tag.count += 1
         tag.amount += record.remainingAmount
-        if (rarityRank[rarity] > rarityRank[tag.rarity]) tag.rarity = rarity
+        if ((rarityRank[rarity] ?? 0) > (rarityRank[tag.rarity] ?? 0)) tag.rarity = rarity
         fishMap.set(record.resultName, tag)
       }
       return {
@@ -79,12 +81,12 @@ export const FishingInventoryModal: FC<FishingInventoryModalProps> = ({
         records: groupRecords,
         totalAmount: groupRecords.reduce((sum, record) => sum + record.remainingAmount, 0),
         originalAmount: groupRecords.reduce((sum, record) => sum + record.rewardAmount, 0),
-        fishTags: Array.from(fishMap.values()).sort((a, b) => rarityRank[b.rarity] - rarityRank[a.rarity] || b.amount - a.amount),
+        fishTags: Array.from(fishMap.values()).sort((a, b) => (rarityRank[b.rarity] ?? 0) - (rarityRank[a.rarity] ?? 0) || b.amount - a.amount),
         highestRarity,
         canRedeem: true,
         target: (isFactionUnit(rewardUnit) ? 'army' : 'garrison') as InventoryGroup['target'],
       }
-    }).sort((a, b) => Number(a.target === 'garrison') - Number(b.target === 'garrison') || rarityRank[b.highestRarity] - rarityRank[a.highestRarity] || b.totalAmount - a.totalAmount)
+    }).sort((a, b) => Number(a.target === 'garrison') - Number(b.target === 'garrison') || (rarityRank[b.highestRarity] ?? 0) - (rarityRank[a.highestRarity] ?? 0) || b.totalAmount - a.totalAmount)
   }, [inventoryRecords, isFactionUnit])
   const redeemableGroups = groups.filter(group => group.canRedeem)
   const redeemableAmount = redeemableGroups.reduce((sum, group) => sum + group.totalAmount, 0)

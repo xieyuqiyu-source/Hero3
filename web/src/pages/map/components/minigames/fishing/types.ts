@@ -1,8 +1,11 @@
+// 本文件定义仙池垂钓前端运行时使用的鱼、鱼饵和界面状态类型。
 import type { MiniGameRecord } from '@/types/game'
+
+export type FishRarity = 'common' | 'rare' | 'epic' | 'legendary' | 'mythic'
 
 export interface FishCatch {
   name: string
-  rarity: 'common' | 'rare' | 'epic' | 'legendary'
+  rarity: FishRarity | string
   reward: string
   rewardAmount: number
   description: string
@@ -15,6 +18,10 @@ export interface BaitType {
   tier: string
   description: string
   rarityBoost: number
+  rarityWeights?: Record<string, number>
+  minRarity?: string
+  maxRarity?: string
+  biteDelayMultiplier?: number
   cityGoldCost: number
   biteChance: number
   biteWindowMs: number
@@ -30,6 +37,7 @@ export interface FishingStats {
   combo: number
   bestCombo: number
   legendaryCount: number
+  mythicCount: number
   epicCount: number
 }
 

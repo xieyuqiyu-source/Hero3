@@ -103,17 +103,41 @@ func testFishingConfig(cityGoldCost int) FishingConfig {
 			"rare":      {Label: "稀有", Weight: 22},
 			"epic":      {Label: "史诗", Weight: 8},
 			"legendary": {Label: "传说", Weight: 1.5},
+			"mythic":    {Label: "神话", Weight: 0.1},
 		},
 		Baits: []FishingBaitConfig{
 			{
 				ID: "coarse", Name: "粗饵", Tier: "一阶", Description: "测试鱼饵",
 				RarityBoost: 1, CityGoldCost: cityGoldCost, BiteChance: 0.8,
+				RarityWeights: map[string]float64{"common": 90, "rare": 10, "epic": 0, "legendary": 0, "mythic": 0},
+				MinRarity:     "common", MaxRarity: "legendary", BiteDelayMultiplier: 1.1,
 				BiteWindowMs: 1500, SweetStart: 50, SweetEnd: 80,
 			},
 		},
 		FishPool: []FishingFishConfig{
 			{Name: "草鱼", Rarity: "common", Reward: "青州军", RewardAmount: 100, Description: "测试鱼", Emoji: "fish"},
 		},
+	}
+}
+
+// TestValidateFishingConfigRejectsInvalidRarityWeights 验证鱼饵独立品质权重会拦截未知品质。
+func TestValidateFishingConfigRejectsInvalidRarityWeights(t *testing.T) {
+	cfg := testFishingConfig(11)
+	cfg.Baits[0].RarityWeights = map[string]float64{"unknown": 1}
+
+	if err := ValidateFishingConfig(cfg); err == nil {
+		t.Fatal("expected invalid rarityWeights to be rejected")
+	}
+}
+
+// TestValidateFishingConfigRejectsInvalidRarityRange 验证鱼饵最低/最高品质范围必须按品质顺序递增。
+func TestValidateFishingConfigRejectsInvalidRarityRange(t *testing.T) {
+	cfg := testFishingConfig(11)
+	cfg.Baits[0].MinRarity = "legendary"
+	cfg.Baits[0].MaxRarity = "rare"
+
+	if err := ValidateFishingConfig(cfg); err == nil {
+		t.Fatal("expected invalid rarity range to be rejected")
 	}
 }
 

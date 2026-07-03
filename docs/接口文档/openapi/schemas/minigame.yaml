@@ -469,7 +469,7 @@ FishingConfig:
   properties:
     rarities:
       type: object
-      description: 稀有度配置，key 一般为 common / rare / epic / legendary。
+      description: 稀有度配置，key 一般为 common / rare / epic / legendary / mythic。
       additionalProperties:
         $ref: '#/components/schemas/FishingRarityConfig'
     baits:
@@ -528,7 +528,32 @@ FishingBaitConfig:
     rarityBoost:
       type: number
       format: double
-      description: 稀有、史诗、传说权重倍率。
+      description: 旧版稀有、史诗、传说权重倍率；未配置 rarityWeights 时用于兼容旧概率模型。
+    rarityWeights:
+      type: object
+      description: 当前鱼饵独立品质权重；存在时优先于 rarityBoost，可用于让顶级饵料主要产出传说和神话。
+      additionalProperties:
+        type: number
+        format: double
+      example:
+        common: 0
+        rare: 5
+        epic: 25
+        legendary: 65
+        mythic: 5
+    minRarity:
+      type: string
+      description: 当前鱼饵允许抽到的最低品质。
+      example: rare
+    maxRarity:
+      type: string
+      description: 当前鱼饵允许抽到的最高品质。
+      example: mythic
+    biteDelayMultiplier:
+      type: number
+      format: double
+      description: 咬钩等待时间倍率；为空或 0 时使用旧版 rarityBoost 等待时间公式。
+      example: 0.65
     cityGoldCost:
       type: integer
       minimum: 0

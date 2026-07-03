@@ -1,3 +1,4 @@
+// 本文件展示仙池垂钓单次钓获结果和奖励入库提示。
 import { X } from 'lucide-react'
 import { useEffect, useState, type FC } from 'react'
 import { RARITY_CONFIG } from './fishingConfig'
@@ -11,7 +12,7 @@ interface FishingResultModalProps {
 
 export const FishingResultModal: FC<FishingResultModalProps> = ({ fish, combo, onClose }) => {
   const [visible, setVisible] = useState(false)
-  const config = RARITY_CONFIG[fish.rarity]
+  const config = RARITY_CONFIG[fish.rarity] ?? RARITY_CONFIG.common
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true))
@@ -26,7 +27,8 @@ export const FishingResultModal: FC<FishingResultModalProps> = ({ fish, combo, o
     <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
       <div
         className={`absolute inset-0 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}
-          ${fish.rarity === 'legendary' ? 'bg-amber-950/60 backdrop-blur-[6px]' :
+          ${fish.rarity === 'mythic' ? 'bg-rose-950/65 backdrop-blur-[7px]' :
+            fish.rarity === 'legendary' ? 'bg-amber-950/60 backdrop-blur-[6px]' :
             fish.rarity === 'epic' ? 'bg-purple-950/60 backdrop-blur-[5px]' :
             'bg-slate-900/50 backdrop-blur-[4px]'}
         `}
@@ -36,7 +38,8 @@ export const FishingResultModal: FC<FishingResultModalProps> = ({ fish, combo, o
         relative w-full max-w-[300px] overflow-hidden rounded-2xl
         border bg-[var(--color-surface)]
         transition-all duration-300
-        ${fish.rarity === 'legendary' ? 'border-amber-500/40 shadow-[0_0_60px_rgba(245,158,11,0.2)]' :
+        ${fish.rarity === 'mythic' ? 'border-rose-500/50 shadow-[0_0_80px_rgba(244,63,94,0.25)]' :
+          fish.rarity === 'legendary' ? 'border-amber-500/40 shadow-[0_0_60px_rgba(245,158,11,0.2)]' :
           fish.rarity === 'epic' ? 'border-purple-500/40 shadow-[0_0_40px_rgba(168,85,247,0.15)]' :
           'border-[var(--color-border)] shadow-[0_24px_60px_rgba(15,23,42,0.3)]'}
         ${visible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-4'}
@@ -48,12 +51,19 @@ export const FishingResultModal: FC<FishingResultModalProps> = ({ fish, combo, o
               <div className="absolute inset-0 bg-[radial-gradient(circle,rgba(245,158,11,0.15)_0%,transparent_70%)]" />
             </>
           )}
+          {fish.rarity === 'mythic' && (
+            <>
+              <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-rose-500/0 via-rose-500/25 to-rose-500/0" />
+              <div className="absolute inset-0 bg-[radial-gradient(circle,rgba(244,63,94,0.18)_0%,transparent_72%)]" />
+            </>
+          )}
           {fish.rarity === 'epic' && (
             <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-purple-500/0 via-purple-500/15 to-purple-500/0" />
           )}
-          <span className={`relative mb-2 block text-4xl ${fish.rarity === 'legendary' ? 'animate-bounce' : ''}`}>{fish.emoji}</span>
+          <span className={`relative mb-2 block text-4xl ${fish.rarity === 'legendary' || fish.rarity === 'mythic' ? 'animate-bounce' : ''}`}>{fish.emoji}</span>
           <h2 className={`relative text-base font-bold ${config.color}`}>
-            {fish.rarity === 'legendary' ? '🐲 传说降临！' :
+            {fish.rarity === 'mythic' ? '🐉 神话现世！' :
+              fish.rarity === 'legendary' ? '🐲 传说降临！' :
               fish.rarity === 'epic' ? '💎 史诗钓获！' :
                 fish.rarity === 'rare' ? '🌟 稀有鱼种！' :
                   '钓到了'}
@@ -81,10 +91,10 @@ export const FishingResultModal: FC<FishingResultModalProps> = ({ fish, combo, o
 
           <div className={`rounded-xl border p-3.5 ${config.bg} ${config.border} ${config.glow}`}>
             <p className="mb-1 text-[10px] text-[var(--color-text-muted)]">可兑换</p>
-            <p className={`${fish.rarity === 'legendary' || fish.rarity === 'epic' ? 'text-xl' : 'text-base'} font-bold ${config.color}`}>
+            <p className={`${fish.rarity === 'mythic' || fish.rarity === 'legendary' || fish.rarity === 'epic' ? 'text-xl' : 'text-base'} font-bold ${config.color}`}>
               {fish.reward}
             </p>
-            <p className={`${fish.rarity === 'legendary' || fish.rarity === 'epic' ? 'text-lg' : 'text-sm'} mt-0.5 font-bold ${config.color}`}>
+            <p className={`${fish.rarity === 'mythic' || fish.rarity === 'legendary' || fish.rarity === 'epic' ? 'text-lg' : 'text-sm'} mt-0.5 font-bold ${config.color}`}>
               ×{fish.rewardAmount.toLocaleString()}
             </p>
           </div>

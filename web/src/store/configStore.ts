@@ -1,3 +1,4 @@
+// 本文件维护前端启动配置缓存和配置辅助读取函数。
 import { create } from 'zustand'
 import { gameApi } from '@/api/game'
 import type { ItemDefinition, ReincarnationConfig } from '@/types/game'
@@ -77,6 +78,10 @@ export interface FishingBaitConfig {
   tier: string
   description: string
   rarityBoost: number
+  rarityWeights?: Record<string, number>
+  minRarity?: string
+  maxRarity?: string
+  biteDelayMultiplier?: number
   cityGoldCost: number
   biteChance: number
   biteWindowMs: number
@@ -86,7 +91,7 @@ export interface FishingBaitConfig {
 
 export interface FishingFishConfig {
   name: string
-  rarity: 'common' | 'rare' | 'epic' | 'legendary'
+  rarity: 'common' | 'rare' | 'epic' | 'legendary' | 'mythic' | string
   reward: string
   rewardAmount: number
   description: string

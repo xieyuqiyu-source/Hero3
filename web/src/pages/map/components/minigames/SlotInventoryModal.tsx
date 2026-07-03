@@ -31,11 +31,12 @@ type SlotInventoryGroup = {
   target: 'army' | 'garrison'
 }
 
-const rarityRank: Record<FishCatch['rarity'], number> = {
+const rarityRank: Record<string, number> = {
   common: 1,
   rare: 2,
   epic: 3,
   legendary: 4,
+  mythic: 5,
 }
 
 // normalizeRarity 归一化后端记录稀有度，避免旧数据破坏样式。
@@ -72,24 +73,24 @@ export const SlotInventoryModal: FC<SlotInventoryModalProps> = ({
       let highestRarity: FishCatch['rarity'] = 'common'
       for (const record of groupRecords) {
         const rarity = normalizeRarity(record.rarity)
-        if (rarityRank[rarity] > rarityRank[highestRarity]) highestRarity = rarity
+        if ((rarityRank[rarity] ?? 0) > (rarityRank[highestRarity] ?? 0)) highestRarity = rarity
         const betText = record.betUnit && record.betAmount ? ` · 押 ${record.betUnit} ×${record.betAmount.toLocaleString()}` : ''
         const tagName = `${record.resultName}${betText}`
         const tag = roundMap.get(tagName) ?? { name: tagName, count: 0, amount: 0, rarity }
         tag.count += 1
         tag.amount += record.remainingAmount
-        if (rarityRank[rarity] > rarityRank[tag.rarity]) tag.rarity = rarity
+        if ((rarityRank[rarity] ?? 0) > (rarityRank[tag.rarity] ?? 0)) tag.rarity = rarity
         roundMap.set(tagName, tag)
       }
       return {
         rewardUnit,
         records: groupRecords,
         totalAmount: groupRecords.reduce((sum, record) => sum + record.remainingAmount, 0),
-        roundTags: Array.from(roundMap.values()).sort((a, b) => rarityRank[b.rarity] - rarityRank[a.rarity] || b.amount - a.amount),
+        roundTags: Array.from(roundMap.values()).sort((a, b) => (rarityRank[b.rarity] ?? 0) - (rarityRank[a.rarity] ?? 0) || b.amount - a.amount),
         highestRarity,
         target: (isFactionUnit(rewardUnit) ? 'army' : 'garrison') as SlotInventoryGroup['target'],
       }
-    }).sort((a, b) => Number(a.target === 'garrison') - Number(b.target === 'garrison') || rarityRank[b.highestRarity] - rarityRank[a.highestRarity] || b.totalAmount - a.totalAmount)
+    }).sort((a, b) => Number(a.target === 'garrison') - Number(b.target === 'garrison') || (rarityRank[b.highestRarity] ?? 0) - (rarityRank[a.highestRarity] ?? 0) || b.totalAmount - a.totalAmount)
   }, [inventoryRecords, isFactionUnit])
   const redeemableAmount = groups.reduce((sum, group) => sum + group.totalAmount, 0)
   const garrisonAmount = groups.filter(group => group.target === 'garrison').reduce((sum, group) => sum + group.totalAmount, 0)
