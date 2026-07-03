@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -132,6 +133,7 @@ type BootstrapResponse struct {
 const (
 	newPlayerRewardMailType = "reward"
 	newPlayerRewardGold     = 10000
+	gameConfigKeyFishing    = "fishing"
 )
 
 func NewService() *Service {
@@ -193,7 +195,10 @@ func (s *Service) SetDropPoolsPath(path string) error {
 
 func (s *Service) SetFishingPath(path string) error {
 	s.fishingPath = path
-	return LoadFishingConfig(path)
+	if err := LoadFishingConfig(path); err != nil {
+		return err
+	}
+	return s.loadFishingConfigFromRepository(GetFishingConfig())
 }
 
 // SetSlotPath 设置并加载天机轮转配置。
@@ -229,7 +234,17 @@ func (s *Service) GetFishingConfig() FishingConfig {
 }
 
 func (s *Service) UpdateFishingConfig(config FishingConfig) error {
-	return SaveFishingConfig(s.fishingPath, config)
+	if err := ValidateFishingConfig(config); err != nil {
+		return err
+	}
+	content, err := json.Marshal(config)
+	if err != nil {
+		return err
+	}
+	if _, err := s.repo.SaveGameConfig(gameConfigKeyFishing, content, "admin", time.Now().UTC()); err != nil {
+		return err
+	}
+	return SetFishingConfig(config)
 }
 
 // GetSlotConfig 返回天机轮转配置。

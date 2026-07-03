@@ -311,6 +311,15 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 			description VARCHAR(255) NOT NULL DEFAULT '',
 			applied_at DATETIME(6) NOT NULL
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS game_configs (
+			config_key VARCHAR(64) PRIMARY KEY,
+			value_json JSON NOT NULL,
+			version INT NOT NULL DEFAULT 1,
+			updated_by VARCHAR(64) NOT NULL DEFAULT '',
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			INDEX idx_game_configs_updated (updated_at)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS accounts (
 			id VARCHAR(64) PRIMARY KEY,
 			username VARCHAR(64) NOT NULL UNIQUE,

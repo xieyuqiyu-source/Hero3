@@ -3379,7 +3379,7 @@ paths:
       tags:
       - Admin
       summary: GM 读取仙池垂钓配置
-      description: 读取鱼池、鱼饵、稀有度概率权重配置。Web 端也会通过 game/bootstrap 获取同一份配置。
+      description: 读取鱼池、鱼饵、稀有度概率权重配置。Web 端也会通过 game/bootstrap 获取同一份配置；线上优先读取数据库 game_configs.fishing，文件配置只作为默认模板。
       operationId: adminGetFishingConfig
       responses:
         '200':
@@ -3392,7 +3392,8 @@ paths:
       tags:
       - Admin
       summary: GM 保存仙池垂钓配置
-      description: 保存后立即更新后端内存配置，后续新进入钓鱼页面或刷新 bootstrap 的玩家会使用新鱼池和概率。
+      description: 保存后写入数据库 game_configs.fishing 并立即更新后端内存配置，后续新进入钓鱼页面或刷新 bootstrap
+        的玩家会使用新鱼池和概率；不会回写发布目录中的 go/config/fishing.json。
       operationId: adminUpdateFishingConfig
       requestBody:
         required: true

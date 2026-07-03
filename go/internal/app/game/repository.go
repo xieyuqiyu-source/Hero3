@@ -218,6 +218,22 @@ type EventProcessingRepository interface {
 	ClaimEventProcessing(moduleID string, handlerKey string, eventKey string, processedAt time.Time) (bool, error)
 }
 
+// GameConfigRecord 保存一份线上 GM 配置快照。
+type GameConfigRecord struct {
+	Key       string
+	ValueJSON []byte
+	Version   int
+	UpdatedBy string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// GameConfigRepository 管理数据库中的线上 GM 配置。
+type GameConfigRepository interface {
+	GetGameConfig(key string) (GameConfigRecord, bool, error)
+	SaveGameConfig(key string, valueJSON []byte, updatedBy string, updatedAt time.Time) (GameConfigRecord, error)
+}
+
 type ReincarnationRepository interface {
 	GetActiveReincarnationRun(playerID string, now time.Time) (ReincarnationRun, bool, error)
 	GetReincarnationRun(runID string) (ReincarnationRun, error)
@@ -250,6 +266,7 @@ type Repository interface {
 	GoldLedgerRepository
 	ItemLedgerRepository
 	EventProcessingRepository
+	GameConfigRepository
 	ReincarnationRepository
 }
 
@@ -276,6 +293,7 @@ type MemoryRepository struct {
 	ledgerNextID      int64
 	itemLedger        []ItemLedgerEntry
 	eventClaims       map[string]struct{}
+	gameConfigs       map[string]GameConfigRecord
 	reincarnationRuns map[string]ReincarnationRun
 }
 
@@ -299,6 +317,7 @@ func NewMemoryRepository() *MemoryRepository {
 		announcements:     make(map[string]Announcement),
 		announcementReads: make(map[string]AnnouncementReadState),
 		eventClaims:       make(map[string]struct{}),
+		gameConfigs:       make(map[string]GameConfigRecord),
 		reincarnationRuns: make(map[string]ReincarnationRun),
 	}
 }
