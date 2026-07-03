@@ -103,11 +103,20 @@ jobs:
 
           fetch_source() {
             local auth_header
+            local auth_config
             auth_header="$(printf 'x-access-token:%s' "$HERO3_GITHUB_TOKEN" | base64 | tr -d '\n')"
-            git -C "$SOURCE_DIR" config http.version HTTP/1.1
+            auth_config="$(mktemp /tmp/hero3-git-auth.XXXXXX)"
+            chmod 600 "$auth_config"
+            {
+              printf '[http]\n'
+              printf '\tversion = HTTP/1.1\n'
+              printf '[http "https://github.com/"]\n'
+              printf '\textraheader = AUTHORIZATION: basic %s\n' "$auth_header"
+            } > "$auth_config"
+            trap 'rm -f "$auth_config"' RETURN
             for attempt in 1 2 3; do
-              if git -C "$SOURCE_DIR" \
-                -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${auth_header}" \
+              if timeout --kill-after=10s 180s git -C "$SOURCE_DIR" \
+                -c "include.path=$auth_config" \
                 fetch --force --prune origin "+refs/heads/${HERO3_REF_NAME}:refs/remotes/origin/${HERO3_REF_NAME}"; then
                 return 0
               fi
