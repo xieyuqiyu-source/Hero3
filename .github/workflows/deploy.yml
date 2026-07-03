@@ -1,4 +1,4 @@
-# Hero3 自动发布流程：Actions 只触发服务器拉取、构建和部署。
+# Hero3 自动发布流程：Actions 只负责 SSH 调度，服务器拉取指定提交、本机构建并部署。
 name: Deploy Hero3
 
 on:
@@ -18,72 +18,12 @@ jobs:
   deploy:
     name: Build and deploy on server
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     env:
       HERO3_HEALTH_URL: https://hero3.ccoos.cn/healthz
 
     steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go/go.mod
-          cache-dependency-path: go/go.sum
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Build release artifacts
-        run: |
-          set -euo pipefail
-          RELEASE_DIR="/tmp/hero3-release.${GITHUB_SHA}"
-          RELEASE_ARCHIVE="/tmp/hero3-release.${GITHUB_SHA}.tar.gz"
-          INCLUDE_STATIC=1
-          if git rev-parse --verify HEAD^ >/dev/null 2>&1 && git diff --quiet HEAD^ HEAD -- web admin; then
-            INCLUDE_STATIC=0
-          fi
-          rm -rf "$RELEASE_DIR" "$RELEASE_ARCHIVE"
-          mkdir -p "$RELEASE_DIR/go/bin" "$RELEASE_DIR/go/config" "$RELEASE_DIR/deploy"
-
-          cd "$GITHUB_WORKSPACE/go"
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o "$RELEASE_DIR/go/bin/hero3-server" ./cmd/server
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o "$RELEASE_DIR/go/bin/hero3-dbtool" ./cmd/dbtool
-          rsync -a "$GITHUB_WORKSPACE/go/config/" "$RELEASE_DIR/go/config/"
-
-          if [ "$INCLUDE_STATIC" = "1" ]; then
-            corepack enable
-            corepack prepare pnpm@10.24.0 --activate
-
-            cd "$GITHUB_WORKSPACE/web"
-            pnpm install --frozen-lockfile
-            pnpm build
-            mkdir -p "$RELEASE_DIR/web"
-            rsync -a "$GITHUB_WORKSPACE/web/dist/" "$RELEASE_DIR/web/"
-
-            cd "$GITHUB_WORKSPACE/admin"
-            pnpm install --frozen-lockfile
-            pnpm build
-            mkdir -p "$RELEASE_DIR/admin"
-            rsync -a "$GITHUB_WORKSPACE/admin/dist/" "$RELEASE_DIR/admin/"
-          else
-            echo "web/admin unchanged, skipping static artifact build"
-          fi
-
-          if [ -d "$GITHUB_WORKSPACE/deploy/systemd" ]; then
-            mkdir -p "$RELEASE_DIR/deploy/systemd"
-            rsync -a "$GITHUB_WORKSPACE/deploy/systemd/" "$RELEASE_DIR/deploy/systemd/"
-          fi
-          tar -czf "$RELEASE_ARCHIVE" -C "$RELEASE_DIR" .
-          du -sh "$RELEASE_DIR" "$RELEASE_ARCHIVE"
-          echo "HERO3_RELEASE_ARCHIVE=$RELEASE_ARCHIVE" >> "$GITHUB_ENV"
-
       - name: Configure SSH
         env:
           HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
@@ -105,61 +45,75 @@ jobs:
           HERO3_REPOSITORY: ${{ github.repository }}
           HERO3_REF_NAME: ${{ github.ref_name }}
           HERO3_SHA: ${{ github.sha }}
+          HERO3_GITHUB_TOKEN: ${{ github.token }}
           HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
           HERO3_SSH_PORT: ${{ secrets.HERO3_SSH_PORT || '22' }}
           HERO3_SSH_USER: ${{ secrets.HERO3_SSH_USER }}
         run: |
           set -euo pipefail
+          test -n "$HERO3_REPOSITORY"
           test -n "$HERO3_REF_NAME"
           test -n "$HERO3_SHA"
+          test -n "$HERO3_GITHUB_TOKEN"
           test -n "$HERO3_SSH_USER"
-          test -f "$HERO3_RELEASE_ARCHIVE"
+          if [ "$HERO3_REF_NAME" != "main-core" ]; then
+            echo "Production deploy only supports main-core, got $HERO3_REF_NAME"
+            exit 1
+          fi
 
-          REMOTE_RELEASE_ARCHIVE="/tmp/hero3-release.${HERO3_SHA}.tar.gz"
+          printf -v REMOTE_ENV 'HERO3_REPOSITORY=%q HERO3_REF_NAME=%q HERO3_SHA=%q HERO3_GITHUB_TOKEN=%q' \
+            "$HERO3_REPOSITORY" "$HERO3_REF_NAME" "$HERO3_SHA" "$HERO3_GITHUB_TOKEN"
 
-          ls -lh "$HERO3_RELEASE_ARCHIVE"
-          timeout --kill-after=10s 900s ssh \
+          timeout --kill-after=10s 2400s ssh \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=accept-new \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             -o ConnectTimeout=15 \
             -o ServerAliveInterval=10 \
-            -o ServerAliveCountMax=6 \
+            -o ServerAliveCountMax=12 \
             -i ~/.ssh/hero3_deploy_key \
             -p "$HERO3_SSH_PORT" \
             "$HERO3_SSH_USER@$HERO3_SSH_HOST" \
-            "cat > '$REMOTE_RELEASE_ARCHIVE'" < "$HERO3_RELEASE_ARCHIVE"
-
-          timeout --kill-after=10s 900s ssh \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=accept-new \
-            -o UserKnownHostsFile=~/.ssh/known_hosts \
-            -o ConnectTimeout=15 \
-            -o ServerAliveInterval=10 \
-            -o ServerAliveCountMax=6 \
-            -i ~/.ssh/hero3_deploy_key \
-            -p "$HERO3_SSH_PORT" \
-            "$HERO3_SSH_USER@$HERO3_SSH_HOST" \
-            "HERO3_REF_NAME='$HERO3_REF_NAME' HERO3_SHA='$HERO3_SHA' HERO3_RELEASE_ARCHIVE='$REMOTE_RELEASE_ARCHIVE' bash -s" <<'EOF'
+            "$REMOTE_ENV bash -s" <<'EOF'
           set -euo pipefail
 
-          RELEASE_DIR="/tmp/hero3-release.${HERO3_SHA}"
+          SOURCE_DIR="/opt/hero3/source"
+          BUILD_DIR="/tmp/hero3-build.${HERO3_SHA}"
           STAMP="$(date +%Y%m%d%H%M%S)"
 
           log() {
             printf '\n[%s] %s\n' "$(date -Is)" "$*"
           }
 
-          command -v rsync >/dev/null
+          command -v base64 >/dev/null
+          command -v corepack >/dev/null
           command -v flock >/dev/null
+          command -v git >/dev/null
+          command -v go >/dev/null
+          command -v node >/dev/null
+          command -v rsync >/dev/null
           command -v tar >/dev/null
           command -v timeout >/dev/null
 
           show_hero3_logs() {
             systemctl status hero3 --no-pager -l || true
             journalctl -u hero3 -n 120 --no-pager || true
+          }
+
+          fetch_source() {
+            local auth_header
+            auth_header="$(printf 'x-access-token:%s' "$HERO3_GITHUB_TOKEN" | base64 | tr -d '\n')"
+            git -C "$SOURCE_DIR" config http.version HTTP/1.1
+            for attempt in 1 2 3; do
+              if git -C "$SOURCE_DIR" \
+                -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${auth_header}" \
+                fetch --force --prune origin "+refs/heads/${HERO3_REF_NAME}:refs/remotes/origin/${HERO3_REF_NAME}"; then
+                return 0
+              fi
+              sleep $((attempt * 5))
+            done
+            return 1
           }
 
           exec 9>/tmp/hero3-deploy.lock
@@ -171,49 +125,85 @@ jobs:
           mkdir -p /opt/hero3/backups /var/www/hero3/backups
           mkdir -p /opt/hero3/go/bin /opt/hero3/go/config /var/www/hero3/web /var/www/hero3/admin
 
-          log "Extracting uploaded release"
-          test -f "$HERO3_RELEASE_ARCHIVE"
-          rm -rf "$RELEASE_DIR"
-          mkdir -p "$RELEASE_DIR"
-          tar -xzf "$HERO3_RELEASE_ARCHIVE" -C "$RELEASE_DIR"
-          rm -f "$HERO3_RELEASE_ARCHIVE"
+          log "Preparing source checkout"
+          if [ -e "$SOURCE_DIR" ] && [ ! -d "$SOURCE_DIR/.git" ]; then
+            mv "$SOURCE_DIR" "/opt/hero3/source.non-git.${STAMP}"
+          fi
+          if [ ! -d "$SOURCE_DIR/.git" ]; then
+            mkdir -p "$SOURCE_DIR"
+            git -C "$SOURCE_DIR" init
+            git -C "$SOURCE_DIR" remote add origin "https://github.com/${HERO3_REPOSITORY}.git"
+          else
+            git -C "$SOURCE_DIR" remote set-url origin "https://github.com/${HERO3_REPOSITORY}.git"
+          fi
+
+          fetch_source
+          git -C "$SOURCE_DIR" cat-file -e "${HERO3_SHA}^{commit}"
+          git -C "$SOURCE_DIR" checkout --force "$HERO3_SHA"
+          git -C "$SOURCE_DIR" reset --hard "$HERO3_SHA"
+          git -C "$SOURCE_DIR" clean -fd
+
+          log "Building release on server"
+          rm -rf "$BUILD_DIR"
+          mkdir -p "$BUILD_DIR/go/bin" "$BUILD_DIR/go/config" "$BUILD_DIR/deploy"
+
+          export GOTOOLCHAIN=auto
+          cd "$SOURCE_DIR/go"
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o "$BUILD_DIR/go/bin/hero3-server" ./cmd/server
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o "$BUILD_DIR/go/bin/hero3-dbtool" ./cmd/dbtool
+          rsync -a "$SOURCE_DIR/go/config/" "$BUILD_DIR/go/config/"
+
+          corepack enable
+          corepack prepare pnpm@10.24.0 --activate
+
+          cd "$SOURCE_DIR/web"
+          pnpm install --frozen-lockfile
+          pnpm build
+          mkdir -p "$BUILD_DIR/web"
+          rsync -a "$SOURCE_DIR/web/dist/" "$BUILD_DIR/web/"
+
+          cd "$SOURCE_DIR/admin"
+          pnpm install --frozen-lockfile
+          pnpm build
+          mkdir -p "$BUILD_DIR/admin"
+          rsync -a "$SOURCE_DIR/admin/dist/" "$BUILD_DIR/admin/"
+
+          if [ -d "$SOURCE_DIR/deploy/systemd" ]; then
+            mkdir -p "$BUILD_DIR/deploy/systemd"
+            rsync -a "$SOURCE_DIR/deploy/systemd/" "$BUILD_DIR/deploy/systemd/"
+          fi
 
           log "Backing up current release"
           if [ -f /opt/hero3/go/bin/hero3-server ]; then
             cp -a /opt/hero3/go/bin/hero3-server "/opt/hero3/backups/hero3-server.$STAMP"
           fi
-          if [ -d "$RELEASE_DIR/web" ] && [ -d /var/www/hero3/web ]; then
+          if [ -d /var/www/hero3/web ]; then
             tar -czf "/var/www/hero3/backups/web.$STAMP.tar.gz" -C /var/www/hero3 web
           fi
-          if [ -d "$RELEASE_DIR/admin" ] && [ -d /var/www/hero3/admin ]; then
+          if [ -d /var/www/hero3/admin ]; then
             tar -czf "/var/www/hero3/backups/admin.$STAMP.tar.gz" -C /var/www/hero3 admin
           fi
 
           log "Installing release"
-          install -m 755 "$RELEASE_DIR/go/bin/hero3-server" /opt/hero3/go/bin/hero3-server
-          install -m 755 "$RELEASE_DIR/go/bin/hero3-dbtool" /opt/hero3/go/bin/hero3-dbtool
-          rsync -a --delete "$RELEASE_DIR/go/config/" /opt/hero3/go/config/
-          if [ -d "$RELEASE_DIR/web" ]; then
-            rsync -a --delete "$RELEASE_DIR/web/" /var/www/hero3/web/
-          else
-            log "Skipping web static install"
-          fi
-          if [ -d "$RELEASE_DIR/admin" ]; then
-            rsync -a --delete "$RELEASE_DIR/admin/" /var/www/hero3/admin/
-          else
-            log "Skipping admin static install"
-          fi
+          install -m 755 "$BUILD_DIR/go/bin/hero3-server" /opt/hero3/go/bin/hero3-server
+          install -m 755 "$BUILD_DIR/go/bin/hero3-dbtool" /opt/hero3/go/bin/hero3-dbtool
+          rsync -a --delete "$BUILD_DIR/go/config/" /opt/hero3/go/config/
+          rsync -a --delete "$BUILD_DIR/web/" /var/www/hero3/web/
+          rsync -a --delete "$BUILD_DIR/admin/" /var/www/hero3/admin/
           printf '%s %s\n' "${HERO3_SHA:0:7}" "deployed from ${HERO3_REF_NAME}" > /opt/hero3/RELEASE
 
           log "Restarting services"
-          if [ -d "$RELEASE_DIR/deploy/systemd" ]; then
-            install -m 644 "$RELEASE_DIR/deploy/systemd/hero3-battle-report-cleanup.service" /etc/systemd/system/hero3-battle-report-cleanup.service
-            install -m 644 "$RELEASE_DIR/deploy/systemd/hero3-battle-report-cleanup.timer" /etc/systemd/system/hero3-battle-report-cleanup.timer
-            install -m 644 "$RELEASE_DIR/deploy/systemd/hero3-maintenance-status.service" /etc/systemd/system/hero3-maintenance-status.service
-            install -m 644 "$RELEASE_DIR/deploy/systemd/hero3-maintenance-status.timer" /etc/systemd/system/hero3-maintenance-status.timer
+          if [ -d "$BUILD_DIR/deploy/systemd" ]; then
+            install -m 644 "$BUILD_DIR/deploy/systemd/hero3-battle-report-cleanup.service" /etc/systemd/system/hero3-battle-report-cleanup.service
+            install -m 644 "$BUILD_DIR/deploy/systemd/hero3-battle-report-cleanup.timer" /etc/systemd/system/hero3-battle-report-cleanup.timer
+            install -m 644 "$BUILD_DIR/deploy/systemd/hero3-maintenance-status.service" /etc/systemd/system/hero3-maintenance-status.service
+            install -m 644 "$BUILD_DIR/deploy/systemd/hero3-maintenance-status.timer" /etc/systemd/system/hero3-maintenance-status.timer
+            install -m 644 "$BUILD_DIR/deploy/systemd/hero3-daily-update-announcement.service" /etc/systemd/system/hero3-daily-update-announcement.service
+            install -m 644 "$BUILD_DIR/deploy/systemd/hero3-daily-update-announcement.timer" /etc/systemd/system/hero3-daily-update-announcement.timer
             timeout --kill-after=10s 60s systemctl daemon-reload
             timeout --kill-after=10s 60s systemctl enable --now hero3-battle-report-cleanup.timer
             timeout --kill-after=10s 60s systemctl enable --now hero3-maintenance-status.timer
+            timeout --kill-after=10s 60s systemctl enable --now hero3-daily-update-announcement.timer
           fi
           if ! timeout --kill-after=10s 120s systemctl restart hero3; then
             log "hero3 restart failed or timed out"
@@ -228,7 +218,7 @@ jobs:
             exit 1
           fi
 
-          rm -rf "$RELEASE_DIR"
+          rm -rf "$BUILD_DIR"
           EOF
 
       - name: Health check

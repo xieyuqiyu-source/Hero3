@@ -93,6 +93,8 @@ func main() {
 		err = runEnsureReportCleanupIndexes(os.Args[2:])
 	case "maintenance-status":
 		err = runMaintenanceStatus(os.Args[2:])
+	case "publish-daily-update-announcement":
+		err = runPublishDailyUpdateAnnouncement(os.Args[2:])
 	case "backfill-world-positions":
 		err = runBackfillWorldPositions(os.Args[2:])
 	default:
@@ -147,5 +149,6 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  lock-snapshot 只读输出活跃连接、InnoDB 事务和锁等待")
 	fmt.Fprintln(os.Stderr, "  ensure-report-cleanup-indexes 检查或创建战报清理专用索引，默认 dry-run")
 	fmt.Fprintln(os.Stderr, "  maintenance-status 只读汇总战报、清理索引和权威表健康状态")
+	fmt.Fprintln(os.Stderr, "  publish-daily-update-announcement 生成或发布每日更新公告，默认 dry-run")
 	fmt.Fprintln(os.Stderr, "  backfill-world-positions 为已有玩家补齐世界地图权威坐标")
 }

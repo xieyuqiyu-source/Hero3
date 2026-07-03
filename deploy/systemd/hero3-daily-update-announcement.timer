@@ -1,0 +1,12 @@
+# 本文件定义 Hero3 每日更新公告的定时触发器。
+[Unit]
+Description=Publish Hero3 daily update announcement at night
+
+[Timer]
+OnCalendar=*-*-* 23:50:00
+RandomizedDelaySec=3min
+Persistent=true
+Unit=hero3-daily-update-announcement.service
+
+[Install]
+WantedBy=timers.target

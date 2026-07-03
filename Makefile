@@ -1,7 +1,7 @@
 # Hero3 项目 Makefile
 # 统一开发环境启动、构建、部署命令
 
-.PHONY: dev dev-go dev-web dev-admin build build-go build-dbtool build-web build-admin clean install migrate migrate-test print-test-dsn clone-data cleanup-battle-reports-dry-run cleanup-battle-reports report-stats lock-snapshot ensure-report-cleanup-indexes-dry-run ensure-report-cleanup-indexes maintenance-status backfill-resources verify-resources backfill-inventory verify-inventory backfill-buildings verify-buildings backfill-resource-slots verify-resource-slots backfill-army verify-army verify-recruit-queues backfill-recruit-queues backfill-generals verify-generals backfill-buffs verify-buffs backfill-currencies verify-currencies backfill-npc-states verify-npc-states backfill-world-positions healthcheck-authority openapi openapi-lint openapi-bundle
+.PHONY: dev dev-go dev-web dev-admin build build-go build-dbtool build-web build-admin clean install migrate migrate-test print-test-dsn clone-data cleanup-battle-reports-dry-run cleanup-battle-reports report-stats lock-snapshot ensure-report-cleanup-indexes-dry-run ensure-report-cleanup-indexes maintenance-status daily-update-announcement-dry-run backfill-resources verify-resources backfill-inventory verify-inventory backfill-buildings verify-buildings backfill-resource-slots verify-resource-slots backfill-army verify-army verify-recruit-queues backfill-recruit-queues backfill-generals verify-generals backfill-buffs verify-buffs backfill-currencies verify-currencies backfill-npc-states verify-npc-states backfill-world-positions healthcheck-authority openapi openapi-lint openapi-bundle
 
 # ===== 开发 =====
 
@@ -191,6 +191,10 @@ ensure-report-cleanup-indexes:
 ## 只读汇总战报、清理索引和权威表健康状态
 maintenance-status:
 	cd go && go run ./cmd/dbtool maintenance-status
+
+## dry-run 预览每日更新公告
+daily-update-announcement-dry-run:
+	cd go && go run ./cmd/dbtool publish-daily-update-announcement --source-dir .. --memory-dir ../memory --current-sha "$$(git rev-parse --short HEAD)"
 
 # ===== 接口文档 =====
 

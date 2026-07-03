@@ -1,0 +1,13 @@
+# 本文件定义 Hero3 每日更新公告发布的一次性 systemd 任务。
+[Unit]
+Description=Hero3 daily update announcement publisher
+After=network.target mysql.service mariadb.service hero3.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/hero3/go
+EnvironmentFile=/etc/hero3/hero3.env
+ExecStart=/opt/hero3/go/bin/hero3-dbtool publish-daily-update-announcement --execute --allow-non-test --source-dir /opt/hero3/source --release-file /opt/hero3/RELEASE
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

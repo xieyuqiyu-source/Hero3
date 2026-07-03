@@ -67,7 +67,8 @@ go build ./cmd/server
 - `make healthcheck-authority` 是当前权威表健康检查；`verify-*` 仍保留为旧快照迁移期校验，不作为轻量 `state_json` 后的日常通过标准。
 - `make backfill-currencies` / `make verify-currencies` 和 `make backfill-npc-states` / `make verify-npc-states` 用于把旧玩家的城金、兑换冷却和旧 NPC 快照迁移到新权威表；正式库执行回填需直接调用 dbtool 并显式传 `--allow-non-test`，回填按小批次提交，可重复执行。
 - `make backfill-world-positions` 用于在测试库为老玩家补齐世界地图权威坐标；正式库执行需直接调用 `hero3-dbtool backfill-world-positions --allow-non-test --batch-size=500`，命令只分页扫描缺坐标的 `players.id`，不读取大存档、不复制大表，可重复执行，已有坐标会跳过，输出创建、跳过、冲突、失败和剩余数量；线上试跑可加 `--max-batches=1`。
-- `make report-stats`、`make lock-snapshot` 和 `make cleanup-battle-reports-dry-run` 用于战报增长、锁等待和过期战报清理观测；生产部署会安装 `hero3-dbtool`，并启用战报清理与每小时维护巡检 systemd timer。
+- `make report-stats`、`make lock-snapshot` 和 `make cleanup-battle-reports-dry-run` 用于战报增长、锁等待和过期战报清理观测；生产部署会安装 `hero3-dbtool`，并启用战报清理、每小时维护巡检和每日更新公告 systemd timer。
+- `hero3-dbtool publish-daily-update-announcement` 会按 `/opt/hero3/RELEASE`、`/opt/hero3/source` 的提交记录和当天 `memory/YYYY-MM-DD.md` 生成“每日更新公告”，默认 dry-run；生产定时任务每天 23:50 执行 `--execute --allow-non-test`，发布后用 `game_configs.daily_update_announcement_cursor` 记录已公告到的提交，避免重复发布。
 - 战报清理默认按差异化保留执行：普通/NPC/扫荡 72 小时，PVP/玩家城池来源、防守/侦查 168 小时，玩家软删除 24 小时；有效分享链接会被保护。
 - `make ensure-report-cleanup-indexes-dry-run` 用于检查战报清理和可见上限所需索引；正式库创建缺失索引需直接调用 dbtool 并显式传 `--execute --allow-non-test`，建议低峰执行。
 - `make maintenance-status` 是只读维护巡检汇总，会同时检查战报统计、战报生命周期索引、可清理候选量和权威表健康；缺索引时会跳过候选量统计并返回异常。生产环境每小时自动执行一次并写入 systemd journal。
@@ -116,6 +117,8 @@ http://localhost:5173/help
 
 帮助页入口位于玩家端侧栏顶部快捷入口。内容来自 `helpdocs/content/*.md`，可以直接手动新增、修改和删除 Markdown 文件；后端通过 `/api/v1/help/docs` 提供文档列表和正文读取。
 
+当前旧版帮助正文已归档到 `过时文档/helpdocs/content/`，`helpdocs/content/` 仅保留空目录占位，后续应按当前实现重新编写玩家端帮助内容。
+
 基础接口：
 
 - `GET /healthz`：健康检查
@@ -163,7 +166,7 @@ http://localhost:5174
 - [服务器部署文档](./docs/运维部署/服务器部署文档.md)：记录当前线上部署结构、发版流程、回滚和排查命令。
 - [OpenAPI 入口文档](./docs/接口文档/openapi/openapi.yaml)：按模块拆分维护，用于接口调试、文档查看和前后端对齐。
 - [OpenAPI 打包文档](./docs/接口文档/openapi打包.yaml)：由 `make openapi` 生成，导入 Apifox 使用。
-- [帮助文档站内容](./helpdocs/README.md)：玩家端帮助页读取的 Wiki 内容源。
+- [帮助文档站内容](./helpdocs/README.md)：玩家端帮助页读取的 Wiki 内容源，当前正文待按现行实现重写。
 
 ## Apifox
 
