@@ -69,6 +69,7 @@ go build ./cmd/server
 - `make backfill-world-positions` 用于在测试库为老玩家补齐世界地图权威坐标；正式库执行需直接调用 `hero3-dbtool backfill-world-positions --allow-non-test --batch-size=500`，命令只分页扫描缺坐标的 `players.id`，不读取大存档、不复制大表，可重复执行，已有坐标会跳过，输出创建、跳过、冲突、失败和剩余数量；线上试跑可加 `--max-batches=1`。
 - `make report-stats`、`make lock-snapshot` 和 `make cleanup-battle-reports-dry-run` 用于战报增长、锁等待和过期战报清理观测；生产部署会安装 `hero3-dbtool`，并启用战报清理、每小时维护巡检和每日更新公告 systemd timer。
 - `hero3-dbtool publish-daily-update-announcement` 会按 `/opt/hero3/RELEASE`、`/opt/hero3/source` 的提交记录和当天 `memory/YYYY-MM-DD.md` 生成“每日更新公告”，默认 dry-run；生产定时任务每天 23:50 执行 `--execute --allow-non-test`，发布后用 `game_configs.daily_update_announcement_cursor` 记录已公告到的提交，避免重复发布。
+- 生产自动部署由 GitHub Actions checkout 当前提交并通过 SSH 上传完整源码仓库快照，服务器解包到 `/opt/hero3/source` 后在本机构建 Go 后端、`hero3-dbtool`、玩家前端和 GM 后台；Actions 不构建 release 产物。
 - 战报清理默认按差异化保留执行：普通/NPC/扫荡 72 小时，PVP/玩家城池来源、防守/侦查 168 小时，玩家软删除 24 小时；有效分享链接会被保护。
 - `make ensure-report-cleanup-indexes-dry-run` 用于检查战报清理和可见上限所需索引；正式库创建缺失索引需直接调用 dbtool 并显式传 `--execute --allow-non-test`，建议低峰执行。
 - `make maintenance-status` 是只读维护巡检汇总，会同时检查战报统计、战报生命周期索引、可清理候选量和权威表健康；缺索引时会跳过候选量统计并返回异常。生产环境每小时自动执行一次并写入 systemd journal。

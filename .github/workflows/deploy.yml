@@ -1,4 +1,4 @@
-# Hero3 自动发布流程：Actions 只负责 SSH 调度，服务器拉取指定提交、本机构建并部署。
+# Hero3 自动发布流程：Actions 同步源码仓库快照，服务器本机构建并部署。
 name: Deploy Hero3
 
 on:
@@ -24,6 +24,12 @@ jobs:
       HERO3_HEALTH_URL: https://hero3.ccoos.cn/healthz
 
     steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
       - name: Configure SSH
         env:
           HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
@@ -40,29 +46,56 @@ jobs:
           ssh-keyscan -T 10 -t ed25519 -p "$HERO3_SSH_PORT" -H "$HERO3_SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
           touch ~/.ssh/known_hosts
 
-      - name: Build and deploy on server
+      - name: Upload source snapshot
         env:
-          HERO3_REPOSITORY: ${{ github.repository }}
-          HERO3_REF_NAME: ${{ github.ref_name }}
           HERO3_SHA: ${{ github.sha }}
-          HERO3_GITHUB_TOKEN: ${{ github.token }}
           HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
           HERO3_SSH_PORT: ${{ secrets.HERO3_SSH_PORT || '22' }}
           HERO3_SSH_USER: ${{ secrets.HERO3_SSH_USER }}
         run: |
           set -euo pipefail
-          test -n "$HERO3_REPOSITORY"
+          test -n "$HERO3_SHA"
+          test -n "$HERO3_SSH_USER"
+          tar -czf "/tmp/hero3-source.${HERO3_SHA}.tar.gz" \
+            --exclude='.git/hooks' \
+            --exclude='.git/logs' \
+            --exclude='node_modules' \
+            --exclude='web/node_modules' \
+            --exclude='admin/node_modules' \
+            --exclude='go/tmp' \
+            .
+          timeout --kill-after=10s 600s scp \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=accept-new \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=12 \
+            -i ~/.ssh/hero3_deploy_key \
+            -P "$HERO3_SSH_PORT" \
+            "/tmp/hero3-source.${HERO3_SHA}.tar.gz" \
+            "$HERO3_SSH_USER@$HERO3_SSH_HOST:/tmp/hero3-source.${HERO3_SHA}.tar.gz"
+
+      - name: Build and deploy on server
+        env:
+          HERO3_REF_NAME: ${{ github.ref_name }}
+          HERO3_SHA: ${{ github.sha }}
+          HERO3_SSH_HOST: ${{ secrets.HERO3_SSH_HOST }}
+          HERO3_SSH_PORT: ${{ secrets.HERO3_SSH_PORT || '22' }}
+          HERO3_SSH_USER: ${{ secrets.HERO3_SSH_USER }}
+        run: |
+          set -euo pipefail
           test -n "$HERO3_REF_NAME"
           test -n "$HERO3_SHA"
-          test -n "$HERO3_GITHUB_TOKEN"
           test -n "$HERO3_SSH_USER"
           if [ "$HERO3_REF_NAME" != "main-core" ]; then
             echo "Production deploy only supports main-core, got $HERO3_REF_NAME"
             exit 1
           fi
 
-          printf -v REMOTE_ENV 'HERO3_REPOSITORY=%q HERO3_REF_NAME=%q HERO3_SHA=%q HERO3_GITHUB_TOKEN=%q' \
-            "$HERO3_REPOSITORY" "$HERO3_REF_NAME" "$HERO3_SHA" "$HERO3_GITHUB_TOKEN"
+          printf -v REMOTE_ENV 'HERO3_REF_NAME=%q HERO3_SHA=%q' \
+            "$HERO3_REF_NAME" "$HERO3_SHA"
 
           timeout --kill-after=10s 2400s ssh \
             -o BatchMode=yes \
@@ -80,6 +113,7 @@ jobs:
 
           SOURCE_DIR="/opt/hero3/source"
           BUILD_DIR="/tmp/hero3-build.${HERO3_SHA}"
+          SOURCE_ARCHIVE="/tmp/hero3-source.${HERO3_SHA}.tar.gz"
           STAMP="$(date +%Y%m%d%H%M%S)"
 
           log() {
@@ -101,30 +135,6 @@ jobs:
             journalctl -u hero3 -n 120 --no-pager || true
           }
 
-          fetch_source() {
-            local auth_header
-            local auth_config
-            auth_header="$(printf 'x-access-token:%s' "$HERO3_GITHUB_TOKEN" | base64 | tr -d '\n')"
-            auth_config="$(mktemp /tmp/hero3-git-auth.XXXXXX)"
-            chmod 600 "$auth_config"
-            {
-              printf '[http]\n'
-              printf '\tversion = HTTP/1.1\n'
-              printf '[http "https://github.com/"]\n'
-              printf '\textraheader = AUTHORIZATION: basic %s\n' "$auth_header"
-            } > "$auth_config"
-            trap 'rm -f "$auth_config"' RETURN
-            for attempt in 1 2 3; do
-              if timeout --kill-after=10s 180s git -C "$SOURCE_DIR" \
-                -c "include.path=$auth_config" \
-                fetch --force --prune origin "+refs/heads/${HERO3_REF_NAME}:refs/remotes/origin/${HERO3_REF_NAME}"; then
-                return 0
-              fi
-              sleep $((attempt * 5))
-            done
-            return 1
-          }
-
           exec 9>/tmp/hero3-deploy.lock
           if ! flock -n 9; then
             echo "Another Hero3 deployment is already running."
@@ -134,19 +144,17 @@ jobs:
           mkdir -p /opt/hero3/backups /var/www/hero3/backups
           mkdir -p /opt/hero3/go/bin /opt/hero3/go/config /var/www/hero3/web /var/www/hero3/admin
 
-          log "Preparing source checkout"
-          if [ -e "$SOURCE_DIR" ] && [ ! -d "$SOURCE_DIR/.git" ]; then
-            mv "$SOURCE_DIR" "/opt/hero3/source.non-git.${STAMP}"
+          log "Preparing source snapshot"
+          if [ ! -s "$SOURCE_ARCHIVE" ]; then
+            echo "Source archive not found: $SOURCE_ARCHIVE"
+            exit 1
           fi
-          if [ ! -d "$SOURCE_DIR/.git" ]; then
-            mkdir -p "$SOURCE_DIR"
-            git -C "$SOURCE_DIR" init
-            git -C "$SOURCE_DIR" remote add origin "https://github.com/${HERO3_REPOSITORY}.git"
-          else
-            git -C "$SOURCE_DIR" remote set-url origin "https://github.com/${HERO3_REPOSITORY}.git"
+          if [ -e "$SOURCE_DIR" ]; then
+            rm -rf "${SOURCE_DIR}.previous"
+            mv "$SOURCE_DIR" "${SOURCE_DIR}.previous"
           fi
-
-          fetch_source
+          mkdir -p "$SOURCE_DIR"
+          tar -xzf "$SOURCE_ARCHIVE" -C "$SOURCE_DIR"
           git -C "$SOURCE_DIR" cat-file -e "${HERO3_SHA}^{commit}"
           git -C "$SOURCE_DIR" checkout --force "$HERO3_SHA"
           git -C "$SOURCE_DIR" reset --hard "$HERO3_SHA"
@@ -228,6 +236,7 @@ jobs:
           fi
 
           rm -rf "$BUILD_DIR"
+          rm -f "$SOURCE_ARCHIVE"
           EOF
 
       - name: Health check
