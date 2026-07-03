@@ -1,3 +1,4 @@
+// 本文件提供 HTTP 处理器的基础结构、通用解析和响应写入工具。
 package api
 
 import (
@@ -34,6 +35,7 @@ type upgradeBuildingRequest struct {
 	BuildingID string `json:"buildingId"`
 }
 
+// NewHandlers 创建 API 处理器集合。
 func NewHandlers(cfg config.Config, gameService *game.Service) *Handlers {
 	return &Handlers{
 		cfg:         cfg,
@@ -131,15 +133,17 @@ func parseLimitOffset(r *http.Request, defaultLimit int, maxLimit int) (int, int
 	return limit, offset
 }
 
+// writeJSON 写入 JSON 响应；响应头已经发出后，写失败不能再追加错误响应。
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
 	}
 }
 
+// decodeJSON 解析请求体 JSON，并在格式错误时直接返回 400。
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
 	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid json body")
@@ -148,6 +152,7 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
 	return true
 }
 
+// writeError 以统一 JSON 格式写入错误响应。
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }
