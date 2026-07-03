@@ -64,7 +64,7 @@ jobs:
             --exclude='admin/node_modules' \
             --exclude='go/tmp' \
             .
-          timeout --kill-after=10s 600s scp \
+          timeout --kill-after=10s 300s ssh \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=accept-new \
@@ -73,9 +73,10 @@ jobs:
             -o ServerAliveInterval=10 \
             -o ServerAliveCountMax=12 \
             -i ~/.ssh/hero3_deploy_key \
-            -P "$HERO3_SSH_PORT" \
-            "/tmp/hero3-source.${HERO3_SHA}.tar.gz" \
-            "$HERO3_SSH_USER@$HERO3_SSH_HOST:/tmp/hero3-source.${HERO3_SHA}.tar.gz"
+            -p "$HERO3_SSH_PORT" \
+            "$HERO3_SSH_USER@$HERO3_SSH_HOST" \
+            "cat > /tmp/hero3-source.${HERO3_SHA}.tar.gz" \
+            < "/tmp/hero3-source.${HERO3_SHA}.tar.gz"
 
       - name: Build and deploy on server
         env:
