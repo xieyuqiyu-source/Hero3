@@ -312,7 +312,7 @@ func (s *Service) attackNpc(req AttackNpcRequest, saveReport bool) (AttackNpcRes
 			Reports:    []BattleReport{report},
 		})
 		if err != nil {
-			slog.Warn("battle report save failed", "error", err, "reportId", report.ID)
+			return AttackNpcResponse{}, err
 		} else if len(createResult.Reports) > 0 {
 			report = createResult.Reports[0]
 		}
@@ -495,6 +495,8 @@ func resolveNpcBattleOnState(state *GameState, req AttackNpcRequest, now time.Ti
 const maxNpcSweepTargets = 20
 const slowNpcSweepThreshold = 2 * time.Second
 const slowNpcSweepTargetThreshold = 2 * time.Second
+const battleReportSaveAttempts = 3
+const battleReportSaveRetryDelay = 120 * time.Millisecond
 
 // SweepNpc 批量扫荡 NPC 城池，并把多场扫荡合并为一条战报。
 func (s *Service) SweepNpc(req SweepNpcRequest) (SweepNpcResponse, error) {
@@ -695,7 +697,7 @@ func (s *Service) sweepNpc(req SweepNpcRequest, limit int) (SweepNpcResponse, er
 		},
 	})
 	if err != nil {
-		slog.Warn("npc sweep report save failed", "error", err, "playerId", playerID)
+		return SweepNpcResponse{}, err
 	} else if len(createResult.Reports) > 0 {
 		for _, savedReport := range createResult.Reports {
 			if savedReport.ID == report.ID {
@@ -841,7 +843,7 @@ func buildNpcSweepReport(reportID string, reports []BattleReport, mode string, r
 	return aggregate
 }
 
-// buildNpcSweepDefenders 构造扫荡聚合战报里的多个 NPC 防守方明细。
+// buildNpcSweepDefenders 构造扫荡聚合战报里的轻量 NPC 防守方明细，完整战损使用聚合字段保存。
 func buildNpcSweepDefenders(reports []BattleReport) []BattleReportSweepDefender {
 	defenders := make([]BattleReportSweepDefender, 0, len(reports))
 	for _, report := range reports {
@@ -853,8 +855,6 @@ func buildNpcSweepDefenders(reports []BattleReport) []BattleReportSweepDefender 
 			Power:            report.EnemyPower,
 			Result:           report.Result,
 			DefenderRevealed: report.DefenderRevealed,
-			Units:            buildReportUnits(report.DefenderFaction, report.DefenderUnits, report.DefenderLostUnits, nil),
-			Resources:        cloneReportIntMap(report.DefenderResources),
 		})
 	}
 	return defenders
@@ -1155,7 +1155,7 @@ func (s *Service) ScoutNpc(req ScoutNpcRequest) (ScoutNpcResponse, error) {
 		Reports:    []BattleReport{report},
 	})
 	if err != nil {
-		slog.Warn("battle report save failed", "error", err, "reportId", report.ID)
+		return ScoutNpcResponse{}, err
 	} else if len(createResult.Reports) > 0 {
 		report = createResult.Reports[0]
 	}
@@ -1696,11 +1696,51 @@ func (s *Service) CreateBattleReports(input BattleReportCreateInput) (BattleRepo
 		report = NormalizeBattleReport(report)
 		reports = append(reports, report)
 	}
-	if err := s.repo.SaveReports(reports); err != nil {
+	if err := s.saveBattleReportsWithConfirmation(reports); err != nil {
 		return BattleReportCreateResult{}, err
 	}
 	event := buildBattleEventFromReports(input, eventID, occurredAt, reports)
 	return BattleReportCreateResult{Event: event, Reports: reports}, nil
+}
+
+// saveBattleReportsWithConfirmation 保存战报并在失败时重试、查回确认，避免战斗已完成但战报静默丢失。
+func (s *Service) saveBattleReportsWithConfirmation(reports []BattleReport) error {
+	var lastErr error
+	for attempt := 1; attempt <= battleReportSaveAttempts; attempt++ {
+		if err := s.repo.SaveReports(reports); err != nil {
+			lastErr = err
+			if s.battleReportsPersisted(reports) {
+				return nil
+			}
+			if attempt < battleReportSaveAttempts {
+				slog.Warn("battle report save retry", "attempt", attempt, "error", err)
+				time.Sleep(time.Duration(attempt) * battleReportSaveRetryDelay)
+				continue
+			}
+			break
+		}
+		return nil
+	}
+	if s.battleReportsPersisted(reports) {
+		return nil
+	}
+	return fmt.Errorf("battle report save failed after %d attempts: %w", battleReportSaveAttempts, lastErr)
+}
+
+// battleReportsPersisted 按玩家和战报 ID 查回确认，用于处理提交成功但连接返回失败的边界情况。
+func (s *Service) battleReportsPersisted(reports []BattleReport) bool {
+	if len(reports) == 0 {
+		return false
+	}
+	for _, report := range reports {
+		if strings.TrimSpace(report.ID) == "" || strings.TrimSpace(report.PlayerID) == "" {
+			return false
+		}
+		if _, err := s.repo.GetReportForPlayer(report.PlayerID, report.ID); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // buildBattleEventFromReports 从标准战报创建输入生成事件快照。

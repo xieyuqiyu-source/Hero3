@@ -1941,18 +1941,8 @@ func TestSweepNpcCreatesOneAggregateReport(t *testing.T) {
 		t.Fatalf("expected two sweep defender snapshots, got %#v", sweepExtra["defenders"])
 	}
 	for _, defender := range defenders {
-		if defender.TargetID == "" || defender.Power <= 0 || len(defender.Units) == 0 {
-			t.Fatalf("expected defender snapshot to include target and units, got %+v", defender)
-		}
-		hasLoss := false
-		for _, unit := range defender.Units {
-			if unit.Lost > 0 {
-				hasLoss = true
-				break
-			}
-		}
-		if !hasLoss {
-			t.Fatalf("expected defender snapshot to include lost units, got %+v", defender)
+		if defender.TargetID == "" || defender.Power <= 0 || len(defender.Units) != 0 || len(defender.Resources) != 0 {
+			t.Fatalf("expected lightweight defender snapshot without units/resources, got %+v", defender)
 		}
 	}
 

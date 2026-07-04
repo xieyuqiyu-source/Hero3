@@ -1052,26 +1052,28 @@ func (r *MemoryRepository) DeleteReport(playerID string, reportID string) error 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	for i := range r.reports[playerID] {
-		if r.reports[playerID][i].ID == reportID {
-			r.reports[playerID][i].DeletedByPlayer = true
-			return nil
-		}
-	}
+	r.reports[playerID] = filterMemoryReports(r.reports[playerID], func(report BattleReport) bool {
+		return report.ID != reportID
+	})
+	clearMemorySweepTaskReport(r.npcSweepTasks, map[string]bool{reportID: true})
 	return nil
 }
 
-// DeleteReportsByView 删除指定视角 Tab 下的战报。
+// DeleteReportsByView 物理删除指定视角 Tab 下的战报。
 func (r *MemoryRepository) DeleteReportsByView(playerID string, viewType string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	for i := range r.reports[playerID] {
-		report := NormalizeBattleReport(r.reports[playerID][i])
-		if viewType == "" || report.ViewType == viewType {
-			r.reports[playerID][i].DeletedByPlayer = true
+	deletedIDs := map[string]bool{}
+	r.reports[playerID] = filterMemoryReports(r.reports[playerID], func(report BattleReport) bool {
+		normalized := NormalizeBattleReport(report)
+		if viewType == "" || normalized.ViewType == viewType {
+			deletedIDs[normalized.ID] = true
+			return false
 		}
-	}
+		return true
+	})
+	clearMemorySweepTaskReport(r.npcSweepTasks, deletedIDs)
 	return nil
 }
 
@@ -1079,10 +1081,38 @@ func (r *MemoryRepository) DeleteAllReports(playerID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	for i := range r.reports[playerID] {
-		r.reports[playerID][i].DeletedByPlayer = true
+	deletedIDs := map[string]bool{}
+	for _, report := range r.reports[playerID] {
+		deletedIDs[report.ID] = true
 	}
+	delete(r.reports, playerID)
+	clearMemorySweepTaskReport(r.npcSweepTasks, deletedIDs)
 	return nil
+}
+
+// filterMemoryReports 返回保留的内存战报列表。
+func filterMemoryReports(reports []BattleReport, keep func(BattleReport) bool) []BattleReport {
+	next := reports[:0]
+	for _, report := range reports {
+		if keep(report) {
+			next = append(next, report)
+		}
+	}
+	return next
+}
+
+// clearMemorySweepTaskReport 清空扫荡任务里的已删除战报快照，避免后续逻辑恢复它。
+func clearMemorySweepTaskReport(tasks map[string]NpcSweepTask, reportIDs map[string]bool) {
+	if len(reportIDs) == 0 {
+		return
+	}
+	for taskID, task := range tasks {
+		if task.Result == nil || !reportIDs[task.Result.BattleReport.ID] {
+			continue
+		}
+		task.Result.BattleReport = BattleReport{}
+		tasks[taskID] = task
+	}
 }
 
 // CreateBattleReportShareLink 为玩家战报创建分享 token。

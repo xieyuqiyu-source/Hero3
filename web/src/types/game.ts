@@ -445,7 +445,7 @@ export interface BattleReportSweepDefender {
   power: number
   result?: string
   defenderRevealed: boolean
-  units: BattleReportUnit[]
+  units?: BattleReportUnit[]
   resources?: Record<string, number>
 }
 

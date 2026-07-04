@@ -8,6 +8,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -17,6 +19,8 @@ import (
 const (
 	battleReportVisibleCapPerView   = 1000
 	battleReportCapDeleteBatchLimit = 500
+	battleReportSweepRepairLimit    = 50
+	battleReportHardDeleteBatchSize = 500
 )
 
 // SaveReport 保存战报，同时写入标准索引字段和玩家阅读状态。
@@ -42,7 +46,7 @@ func (r *MySQLRepository) SaveReports(reports []game.BattleReport) error {
 // saveReportLegacy 保存战报，同时写入标准索引字段和玩家阅读状态。
 func (r *MySQLRepository) saveReportLegacy(report game.BattleReport) error {
 	report = game.NormalizeBattleReport(report)
-	reportJSON, err := json.Marshal(report)
+	reportJSON, err := marshalBattleReportBodyJSON(report)
 	if err != nil {
 		return err
 	}
@@ -275,58 +279,106 @@ func reportParticipantUnitMap(units []game.BattleReportUnit, field string) map[s
 	return result
 }
 
-// GetReportByID 公开获取单条战报，保留旧分享链接兼容。
-func (r *MySQLRepository) GetReportByID(reportID string) (game.BattleReport, error) {
-	var reportJSON []byte
-	err := r.db.QueryRow(`SELECT report_json FROM battle_reports WHERE id = ? LIMIT 1`, reportID).Scan(&reportJSON)
-	if err != nil {
-		return game.BattleReport{}, errors.New("report not found")
-	}
-	var report game.BattleReport
-	if err := json.Unmarshal(reportJSON, &report); err != nil {
-		return game.BattleReport{}, err
-	}
-	return game.NormalizeBattleReport(report), nil
+// marshalBattleReportBodyJSON 保存战报主体，详情只写 detail_json，避免大型扫荡详情重复写入。
+func marshalBattleReportBodyJSON(report game.BattleReport) ([]byte, error) {
+	report.Detail = nil
+	return json.Marshal(report)
 }
 
-// GetReportForPlayer 获取玩家自己的未删除战报。
-func (r *MySQLRepository) GetReportForPlayer(playerID string, reportID string) (game.BattleReport, error) {
-	var reportJSON []byte
-	var isRead bool
-	err := r.db.QueryRow(
-		`SELECT report_json, is_read FROM battle_reports
-		 WHERE id = ? AND player_id = ? AND deleted_by_player = 0 LIMIT 1`,
-		reportID, playerID,
-	).Scan(&reportJSON, &isRead)
-	if err != nil {
-		return game.BattleReport{}, errors.New("report not found")
-	}
+// scanBattleReportJSON 合并主体 JSON 和详情 JSON，兼容旧 report_json 已包含 detail 的历史数据。
+func scanBattleReportJSON(reportJSON []byte, detailJSON []byte, isRead bool) (game.BattleReport, error) {
 	var report game.BattleReport
 	if err := json.Unmarshal(reportJSON, &report); err != nil {
 		return game.BattleReport{}, err
+	}
+	if report.Detail == nil && len(detailJSON) > 0 && string(detailJSON) != "null" {
+		var detail game.BattleReportDetail
+		if err := json.Unmarshal(detailJSON, &detail); err != nil {
+			return game.BattleReport{}, err
+		}
+		report.Detail = &detail
 	}
 	report.Read = isRead
 	return game.NormalizeBattleReport(report), nil
 }
 
+const battleReportSummaryColumns = `id, player_id, event_id, owner_player_id, view_type, source_type, battle_type, result,
+	title, summary, target_id, target_name, type, is_read, deleted_by_player, created_at`
+
+// scanBattleReportSummary 从索引列构造军情列表摘要，避免列表读取完整 report_json。
+func scanBattleReportSummary(scanner interface{ Scan(dest ...any) error }) (game.BattleReport, error) {
+	var report game.BattleReport
+	var createdAt time.Time
+	if err := scanner.Scan(
+		&report.ID,
+		&report.PlayerID,
+		&report.EventID,
+		&report.OwnerPlayerID,
+		&report.ViewType,
+		&report.SourceType,
+		&report.BattleType,
+		&report.Result,
+		&report.Title,
+		&report.Summary,
+		&report.TargetID,
+		&report.TargetName,
+		&report.Type,
+		&report.Read,
+		&report.DeletedByPlayer,
+		&createdAt,
+	); err != nil {
+		return game.BattleReport{}, err
+	}
+	report.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+	return report, nil
+}
+
+// GetReportByID 公开获取单条战报，保留旧分享链接兼容。
+func (r *MySQLRepository) GetReportByID(reportID string) (game.BattleReport, error) {
+	var reportJSON []byte
+	var detailJSON []byte
+	err := r.db.QueryRow(`SELECT report_json, COALESCE(CAST(detail_json AS CHAR), 'null') FROM battle_reports WHERE id = ? LIMIT 1`, reportID).Scan(&reportJSON, &detailJSON)
+	if err != nil {
+		return game.BattleReport{}, errors.New("report not found")
+	}
+	return scanBattleReportJSON(reportJSON, detailJSON, false)
+}
+
+// GetReportForPlayer 获取玩家自己的未删除战报。
+func (r *MySQLRepository) GetReportForPlayer(playerID string, reportID string) (game.BattleReport, error) {
+	var reportJSON []byte
+	var detailJSON []byte
+	var isRead bool
+	err := r.db.QueryRow(
+		`SELECT report_json, COALESCE(CAST(detail_json AS CHAR), 'null'), is_read FROM battle_reports
+		 WHERE id = ? AND player_id = ? AND deleted_by_player = 0 LIMIT 1`,
+		reportID, playerID,
+	).Scan(&reportJSON, &detailJSON, &isRead)
+	if err != nil {
+		return game.BattleReport{}, errors.New("report not found")
+	}
+	return scanBattleReportJSON(reportJSON, detailJSON, isRead)
+}
+
 // GetReportByShareToken 通过分享 token 获取战报。
 func (r *MySQLRepository) GetReportByShareToken(token string) (game.BattleReport, error) {
 	var reportJSON []byte
+	var detailJSON []byte
 	var tokenValue, visibility string
 	var expiresAt sql.NullTime
 	err := r.db.QueryRow(
-		`SELECT br.report_json, l.token, l.visibility, l.expires_at
+		`SELECT br.report_json, COALESCE(CAST(br.detail_json AS CHAR), 'null'), l.token, l.visibility, l.expires_at
 		 FROM battle_report_links l
 		 JOIN battle_reports br ON br.id = l.report_id
 		 WHERE l.token = ? AND (l.expires_at IS NULL OR l.expires_at > ?)
 		 LIMIT 1`,
 		token, time.Now().UTC(),
-	).Scan(&reportJSON, &tokenValue, &visibility, &expiresAt)
+	).Scan(&reportJSON, &detailJSON, &tokenValue, &visibility, &expiresAt)
 	if err != nil {
 		return game.BattleReport{}, errors.New("report not found")
 	}
-	var report game.BattleReport
-	if err := json.Unmarshal(reportJSON, &report); err != nil {
+	report, err := scanBattleReportJSON(reportJSON, detailJSON, false)
+	if err != nil {
 		return game.BattleReport{}, err
 	}
 	report.Share = &game.BattleReportShare{Token: tokenValue, Visibility: visibility, ExpiresAt: formatNullTime(expiresAt)}
@@ -336,6 +388,11 @@ func (r *MySQLRepository) GetReportByShareToken(token string) (game.BattleReport
 // ListReports 按旧接口分页获取玩家军情战报。
 func (r *MySQLRepository) ListReports(playerID string, limit int, offset int) ([]game.BattleReport, int, error) {
 	threeDaysAgo := time.Now().Add(-3 * 24 * time.Hour).UTC()
+	if repaired, err := r.repairMissingSweepReportsForPlayer(playerID, threeDaysAgo); err != nil {
+		slog.Warn("missing sweep report repair failed", "playerId", playerID, "error", err)
+	} else if repaired > 0 {
+		slog.Info("missing sweep reports repaired", "playerId", playerID, "count", repaired)
+	}
 	if limit <= 0 {
 		limit = 10
 	}
@@ -353,7 +410,7 @@ func (r *MySQLRepository) ListReports(playerID string, limit int, offset int) ([
 	}
 
 	rows, err := r.db.Query(
-		`SELECT report_json, is_read FROM battle_reports
+		`SELECT `+battleReportSummaryColumns+` FROM battle_reports
 		 WHERE player_id = ? AND deleted_by_player = 0 AND created_at > ?
 		 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 		playerID, threeDaysAgo, limit, offset,
@@ -365,17 +422,11 @@ func (r *MySQLRepository) ListReports(playerID string, limit int, offset int) ([
 
 	var reports []game.BattleReport
 	for rows.Next() {
-		var reportJSON []byte
-		var isRead bool
-		if err := rows.Scan(&reportJSON, &isRead); err != nil {
-			return nil, 0, err
-		}
-		var report game.BattleReport
-		if err := json.Unmarshal(reportJSON, &report); err != nil {
+		report, err := scanBattleReportSummary(rows)
+		if err != nil {
 			continue
 		}
-		report.Read = isRead
-		reports = append(reports, game.NormalizeBattleReport(report))
+		reports = append(reports, report)
 	}
 	return reports, total, rows.Err()
 }
@@ -396,6 +447,11 @@ func (r *MySQLRepository) ListReportsByQuery(query game.BattleReportQuery) ([]ga
 	if timeFrom.IsZero() {
 		timeFrom = time.Now().Add(-3 * 24 * time.Hour).UTC()
 	}
+	if repaired, err := r.repairMissingSweepReportsForPlayer(query.PlayerID, timeFrom); err != nil {
+		slog.Warn("missing sweep report repair failed", "playerId", query.PlayerID, "error", err)
+	} else if repaired > 0 {
+		slog.Info("missing sweep reports repaired", "playerId", query.PlayerID, "count", repaired)
+	}
 
 	where, args := buildReportWhere(query, timeFrom)
 	var total int
@@ -403,7 +459,7 @@ func (r *MySQLRepository) ListReportsByQuery(query game.BattleReportQuery) ([]ga
 		return nil, 0, err
 	}
 	rows, err := r.db.Query(
-		`SELECT report_json, is_read FROM battle_reports `+where+` ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		`SELECT `+battleReportSummaryColumns+` FROM battle_reports `+where+` ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 		append(args, query.PageSize, offset)...,
 	)
 	if err != nil {
@@ -413,19 +469,91 @@ func (r *MySQLRepository) ListReportsByQuery(query game.BattleReportQuery) ([]ga
 
 	var reports []game.BattleReport
 	for rows.Next() {
-		var reportJSON []byte
-		var isRead bool
-		if err := rows.Scan(&reportJSON, &isRead); err != nil {
-			return nil, 0, err
-		}
-		var report game.BattleReport
-		if err := json.Unmarshal(reportJSON, &report); err != nil {
+		report, err := scanBattleReportSummary(rows)
+		if err != nil {
 			continue
 		}
-		report.Read = isRead
-		reports = append(reports, game.NormalizeBattleReport(report))
+		reports = append(reports, report)
 	}
 	return reports, total, rows.Err()
+}
+
+type sweepTaskReportRepairPayload struct {
+	BattleReport game.BattleReport `json:"battleReport"`
+}
+
+// repairMissingSweepReportsForPlayer 从扫荡任务结果快照补写缺失战报，修复历史保存失败造成的军情空洞。
+func (r *MySQLRepository) repairMissingSweepReportsForPlayer(playerID string, cutoff time.Time) (int, error) {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return 0, nil
+	}
+	if cutoff.IsZero() {
+		cutoff = time.Now().Add(-3 * 24 * time.Hour).UTC()
+	}
+	rows, err := r.db.Query(
+		`SELECT t.id, t.result_json
+		 FROM npc_sweep_tasks t
+		 LEFT JOIN battle_reports br
+		   ON br.id = JSON_UNQUOTE(JSON_EXTRACT(t.result_json, '$.battleReport.id'))
+		 WHERE t.player_id = ?
+		   AND t.created_at > ?
+		   AND t.status = 'completed'
+		   AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(t.result_json, '$.battleReport.id')), '') <> ''
+		   AND br.id IS NULL
+		 ORDER BY t.created_at DESC
+		 LIMIT ?`,
+		playerID,
+		cutoff.UTC(),
+		battleReportSweepRepairLimit,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	type repairCandidate struct {
+		taskID     string
+		resultJSON []byte
+	}
+	candidates := []repairCandidate{}
+	for rows.Next() {
+		var candidate repairCandidate
+		if err := rows.Scan(&candidate.taskID, &candidate.resultJSON); err != nil {
+			_ = rows.Close()
+			return 0, err
+		}
+		candidates = append(candidates, candidate)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, err
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	repaired := 0
+	for _, candidate := range candidates {
+		var payload sweepTaskReportRepairPayload
+		if err := json.Unmarshal(candidate.resultJSON, &payload); err != nil {
+			return repaired, fmt.Errorf("decode sweep task %s result: %w", candidate.taskID, err)
+		}
+		report := game.NormalizeBattleReport(payload.BattleReport)
+		if strings.TrimSpace(report.ID) == "" || strings.TrimSpace(report.PlayerID) == "" {
+			continue
+		}
+		if report.PlayerID != playerID {
+			slog.Warn("skip sweep report repair for mismatched player", "taskId", candidate.taskID, "playerId", playerID, "reportPlayerId", report.PlayerID, "reportId", report.ID)
+			continue
+		}
+		if err := r.SaveReport(report); err != nil {
+			if _, lookupErr := r.GetReportForPlayer(playerID, report.ID); lookupErr == nil {
+				continue
+			}
+			return repaired, fmt.Errorf("save repaired sweep report %s from task %s: %w", report.ID, candidate.taskID, err)
+		}
+		repaired++
+	}
+	return repaired, nil
 }
 
 // buildReportWhere 构建战报查询条件。
@@ -461,7 +589,7 @@ func buildReportWhere(query game.BattleReportQuery, timeFrom time.Time) (string,
 // ListAllReports 列出玩家所有战报，供维护和兼容逻辑使用。
 func (r *MySQLRepository) ListAllReports(playerID string) ([]game.BattleReport, error) {
 	rows, err := r.db.Query(
-		`SELECT report_json FROM battle_reports
+		`SELECT report_json, COALESCE(CAST(detail_json AS CHAR), 'null') FROM battle_reports
 		 WHERE player_id = ?
 		 ORDER BY created_at DESC`,
 		playerID,
@@ -474,14 +602,15 @@ func (r *MySQLRepository) ListAllReports(playerID string) ([]game.BattleReport, 
 	var reports []game.BattleReport
 	for rows.Next() {
 		var reportJSON []byte
-		if err := rows.Scan(&reportJSON); err != nil {
+		var detailJSON []byte
+		if err := rows.Scan(&reportJSON, &detailJSON); err != nil {
 			return nil, err
 		}
-		var report game.BattleReport
-		if err := json.Unmarshal(reportJSON, &report); err != nil {
+		report, err := scanBattleReportJSON(reportJSON, detailJSON, false)
+		if err != nil {
 			continue
 		}
-		reports = append(reports, game.NormalizeBattleReport(report))
+		reports = append(reports, report)
 	}
 	return reports, rows.Err()
 }
@@ -566,86 +695,150 @@ func (r *MySQLRepository) MarkSingleReportRead(playerID string, reportID string)
 	return tx.Commit()
 }
 
-// DeleteReport 删除单条玩家战报状态。
+// DeleteReport 物理删除单条玩家战报及其关联数据。
 func (r *MySQLRepository) DeleteReport(playerID string, reportID string) error {
-	tx, err := r.db.Begin()
+	rows, err := r.selectReportDeleteTargets(`WHERE player_id = ? AND id = ?`, playerID, reportID)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-	now := time.Now().UTC()
-	if _, err := tx.Exec(
-		`UPDATE battle_reports
-		 SET deleted_by_player = 1
-		 WHERE id = ? AND player_id = ? AND deleted_by_player = 0`,
-		reportID, playerID,
-	); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(
-		`UPDATE battle_report_states
-		 SET is_deleted = 1, deleted_at = ?, updated_at = ?
-		 WHERE report_id = ? AND player_id = ? AND is_deleted = 0`,
-		now, now, reportID, playerID,
-	); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return r.deleteBattleReportsHard(rows)
 }
 
-// DeleteReportsByView 删除指定视角 Tab 下的战报。
+// DeleteReportsByView 物理删除指定视角 Tab 下的战报。
 func (r *MySQLRepository) DeleteReportsByView(playerID string, viewType string) error {
 	if strings.TrimSpace(viewType) == "" {
 		return r.DeleteAllReports(playerID)
 	}
+	rows, err := r.selectReportDeleteTargets(`WHERE player_id = ? AND view_type = ?`, playerID, viewType)
+	if err != nil {
+		return err
+	}
+	return r.deleteBattleReportsHard(rows)
+}
+
+// DeleteAllReports 物理删除玩家全部战报。
+func (r *MySQLRepository) DeleteAllReports(playerID string) error {
+	rows, err := r.selectReportDeleteTargets(`WHERE player_id = ?`, playerID)
+	if err != nil {
+		return err
+	}
+	return r.deleteBattleReportsHard(rows)
+}
+
+type battleReportDeleteTarget struct {
+	ReportID string
+	EventID  string
+}
+
+// selectReportDeleteTargets 读取待物理删除的战报主键和事件 ID。
+func (r *MySQLRepository) selectReportDeleteTargets(where string, args ...any) ([]battleReportDeleteTarget, error) {
+	rows, err := r.db.Query(`SELECT id, event_id FROM battle_reports `+where, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	targets := []battleReportDeleteTarget{}
+	for rows.Next() {
+		var target battleReportDeleteTarget
+		if err := rows.Scan(&target.ReportID, &target.EventID); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(target.ReportID) != "" {
+			targets = append(targets, target)
+		}
+	}
+	return targets, rows.Err()
+}
+
+// deleteBattleReportsHard 分批物理删除战报及附属数据，并清掉扫荡任务里的战报快照。
+func (r *MySQLRepository) deleteBattleReportsHard(targets []battleReportDeleteTarget) error {
+	for start := 0; start < len(targets); start += battleReportHardDeleteBatchSize {
+		end := start + battleReportHardDeleteBatchSize
+		if end > len(targets) {
+			end = len(targets)
+		}
+		if err := r.deleteBattleReportsHardBatch(targets[start:end]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// deleteBattleReportsHardBatch 在短事务内删除一批战报，避免大事务拖慢线上库。
+func (r *MySQLRepository) deleteBattleReportsHardBatch(targets []battleReportDeleteTarget) error {
+	if len(targets) == 0 {
+		return nil
+	}
+	reportIDs := make([]string, 0, len(targets))
+	eventIDs := make([]string, 0, len(targets))
+	seenEvents := map[string]bool{}
+	for _, target := range targets {
+		reportIDs = append(reportIDs, target.ReportID)
+		if strings.TrimSpace(target.EventID) != "" && !seenEvents[target.EventID] {
+			eventIDs = append(eventIDs, target.EventID)
+			seenEvents[target.EventID] = true
+		}
+	}
+
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	now := time.Now().UTC()
-	if _, err := tx.Exec(
-		`UPDATE battle_reports SET deleted_by_player = 1
-		 WHERE player_id = ? AND view_type = ? AND deleted_by_player = 0`,
-		playerID, viewType,
-	); err != nil {
+
+	if err := removeSweepTaskBattleReportsTx(tx, reportIDs); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(
-		`UPDATE battle_report_states s
-		 JOIN battle_reports br ON br.id = s.report_id
-		 SET s.is_deleted = 1, s.deleted_at = ?, s.updated_at = ?
-		 WHERE s.player_id = ? AND br.view_type = ? AND s.is_deleted = 0`,
-		now, now, playerID, viewType,
-	); err != nil {
+	if err := execReportIDDeleteTx(tx, `DELETE FROM battle_report_links WHERE report_id IN (%s)`, reportIDs); err != nil {
 		return err
+	}
+	if err := execReportIDDeleteTx(tx, `DELETE FROM battle_report_states WHERE report_id IN (%s)`, reportIDs); err != nil {
+		return err
+	}
+	if err := execReportIDDeleteTx(tx, `DELETE FROM battle_report_participants WHERE report_id IN (%s)`, reportIDs); err != nil {
+		return err
+	}
+	if err := execReportIDDeleteTx(tx, `DELETE FROM battle_reports WHERE id IN (%s)`, reportIDs); err != nil {
+		return err
+	}
+	if len(eventIDs) > 0 {
+		if err := execReportIDDeleteTx(tx,
+			`DELETE FROM battle_events
+			 WHERE id IN (%s)
+			   AND NOT EXISTS (SELECT 1 FROM battle_reports br WHERE br.event_id = battle_events.id)
+			   AND NOT EXISTS (SELECT 1 FROM battle_report_participants p WHERE p.event_id = battle_events.id)`,
+			eventIDs,
+		); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
 
-// DeleteAllReports 删除玩家全部战报。
-func (r *MySQLRepository) DeleteAllReports(playerID string) error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return err
+// removeSweepTaskBattleReportsTx 移除扫荡任务结果中的战报快照，防止物理删除后被自动补写恢复。
+func removeSweepTaskBattleReportsTx(tx *sql.Tx, reportIDs []string) error {
+	return execReportIDDeleteTx(
+		tx,
+		`UPDATE npc_sweep_tasks
+		 SET result_json = JSON_REMOVE(result_json, '$.battleReport')
+		 WHERE JSON_UNQUOTE(JSON_EXTRACT(result_json, '$.battleReport.id')) IN (%s)`,
+		reportIDs,
+	)
+}
+
+// execReportIDDeleteTx 执行基于字符串主键 IN 条件的删除或更新语句。
+func execReportIDDeleteTx(tx *sql.Tx, statement string, values []string) error {
+	if len(values) == 0 {
+		return nil
 	}
-	defer tx.Rollback()
-	now := time.Now().UTC()
-	if _, err := tx.Exec(
-		`UPDATE battle_reports SET deleted_by_player = 1 WHERE player_id = ? AND deleted_by_player = 0`,
-		playerID,
-	); err != nil {
-		return err
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(values)), ",")
+	args := make([]any, 0, len(values))
+	for _, value := range values {
+		args = append(args, value)
 	}
-	if _, err := tx.Exec(
-		`UPDATE battle_report_states
-		 SET is_deleted = 1, deleted_at = ?, updated_at = ?
-		 WHERE player_id = ? AND is_deleted = 0`,
-		now, now, playerID,
-	); err != nil {
-		return err
-	}
-	return tx.Commit()
+	_, err := tx.Exec(fmt.Sprintf(statement, placeholders), args...)
+	return err
 }
 
 // CreateBattleReportShareLink 创建或更新战报分享 token。
@@ -737,7 +930,7 @@ func (r *MySQLRepository) GetBattleEventForAdmin(eventID string) (game.BattleEve
 // ListReportsByEventForAdmin 返回同一事件下所有玩家视角战报。
 func (r *MySQLRepository) ListReportsByEventForAdmin(eventID string) ([]game.BattleReport, error) {
 	rows, err := r.db.Query(
-		`SELECT report_json, is_read FROM battle_reports WHERE event_id = ? ORDER BY created_at DESC`,
+		`SELECT report_json, COALESCE(CAST(detail_json AS CHAR), 'null'), is_read FROM battle_reports WHERE event_id = ? ORDER BY created_at DESC`,
 		eventID,
 	)
 	if err != nil {
@@ -747,16 +940,16 @@ func (r *MySQLRepository) ListReportsByEventForAdmin(eventID string) ([]game.Bat
 	reports := []game.BattleReport{}
 	for rows.Next() {
 		var reportJSON []byte
+		var detailJSON []byte
 		var isRead bool
-		if err := rows.Scan(&reportJSON, &isRead); err != nil {
+		if err := rows.Scan(&reportJSON, &detailJSON, &isRead); err != nil {
 			return nil, err
 		}
-		var report game.BattleReport
-		if err := json.Unmarshal(reportJSON, &report); err != nil {
+		report, err := scanBattleReportJSON(reportJSON, detailJSON, isRead)
+		if err != nil {
 			continue
 		}
-		report.Read = isRead
-		reports = append(reports, game.NormalizeBattleReport(report))
+		reports = append(reports, report)
 	}
 	return reports, rows.Err()
 }

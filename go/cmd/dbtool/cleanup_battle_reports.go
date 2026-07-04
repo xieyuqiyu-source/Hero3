@@ -238,13 +238,18 @@ func buildBattleReportCleanupWhere(options battleReportCleanupOptions) (string, 
 	scoutCutoff := options.Now.Add(-time.Duration(options.ScoutRetentionHours) * time.Hour)
 	deletedCutoff := options.Now.Add(-time.Duration(options.DeletedRetentionHours) * time.Hour)
 	return `
-		NOT EXISTS (
-			SELECT 1
-			FROM battle_report_links active_link
-			WHERE active_link.report_id = br.id
-			  AND (active_link.expires_at IS NULL OR active_link.expires_at > ?)
-		)
-		AND (
+			NOT EXISTS (
+				SELECT 1
+				FROM battle_report_links active_link
+				WHERE active_link.report_id = br.id
+				  AND (active_link.expires_at IS NULL OR active_link.expires_at > ?)
+			)
+			AND NOT EXISTS (
+				SELECT 1
+				FROM npc_sweep_tasks sweep_task
+				WHERE JSON_UNQUOTE(JSON_EXTRACT(sweep_task.result_json, '$.battleReport.id')) = br.id
+			)
+			AND (
 			(
 				br.deleted_by_player = 1
 				AND (

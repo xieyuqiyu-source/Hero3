@@ -69,9 +69,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
   const sweepDefenders = readSweepDefenders(report)
   const isSweepReport = report.battleType === 'sweep' || sweepDefenders.length > 0
   const sweepExtra = report.detail?.extra?.sweep
-  const sweepLossTotal = sweepDefenders.reduce((sum, defender) => {
-    return sum + (defender.units ?? []).reduce((inner, unit) => inner + Math.max(0, unit.lost ?? 0), 0)
-  }, 0)
+  const sweepLossTotal = Object.values(report.defenderLostUnits ?? {}).reduce((sum, amount) => sum + Math.max(0, amount), 0)
 
   return (
     <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
@@ -131,7 +129,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
                 <SummaryPill label="状态" value={sweepExtra?.stopped ? '中止' : '完成'} />
               </div>
               <p className="mt-2 text-[10px] leading-relaxed text-[var(--color-text-muted)]">
-                这里只保留本次扫荡结果摘要，逐城战损、守军明细和完整过程请查看战报详情。
+                这里只保留本次扫荡结果摘要，逐城仅保存目标和胜负，完整过程请查看服务日志。
               </p>
             </div>
           )}

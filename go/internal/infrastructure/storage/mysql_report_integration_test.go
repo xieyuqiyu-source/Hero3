@@ -4,6 +4,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -44,6 +45,200 @@ func openReportTestRepository(t *testing.T) (*MySQLRepository, *sql.DB) {
 		_ = db.Close()
 	})
 	return NewMySQLRepository(db), db
+}
+
+// TestBattleReportBodyJSONOmitsDetail 验证 report_json 不再重复保存 detail_json 中的重型详情。
+func TestBattleReportBodyJSONOmitsDetail(t *testing.T) {
+	report := game.BattleReport{
+		ID:               "br_compact_detail",
+		PlayerID:         "player_compact_detail",
+		ViewType:         game.ReportViewAttack,
+		SourceType:       game.ReportSourceNPCCity,
+		BattleType:       "sweep",
+		Type:             "attack",
+		Result:           "attacker_victory",
+		TargetID:         "npc_sweep",
+		TargetName:       "NPC 扫荡",
+		DefenderRevealed: true,
+		CreatedAt:        time.Now().UTC().Format(time.RFC3339),
+		Detail: &game.BattleReportDetail{
+			Title:   "NPC 扫荡",
+			Summary: "扫荡完成",
+			PrimarySide: game.BattleReportSide{
+				PlayerID: "player_compact_detail",
+				Role:     "attacker",
+				Units:    []game.BattleReportUnit{{UnitType: "weiInfantry", AmountBefore: 10}},
+			},
+			Rewards: game.BattleReportRewards{},
+			Extra: map[string]interface{}{
+				"sweep": map[string]interface{}{
+					"defenders": []game.BattleReportSweepDefender{{TargetID: "npc_1", TargetName: "NPC 1"}},
+				},
+			},
+		},
+	}
+
+	bodyJSON, err := marshalBattleReportBodyJSON(report)
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
+	var body map[string]interface{}
+	if err := json.Unmarshal(bodyJSON, &body); err != nil {
+		t.Fatalf("unmarshal body: %v", err)
+	}
+	if _, ok := body["detail"]; ok {
+		t.Fatalf("expected report_json body to omit detail, got %s", string(bodyJSON))
+	}
+	detailJSON, err := json.Marshal(report.Detail)
+	if err != nil {
+		t.Fatalf("marshal detail: %v", err)
+	}
+	restored, err := scanBattleReportJSON(bodyJSON, detailJSON, false)
+	if err != nil {
+		t.Fatalf("scan report: %v", err)
+	}
+	if restored.Detail == nil || restored.Detail.Extra["sweep"] == nil {
+		t.Fatalf("expected detail_json to be restored, got %+v", restored.Detail)
+	}
+}
+
+// TestListReportsRepairsMissingSweepReport 验证军情列表会从扫荡任务快照补写缺失战报。
+func TestListReportsRepairsMissingSweepReport(t *testing.T) {
+	repo, db := openReportTestRepository(t)
+	now := time.Now().UTC()
+	suffix := strings.NewReplacer(".", "_").Replace(now.Format("150405.000000"))
+	accountID := "it_repair_acc_" + suffix
+	playerID := "it_repair_player_" + suffix
+	taskID := "it_repair_task_" + suffix
+	reportID := "it_repair_report_" + suffix
+	eventID := "it_repair_event_" + suffix
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM npc_sweep_tasks WHERE id = ?`, taskID)
+		_, _ = db.Exec(`DELETE FROM battle_report_states WHERE report_id = ?`, reportID)
+		_, _ = db.Exec(`DELETE FROM battle_report_participants WHERE report_id = ?`, reportID)
+		_, _ = db.Exec(`DELETE FROM battle_reports WHERE id = ?`, reportID)
+		_, _ = db.Exec(`DELETE FROM battle_events WHERE id = ?`, eventID)
+		_, _ = db.Exec(`DELETE FROM players WHERE id = ?`, playerID)
+		_, _ = db.Exec(`DELETE FROM accounts WHERE id = ?`, accountID)
+	})
+
+	if _, err := db.Exec(
+		`INSERT INTO accounts (id, username, password_hash, gold, created_at) VALUES (?, ?, ?, 0, ?)`,
+		accountID,
+		"repair_"+suffix,
+		strings.Repeat("a", 64),
+		now,
+	); err != nil {
+		t.Fatalf("insert account: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO players (id, account_id, nickname, faction, mail_code, state_json, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, '', ?, ?, ?)`,
+		playerID,
+		accountID,
+		"Repair",
+		"wei",
+		`{"player":{"id":"`+playerID+`","nickname":"Repair","faction":"wei"}}`,
+		now,
+		now,
+	); err != nil {
+		t.Fatalf("insert player: %v", err)
+	}
+
+	report := game.NormalizeBattleReport(game.BattleReport{
+		ID:               reportID,
+		EventID:          eventID,
+		PlayerID:         playerID,
+		OwnerPlayerID:    playerID,
+		PlayerName:       "Repair",
+		PlayerFaction:    "wei",
+		ViewType:         game.ReportViewAttack,
+		SourceType:       game.ReportSourceNPCCity,
+		BattleType:       "sweep",
+		Title:            "NPC 扫荡",
+		Summary:          "扫荡 2 城，成功 2 场，失败 0 场。",
+		Type:             "attack",
+		Result:           "attacker_victory",
+		TargetID:         "npc_sweep",
+		TargetName:       "NPC 扫荡",
+		DefenderFaction:  "wei",
+		DefenderRevealed: true,
+		Rewards:          map[string]int{"wood": 100},
+		CreatedAt:        now.Format(time.RFC3339),
+		Detail: &game.BattleReportDetail{
+			Title:   "NPC 扫荡",
+			Summary: "扫荡 2 城，成功 2 场，失败 0 场。",
+			PrimarySide: game.BattleReportSide{
+				PlayerID:   playerID,
+				PlayerName: "Repair",
+				Role:       "attacker",
+				Faction:    "wei",
+			},
+			Extra: map[string]interface{}{
+				"sweep": map[string]interface{}{"requested": 2, "success": 2},
+			},
+		},
+	})
+	resultJSON, err := json.Marshal(game.SweepNpcResponse{BattleReport: report, Done: 2, Failed: 0})
+	if err != nil {
+		t.Fatalf("marshal sweep result: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO npc_sweep_tasks (
+			id, player_id, status, mode, npc_ids_json, general_ids_json, requested, done, failed, stopped,
+			error_message, result_json, created_at, updated_at, started_at, completed_at
+		) VALUES (?, ?, 'completed', 'attack', ?, ?, 2, 2, 0, 0, '', ?, ?, ?, ?, ?)`,
+		taskID,
+		playerID,
+		`["npc_1","npc_2"]`,
+		`[]`,
+		string(resultJSON),
+		now,
+		now,
+		now,
+		now,
+	); err != nil {
+		t.Fatalf("insert sweep task: %v", err)
+	}
+
+	reports, total, err := repo.ListReportsByQuery(game.BattleReportQuery{PlayerID: playerID, Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("list reports: %v", err)
+	}
+	if total != 1 || len(reports) != 1 || reports[0].ID != reportID {
+		t.Fatalf("expected repaired report in list, total=%d reports=%+v", total, reports)
+	}
+	restored, err := repo.GetReportForPlayer(playerID, reportID)
+	if err != nil {
+		t.Fatalf("get repaired report: %v", err)
+	}
+	if restored.Detail == nil || restored.Detail.Extra["sweep"] == nil {
+		t.Fatalf("expected repaired report detail, got %+v", restored.Detail)
+	}
+
+	if err := repo.DeleteReport(playerID, reportID); err != nil {
+		t.Fatalf("delete repaired report: %v", err)
+	}
+	if _, err := repo.GetReportForPlayer(playerID, reportID); err == nil {
+		t.Fatal("expected physically deleted repaired report to be missing")
+	}
+	reports, total, err = repo.ListReportsByQuery(game.BattleReportQuery{PlayerID: playerID, Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("list reports after physical delete: %v", err)
+	}
+	if total != 0 || len(reports) != 0 {
+		t.Fatalf("expected deleted sweep report not to be repaired again, total=%d reports=%+v", total, reports)
+	}
+	var taskReportID sql.NullString
+	if err := db.QueryRow(
+		`SELECT JSON_UNQUOTE(JSON_EXTRACT(result_json, '$.battleReport.id')) FROM npc_sweep_tasks WHERE id = ?`,
+		taskID,
+	).Scan(&taskReportID); err != nil {
+		t.Fatalf("read sweep task report id after delete: %v", err)
+	}
+	if taskReportID.Valid && taskReportID.String != "" {
+		t.Fatalf("expected sweep task battleReport snapshot to be removed, got %q", taskReportID.String)
+	}
 }
 
 // TestMySQLBattleReportEventStateAndShare 验证标准战报主链路的 MySQL 持久化能力。
@@ -151,6 +346,16 @@ func TestMySQLBattleReportEventStateAndShare(t *testing.T) {
 	if attackTotal != 1 || len(attackReports) != 1 || attackReports[0].ID != attackerReportID {
 		t.Fatalf("unexpected attack reports total=%d reports=%+v", attackTotal, attackReports)
 	}
+	if attackReports[0].Detail != nil {
+		t.Fatalf("expected report list to return summary without heavy detail, got %+v", attackReports[0].Detail)
+	}
+	attackDetail, err := repo.GetReportForPlayer(attackerPlayerID, attackerReportID)
+	if err != nil {
+		t.Fatalf("get attack report detail: %v", err)
+	}
+	if attackDetail.Detail == nil {
+		t.Fatalf("expected detail endpoint to restore detail_json, got %+v", attackDetail)
+	}
 
 	eventReports, err := repo.ListReportsByEventForAdmin(eventID)
 	if err != nil {
@@ -195,12 +400,33 @@ func TestMySQLBattleReportEventStateAndShare(t *testing.T) {
 	if err := repo.DeleteReportsByView(attackerPlayerID, game.ReportViewAttack); err != nil {
 		t.Fatalf("delete reports by view: %v", err)
 	}
-	var isDeleted bool
-	if err := db.QueryRow(`SELECT is_deleted FROM battle_report_states WHERE report_id = ? AND player_id = ?`, attackerReportID, attackerPlayerID).Scan(&isDeleted); err != nil {
-		t.Fatalf("read deleted report state: %v", err)
+	var deletedReportRows int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM battle_reports WHERE id = ?`, attackerReportID).Scan(&deletedReportRows); err != nil {
+		t.Fatalf("count deleted report: %v", err)
 	}
-	if !isDeleted {
-		t.Fatal("expected report state to be marked deleted")
+	if deletedReportRows != 0 {
+		t.Fatalf("expected report to be physically deleted, got %d rows", deletedReportRows)
+	}
+	var deletedStateRows int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM battle_report_states WHERE report_id = ? AND player_id = ?`, attackerReportID, attackerPlayerID).Scan(&deletedStateRows); err != nil {
+		t.Fatalf("count deleted report state: %v", err)
+	}
+	if deletedStateRows != 0 {
+		t.Fatalf("expected report state to be physically deleted, got %d rows", deletedStateRows)
+	}
+	var deletedLinkRows int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM battle_report_links WHERE report_id = ?`, attackerReportID).Scan(&deletedLinkRows); err != nil {
+		t.Fatalf("count deleted report links: %v", err)
+	}
+	if deletedLinkRows != 0 {
+		t.Fatalf("expected report share links to be physically deleted, got %d rows", deletedLinkRows)
+	}
+	remainingEventReports, err := repo.ListReportsByEventForAdmin(eventID)
+	if err != nil {
+		t.Fatalf("list event reports after delete: %v", err)
+	}
+	if len(remainingEventReports) != 1 || remainingEventReports[0].ID != defenderReportID {
+		t.Fatalf("expected only defender report to remain, got %+v", remainingEventReports)
 	}
 }
 

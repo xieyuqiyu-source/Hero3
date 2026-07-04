@@ -21,6 +21,7 @@ const NewsPage: FC = () => {
   const [totalReports, setTotalReports] = useState(0)
   const [activeView, setActiveView] = useState('all')
   const [loading, setLoading] = useState(false)
+  const [clearingReports, setClearingReports] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const patchState = useGameStore((s) => s.patchState)
@@ -65,13 +66,18 @@ const NewsPage: FC = () => {
     setCurrentPage(1)
   }
 
-  // 点击单条战报时标记为已读
+  // 点击单条战报时标记为已读，并按需读取完整详情。
   const handleSelectReport = (report: BattleReport) => {
     setSelectedReport(report)
     if (!report.read && activePlayerId) {
       setReports((items) => items.map((item) => item.id === report.id ? { ...item, read: true } : item))
       gameApi.markReportsRead(activePlayerId, report.id).then((res) => {
         patchState({ unreadMessageCount: res.unreadMessageCount, serverTime: res.serverTime })
+      }).catch(() => {})
+    }
+    if (activePlayerId) {
+      gameApi.getReport(report.id, activePlayerId).then((fullReport) => {
+        setSelectedReport(fullReport)
       }).catch(() => {})
     }
   }
@@ -101,13 +107,21 @@ const NewsPage: FC = () => {
     }).catch(() => {})
   }
 
-  const handleDeleteAll = () => {
-    if (!activePlayerId) return
-    gameApi.deleteAllReports(activePlayerId, activeView === 'all' ? undefined : activeView).then((res) => {
+  const handleDeleteAll = async () => {
+    if (!activePlayerId || clearingReports) return
+    setClearingReports(true)
+    try {
+      const res = await gameApi.deleteAllReports(activePlayerId, activeView === 'all' ? undefined : activeView)
       patchState({ unreadMessageCount: res.unreadMessageCount, serverTime: res.serverTime })
+      setReports(EMPTY_REPORTS)
+      setTotalReports(0)
       setCurrentPage(1)
-      loadReports(1)
-    }).catch(() => {})
+      await loadReports(1)
+    } catch {
+      // 统一 API 层已经负责错误提示，这里只恢复按钮状态。
+    } finally {
+      setClearingReports(false)
+    }
   }
 
   return (
@@ -134,20 +148,20 @@ const NewsPage: FC = () => {
         <button
           type="button"
           onClick={handleDeleteAll}
-          disabled={loading}
+          disabled={loading || clearingReports}
           className="flex items-center gap-1 text-[10px] text-red-500 hover:text-red-600 cursor-pointer transition-colors px-2 py-1 rounded-lg hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Trash2 size={12} />
-          清空全部
+          {clearingReports ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+          {clearingReports ? '清空中' : '清空全部'}
         </button>
       </div>
 
       <div className="relative space-y-2">
-        {loading && (
+        {(loading || clearingReports) && (
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-[var(--color-bg)]/55 backdrop-blur-[1px]">
             <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-secondary)] shadow-sm">
               <Loader2 size={14} className="animate-spin text-[var(--color-accent)]" />
-              加载军情中
+              {clearingReports ? '清空军情中' : '加载军情中'}
             </div>
           </div>
         )}

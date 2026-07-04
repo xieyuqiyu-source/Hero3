@@ -737,7 +737,7 @@ func scanPvpPlayerState(scanner reinforcementScanner) (game.PvpPlayerState, erro
 
 func insertBattleReportTx(tx *sql.Tx, report game.BattleReport) error {
 	report = game.NormalizeBattleReport(report)
-	reportJSON, err := json.Marshal(report)
+	reportJSON, err := marshalBattleReportBodyJSON(report)
 	if err != nil {
 		return err
 	}
