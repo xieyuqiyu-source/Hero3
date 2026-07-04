@@ -1,8 +1,10 @@
+// 本文件实现地图页 NPC 城池列表、手动攻击和一键扫荡交互。
 import { useState, useEffect, useCallback, type FC } from 'react'
 import { RefreshCw, LoaderCircle, Swords } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { gameApi } from '@/api/game'
-import type { NpcCity, BattleReport } from '@/types/game'
+import { ApiError } from '@/api/client'
+import type { NpcCity, BattleReport, NpcSweepTask } from '@/types/game'
 import { toast } from '@/components/ui'
 import NpcCityCard from './NpcCityCard'
 import AttackPanel from './AttackPanel'
@@ -19,14 +21,17 @@ const TIER_LABELS: Record<NpcTier, string> = {
   large: '大型',
   golden: '金色',
 }
+const SWEEP_TASK_POLL_MS = 800
+const SWEEP_TASK_POLL_TIMEOUT_MS = 120_000
+const MAX_SWEEP_TASK_TARGETS = 50
 
+// NpcCityTab 渲染 NPC 城池页签，并维护一键扫荡的本地状态。
 const NpcCityTab: FC = () => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const [cities, setCities] = useState<NpcCity[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [sweeping, setSweeping] = useState(false)
-  const [sweepProgress, setSweepProgress] = useState({ done: 0, total: 0, failed: 0, current: '', cityGold: 0 })
   const [lastSweepSummary, setLastSweepSummary] = useState<{ done: number; failed: number; cityGold: number } | null>(null)
   const [selectedTiers, setSelectedTiers] = useState<Record<NpcTier, boolean>>({
     small: true,
@@ -64,27 +69,39 @@ const NpcCityTab: FC = () => {
     }
   }
 
-  const selectedSweepTargets = cities
+  const allSweepTargets = cities
     .filter((city) => selectedTiers[city.tier])
     .sort((a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier))
+  const selectedSweepTargets = allSweepTargets
 
+  // handleSweepTierToggle 切换参与一键扫荡的 NPC 城池等级。
   const handleSweepTierToggle = (tier: NpcTier) => {
     if (sweeping) return
     setSelectedTiers((prev) => ({ ...prev, [tier]: !prev[tier] }))
   }
 
+  // handleSweep 调用后端批量扫荡接口，完成后同步局部玩家状态和聚合战报。
   const handleSweep = async () => {
     if (!activePlayerId || sweeping || selectedSweepTargets.length === 0) return
+    if (selectedSweepTargets.length > MAX_SWEEP_TASK_TARGETS) {
+      toast.error(`单次最多扫荡 ${MAX_SWEEP_TASK_TARGETS} 座城，请减少勾选等级。`)
+      return
+    }
 
     setSelectedCity(null)
     setSweeping(true)
     setLastSweepSummary(null)
-    setSweepProgress({ done: 0, total: selectedSweepTargets.length, failed: 0, current: '', cityGold: 0 })
 
     try {
       const npcIds = selectedSweepTargets.map((city) => city.id)
       const generalIds = getNpcQuickBattleGeneralIds(useGameStore.getState().state)
-      const result = await gameApi.sweepNpc(activePlayerId, npcIds, 'attack', generalIds)
+      const task = await gameApi.sweepNpc(activePlayerId, npcIds, 'attack', generalIds)
+      const completedTask = await pollSweepTask(activePlayerId, task)
+      if (completedTask.status === 'failed' || !completedTask.result) {
+        toast.error(completedTask.error || '扫荡失败，请稍后重试')
+        return
+      }
+      const result = completedTask.result
       useGameStore.getState().patchState({
         resources: result.resources,
         army: result.army,
@@ -101,13 +118,6 @@ const NpcCityTab: FC = () => {
       if (result.battleReport?.id) {
         setBattleReport(result.battleReport)
       }
-      setSweepProgress({
-        done: result.done,
-        total: selectedSweepTargets.length,
-        failed: result.failed,
-        current: '',
-        cityGold: totalCityGold,
-      })
       setLastSweepSummary({ done: result.done, failed: result.failed, cityGold: totalCityGold })
       await loadCities()
       void useGameStore.getState().loadMilitaryView()
@@ -117,8 +127,10 @@ const NpcCityTab: FC = () => {
       } else {
         toast.success(`扫荡完成：成功 ${result.done} 场，失败 ${result.failed} 场，获得 ${totalCityGold.toLocaleString()} 城金。可前往军情查看战报。`)
       }
-    } catch {
-      toast.error('扫荡失败，请稍后重试')
+    } catch (error) {
+      if (!(error instanceof ApiError)) {
+        toast.error(error instanceof Error ? error.message : '扫荡失败，请稍后重试')
+      }
     } finally {
       setSweeping(false)
     }
@@ -185,7 +197,7 @@ const NpcCityTab: FC = () => {
           <div>
             <div className="text-xs font-bold text-[var(--color-text-primary)]">一键扫荡</div>
             <div className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
-              按小型到金色顺序逐个发起一键攻击，详细结果在军情查看。
+              按小型到金色顺序逐个发起一键攻击，后台自动结算，单次最多 {MAX_SWEEP_TASK_TARGETS} 城。
             </div>
           </div>
           <button
@@ -217,20 +229,16 @@ const NpcCityTab: FC = () => {
           ))}
         </div>
 
+        {selectedSweepTargets.length > MAX_SWEEP_TASK_TARGETS && (
+          <div className="rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-[10px] text-red-500">
+            当前已选择 {selectedSweepTargets.length} 座城，超过单次上限 {MAX_SWEEP_TASK_TARGETS} 座。
+          </div>
+        )}
+
         {sweeping && (
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)]">
-              <span>{sweepProgress.current ? `正在攻击：${sweepProgress.current}` : '准备出征...'}</span>
-              <span>{sweepProgress.done}/{sweepProgress.total}，失败 {sweepProgress.failed}，城金 +{sweepProgress.cityGold.toLocaleString()}</span>
-            </div>
-            <div className="h-2 rounded-full bg-[var(--color-surface-dim)] overflow-hidden">
-              <div
-                className="h-full rounded-full bg-red-500 transition-all duration-300"
-                style={{
-                  width: `${sweepProgress.total > 0 ? Math.round((sweepProgress.done / sweepProgress.total) * 100) : 0}%`,
-                }}
-              />
-            </div>
+          <div className="flex items-center gap-2 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-[10px] text-[var(--color-text-muted)]">
+            <LoaderCircle size={12} className="animate-spin text-red-500" />
+            <span>后台批量结算中，完成后会自动展示结果。</span>
           </div>
         )}
 
@@ -291,6 +299,20 @@ const NpcCityTab: FC = () => {
       )}
     </div>
   )
+}
+
+// pollSweepTask 轮询后台扫荡任务，直到任务完成或失败。
+const pollSweepTask = async (playerId: string, initialTask: NpcSweepTask) => {
+  let current = initialTask
+  const startedAt = Date.now()
+  while (current.status === 'queued' || current.status === 'running') {
+    if (Date.now() - startedAt >= SWEEP_TASK_POLL_TIMEOUT_MS) {
+      throw new Error('扫荡任务等待超时，请刷新页面后查看任务结果。')
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, SWEEP_TASK_POLL_MS))
+    current = await gameApi.getNpcSweepTask(playerId, current.id)
+  }
+  return current
 }
 
 export default NpcCityTab

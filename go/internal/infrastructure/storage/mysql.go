@@ -362,6 +362,30 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 				FOREIGN KEY (player_id) REFERENCES players(id)
 				ON DELETE CASCADE
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`CREATE TABLE IF NOT EXISTS npc_sweep_tasks (
+			id VARCHAR(64) PRIMARY KEY,
+			player_id VARCHAR(64) NOT NULL,
+			status VARCHAR(24) NOT NULL,
+			mode VARCHAR(16) NOT NULL,
+			npc_ids_json JSON NOT NULL,
+			general_ids_json JSON NOT NULL,
+			requested INT NOT NULL DEFAULT 0,
+			done INT NOT NULL DEFAULT 0,
+			failed INT NOT NULL DEFAULT 0,
+			stopped TINYINT(1) NOT NULL DEFAULT 0,
+			error_message VARCHAR(512) NOT NULL DEFAULT '',
+			result_json JSON NULL,
+			created_at DATETIME(6) NOT NULL,
+			updated_at DATETIME(6) NOT NULL,
+			started_at DATETIME(6) NULL,
+				completed_at DATETIME(6) NULL,
+				INDEX idx_npc_sweep_tasks_player_status (player_id, status, updated_at),
+				INDEX idx_npc_sweep_tasks_player_created (player_id, created_at),
+				INDEX idx_npc_sweep_tasks_status_completed (status, completed_at),
+				CONSTRAINT fk_npc_sweep_tasks_player
+					FOREIGN KEY (player_id) REFERENCES players(id)
+					ON DELETE CASCADE
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 		`CREATE TABLE IF NOT EXISTS player_currencies (
 			player_id VARCHAR(64) PRIMARY KEY,
 			city_gold INT NOT NULL DEFAULT 0,
@@ -1032,6 +1056,9 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if _, err := db.ExecContext(ctx, `CREATE INDEX idx_players_mail_address ON players (nickname, mail_code)`); err != nil && !isDuplicateKeyName(err) {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `CREATE INDEX idx_npc_sweep_tasks_status_completed ON npc_sweep_tasks (status, completed_at)`); err != nil && !isDuplicateKeyName(err) {
 		return err
 	}
 	if err := addColumnIfMissing(ctx, db, `ALTER TABLE minigame_records ADD COLUMN bet_unit VARCHAR(64) NOT NULL DEFAULT ''`); err != nil {

@@ -110,6 +110,12 @@ paths:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1refresh
   /api/v1/map/npc-cities/attack:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1attack
+  /api/v1/map/npc-cities/sweep:
+    $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1sweep
+  /api/v1/map/npc-cities/sweep-tasks:
+    $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1sweep-tasks
+  /api/v1/map/npc-cities/sweep-tasks/{taskId}:
+    $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1sweep-tasks~1{taskId}
   /api/v1/map/npc-cities/scout:
     $ref: ./paths/map.yaml#/~1api~1v1~1map~1npc-cities~1scout
   /api/v1/dungeons/reincarnation/config:
@@ -495,6 +501,12 @@ components:
       $ref: ./schemas/map.yaml#/AttackNpcRequest
     AttackNpcResponse:
       $ref: ./schemas/map.yaml#/AttackNpcResponse
+    SweepNpcRequest:
+      $ref: ./schemas/map.yaml#/SweepNpcRequest
+    SweepNpcResponse:
+      $ref: ./schemas/map.yaml#/SweepNpcResponse
+    NpcSweepTask:
+      $ref: ./schemas/map.yaml#/NpcSweepTask
     ScoutNpcRequest:
       $ref: ./schemas/map.yaml#/ScoutNpcRequest
     ScoutNpcResponse:

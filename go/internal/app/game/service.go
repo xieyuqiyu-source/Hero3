@@ -78,6 +78,7 @@ var (
 	ErrWorldMapFull                = errors.New("world map is full")
 	ErrInvalidWorldCoordinate      = errors.New("invalid world coordinate")
 	ErrOperationTooFast            = errors.New("操作太快，请稍后再试")
+	ErrSweepTargetsTooMany         = errors.New("sweep target count exceeds limit")
 )
 
 const resourceDateLayout = time.RFC3339
@@ -141,7 +142,9 @@ func NewService() *Service {
 }
 
 func NewServiceWithRepository(repo Repository) *Service {
-	return &Service{repo: repo, eventBus: NewEventBus()}
+	service := &Service{repo: repo, eventBus: NewEventBus()}
+	service.recoverNpcSweepTasksOnStartup()
+	return service
 }
 
 func (s *Service) SubscribeEvent(eventType string, handler EventHandler) {

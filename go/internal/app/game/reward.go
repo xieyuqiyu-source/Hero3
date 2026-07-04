@@ -320,11 +320,22 @@ func (s *Service) flushRewardSideEffectsWithoutEvents(result RewardApplyResult) 
 
 // flushRewardSideEffectsWithEvents 落地奖励流水，并按需要发布奖励事件。
 func (s *Service) flushRewardSideEffectsWithEvents(result RewardApplyResult, publishEvents bool) {
-	for _, entry := range result.LedgerEntries {
-		s.recordLedger(entry)
+	if len(result.LedgerEntries) > 0 {
+		for i := range result.LedgerEntries {
+			entry := &result.LedgerEntries[i]
+			if entry.CreatedAt == "" {
+				entry.CreatedAt = time.Now().UTC().Format(resourceDateLayout)
+			}
+			if entry.Currency == LedgerCurrencyCityGold && entry.AccountID == "" && entry.PlayerID != "" {
+				if accountID, err := s.repo.GetAccountIDByPlayerID(entry.PlayerID); err == nil {
+					entry.AccountID = accountID
+				}
+			}
+		}
+		_ = s.repo.WriteGoldLedgers(result.LedgerEntries)
 	}
-	for _, entry := range result.ItemLedgerEntries {
-		_ = s.repo.WriteItemLedger(entry)
+	if len(result.ItemLedgerEntries) > 0 {
+		_ = s.repo.WriteItemLedgers(result.ItemLedgerEntries)
 	}
 	if !publishEvents {
 		return

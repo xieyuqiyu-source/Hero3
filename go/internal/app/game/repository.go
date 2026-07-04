@@ -79,6 +79,15 @@ type CombatAssetRepository interface {
 	UpdateCombatState(playerID string, scope CombatAssetScope, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
 }
 
+type NpcSweepTaskRepository interface {
+	CreateNpcSweepTask(task NpcSweepTask) (NpcSweepTask, error)
+	GetNpcSweepTask(playerID string, taskID string) (NpcSweepTask, error)
+	FindActiveNpcSweepTask(playerID string) (NpcSweepTask, bool, error)
+	UpdateNpcSweepTask(taskID string, updatedAt time.Time, update func(task *NpcSweepTask) error) (NpcSweepTask, error)
+	FailActiveNpcSweepTasks(updatedAt time.Time, reason string) (int, error)
+	DeleteNpcSweepTasksCompletedBefore(cutoff time.Time) (int, error)
+}
+
 type RewardAssetRepository interface {
 	UpdateRewardState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
 	UpdateScopedRewardState(playerID string, scope RewardAssetScope, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
@@ -206,11 +215,13 @@ type AnnouncementRepository interface {
 
 type GoldLedgerRepository interface {
 	WriteGoldLedger(entry GoldLedgerEntry) error
+	WriteGoldLedgers(entries []GoldLedgerEntry) error
 	ListGoldLedger(filter GoldLedgerFilter) ([]GoldLedgerEntry, error)
 }
 
 type ItemLedgerRepository interface {
 	WriteItemLedger(entry ItemLedgerEntry) error
+	WriteItemLedgers(entries []ItemLedgerEntry) error
 	ListItemLedger(filter ItemLedgerFilter) ([]ItemLedgerEntry, int, error)
 }
 
@@ -253,6 +264,7 @@ type Repository interface {
 	ItemAssetRepository
 	GeneralAssetRepository
 	CombatAssetRepository
+	NpcSweepTaskRepository
 	RewardAssetRepository
 	AccountAssetRepository
 	ReportRepository
@@ -289,6 +301,7 @@ type MemoryRepository struct {
 	worldPositions    map[string]WorldPosition
 	announcements     map[string]Announcement
 	announcementReads map[string]AnnouncementReadState
+	npcSweepTasks     map[string]NpcSweepTask
 	ledger            []GoldLedgerEntry
 	ledgerNextID      int64
 	itemLedger        []ItemLedgerEntry
@@ -316,6 +329,7 @@ func NewMemoryRepository() *MemoryRepository {
 		worldPositions:    make(map[string]WorldPosition),
 		announcements:     make(map[string]Announcement),
 		announcementReads: make(map[string]AnnouncementReadState),
+		npcSweepTasks:     make(map[string]NpcSweepTask),
 		eventClaims:       make(map[string]struct{}),
 		gameConfigs:       make(map[string]GameConfigRecord),
 		reincarnationRuns: make(map[string]ReincarnationRun),
@@ -1946,6 +1960,16 @@ func (r *MemoryRepository) WriteGoldLedger(entry GoldLedgerEntry) error {
 	return nil
 }
 
+func (r *MemoryRepository) WriteGoldLedgers(entries []GoldLedgerEntry) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, entry := range entries {
+		r.appendGoldLedgerLocked(entry)
+	}
+	return nil
+}
+
 func (r *MemoryRepository) appendGoldLedgerLocked(entry GoldLedgerEntry) {
 	r.ledgerNextID++
 	entry.ID = r.ledgerNextID
@@ -1998,15 +2022,21 @@ func (r *MemoryRepository) ListGoldLedger(filter GoldLedgerFilter) ([]GoldLedger
 
 // WriteItemLedger 写入内存物品流水。
 func (r *MemoryRepository) WriteItemLedger(entry ItemLedgerEntry) error {
+	return r.WriteItemLedgers([]ItemLedgerEntry{entry})
+}
+
+func (r *MemoryRepository) WriteItemLedgers(entries []ItemLedgerEntry) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if entry.ID == "" {
-		entry.ID = randomID(12)
+	for _, entry := range entries {
+		if entry.ID == "" {
+			entry.ID = randomID(12)
+		}
+		if entry.CreatedAt == "" {
+			entry.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+		}
+		r.itemLedger = append(r.itemLedger, entry)
 	}
-	if entry.CreatedAt == "" {
-		entry.CreatedAt = time.Now().UTC().Format(time.RFC3339)
-	}
-	r.itemLedger = append(r.itemLedger, entry)
 	return nil
 }
 

@@ -1,4 +1,4 @@
-/* 本文件实现地图页入口和地图玩法页签切换，玩家页签承载世界地图。 */
+/* 本文件实现地图页入口和地图玩法页签切换，默认展示 NPC 城池。 */
 import { Suspense, lazy, useEffect, useRef, useState, type FC, type PointerEvent as ReactPointerEvent } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Castle, Users, Flag, Scroll, Sparkles } from 'lucide-react'
@@ -18,10 +18,10 @@ const MAP_TABS = [
   { key: 'minigames' as const, label: '万象幻境', icon: Sparkles },
 ]
 
-// MapPage 使用原有地图页签样式切换玩法，并默认展示玩家世界地图。
+// MapPage 使用原有地图页签样式切换玩法，并默认展示 NPC 城池。
 const MapPage: FC = () => {
   const location = useLocation()
-  const [activeTab, setActiveTab] = useState<MapTab>('players')
+  const [activeTab, setActiveTab] = useState<MapTab>('npc')
   const scrollRef = useRef<HTMLDivElement>(null)
   const isDragging = useRef(false)
   const hasMoved = useRef(false)

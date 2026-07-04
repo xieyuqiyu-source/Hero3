@@ -11,27 +11,48 @@ import (
 )
 
 func (r *MySQLRepository) WriteGoldLedger(entry game.GoldLedgerEntry) error {
-	createdAt, _ := time.Parse(time.RFC3339, entry.CreatedAt)
-	if createdAt.IsZero() {
-		createdAt = time.Now()
-	}
+	return r.WriteGoldLedgers([]game.GoldLedgerEntry{entry})
+}
 
-	_, err := r.db.Exec(
+func (r *MySQLRepository) WriteGoldLedgers(entries []game.GoldLedgerEntry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	stmt, err := tx.Prepare(
 		`INSERT INTO gold_ledger
 		 (account_id, player_id, currency, direction, amount, balance_after, ref_type, ref_id, reason, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		entry.AccountID,
-		entry.PlayerID,
-		entry.Currency,
-		entry.Direction,
-		entry.Amount,
-		entry.BalanceAfter,
-		entry.RefType,
-		entry.RefID,
-		entry.Reason,
-		createdAt.UTC(),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for _, entry := range entries {
+		createdAt, _ := time.Parse(time.RFC3339, entry.CreatedAt)
+		if createdAt.IsZero() {
+			createdAt = time.Now()
+		}
+		if _, err := stmt.Exec(
+			entry.AccountID,
+			entry.PlayerID,
+			entry.Currency,
+			entry.Direction,
+			entry.Amount,
+			entry.BalanceAfter,
+			entry.RefType,
+			entry.RefID,
+			entry.Reason,
+			createdAt.UTC(),
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (r *MySQLRepository) ListGoldLedger(filter game.GoldLedgerFilter) ([]game.GoldLedgerEntry, error) {
@@ -94,37 +115,60 @@ func (r *MySQLRepository) ListGoldLedger(filter game.GoldLedgerFilter) ([]game.G
 
 // WriteItemLedger 写入物品获得或消耗流水。
 func (r *MySQLRepository) WriteItemLedger(entry game.ItemLedgerEntry) error {
-	if entry.ID == "" {
-		entry.ID = fmt.Sprintf("item_ledger_%d", time.Now().UnixNano())
+	return r.WriteItemLedgers([]game.ItemLedgerEntry{entry})
+}
+
+// WriteItemLedgers 批量写入物品获得或消耗流水。
+func (r *MySQLRepository) WriteItemLedgers(entries []game.ItemLedgerEntry) error {
+	if len(entries) == 0 {
+		return nil
 	}
-	createdAt, _ := time.Parse(time.RFC3339, entry.CreatedAt)
-	if createdAt.IsZero() {
-		createdAt = time.Now()
-	}
-	metadata, err := json.Marshal(entry.Metadata)
+	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
-	if entry.Metadata == nil {
-		metadata = nil
-	}
-	_, err = r.db.Exec(
+	defer func() { _ = tx.Rollback() }()
+	stmt, err := tx.Prepare(
 		`INSERT INTO item_ledger
 		 (id, player_id, item_id, change_amount, before_amount, after_amount, reason, ref_type, ref_id, metadata_json, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		entry.ID,
-		entry.PlayerID,
-		entry.ItemID,
-		entry.ChangeAmount,
-		entry.BeforeAmount,
-		entry.AfterAmount,
-		entry.Reason,
-		entry.RefType,
-		entry.RefID,
-		nullableJSONArg(metadata),
-		createdAt.UTC(),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for _, entry := range entries {
+		if entry.ID == "" {
+			entry.ID = fmt.Sprintf("item_ledger_%d", time.Now().UnixNano())
+		}
+		createdAt, _ := time.Parse(time.RFC3339, entry.CreatedAt)
+		if createdAt.IsZero() {
+			createdAt = time.Now()
+		}
+		metadata, err := json.Marshal(entry.Metadata)
+		if err != nil {
+			return err
+		}
+		if entry.Metadata == nil {
+			metadata = nil
+		}
+		if _, err := stmt.Exec(
+			entry.ID,
+			entry.PlayerID,
+			entry.ItemID,
+			entry.ChangeAmount,
+			entry.BeforeAmount,
+			entry.AfterAmount,
+			entry.Reason,
+			entry.RefType,
+			entry.RefID,
+			nullableJSONArg(metadata),
+			createdAt.UTC(),
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // ListItemLedger 按筛选条件读取物品流水。

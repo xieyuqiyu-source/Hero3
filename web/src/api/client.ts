@@ -34,6 +34,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   'recruit queue is full': '征兵队列已满',
   'invalid general for faction': '将领不属于该阵营',
   'npc city not found': 'NPC城池不存在',
+  'npc sweep task already running': '已有扫荡任务正在执行',
+  'sweep target count exceeds limit': '扫荡目标数量超过上限',
   'no units selected for dispatch': '未选择出征兵力',
   'insufficient army for dispatch': '兵力不足，无法出征',
   'insufficient gold': '金币不足',

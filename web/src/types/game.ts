@@ -33,6 +33,37 @@ export interface PlayerDeletionResult {
   deleteScheduledAt?: string
 }
 
+export interface NpcSweepTask {
+  id: string
+  playerId: string
+  npcIds: string[]
+  mode: 'attack' | 'plunder' | string
+  generalIds?: string[]
+  status: 'queued' | 'running' | 'completed' | 'failed' | string
+  requested: number
+  done: number
+  failed: number
+  stopped: boolean
+  error?: string
+  result?: {
+    battleReport: BattleReport
+    done: number
+    failed: number
+    stopped: boolean
+    resources: ResourceState
+    army: ArmyUnit[]
+    general?: General
+    generals?: General[]
+    cityGold: number
+    npcState?: GameState['npcState']
+    serverTime: string
+  }
+  createdAt: string
+  updatedAt: string
+  startedAt?: string
+  completedAt?: string
+}
+
 export type AnnouncementType = 'system' | 'maintenance' | 'update' | 'activity' | 'compensation' | 'emergency'
 
 export interface AnnouncementSummary {

@@ -4,11 +4,13 @@ package game
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1880,8 +1882,9 @@ func TestScoutNpcPassesScoutUnitCombatScope(t *testing.T) {
 func TestSweepNpcCreatesOneAggregateReport(t *testing.T) {
 	setTestCombatUnitsConfig(t)
 
-	svc := NewService()
-	repo := svc.repo.(*MemoryRepository)
+	baseRepo := NewMemoryRepository()
+	repo := &combatScopeRecorderRepository{MemoryRepository: baseRepo}
+	svc := NewServiceWithRepository(repo)
 	now := time.Now()
 	account := Account{ID: "acc_sweep_report", Username: "sweep_report", PasswordHash: "x", CreatedAt: now}
 	if err := repo.CreateAccount(account); err != nil {
@@ -1969,6 +1972,186 @@ func TestSweepNpcCreatesOneAggregateReport(t *testing.T) {
 	}
 	if len(events) != 1 || events[0].RefID != result.BattleReport.ID {
 		t.Fatalf("expected one aggregate battle event, got %+v", events)
+	}
+	if len(repo.combatScopes) != 1 {
+		t.Fatalf("expected sweep to use one batch combat transaction, got %d scopes", len(repo.combatScopes))
+	}
+}
+
+func TestSweepNpcCapsTargetsToLatencyLimit(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_sweep_cap", Username: "sweep_cap", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_sweep_cap", "SweepCap", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 5000}}
+	state.Resources.Capacity = map[string]int{"wood": 10000, "stone": 10000, "iron": 10000, "food": 10000}
+	npcIDs := make([]string, 0, maxNpcSweepTargets+5)
+	state.NpcState = &NpcState{LastRefreshedAt: now.UTC().Format(resourceDateLayout)}
+	for i := 0; i < maxNpcSweepTargets+5; i++ {
+		npcID := fmt.Sprintf("npc_sweep_cap_%02d", i)
+		npcIDs = append(npcIDs, npcID)
+		state.NpcState.Cities = append(state.NpcState.Cities, testNpcCity(npcID, now))
+	}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	result, err := svc.SweepNpc(SweepNpcRequest{
+		PlayerID: state.Player.ID,
+		NpcIDs:   npcIDs,
+		Mode:     "attack",
+	})
+	if err != nil {
+		t.Fatalf("SweepNpc failed: %v", err)
+	}
+	if result.Done != maxNpcSweepTargets || result.Failed != 0 || result.Stopped {
+		t.Fatalf("expected sweep to process capped target count, got %+v", result)
+	}
+	sweepExtra, ok := result.BattleReport.Detail.Extra["sweep"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected sweep extra in aggregate report detail, got %+v", result.BattleReport.Detail.Extra)
+	}
+	if sweepExtra["requested"] != maxNpcSweepTargets || sweepExtra["success"] != maxNpcSweepTargets {
+		t.Fatalf("expected sweep report to use capped requested count, got %+v", sweepExtra)
+	}
+	defenders, ok := sweepExtra["defenders"].([]BattleReportSweepDefender)
+	if !ok || len(defenders) != maxNpcSweepTargets {
+		t.Fatalf("expected capped defender snapshots, got %#v", sweepExtra["defenders"])
+	}
+}
+
+func TestNpcSweepTaskCompletesWithAggregateResult(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_sweep_task", Username: "sweep_task", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_sweep_task", "SweepTask", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	state.Resources.Capacity = map[string]int{"wood": 10000, "stone": 10000, "iron": 10000, "food": 10000}
+	state.NpcState = &NpcState{
+		Cities: []NpcCity{
+			testNpcCity("npc_sweep_task_1", now),
+			testNpcCity("npc_sweep_task_2", now),
+		},
+		LastRefreshedAt: now.UTC().Format(resourceDateLayout),
+	}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	task, err := svc.StartNpcSweepTask(SweepNpcRequest{
+		PlayerID: state.Player.ID,
+		NpcIDs:   []string{"npc_sweep_task_1", "npc_sweep_task_2"},
+		Mode:     "attack",
+	})
+	if err != nil {
+		t.Fatalf("StartNpcSweepTask failed: %v", err)
+	}
+	if task.ID == "" || task.Status != SweepTaskStatusQueued || task.Requested != 2 {
+		t.Fatalf("unexpected initial task: %+v", task)
+	}
+
+	completed := waitForNpcSweepTask(t, svc, state.Player.ID, task.ID)
+	if completed.Status != SweepTaskStatusCompleted || completed.Result == nil {
+		t.Fatalf("expected completed task with result, got %+v", completed)
+	}
+	if completed.Result.Done != 2 || completed.Result.BattleReport.BattleType != "sweep" {
+		t.Fatalf("unexpected sweep task result: %+v", completed.Result)
+	}
+}
+
+func TestCreateNpcSweepTaskRejectsConcurrentActiveTasks(t *testing.T) {
+	repo := NewMemoryRepository()
+	now := time.Now().UTC().Format(resourceDateLayout)
+	var successCount int32
+	var runningCount int32
+	unexpected := make(chan error, 8)
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, err := repo.CreateNpcSweepTask(NpcSweepTask{
+				ID:        fmt.Sprintf("sweep_task_atomic_%d", i),
+				PlayerID:  "player_sweep_atomic",
+				NpcIDs:    []string{"npc_sweep_atomic"},
+				Mode:      "attack",
+				Status:    SweepTaskStatusQueued,
+				CreatedAt: now,
+				UpdatedAt: now,
+			})
+			if err == nil {
+				atomic.AddInt32(&successCount, 1)
+				return
+			}
+			if errors.Is(err, ErrNpcSweepTaskRunning) {
+				atomic.AddInt32(&runningCount, 1)
+				return
+			}
+			unexpected <- err
+		}(i)
+	}
+	wg.Wait()
+	close(unexpected)
+	for err := range unexpected {
+		t.Fatalf("unexpected create error: %v", err)
+	}
+	if successCount != 1 || runningCount != 7 {
+		t.Fatalf("expected one created task and seven running errors, success=%d running=%d", successCount, runningCount)
+	}
+}
+
+func TestNewServiceMarksInterruptedNpcSweepTasksFailed(t *testing.T) {
+	repo := NewMemoryRepository()
+	now := time.Now().UTC().Format(resourceDateLayout)
+	created, err := repo.CreateNpcSweepTask(NpcSweepTask{
+		ID:        "sweep_task_interrupted",
+		PlayerID:  "player_sweep_interrupted",
+		NpcIDs:    []string{"npc_sweep_interrupted"},
+		Mode:      "attack",
+		Status:    SweepTaskStatusRunning,
+		CreatedAt: now,
+		UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("create active task: %v", err)
+	}
+
+	svc := NewServiceWithRepository(repo)
+	recovered, err := svc.GetNpcSweepTask("player_sweep_interrupted", created.ID)
+	if err != nil {
+		t.Fatalf("get recovered task: %v", err)
+	}
+	if recovered.Status != SweepTaskStatusFailed || recovered.CompletedAt == "" || recovered.Error == "" {
+		t.Fatalf("expected interrupted task to be marked failed, got %+v", recovered)
+	}
+}
+
+func TestStartNpcSweepTaskRejectsTooManyTargets(t *testing.T) {
+	svc := NewService()
+	npcIDs := make([]string, 0, maxNpcSweepTaskTargets+1)
+	for i := 0; i < maxNpcSweepTaskTargets+1; i++ {
+		npcIDs = append(npcIDs, fmt.Sprintf("npc_sweep_limit_%02d", i))
+	}
+
+	_, err := svc.StartNpcSweepTask(SweepNpcRequest{
+		PlayerID: "player_sweep_limit",
+		NpcIDs:   npcIDs,
+		Mode:     "attack",
+	})
+	if !errors.Is(err, ErrSweepTargetsTooMany) {
+		t.Fatalf("expected too many targets error, got %v", err)
 	}
 }
 
@@ -2377,6 +2560,27 @@ func testNpcCity(id string, now time.Time) NpcCity {
 		ArmySettledAt:     now.UTC().Format(resourceDateLayout),
 		GeneratedAt:       now.UTC().Format(resourceDateLayout),
 	}
+}
+
+func waitForNpcSweepTask(t *testing.T, svc *Service, playerID string, taskID string) NpcSweepTask {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		task, err := svc.GetNpcSweepTask(playerID, taskID)
+		if err != nil {
+			t.Fatalf("GetNpcSweepTask failed: %v", err)
+		}
+		if task.Status == SweepTaskStatusCompleted || task.Status == SweepTaskStatusFailed {
+			return task
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	task, err := svc.GetNpcSweepTask(playerID, taskID)
+	if err != nil {
+		t.Fatalf("GetNpcSweepTask after timeout failed: %v", err)
+	}
+	t.Fatalf("sweep task did not finish before timeout: %+v", task)
+	return task
 }
 
 func TestAddAccountGoldAdminWritesLedger(t *testing.T) {

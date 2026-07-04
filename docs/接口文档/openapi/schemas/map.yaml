@@ -427,6 +427,154 @@ AttackNpcResponse:
     serverTime:
       type: string
       format: date-time
+SweepNpcRequest:
+  type: object
+  required:
+  - playerId
+  - npcIds
+  properties:
+    playerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+    npcIds:
+      type: array
+      minItems: 1
+      maxItems: 50
+      description: 按顺序扫荡的 NPC 城池 ID。后台任务会完整处理请求中的目标，内部按批量事务结算；单次最多 50 个目标。
+      items:
+        type: string
+      example:
+      - npc_a1b2c3d4
+      - npc_b2c3d4e5
+    mode:
+      type: string
+      enum:
+      - attack
+      - plunder
+      default: attack
+      description: attack 为攻城，plunder 为掠夺。
+    generalIds:
+      type: array
+      maxItems: 1
+      description: 本次扫荡携带的参战武将 ID，最多 1 个；为空表示不带武将。
+      items:
+        type: string
+SweepNpcResponse:
+  type: object
+  required:
+  - battleReport
+  - done
+  - failed
+  - stopped
+  - resources
+  - army
+  - cityGold
+  - serverTime
+  properties:
+    battleReport:
+      $ref: '#/components/schemas/BattleReport'
+    done:
+      type: integer
+      description: 成功结算的 NPC 城池数量。
+      example: 10
+    failed:
+      type: integer
+      description: 结算失败并跳过的 NPC 城池数量。
+      example: 0
+    stopped:
+      type: boolean
+      description: 是否因为兵力不足或没有可用兵力提前停止。
+      example: false
+    resources:
+      $ref: '#/components/schemas/ResourceState'
+    army:
+      type: array
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    general:
+      $ref: '#/components/schemas/General'
+    generals:
+      type: array
+      items:
+        $ref: '#/components/schemas/General'
+    cityGold:
+      type: integer
+      example: 120
+    npcState:
+      $ref: '#/components/schemas/NpcState'
+    serverTime:
+      type: string
+      format: date-time
+NpcSweepTask:
+  type: object
+  required:
+  - id
+  - playerId
+  - npcIds
+  - mode
+  - status
+  - requested
+  - done
+  - failed
+  - stopped
+  - createdAt
+  - updatedAt
+  properties:
+    id:
+      type: string
+      example: sweep_task_abc123
+    playerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+    npcIds:
+      type: array
+      items:
+        type: string
+    mode:
+      type: string
+      enum:
+      - attack
+      - plunder
+    generalIds:
+      type: array
+      items:
+        type: string
+    status:
+      type: string
+      enum:
+      - queued
+      - running
+      - completed
+      - failed
+    requested:
+      type: integer
+      description: 本次任务请求扫荡的目标数量，单次最多 50 个。
+    done:
+      type: integer
+      description: 已成功结算的目标数量。
+    failed:
+      type: integer
+      description: 已失败或跳过的目标数量。
+    stopped:
+      type: boolean
+      description: 是否因为兵力不足等原因提前停止。
+    error:
+      type: string
+      description: 任务失败时的错误信息。
+    result:
+      $ref: '#/components/schemas/SweepNpcResponse'
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+    startedAt:
+      type: string
+      format: date-time
+    completedAt:
+      type: string
+      format: date-time
 ScoutNpcRequest:
   type: object
   required:

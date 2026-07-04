@@ -155,6 +155,8 @@ func registerMapRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("POST /api/v1/map/npc-cities/refresh", handlers.RefreshNpcCities)
 	mux.HandleFunc("POST /api/v1/map/npc-cities/attack", handlers.AttackNpc)
 	mux.HandleFunc("POST /api/v1/map/npc-cities/sweep", handlers.SweepNpc)
+	mux.HandleFunc("POST /api/v1/map/npc-cities/sweep-tasks", handlers.StartNpcSweepTask)
+	mux.HandleFunc("GET /api/v1/map/npc-cities/sweep-tasks/{taskId}", handlers.GetNpcSweepTask)
 	mux.HandleFunc("POST /api/v1/map/npc-cities/scout", handlers.ScoutNpc)
 }
 

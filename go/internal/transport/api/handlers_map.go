@@ -89,6 +89,10 @@ func (h *Handlers) AttackNpc(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) SweepNpc(w http.ResponseWriter, r *http.Request) {
+	h.StartNpcSweepTask(w, r)
+}
+
+func (h *Handlers) StartNpcSweepTask(w http.ResponseWriter, r *http.Request) {
 	var payload game.SweepNpcRequest
 	if !decodeJSON(w, r, &payload) {
 		return
@@ -97,13 +101,15 @@ func (h *Handlers) SweepNpc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.gameService.SweepNpc(payload)
+	result, err := h.gameService.StartNpcSweepTask(payload)
 	if err != nil {
 		status := http.StatusBadRequest
 		switch {
 		case errors.Is(err, game.ErrPlayerNotFound):
 			status = http.StatusNotFound
 		case errors.Is(err, game.ErrNoSweepTargets):
+			status = http.StatusBadRequest
+		case errors.Is(err, game.ErrSweepTargetsTooMany):
 			status = http.StatusBadRequest
 		case errors.Is(err, game.ErrNoUnitsSelected):
 			status = http.StatusBadRequest
@@ -113,6 +119,34 @@ func (h *Handlers) SweepNpc(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusBadRequest
 		case errors.Is(err, game.ErrOperationTooFast):
 			status = http.StatusTooManyRequests
+		case errors.Is(err, game.ErrNpcSweepTaskRunning):
+			status = http.StatusConflict
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, result)
+}
+
+func (h *Handlers) GetNpcSweepTask(w http.ResponseWriter, r *http.Request) {
+	playerID := r.URL.Query().Get("playerId")
+	if playerID == "" {
+		writeError(w, http.StatusBadRequest, "playerId is required")
+		return
+	}
+	if !h.requireOwnership(w, r, playerID) {
+		return
+	}
+
+	result, err := h.gameService.GetNpcSweepTask(playerID, r.PathValue("taskId"))
+	if err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, game.ErrPlayerNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, game.ErrNpcSweepTaskNotFound):
+			status = http.StatusNotFound
 		}
 		writeError(w, status, err.Error())
 		return

@@ -233,141 +233,15 @@ func (s *Service) attackNpc(req AttackNpcRequest, saveReport bool) (AttackNpcRes
 		capturedToGarrison = map[string]int{}
 		capturedSourceFaction = ""
 		state, err = s.repo.UpdateCombatState(playerID, combatScopeForAttack(req.Units, req.GeneralIDs), now, func(state *GameState) error {
-			if state.General != nil {
-				applyHeroConfigToGeneral(state.General)
-			}
-			EnsureGeneralRoster(state, now)
-
-			nextState, _ := settleResources(*state, now)
-			*state = nextState
-
-			if state.NpcState == nil || len(state.NpcState.Cities) == 0 {
-				return ErrNpcNotFound
-			}
-
-			settleNpcCities(state.NpcState, now)
-
-			npcIdx := -1
-			for i, city := range state.NpcState.Cities {
-				if city.ID == npcID {
-					npcIdx = i
-					break
-				}
-			}
-			if npcIdx == -1 {
-				return ErrNpcNotFound
-			}
-
-			npc := &state.NpcState.Cities[npcIdx]
-			generalIDs, err := normalizeBattleGeneralIDs(state, req.GeneralIDs)
+			prepareNpcCombatState(state, now)
+			outcome, err := resolveNpcBattleOnState(state, req, now)
 			if err != nil {
 				return err
 			}
-			attackerUnits, err := validateAndConsumeArmyWithModifiers(state, req.Units, modifierSourcesForBattleGenerals(state, generalIDs)...)
-			if err != nil {
-				return err
-			}
-
-			ruleID := activeCombatRuleID(combatSceneForPVE(mode))
-
-			attackerArmy := buildCombatArmy(state.Player.Faction, attackerUnits)
-			defenderArmy := buildNpcCombatArmy(npc)
-			activeTraits := buildActiveTraitsForGeneralIDs(state, generalIDs)
-			beforeCtx := &general.BeforeBattleContext{
-				Attacker:          &attackerArmy,
-				Defender:          &defenderArmy,
-				AttackerOwnsTrait: true,
-				DefenderOwnsTrait: false,
-				IsPvP:             false,
-				SameFaction:       true,
-			}
-			general.Dispatch(beforeCtx, activeTraits)
-			capturedToArmy, routedToGarrison := splitCapturedUnitsByOwnerFaction(state.Player.Faction, beforeCtx.CapturedToArmy)
-			capturedToGarrison = mergeTroopMaps(routedToGarrison, beforeCtx.CapturedToGarrison)
-			capturedSourceFaction = npc.Faction
-			for unitType, count := range capturedToArmy {
-				mergeIntoArmy(state, unitType, count)
-			}
-
-			result := combat.Resolve(combat.CombatInput{
-				RuleID:    ruleID,
-				Attacker:  attackerArmy,
-				Defender:  defenderArmy,
-				WallLevel: 0,
-			})
-
-			afterCombatCtx := &general.AfterCombatResolveContext{
-				Result:            &result,
-				Attacker:          &attackerArmy,
-				Defender:          &defenderArmy,
-				AttackerOwnsTrait: true,
-				DefenderOwnsTrait: false,
-				IsAttackerOnly:    true,
-			}
-			general.Dispatch(afterCombatCtx, activeTraits)
-
-			report = applyNpcBattleResult(state, npc, result, attackerUnits, mode, now)
-			if len(capturedToArmy) > 0 {
-				report.CapturedUnits = capturedToArmy
-			}
-			if len(capturedToGarrison) > 0 {
-				report.CapturedToGarrison = cloneStringIntMap(capturedToGarrison)
-			}
-			mergeTraitOutcomes(&report, beforeCtx.Triggered)
-			mergeTraitOutcomes(&report, afterCombatCtx.Triggered)
-
-			playerArmyMap := armySliceToMap(state.Army)
-			afterBattleCtx := &general.AfterBattleContext{
-				PlayerArmy:   playerArmyMap,
-				PlayerLosses: report.LostUnits,
-				IsAttacker:   true,
-				Won:          report.Result == "attacker_victory",
-			}
-			general.Dispatch(afterBattleCtx, activeTraits)
-			if len(afterBattleCtx.Revived) > 0 {
-				state.Army = armyMapToSlice(playerArmyMap)
-				if report.RevivedUnits == nil {
-					report.RevivedUnits = map[string]int{}
-				}
-				for k, v := range afterBattleCtx.Revived {
-					report.RevivedUnits[k] = v
-				}
-			}
-			mergeTraitOutcomes(&report, afterBattleCtx.Triggered)
-
-			expResult := applyGeneralBattleExpToRoster(state, generalIDs, calculateGeneralBattleExpFromLosses(npc.Faction, result.DefenderLosses))
-			if expResult.Gained > 0 {
-				report.GeneralExpGained = expResult.Gained
-				report.GeneralLevelBefore = expResult.LevelBefore
-				report.GeneralLevelAfter = expResult.LevelAfter
-			}
-			effectRefID := strings.TrimSpace(req.EffectRefID)
-			if effectRefID == "" {
-				effectRefID = report.ID
-			}
-			dropRewards, dropSnapshots, err := rollNpcBattleDrops(npc, report)
-			if err != nil {
-				return err
-			}
-			if len(dropRewards) > 0 {
-				apply, err := ApplyRewardsToStateWithContext(state, dropRewards, RewardGrantContext{
-					PlayerID: state.Player.ID,
-					RefType:  LedgerRefBattleReward,
-					RefID:    effectRefID,
-					Reason:   "npc_battle_drop",
-				}, now)
-				if err != nil {
-					return err
-				}
-				mergeRewardApplyResult(&rewardApply, apply)
-				report.Drops = dropSnapshots
-			}
-			report.PvpAttackerGenerals = buildPvpGeneralSnapshots(state, generalIDs)
-			report.GrantedRewards = buildBattleGrantedRewards(report)
-
-			if report.OverflowCityGold > 0 {
-				state.CityGold += FlexInt(report.OverflowCityGold)
-			}
+			report = outcome.Report
+			rewardApply = outcome.RewardApply
+			capturedToGarrison = outcome.CapturedToGarrison
+			capturedSourceFaction = outcome.CapturedSourceFaction
 			state.ServerTime = now.UTC().Format(resourceDateLayout)
 			return nil
 		})
@@ -460,10 +334,176 @@ func (s *Service) attackNpc(req AttackNpcRequest, saveReport bool) (AttackNpcRes
 	}, nil
 }
 
-const maxNpcSweepTargets = 100
+type npcBattleStateOutcome struct {
+	Report                BattleReport
+	RewardApply           RewardApplyResult
+	CapturedToGarrison    map[string]int
+	CapturedSourceFaction string
+}
+
+// prepareNpcCombatState 在战斗事务内做一次玩家和 NPC 的惰性结算。
+func prepareNpcCombatState(state *GameState, now time.Time) {
+	if state.General != nil {
+		applyHeroConfigToGeneral(state.General)
+	}
+	EnsureGeneralRoster(state, now)
+	nextState, _ := settleResources(*state, now)
+	*state = nextState
+	if state.NpcState != nil {
+		settleNpcCities(state.NpcState, now)
+	}
+}
+
+// resolveNpcBattleOnState 在已锁定并加载的玩家状态内结算单场 NPC 战斗。
+func resolveNpcBattleOnState(state *GameState, req AttackNpcRequest, now time.Time) (npcBattleStateOutcome, error) {
+	npcID := strings.TrimSpace(req.NpcID)
+	mode := strings.TrimSpace(req.Mode)
+	if mode != "attack" && mode != "plunder" {
+		mode = "attack"
+	}
+	if state.NpcState == nil || len(state.NpcState.Cities) == 0 {
+		return npcBattleStateOutcome{}, ErrNpcNotFound
+	}
+	npcIdx := -1
+	for i, city := range state.NpcState.Cities {
+		if city.ID == npcID {
+			npcIdx = i
+			break
+		}
+	}
+	if npcIdx == -1 {
+		return npcBattleStateOutcome{}, ErrNpcNotFound
+	}
+
+	npc := &state.NpcState.Cities[npcIdx]
+	generalIDs, err := normalizeBattleGeneralIDs(state, req.GeneralIDs)
+	if err != nil {
+		return npcBattleStateOutcome{}, err
+	}
+	attackerUnits, err := validateAndConsumeArmyWithModifiers(state, req.Units, modifierSourcesForBattleGenerals(state, generalIDs)...)
+	if err != nil {
+		return npcBattleStateOutcome{}, err
+	}
+
+	ruleID := activeCombatRuleID(combatSceneForPVE(mode))
+	attackerArmy := buildCombatArmy(state.Player.Faction, attackerUnits)
+	defenderArmy := buildNpcCombatArmy(npc)
+	activeTraits := buildActiveTraitsForGeneralIDs(state, generalIDs)
+	beforeCtx := &general.BeforeBattleContext{
+		Attacker:          &attackerArmy,
+		Defender:          &defenderArmy,
+		AttackerOwnsTrait: true,
+		DefenderOwnsTrait: false,
+		IsPvP:             false,
+		SameFaction:       true,
+	}
+	general.Dispatch(beforeCtx, activeTraits)
+	capturedToArmy, routedToGarrison := splitCapturedUnitsByOwnerFaction(state.Player.Faction, beforeCtx.CapturedToArmy)
+	capturedToGarrison := mergeTroopMaps(routedToGarrison, beforeCtx.CapturedToGarrison)
+	for unitType, count := range capturedToArmy {
+		mergeIntoArmy(state, unitType, count)
+	}
+
+	result := combat.Resolve(combat.CombatInput{
+		RuleID:    ruleID,
+		Attacker:  attackerArmy,
+		Defender:  defenderArmy,
+		WallLevel: 0,
+	})
+
+	afterCombatCtx := &general.AfterCombatResolveContext{
+		Result:            &result,
+		Attacker:          &attackerArmy,
+		Defender:          &defenderArmy,
+		AttackerOwnsTrait: true,
+		DefenderOwnsTrait: false,
+		IsAttackerOnly:    true,
+	}
+	general.Dispatch(afterCombatCtx, activeTraits)
+
+	report := applyNpcBattleResult(state, npc, result, attackerUnits, mode, now)
+	if len(capturedToArmy) > 0 {
+		report.CapturedUnits = capturedToArmy
+	}
+	if len(capturedToGarrison) > 0 {
+		report.CapturedToGarrison = cloneStringIntMap(capturedToGarrison)
+	}
+	mergeTraitOutcomes(&report, beforeCtx.Triggered)
+	mergeTraitOutcomes(&report, afterCombatCtx.Triggered)
+
+	playerArmyMap := armySliceToMap(state.Army)
+	afterBattleCtx := &general.AfterBattleContext{
+		PlayerArmy:   playerArmyMap,
+		PlayerLosses: report.LostUnits,
+		IsAttacker:   true,
+		Won:          report.Result == "attacker_victory",
+	}
+	general.Dispatch(afterBattleCtx, activeTraits)
+	if len(afterBattleCtx.Revived) > 0 {
+		state.Army = armyMapToSlice(playerArmyMap)
+		if report.RevivedUnits == nil {
+			report.RevivedUnits = map[string]int{}
+		}
+		for k, v := range afterBattleCtx.Revived {
+			report.RevivedUnits[k] = v
+		}
+	}
+	mergeTraitOutcomes(&report, afterBattleCtx.Triggered)
+
+	expResult := applyGeneralBattleExpToRoster(state, generalIDs, calculateGeneralBattleExpFromLosses(npc.Faction, result.DefenderLosses))
+	if expResult.Gained > 0 {
+		report.GeneralExpGained = expResult.Gained
+		report.GeneralLevelBefore = expResult.LevelBefore
+		report.GeneralLevelAfter = expResult.LevelAfter
+	}
+	effectRefID := strings.TrimSpace(req.EffectRefID)
+	if effectRefID == "" {
+		effectRefID = report.ID
+	}
+	var rewardApply RewardApplyResult
+	dropRewards, dropSnapshots, err := rollNpcBattleDrops(npc, report)
+	if err != nil {
+		return npcBattleStateOutcome{}, err
+	}
+	if len(dropRewards) > 0 {
+		apply, err := ApplyRewardsToStateWithContext(state, dropRewards, RewardGrantContext{
+			PlayerID: state.Player.ID,
+			RefType:  LedgerRefBattleReward,
+			RefID:    effectRefID,
+			Reason:   "npc_battle_drop",
+		}, now)
+		if err != nil {
+			return npcBattleStateOutcome{}, err
+		}
+		mergeRewardApplyResult(&rewardApply, apply)
+		report.Drops = dropSnapshots
+	}
+	report.PvpAttackerGenerals = buildPvpGeneralSnapshots(state, generalIDs)
+	report.GrantedRewards = buildBattleGrantedRewards(report)
+
+	if report.OverflowCityGold > 0 {
+		state.CityGold += FlexInt(report.OverflowCityGold)
+	}
+	return npcBattleStateOutcome{
+		Report:                report,
+		RewardApply:           rewardApply,
+		CapturedToGarrison:    capturedToGarrison,
+		CapturedSourceFaction: npc.Faction,
+	}, nil
+}
+
+const maxNpcSweepTargets = 20
+const slowNpcSweepThreshold = 2 * time.Second
+const slowNpcSweepTargetThreshold = 2 * time.Second
 
 // SweepNpc 批量扫荡 NPC 城池，并把多场扫荡合并为一条战报。
 func (s *Service) SweepNpc(req SweepNpcRequest) (SweepNpcResponse, error) {
+	return s.sweepNpc(req, maxNpcSweepTargets)
+}
+
+// sweepNpc 执行实际扫荡结算；limit 为 0 时不截断目标，供后台任务处理完整扫荡。
+func (s *Service) sweepNpc(req SweepNpcRequest, limit int) (SweepNpcResponse, error) {
+	sweepStartedAt := time.Now()
 	playerID := strings.TrimSpace(req.PlayerID)
 	if playerID == "" {
 		return SweepNpcResponse{}, ErrPlayerNotFound
@@ -475,11 +515,14 @@ func (s *Service) SweepNpc(req SweepNpcRequest) (SweepNpcResponse, error) {
 	defer unlock()
 
 	npcIDs := normalizeSweepNpcIDs(req.NpcIDs)
+	requestedInput := len(npcIDs)
 	if len(npcIDs) == 0 {
 		return SweepNpcResponse{}, ErrNoSweepTargets
 	}
-	if len(npcIDs) > maxNpcSweepTargets {
-		npcIDs = npcIDs[:maxNpcSweepTargets]
+	truncated := false
+	if limit > 0 && len(npcIDs) > limit {
+		npcIDs = npcIDs[:limit]
+		truncated = true
 	}
 
 	mode := strings.TrimSpace(req.Mode)
@@ -487,16 +530,17 @@ func (s *Service) SweepNpc(req SweepNpcRequest) (SweepNpcResponse, error) {
 		mode = "attack"
 	}
 
+	stateLoadStartedAt := time.Now()
 	state, err := s.repo.GetState(playerID)
+	stateLoadDuration := time.Since(stateLoadStartedAt)
 	if err != nil {
 		return SweepNpcResponse{}, err
 	}
-	currentArmy := state.Army
-	if len(sweepUnitsFromArmy(currentArmy)) == 0 {
+	if len(sweepUnitsFromArmy(state.Army)) == 0 {
 		return SweepNpcResponse{}, ErrNoUnitsSelected
 	}
 	sweepReportID := "br_" + randomID(8)
-	response := SweepNpcResponse{
+	initialResponse := SweepNpcResponse{
 		Resources:  state.Resources,
 		Army:       state.Army,
 		General:    state.General,
@@ -505,51 +549,135 @@ func (s *Service) SweepNpc(req SweepNpcRequest) (SweepNpcResponse, error) {
 		NpcState:   state.NpcState,
 		ServerTime: state.ServerTime,
 	}
+	response := initialResponse
+	var reports []BattleReport
+	var rewardApply RewardApplyResult
+	var capturedGarrisons []struct {
+		NpcID         string
+		SourceFaction string
+		Troops        map[string]int
+	}
+	var combatDuration time.Duration
+	scope := combatScopeForAttack(sweepUnitsFromArmy(state.Army), req.GeneralIDs)
+	for attempt := 0; attempt < 3; attempt++ {
+		attemptResponse := initialResponse
+		attemptReports := make([]BattleReport, 0, len(npcIDs))
+		attemptRewardApply := RewardApplyResult{}
+		attemptCapturedGarrisons := []struct {
+			NpcID         string
+			SourceFaction string
+			Troops        map[string]int
+		}{}
+		attemptCombatDuration := time.Duration(0)
+		state, err = s.repo.UpdateCombatState(playerID, scope, time.Now(), func(state *GameState) error {
+			prepareNpcCombatState(state, time.Now())
+			if state.NpcState == nil || len(state.NpcState.Cities) == 0 {
+				return ErrNpcNotFound
+			}
+			for _, npcID := range npcIDs {
+				units := sweepUnitsFromArmy(state.Army)
+				if len(units) == 0 {
+					attemptResponse.Stopped = true
+					break
+				}
 
-	reports := make([]BattleReport, 0, len(npcIDs))
-	for _, npcID := range npcIDs {
-		units := sweepUnitsFromArmy(currentArmy)
-		if len(units) == 0 {
-			response.Stopped = true
+				targetStartedAt := time.Now()
+				outcome, err := resolveNpcBattleOnState(state, AttackNpcRequest{
+					PlayerID:    playerID,
+					NpcID:       npcID,
+					Mode:        mode,
+					Units:       units,
+					GeneralIDs:  req.GeneralIDs,
+					EffectRefID: sweepReportID,
+				}, time.Now())
+				targetDuration := time.Since(targetStartedAt)
+				attemptCombatDuration += targetDuration
+				if targetDuration >= slowNpcSweepTargetThreshold {
+					slog.Warn("npc sweep target slow", "playerId", playerID, "npcId", npcID, "duration_ms", targetDuration.Milliseconds())
+				}
+				if err != nil {
+					if errors.Is(err, ErrGeneralNotFound) || errors.Is(err, ErrGeneralBusy) {
+						return err
+					}
+					if errors.Is(err, ErrNoUnitsSelected) || errors.Is(err, ErrInsufficientArmy) {
+						attemptResponse.Stopped = true
+						break
+					}
+					if errors.Is(err, ErrNpcNotFound) {
+						attemptResponse.Failed++
+						continue
+					}
+					return err
+				}
+
+				attemptResponse.Done++
+				attemptReports = append(attemptReports, outcome.Report)
+				mergeRewardApplyResult(&attemptRewardApply, outcome.RewardApply)
+				if len(outcome.CapturedToGarrison) > 0 {
+					attemptCapturedGarrisons = append(attemptCapturedGarrisons, struct {
+						NpcID         string
+						SourceFaction string
+						Troops        map[string]int
+					}{
+						NpcID:         npcID,
+						SourceFaction: outcome.CapturedSourceFaction,
+						Troops:        cloneStringIntMap(outcome.CapturedToGarrison),
+					})
+				}
+			}
+			attemptResponse.Resources = state.Resources
+			attemptResponse.Army = state.Army
+			attemptResponse.General = state.General
+			attemptResponse.Generals = state.Generals
+			attemptResponse.CityGold = state.CityGold
+			attemptResponse.NpcState = state.NpcState
+			attemptResponse.ServerTime = time.Now().UTC().Format(resourceDateLayout)
+			state.ServerTime = attemptResponse.ServerTime
+			return nil
+		})
+		if err == nil {
+			response = attemptResponse
+			reports = attemptReports
+			rewardApply = attemptRewardApply
+			capturedGarrisons = attemptCapturedGarrisons
+			combatDuration = attemptCombatDuration
 			break
 		}
-
-		result, err := s.attackNpc(AttackNpcRequest{
-			PlayerID:    playerID,
-			NpcID:       npcID,
-			Mode:        mode,
-			Units:       units,
-			GeneralIDs:  req.GeneralIDs,
-			EffectRefID: sweepReportID,
-		}, false)
-		if err != nil {
-			if errors.Is(err, ErrGeneralNotFound) || errors.Is(err, ErrGeneralBusy) {
-				return SweepNpcResponse{}, err
-			}
-			if errors.Is(err, ErrNoUnitsSelected) || errors.Is(err, ErrInsufficientArmy) {
-				response.Stopped = true
-				break
-			}
-			response.Failed++
-			continue
+		if !isRetryableStorageConflict(err) || attempt == 2 {
+			return SweepNpcResponse{}, err
 		}
-
-		response.Done++
-		reports = append(reports, result.BattleReport)
-		currentArmy = result.Army
-		response.Resources = result.Resources
-		response.Army = result.Army
-		response.General = result.General
-		response.Generals = result.Generals
-		response.CityGold = result.CityGold
-		response.NpcState = result.NpcState
-		response.ServerTime = result.ServerTime
+		slog.Warn("npc sweep transaction retry after storage conflict", "playerId", playerID, "attempt", attempt+1, "error", err)
+		time.Sleep(time.Duration(attempt+1) * 80 * time.Millisecond)
+	}
+	s.flushRewardSideEffectsWithoutEvents(rewardApply)
+	for _, captured := range capturedGarrisons {
+		result, err := s.CreateGarrisonDetachment(CreateGarrisonDetachmentRequest{
+			OwnerPlayerID: playerID,
+			HostPlayerID:  playerID,
+			SourceType:    GarrisonSourceCaptured,
+			SourceID:      sweepReportID,
+			SourceFaction: captured.SourceFaction,
+			Troops:        captured.Troops,
+			Metadata: map[string]any{
+				"reason":   "beauty_trap_capture",
+				"reportId": sweepReportID,
+				"npcId":    captured.NpcID,
+			},
+		})
+		if err != nil {
+			return SweepNpcResponse{}, err
+		}
+		if result.Patch.ServerTime != "" {
+			response.ServerTime = result.Patch.ServerTime
+		}
 	}
 
 	if len(reports) == 0 {
+		logNpcSweepCompleted(playerID, requestedInput, len(npcIDs), response.Done, response.Failed, response.Stopped, truncated, time.Since(sweepStartedAt), stateLoadDuration, combatDuration, 0)
 		return response, nil
 	}
 
+	reportStartedAt := time.Now()
 	report := buildNpcSweepReport(sweepReportID, reports, mode, len(npcIDs), response.Failed, response.Stopped)
 	createResult, err := s.CreateBattleReports(BattleReportCreateInput{
 		EventID:    report.EventID,
@@ -591,7 +719,31 @@ func (s *Service) SweepNpc(req SweepNpcRequest) (SweepNpcResponse, error) {
 	s.publishBattleRewardEvents(playerID, report)
 	s.publishBattleFinished(playerID, report)
 	response.BattleReport = report
+	reportDuration := time.Since(reportStartedAt)
+	logNpcSweepCompleted(playerID, requestedInput, len(npcIDs), response.Done, response.Failed, response.Stopped, truncated, time.Since(sweepStartedAt), stateLoadDuration, combatDuration, reportDuration)
 	return response, nil
+}
+
+// logNpcSweepCompleted 记录扫荡链路的关键耗时，便于线上判断是否需要任务化或批量事务改造。
+func logNpcSweepCompleted(playerID string, requestedInput int, requested int, done int, failed int, stopped bool, truncated bool, totalDuration time.Duration, stateLoadDuration time.Duration, combatDuration time.Duration, reportDuration time.Duration) {
+	attrs := []any{
+		"playerId", playerID,
+		"requested_input", requestedInput,
+		"requested", requested,
+		"done", done,
+		"failed", failed,
+		"stopped", stopped,
+		"truncated", truncated,
+		"duration_ms", totalDuration.Milliseconds(),
+		"state_load_ms", stateLoadDuration.Milliseconds(),
+		"combat_ms", combatDuration.Milliseconds(),
+		"report_ms", reportDuration.Milliseconds(),
+	}
+	if totalDuration >= slowNpcSweepThreshold {
+		slog.Warn("npc sweep completed slowly", attrs...)
+		return
+	}
+	slog.Info("npc sweep completed", attrs...)
 }
 
 // normalizeSweepNpcIDs 去重并过滤空 NPC ID，避免一次扫荡重复打同一个目标。
