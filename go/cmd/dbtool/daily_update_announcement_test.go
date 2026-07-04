@@ -35,27 +35,30 @@ func TestBuildDailyUpdateAnnouncementPlanUsesCursorRange(t *testing.T) {
 	runGit(t, dir, "commit", "-m", "新增每日公告自动化")
 	newSHA := gitOutput(t, dir, "rev-parse", "HEAD")
 
-	memoryDir := filepath.Join(dir, "memory")
-	if err := os.MkdirAll(memoryDir, 0o755); err != nil {
-		t.Fatalf("mkdir memory: %v", err)
+	announcementDir := filepath.Join(dir, "announcements", "daily")
+	if err := os.MkdirAll(announcementDir, 0o755); err != nil {
+		t.Fatalf("mkdir announcement dir: %v", err)
 	}
-	writeFile(t, filepath.Join(memoryDir, "2026-07-03.md"), strings.Join([]string{
-		"# 2026-07-03 记忆",
-		"- 每日更新公告接入 dbtool 和 systemd timer。",
-		"- 已验证：go test ./cmd/dbtool。",
+	writeFile(t, filepath.Join(announcementDir, "2026-07-03.md"), strings.Join([]string{
+		"# 2026-07-03 每日更新公告",
+		"## 摘要",
+		"本次更新优化了公告展示和战斗体验。",
+		"## 玩家公告",
+		"- 修复扫荡结算后偶发服务器异常提示的问题。",
+		"- 公告详情支持更清晰的富文本排版。",
 	}, "\n"))
 	releaseFile := filepath.Join(dir, "RELEASE")
 	writeFile(t, releaseFile, newSHA+" deployed from main-core\n")
 
 	location := time.FixedZone("Asia/Shanghai", 8*60*60)
 	plan, err := buildDailyUpdateAnnouncementPlan(dailyUpdateAnnouncementCursor{LastAnnouncedSha: oldSHA[:12]}, dailyUpdateAnnouncementOptions{
-		SourceDir:      dir,
-		ReleaseFile:    releaseFile,
-		MemoryDir:      memoryDir,
-		TargetDate:     time.Date(2026, 7, 3, 12, 0, 0, 0, location),
-		Location:       location,
-		MaxCommits:     10,
-		MaxMemoryItems: 10,
+		SourceDir:            dir,
+		ReleaseFile:          releaseFile,
+		AnnouncementDir:      announcementDir,
+		TargetDate:           time.Date(2026, 7, 3, 12, 0, 0, 0, location),
+		Location:             location,
+		MaxCommits:           10,
+		MaxAnnouncementItems: 10,
 	})
 	if err != nil {
 		t.Fatalf("buildDailyUpdateAnnouncementPlan failed: %v", err)
@@ -66,11 +69,50 @@ func TestBuildDailyUpdateAnnouncementPlanUsesCursorRange(t *testing.T) {
 	if len(plan.Commits) != 1 || plan.Commits[0].Subject != "新增每日公告自动化" {
 		t.Fatalf("unexpected commits: %#v", plan.Commits)
 	}
-	if len(plan.MemoryItems) != 1 || !strings.Contains(plan.MemoryItems[0], "systemd timer") {
-		t.Fatalf("unexpected memory items: %#v", plan.MemoryItems)
+	if len(plan.PlayerItems) != 2 || !strings.Contains(strings.Join(plan.PlayerItems, "\n"), "扫荡") {
+		t.Fatalf("unexpected player items: %#v", plan.PlayerItems)
 	}
-	if !strings.Contains(plan.Content, "本公告只汇总已经发布到线上环境的内容") {
-		t.Fatalf("content missing safety note: %s", plan.Content)
+	for _, forbidden := range []string{"代码变更", "新增每日公告自动化", "当前版本", "上线范围", "dbtool", "systemd"} {
+		if strings.Contains(plan.Content, forbidden) {
+			t.Fatalf("content should not expose technical detail %q: %s", forbidden, plan.Content)
+		}
+	}
+	for _, want := range []string{"<article", "<ul>", "<li>", "修复扫荡结算后偶发服务器异常提示的问题", "不展示内部代码与文件修改记录"} {
+		if !strings.Contains(plan.Content, want) {
+			t.Fatalf("content missing %q: %s", want, plan.Content)
+		}
+	}
+	if plan.Summary != "本次更新优化了公告展示和战斗体验。" {
+		t.Fatalf("unexpected summary: %s", plan.Summary)
+	}
+}
+
+// TestBuildDailyUpdateAnnouncementPlanRequiresPlayerSource 验证没有玩家公告源时不发布公告。
+func TestBuildDailyUpdateAnnouncementPlanRequiresPlayerSource(t *testing.T) {
+	dir := t.TempDir()
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.name", "Hero3 Test")
+	runGit(t, dir, "config", "user.email", "hero3@example.test")
+	writeFile(t, filepath.Join(dir, "README.md"), "new\n")
+	runGit(t, dir, "add", "README.md")
+	runGit(t, dir, "commit", "-m", "fix: internal technical change")
+	sha := gitOutput(t, dir, "rev-parse", "HEAD")
+	releaseFile := filepath.Join(dir, "RELEASE")
+	writeFile(t, releaseFile, sha+" deployed from main-core\n")
+
+	plan, err := buildDailyUpdateAnnouncementPlan(dailyUpdateAnnouncementCursor{}, dailyUpdateAnnouncementOptions{
+		SourceDir:            dir,
+		ReleaseFile:          releaseFile,
+		AnnouncementDir:      filepath.Join(dir, "announcements", "daily"),
+		TargetDate:           time.Date(2026, 7, 3, 12, 0, 0, 0, time.FixedZone("Asia/Shanghai", 8*60*60)),
+		MaxCommits:           10,
+		MaxAnnouncementItems: 10,
+	})
+	if err != nil {
+		t.Fatalf("buildDailyUpdateAnnouncementPlan failed: %v", err)
+	}
+	if plan.HasChanges {
+		t.Fatalf("missing player announcement source should not publish: %#v", plan)
 	}
 }
 

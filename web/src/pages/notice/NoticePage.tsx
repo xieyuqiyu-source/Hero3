@@ -1,4 +1,4 @@
-/* 本文件实现玩家公告中心，支持公告列表、历史筛选和详情阅读。 */
+/* 本文件实现玩家公告中心，支持公告列表、富文本详情、历史筛选和详情阅读。 */
 import { useCallback, useEffect, useMemo, useState, type FC } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Megaphone, Pin, Clock, AlertTriangle } from 'lucide-react'
@@ -151,7 +151,7 @@ const NoticePage: FC = () => {
           </div>
           <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">{selected.title}</h2>
           <p className="mt-2 text-sm text-[var(--color-text-muted)]">{formatTime(selected.publishedAt)}{selected.endsAt ? ` · 截止 ${formatTime(selected.endsAt)}` : ''}</p>
-          <div className="mt-5 whitespace-pre-wrap text-sm leading-7 text-[var(--color-text-secondary)]">{selected.content}</div>
+          <AnnouncementContent content={selected.content} />
         </article>
       ) : (
         <div className="space-y-3">
@@ -193,6 +193,67 @@ const NoticeTypeBadge: FC<{ type: AnnouncementType | string }> = ({ type }) => (
     {TYPE_LABELS[type] ?? '公告'}
   </span>
 )
+
+const HTML_ANNOUNCEMENT_TAGS = new Set(['ARTICLE', 'SECTION', 'H3', 'P', 'UL', 'OL', 'LI', 'STRONG', 'EM', 'BR'])
+
+// AnnouncementContent 渲染公告正文，自动公告使用受限 HTML，普通公告按纯文本换行展示。
+const AnnouncementContent: FC<{ content: string }> = ({ content }) => {
+  const sanitizedHtml = useMemo(() => sanitizeAnnouncementHtml(content), [content])
+  if (sanitizedHtml) {
+    return (
+      <div
+        className="mt-5 text-sm leading-7 text-[var(--color-text-secondary)] [&_h3]:mb-2 [&_h3]:mt-4 [&_h3]:text-base [&_h3]:font-bold [&_h3]:text-[var(--color-text-primary)] [&_li]:mb-1.5 [&_p]:mb-3 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pl-5"
+        dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+      />
+    )
+  }
+  return <div className="mt-5 whitespace-pre-wrap text-sm leading-7 text-[var(--color-text-secondary)]">{content}</div>
+}
+
+// sanitizeAnnouncementHtml 只允许公告富文本需要的少量标签和安全 class。
+function sanitizeAnnouncementHtml(content: string) {
+  const trimmed = content.trim()
+  if (!/^<(article|section|p|ul|ol|li|h3|strong|em|br)(\s|>)/i.test(trimmed)) {
+    return ''
+  }
+  const parser = new DOMParser()
+  const document = parser.parseFromString(trimmed, 'text/html')
+  const sanitizeNode = (node: Node): Node | null => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return document.createTextNode(node.textContent ?? '')
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return null
+    }
+    const element = node as HTMLElement
+    if (!HTML_ANNOUNCEMENT_TAGS.has(element.tagName)) {
+      const fragment = document.createDocumentFragment()
+      element.childNodes.forEach((child) => {
+        const sanitized = sanitizeNode(child)
+        if (sanitized) fragment.appendChild(sanitized)
+      })
+      return fragment
+    }
+    const next = document.createElement(element.tagName.toLowerCase())
+    const className = element.getAttribute('class') ?? ''
+    if (className.split(/\s+/).every((item) => item === '' || item.startsWith('hero3-announcement'))) {
+      next.setAttribute('class', className)
+    }
+    element.childNodes.forEach((child) => {
+      const sanitized = sanitizeNode(child)
+      if (sanitized) next.appendChild(sanitized)
+    })
+    return next
+  }
+  const fragment = document.createDocumentFragment()
+  document.body.childNodes.forEach((child) => {
+    const sanitized = sanitizeNode(child)
+    if (sanitized) fragment.appendChild(sanitized)
+  })
+  const wrapper = document.createElement('div')
+  wrapper.appendChild(fragment)
+  return wrapper.innerHTML
+}
 
 function formatTime(value?: string) {
   if (!value) return '未发布'

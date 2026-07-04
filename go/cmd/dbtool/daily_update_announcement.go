@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"html"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,21 +27,21 @@ type dailyUpdateAnnouncementCursor struct {
 }
 
 type dailyUpdateAnnouncementOptions struct {
-	SourceDir      string
-	ReleaseFile    string
-	MemoryDir      string
-	CurrentSha     string
-	TargetDate     time.Time
-	Location       *time.Location
-	MaxCommits     int
-	MaxMemoryItems int
-	TitlePrefix    string
-	DisplayMode    string
-	ForcePopup     bool
-	Pinned         bool
-	Priority       int
-	EndsAfterHours int
-	Execute        bool
+	SourceDir            string
+	ReleaseFile          string
+	AnnouncementDir      string
+	CurrentSha           string
+	TargetDate           time.Time
+	Location             *time.Location
+	MaxCommits           int
+	MaxAnnouncementItems int
+	TitlePrefix          string
+	DisplayMode          string
+	ForcePopup           bool
+	Pinned               bool
+	Priority             int
+	EndsAfterHours       int
+	Execute              bool
 }
 
 type dailyUpdateCommit struct {
@@ -56,8 +57,13 @@ type dailyUpdateAnnouncementPlan struct {
 	Summary     string
 	Content     string
 	Commits     []dailyUpdateCommit
-	MemoryItems []string
+	PlayerItems []string
 	HasChanges  bool
+}
+
+type dailyPlayerAnnouncementSource struct {
+	Summary string
+	Items   []string
 }
 
 // runPublishDailyUpdateAnnouncement 生成或发布每日更新公告。
@@ -66,11 +72,11 @@ func runPublishDailyUpdateAnnouncement(args []string) error {
 	dsn := flags.String("dsn", "", "目标数据库 DSN，默认使用 HERO3_DATABASE_DSN")
 	sourceDir := flags.String("source-dir", "/opt/hero3/source", "服务器源码目录")
 	releaseFile := flags.String("release-file", "/opt/hero3/RELEASE", "当前线上发布记录文件")
-	memoryDir := flags.String("memory-dir", "", "记忆目录，默认使用 source-dir/memory")
+	announcementDir := flags.String("announcement-dir", "", "玩家公告源目录，默认使用 source-dir/announcements/daily")
 	currentSha := flags.String("current-sha", "", "当前线上提交，默认从 release-file 读取")
 	dateText := flags.String("date", "", "公告日期，格式 YYYY-MM-DD，默认北京时间当天")
-	maxCommits := flags.Int("max-commits", 20, "公告中最多展示多少条提交")
-	maxMemoryItems := flags.Int("max-memory-items", 10, "公告中最多展示多少条记忆摘要")
+	maxCommits := flags.Int("max-commits", 20, "用于判断更新范围的最多提交数")
+	maxAnnouncementItems := flags.Int("max-announcement-items", 10, "公告中最多展示多少条玩家更新项")
 	titlePrefix := flags.String("title-prefix", "更新公告", "公告标题前缀")
 	displayMode := flags.String("display-mode", game.AnnouncementDisplayCenterOnly, "公告展示模式：center_only、popup 或 banner")
 	forcePopup := flags.Bool("force-popup", false, "是否强制弹窗")
@@ -117,21 +123,21 @@ func runPublishDailyUpdateAnnouncement(args []string) error {
 		return err
 	}
 	options := dailyUpdateAnnouncementOptions{
-		SourceDir:      *sourceDir,
-		ReleaseFile:    *releaseFile,
-		MemoryDir:      *memoryDir,
-		CurrentSha:     *currentSha,
-		TargetDate:     targetDate,
-		Location:       location,
-		MaxCommits:     *maxCommits,
-		MaxMemoryItems: *maxMemoryItems,
-		TitlePrefix:    *titlePrefix,
-		DisplayMode:    *displayMode,
-		ForcePopup:     *forcePopup,
-		Pinned:         *pinned,
-		Priority:       *priority,
-		EndsAfterHours: *endsAfterHours,
-		Execute:        *execute,
+		SourceDir:            *sourceDir,
+		ReleaseFile:          *releaseFile,
+		AnnouncementDir:      *announcementDir,
+		CurrentSha:           *currentSha,
+		TargetDate:           targetDate,
+		Location:             location,
+		MaxCommits:           *maxCommits,
+		MaxAnnouncementItems: *maxAnnouncementItems,
+		TitlePrefix:          *titlePrefix,
+		DisplayMode:          *displayMode,
+		ForcePopup:           *forcePopup,
+		Pinned:               *pinned,
+		Priority:             *priority,
+		EndsAfterHours:       *endsAfterHours,
+		Execute:              *execute,
 	}
 	plan, err := buildDailyUpdateAnnouncementPlan(cursor, options)
 	if err != nil {
@@ -203,7 +209,7 @@ func saveDailyUpdateCursor(repo game.GameConfigRepository, cursor dailyUpdateAnn
 	return err
 }
 
-// buildDailyUpdateAnnouncementPlan 汇总 git 提交和记忆文件，生成公告计划。
+// buildDailyUpdateAnnouncementPlan 根据线上提交范围和玩家公告源生成公告计划。
 func buildDailyUpdateAnnouncementPlan(cursor dailyUpdateAnnouncementCursor, options dailyUpdateAnnouncementOptions) (dailyUpdateAnnouncementPlan, error) {
 	options = normalizeDailyUpdateAnnouncementOptions(options)
 	currentSha, err := resolveDailyAnnouncementCurrentSha(options)
@@ -222,14 +228,17 @@ func buildDailyUpdateAnnouncementPlan(cursor dailyUpdateAnnouncementCursor, opti
 	if err != nil {
 		return dailyUpdateAnnouncementPlan{}, err
 	}
-	memoryItems := collectDailyAnnouncementMemoryItems(options.MemoryDir, options.TargetDate, options.MaxMemoryItems)
-	if len(commits) == 0 && len(memoryItems) == 0 {
+	source, ok := collectDailyPlayerAnnouncementSource(options.AnnouncementDir, options.TargetDate, options.MaxAnnouncementItems)
+	if len(commits) == 0 || !ok || len(source.Items) == 0 {
 		return dailyUpdateAnnouncementPlan{CurrentSha: currentSha, PreviousSha: previousSha}, nil
 	}
 	titleDate := options.TargetDate.In(options.Location).Format("1月2日")
 	title := fmt.Sprintf("%s%s", titleDate, strings.TrimSpace(options.TitlePrefix))
-	summary := fmt.Sprintf("今日已上线 %d 条代码更新，整理了 %d 条关键变更。", len(commits), len(memoryItems))
-	content := renderDailyUpdateAnnouncementContent(titleDate, currentSha, previousSha, commits, memoryItems)
+	summary := strings.TrimSpace(source.Summary)
+	if summary == "" {
+		summary = fmt.Sprintf("本次更新包含 %d 项玩法、体验与问题修复。", len(source.Items))
+	}
+	content := renderDailyUpdateAnnouncementContent(titleDate, source.Items)
 	return dailyUpdateAnnouncementPlan{
 		CurrentSha:  currentSha,
 		PreviousSha: previousSha,
@@ -237,7 +246,7 @@ func buildDailyUpdateAnnouncementPlan(cursor dailyUpdateAnnouncementCursor, opti
 		Summary:     summary,
 		Content:     content,
 		Commits:     commits,
-		MemoryItems: memoryItems,
+		PlayerItems: source.Items,
 		HasChanges:  true,
 	}, nil
 }
@@ -250,14 +259,14 @@ func normalizeDailyUpdateAnnouncementOptions(options dailyUpdateAnnouncementOpti
 	if options.TargetDate.IsZero() {
 		options.TargetDate = time.Now().In(options.Location)
 	}
-	if strings.TrimSpace(options.MemoryDir) == "" && strings.TrimSpace(options.SourceDir) != "" {
-		options.MemoryDir = filepath.Join(options.SourceDir, "memory")
+	if strings.TrimSpace(options.AnnouncementDir) == "" && strings.TrimSpace(options.SourceDir) != "" {
+		options.AnnouncementDir = filepath.Join(options.SourceDir, "announcements", "daily")
 	}
 	if options.MaxCommits <= 0 {
 		options.MaxCommits = 20
 	}
-	if options.MaxMemoryItems < 0 {
-		options.MaxMemoryItems = 0
+	if options.MaxAnnouncementItems < 0 {
+		options.MaxAnnouncementItems = 0
 	}
 	if strings.TrimSpace(options.TitlePrefix) == "" {
 		options.TitlePrefix = "更新公告"
@@ -336,74 +345,76 @@ func parseDailyAnnouncementCommits(output string, maxCommits int) []dailyUpdateC
 	return commits
 }
 
-// collectDailyAnnouncementMemoryItems 从当天记忆文件提取公告可读摘要。
-func collectDailyAnnouncementMemoryItems(memoryDir string, targetDate time.Time, maxItems int) []string {
-	if maxItems <= 0 {
-		return nil
-	}
-	path := filepath.Join(strings.TrimSpace(memoryDir), targetDate.Format("2006-01-02")+".md")
+// collectDailyPlayerAnnouncementSource 读取当天玩家公告源文件。
+func collectDailyPlayerAnnouncementSource(announcementDir string, targetDate time.Time, maxItems int) (dailyPlayerAnnouncementSource, bool) {
+	path := filepath.Join(strings.TrimSpace(announcementDir), targetDate.Format("2006-01-02")+".md")
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return nil
+		return dailyPlayerAnnouncementSource{}, false
 	}
-	return extractDailyAnnouncementMemoryItems(string(content), maxItems)
+	source := parseDailyPlayerAnnouncementSource(string(content), maxItems)
+	return source, len(source.Items) > 0
 }
 
-// extractDailyAnnouncementMemoryItems 提取适合玩家公告展示的记忆条目。
-func extractDailyAnnouncementMemoryItems(content string, maxItems int) []string {
-	var items []string
-	for _, line := range strings.Split(content, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "- ") {
+// parseDailyPlayerAnnouncementSource 解析 announcements/daily/YYYY-MM-DD.md。
+func parseDailyPlayerAnnouncementSource(content string, maxItems int) dailyPlayerAnnouncementSource {
+	if maxItems <= 0 {
+		maxItems = 10
+	}
+	var source dailyPlayerAnnouncementSource
+	section := ""
+	for _, raw := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" {
 			continue
 		}
-		item := strings.TrimSpace(strings.TrimPrefix(line, "- "))
-		if item == "" || dailyAnnouncementMemoryItemSkipped(item) {
+		if strings.HasPrefix(line, "## ") {
+			title := strings.TrimSpace(strings.TrimPrefix(line, "## "))
+			switch title {
+			case "摘要", "公告摘要":
+				section = "summary"
+			case "玩家公告", "更新内容", "本次更新":
+				section = "items"
+			default:
+				section = ""
+			}
 			continue
 		}
-		items = append(items, item)
-		if maxItems > 0 && len(items) >= maxItems {
-			break
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		switch section {
+		case "summary":
+			if source.Summary == "" {
+				source.Summary = strings.TrimSpace(strings.TrimPrefix(line, "- "))
+			}
+		case "items":
+			if len(source.Items) >= maxItems || !strings.HasPrefix(line, "- ") {
+				continue
+			}
+			item := strings.TrimSpace(strings.TrimPrefix(line, "- "))
+			if item != "" {
+				source.Items = append(source.Items, item)
+			}
 		}
 	}
-	return items
+	return source
 }
 
-// dailyAnnouncementMemoryItemSkipped 判断记忆条目是否不适合进入玩家公告。
-func dailyAnnouncementMemoryItemSkipped(item string) bool {
-	skipWords := []string{"用户要求", "用户指出", "已验证", "验证通过", "git diff", "go test", "npm run", "pnpm build", "OpenAPI", "README"}
-	for _, word := range skipWords {
-		if strings.Contains(item, word) {
-			return true
-		}
-	}
-	return false
-}
-
-// renderDailyUpdateAnnouncementContent 生成最终公告正文。
-func renderDailyUpdateAnnouncementContent(titleDate string, currentSha string, previousSha string, commits []dailyUpdateCommit, memoryItems []string) string {
+// renderDailyUpdateAnnouncementContent 生成带有限 HTML 排版的公告正文。
+func renderDailyUpdateAnnouncementContent(titleDate string, playerItems []string) string {
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "%s更新内容已上线。\n\n", titleDate)
-	if len(memoryItems) > 0 {
-		builder.WriteString("主要更新：\n")
-		for idx, item := range memoryItems {
-			fmt.Fprintf(&builder, "%d. %s\n", idx+1, item)
+	builder.WriteString(`<article class="hero3-announcement hero3-update-announcement">`)
+	fmt.Fprintf(&builder, `<p class="hero3-announcement-lead">%s更新内容已上线。</p>`, html.EscapeString(titleDate))
+	if len(playerItems) > 0 {
+		builder.WriteString(`<section class="hero3-announcement-section"><h3>本次更新</h3><ul>`)
+		for _, item := range playerItems {
+			fmt.Fprintf(&builder, "<li>%s</li>", html.EscapeString(item))
 		}
-		builder.WriteString("\n")
+		builder.WriteString(`</ul></section>`)
 	}
-	if len(commits) > 0 {
-		builder.WriteString("代码变更：\n")
-		for idx, commit := range commits {
-			fmt.Fprintf(&builder, "%d. %s\n", idx+1, commit.Subject)
-		}
-		builder.WriteString("\n")
-	}
-	if strings.TrimSpace(previousSha) != "" {
-		fmt.Fprintf(&builder, "上线范围：%s -> %s\n", shortDailyAnnouncementSHA(previousSha), shortDailyAnnouncementSHA(currentSha))
-	} else {
-		fmt.Fprintf(&builder, "当前版本：%s\n", shortDailyAnnouncementSHA(currentSha))
-	}
-	builder.WriteString("本公告只汇总已经发布到线上环境的内容。")
+	builder.WriteString(`<p class="hero3-announcement-note">本公告只汇总已经上线的游戏内容和体验调整，不展示内部代码与文件修改记录。</p>`)
+	builder.WriteString(`</article>`)
 	return strings.TrimSpace(builder.String())
 }
 
@@ -413,8 +424,8 @@ func printDailyUpdateAnnouncementPlan(databaseName string, plan dailyUpdateAnnou
 	if execute {
 		mode = "execute"
 	}
-	fmt.Printf("每日更新公告计划：database=%s mode=%s current=%s previous=%s commits=%d memory=%d\n",
-		databaseName, mode, shortDailyAnnouncementSHA(plan.CurrentSha), shortDailyAnnouncementSHA(plan.PreviousSha), len(plan.Commits), len(plan.MemoryItems))
+	fmt.Printf("每日更新公告计划：database=%s mode=%s current=%s previous=%s commits=%d playerItems=%d\n",
+		databaseName, mode, shortDailyAnnouncementSHA(plan.CurrentSha), shortDailyAnnouncementSHA(plan.PreviousSha), len(plan.Commits), len(plan.PlayerItems))
 	if !plan.HasChanges {
 		fmt.Println("没有发现需要发布的线上更新公告。")
 		return
