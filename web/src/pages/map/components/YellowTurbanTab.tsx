@@ -1,4 +1,4 @@
-/* 本文件实现地图中的黄巾起义据点面板。 */
+/* 本文件实现据点页中的黄巾起义状态面板。 */
 import { useEffect, useMemo, useState, type FC } from 'react'
 import { AlertTriangle, RefreshCw, Shield, Timer, Tent } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -75,11 +75,10 @@ const YellowTurbanTab: FC = () => {
             </button>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <Metric label="当前口粮" value={`${formatCompactNumber(food?.currentFood)} / ${formatCompactNumber(food?.foodCapacity)}`} danger={food?.overCapacity} />
             <Metric label="压力值" value={`${pressurePct}%`} danger={food?.overCapacity} />
             <Metric label="压力等级" value={food?.riskLevelName ?? '安全'} danger={food?.overCapacity} />
-            <Metric label="来袭队列" value={`${status?.incomingCount ?? 0} / ${status?.maxIncoming ?? 0}`} danger={(status?.incomingCount ?? 0) > 0} />
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -125,27 +124,6 @@ const YellowTurbanTab: FC = () => {
         </section>
       </div>
 
-      <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-        <h3 className="mb-3 text-sm font-semibold text-[var(--color-text-primary)]">正在来袭</h3>
-        {status?.incoming.length ? (
-          <div className="grid gap-2">
-            {status.incoming.map((march) => (
-              <div key={march.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
-                <div>
-                  <div className="text-sm font-semibold text-[var(--color-text-primary)]">{march.sourceName}</div>
-                  <div className="text-xs text-[var(--color-text-secondary)]">{march.riskLevelName}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-bold text-red-600">{remainingText(march.arrivesAt)}</div>
-                  <div className="text-xs text-[var(--color-text-muted)]">{formatTime(march.arrivesAt)} 抵达</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-lg border border-dashed border-[var(--color-border)] py-8 text-center text-sm text-[var(--color-text-muted)]">暂无黄巾来袭</div>
-        )}
-      </section>
     </div>
   )
 }
@@ -169,14 +147,6 @@ const formatTime = (value?: string) => {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '--'
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-}
-
-const remainingText = (value: string) => {
-  const ms = new Date(value).getTime() - Date.now()
-  if (Number.isNaN(ms) || ms <= 0) return '即将抵达'
-  const minutes = Math.floor(ms / 60000)
-  const seconds = Math.floor((ms % 60000) / 1000)
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
 export default YellowTurbanTab

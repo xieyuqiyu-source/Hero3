@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FC } from 'reac
 import { gameApi } from '@/api/game'
 import { toast } from '@/components/ui'
 import { useGameStore } from '@/store/gameStore'
-import type { PvpMarch, Reinforcement } from '@/types/game'
+import type { PvpMarch, Reinforcement, YellowTurbanMarch } from '@/types/game'
 
 const PVP_RECALL_WINDOW_MS = 120_000
 const PVP_MAX_ACCELERATE_TIMES = 2
@@ -22,6 +22,7 @@ interface MarchAlertItem {
   pvpMarch?: PvpMarch
   reinforcement?: Reinforcement
   reinforcementRole?: 'sent' | 'received'
+  yellowTurbanMarch?: YellowTurbanMarch
 }
 
 interface MarchAlertTagsProps {
@@ -43,6 +44,7 @@ const MarchAlertTags: FC<MarchAlertTagsProps> = ({ limit = 5 }) => {
   const [pvpMarches, setPvpMarches] = useState<PvpMarch[]>([])
   const [sentReinforcements, setSentReinforcements] = useState<Reinforcement[]>([])
   const [receivedReinforcements, setReceivedReinforcements] = useState<Reinforcement[]>([])
+  const [yellowTurbanMarches, setYellowTurbanMarches] = useState<YellowTurbanMarch[]>([])
   const [nowMs, setNowMs] = useState(Date.now())
   const [busyMarchId, setBusyMarchId] = useState<string | null>(null)
   const arrivedRefreshIds = useRef<Set<string>>(new Set())
@@ -53,23 +55,27 @@ const MarchAlertTags: FC<MarchAlertTagsProps> = ({ limit = 5 }) => {
       setPvpMarches([])
       setSentReinforcements([])
       setReceivedReinforcements([])
+      setYellowTurbanMarches([])
       return
     }
     try {
-      const [pvpResult, sentResult, receivedResult] = await Promise.all([
+      const [pvpResult, sentResult, receivedResult, yellowTurbanResult] = await Promise.allSettled([
         gameApi.listPvpMarches(activePlayerId),
         gameApi.listSentReinforcements(activePlayerId),
         gameApi.listReceivedReinforcements(activePlayerId),
+        gameApi.getYellowTurbanStatus(activePlayerId),
       ])
       if (cancelled?.()) return
-      setPvpMarches(Array.isArray(pvpResult.items) ? pvpResult.items : [])
-      setSentReinforcements(Array.isArray(sentResult.items) ? sentResult.items : [])
-      setReceivedReinforcements(Array.isArray(receivedResult.items) ? receivedResult.items : [])
+      setPvpMarches(pvpResult.status === 'fulfilled' && Array.isArray(pvpResult.value.items) ? pvpResult.value.items : [])
+      setSentReinforcements(sentResult.status === 'fulfilled' && Array.isArray(sentResult.value.items) ? sentResult.value.items : [])
+      setReceivedReinforcements(receivedResult.status === 'fulfilled' && Array.isArray(receivedResult.value.items) ? receivedResult.value.items : [])
+      setYellowTurbanMarches(yellowTurbanResult.status === 'fulfilled' && Array.isArray(yellowTurbanResult.value.incoming) ? yellowTurbanResult.value.incoming : [])
     } catch {
       if (cancelled?.()) return
       setPvpMarches([])
       setSentReinforcements([])
       setReceivedReinforcements([])
+      setYellowTurbanMarches([])
     }
   }, [activePlayerId])
 
@@ -111,10 +117,15 @@ const MarchAlertTags: FC<MarchAlertTagsProps> = ({ limit = 5 }) => {
       if (item) next.push(item)
     })
 
+    yellowTurbanMarches.forEach((march) => {
+      const item = buildYellowTurbanAlertItem(march)
+      if (item) next.push(item)
+    })
+
     return next
       .sort((a, b) => a.priority - b.priority || a.sortAt - b.sortAt)
       .slice(0, limit)
-  }, [activePlayerId, limit, pvpMarches, receivedReinforcements, sentReinforcements])
+  }, [activePlayerId, limit, pvpMarches, receivedReinforcements, sentReinforcements, yellowTurbanMarches])
 
   useEffect(() => {
     arrivedRefreshIds.current.clear()
@@ -360,6 +371,21 @@ function buildReceivedReinforcementItem(reinforcement: Reinforcement): MarchAler
     priority: ALERT_PRIORITY.增援,
     reinforcement,
     reinforcementRole: 'received',
+  }
+}
+
+// buildYellowTurbanAlertItem 生成黄巾来袭的被攻击倒计时提示。
+function buildYellowTurbanAlertItem(march: YellowTurbanMarch): MarchAlertItem | null {
+  if (march.status !== 'marching' && march.status !== 'resolving') return null
+  return {
+    id: `yellow-turban:${march.id}:defense`,
+    tag: '被攻击',
+    playerName: march.sourceName || '黄巾军',
+    endsAt: march.arrivesAt,
+    fallbackText: march.status === 'resolving' ? '结算中' : undefined,
+    sortAt: toTime(march.arrivesAt),
+    priority: ALERT_PRIORITY.被攻击,
+    yellowTurbanMarch: march,
   }
 }
 
