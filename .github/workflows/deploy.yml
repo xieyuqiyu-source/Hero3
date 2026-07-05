@@ -205,7 +205,23 @@ jobs:
           printf '%s %s\n' "${HERO3_SHA:0:7}" "deployed from ${HERO3_REF_NAME}" > /opt/hero3/RELEASE
 
           log "Running database migrations"
-          HERO3_DATABASE_DSN="$(sed -n 's/^HERO3_DATABASE_DSN=//p' /etc/hero3/hero3.env | tail -n 1)"
+          HERO3_DATABASE_DSN="$(
+            awk '
+              BEGIN { found = 0; value = "" }
+              found == 0 && /^HERO3_DATABASE_DSN=/ {
+                found = 1
+                value = substr($0, index($0, "=") + 1)
+              }
+              found == 1 {
+                while (value ~ /\\$/ && (getline next_line) > 0) {
+                  sub(/\\$/, "", value)
+                  value = value next_line
+                }
+                print value
+                exit
+              }
+            ' /etc/hero3/hero3.env
+          )"
           HERO3_DATABASE_DSN="${HERO3_DATABASE_DSN%\"}"
           HERO3_DATABASE_DSN="${HERO3_DATABASE_DSN#\"}"
           HERO3_DATABASE_DSN="${HERO3_DATABASE_DSN%\'}"
