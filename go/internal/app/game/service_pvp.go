@@ -2510,6 +2510,9 @@ func buildPvpDefenderUnits(defender *GameState, reinforcements []Reinforcement, 
 	}
 	for _, record := range reinforcements {
 		normalizeGarrisonRecord(&record)
+		if record.Status != ReinforcementStatusStationed || !record.Rules.CanFight {
+			continue
+		}
 		for unitType, amount := range record.RemainingTroops {
 			if amount <= 0 {
 				continue

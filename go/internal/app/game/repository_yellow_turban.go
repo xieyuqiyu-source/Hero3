@@ -52,6 +52,42 @@ func (r *MemoryRepository) UpdateYellowTurbanMarch(marchID string, updatedAt tim
 	return march, nil
 }
 
+// ResolveYellowTurbanBattleTransaction 在内存事务中结算黄巾防守和驻防协防。
+func (r *MemoryRepository) ResolveYellowTurbanBattleTransaction(marchID string, updatedAt time.Time, update func(defender *GameState, reinforcements []Reinforcement, march *YellowTurbanMarch) (BattleReport, []BattleReport, []Reinforcement, error)) (GameState, YellowTurbanMarch, BattleReport, []BattleReport, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	march, ok := r.yellowTurbanMarches[marchID]
+	if !ok {
+		return GameState{}, YellowTurbanMarch{}, BattleReport{}, nil, ErrYellowTurbanMarchNotFound
+	}
+	defender, ok := r.players[march.TargetPlayerID]
+	if !ok {
+		return GameState{}, YellowTurbanMarch{}, BattleReport{}, nil, ErrPlayerNotFound
+	}
+	targetRecords := []Reinforcement{}
+	for _, record := range r.reinforcements {
+		normalizeGarrisonRecord(&record)
+		if record.HostPlayerID == defender.Player.ID && record.Status == ReinforcementStatusStationed && record.Rules.CanFight {
+			targetRecords = append(targetRecords, cloneReinforcement(record))
+		}
+	}
+	report, reinforcementReports, changedReinforcements, err := update(&defender, targetRecords, &march)
+	if err != nil {
+		return GameState{}, YellowTurbanMarch{}, BattleReport{}, nil, err
+	}
+	for _, record := range changedReinforcements {
+		r.reinforcements[record.ID] = record
+	}
+	r.players[defender.Player.ID] = defender
+	if updatedAt.IsZero() {
+		updatedAt = time.Now().UTC()
+	}
+	r.playerUpdatedAt[defender.Player.ID] = updatedAt.UTC()
+	march.UpdatedAt = updatedAt.UTC().Format(resourceDateLayout)
+	r.yellowTurbanMarches[march.ID] = cloneYellowTurbanMarch(march)
+	return defender, cloneYellowTurbanMarch(march), report, reinforcementReports, nil
+}
+
 // ListYellowTurbanMarchesForPlayer 返回玩家相关黄巾来袭。
 func (r *MemoryRepository) ListYellowTurbanMarchesForPlayer(playerID string) ([]YellowTurbanMarch, error) {
 	r.mu.RLock()

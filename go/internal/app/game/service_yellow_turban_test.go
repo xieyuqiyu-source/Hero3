@@ -197,6 +197,112 @@ func TestYellowTurbanDefenseUsesHomeGeneralAndGrantsExp(t *testing.T) {
 	}
 }
 
+func TestYellowTurbanDefenseUsesStationedReinforcements(t *testing.T) {
+	if err := LoadFactionsConfig("../../../config/factions.json"); err != nil {
+		t.Fatalf("LoadFactionsConfig failed: %v", err)
+	}
+	if err := LoadGeneralsConfig("../../../config/generals.json"); err != nil {
+		t.Fatalf("LoadGeneralsConfig failed: %v", err)
+	}
+	if err := LoadUnitsConfig("../../../config/units"); err != nil {
+		t.Fatalf("LoadUnitsConfig failed: %v", err)
+	}
+	SetYellowTurbanConfig(defaultYellowTurbanConfig())
+	repo := NewMemoryRepository()
+	svc := NewServiceWithRepository(repo)
+	now := time.Now().UTC()
+	defenderAccount := Account{ID: "account_yt_rein_def", Username: "yt_rein_def", CreatedAt: now}
+	helperAccount := Account{ID: "account_yt_rein_helper", Username: "yt_rein_helper", CreatedAt: now}
+	if err := repo.CreateAccount(defenderAccount); err != nil {
+		t.Fatalf("CreateAccount defender failed: %v", err)
+	}
+	if err := repo.CreateAccount(helperAccount); err != nil {
+		t.Fatalf("CreateAccount helper failed: %v", err)
+	}
+	defender := newPlayerState("player_yt_rein_def", "被援玩家", "shu", "liubei", now)
+	helper := newPlayerState("player_yt_rein_helper", "协防玩家", "wu", "sunquan", now)
+	defender.Army = []ArmyUnit{{UnitType: "greedyWolf", Amount: 1}}
+	if err := repo.CreatePlayer(defenderAccount.ID, defender, now); err != nil {
+		t.Fatalf("CreatePlayer defender failed: %v", err)
+	}
+	if err := repo.CreatePlayer(helperAccount.ID, helper, now); err != nil {
+		t.Fatalf("CreatePlayer helper failed: %v", err)
+	}
+	reinforcement := Reinforcement{
+		ID:                "reinforcement_yt_report",
+		FromPlayerID:      helper.Player.ID,
+		FromPlayerName:    helper.Player.Nickname,
+		FromPlayerFaction: helper.Player.Faction,
+		ToPlayerID:        defender.Player.ID,
+		ToPlayerName:      defender.Player.Nickname,
+		ToPlayerFaction:   defender.Player.Faction,
+		OwnerPlayerID:     helper.Player.ID,
+		HostPlayerID:      defender.Player.ID,
+		SourceType:        GarrisonSourceReinforcement,
+		SourceID:          "reinforcement_yt_report",
+		TargetType:        ReinforcementTargetPlayerCity,
+		TargetID:          defender.Player.ID,
+		Status:            ReinforcementStatusStationed,
+		Troops:            map[string]int{"shadowGuard": 40},
+		RemainingTroops:   map[string]int{"shadowGuard": 40},
+		Losses:            map[string]int{},
+		Rules:             defaultGarrisonRules(GarrisonSourceReinforcement),
+		SentAt:            now.Add(-4 * time.Hour).UTC().Format(resourceDateLayout),
+		ArrivedAt:         now.Add(-3 * time.Hour).UTC().Format(resourceDateLayout),
+		CreatedAt:         now.Add(-4 * time.Hour).UTC().Format(resourceDateLayout),
+		UpdatedAt:         now.Add(-3 * time.Hour).UTC().Format(resourceDateLayout),
+	}
+	repo.reinforcements[reinforcement.ID] = reinforcement
+	march, err := repo.CreateYellowTurbanMarch(YellowTurbanMarch{
+		ID:              "yt_rein_march",
+		TargetPlayerID:  defender.Player.ID,
+		SourceCityID:    "yt_wei_1",
+		SourceName:      "黄巾军·魏地",
+		SourceFaction:   "wei",
+		SourceRegionID:  "wei",
+		RiskLevelID:     2,
+		RiskLevelName:   "黄巾·聚众",
+		PlayerFood:      10000,
+		FoodCapacity:    1000,
+		Pressure:        10,
+		Troops:          map[string]int{"qingZhouArmy": 500},
+		Status:          YellowTurbanMarchStatusMarching,
+		DurationSeconds: 1,
+		StartedAt:       now.Add(-2 * time.Minute).Format(resourceDateLayout),
+		ArrivesAt:       now.Add(-time.Minute).Format(resourceDateLayout),
+		CreatedAt:       now.Add(-2 * time.Minute).Format(resourceDateLayout),
+		UpdatedAt:       now.Add(-2 * time.Minute).Format(resourceDateLayout),
+	})
+	if err != nil {
+		t.Fatalf("CreateYellowTurbanMarch failed: %v", err)
+	}
+
+	report, err := svc.ResolveYellowTurbanMarch(march.ID)
+	if err != nil {
+		t.Fatalf("ResolveYellowTurbanMarch failed: %v", err)
+	}
+	if len(report.PvpReinforcements) != 1 || report.PvpReinforcements[0].ReinforcementID != reinforcement.ID {
+		t.Fatalf("expected yellow turban defense report to include reinforcement, got %+v", report.PvpReinforcements)
+	}
+	if len(report.PvpReinforcementLosses[reinforcement.ID]) == 0 {
+		t.Fatalf("expected reinforcement losses in yellow turban report, got %+v", report.PvpReinforcementLosses)
+	}
+	helperReports, total, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: helper.Player.ID, ViewType: ReportViewReinforcement, Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("ListReportsByQuery helper failed: %v", err)
+	}
+	if total != 1 || len(helperReports) != 1 {
+		t.Fatalf("expected one helper yellow turban reinforcement report, total=%d reports=%+v", total, helperReports)
+	}
+	if helperReports[0].SourceType != ReportSourceYellowTurban || helperReports[0].BattleType != BattleTypeYellowTurban {
+		t.Fatalf("expected yellow turban reinforcement report type, got %+v", helperReports[0])
+	}
+	updated := repo.reinforcements[reinforcement.ID]
+	if updated.LastBattleReportID != helperReports[0].ID {
+		t.Fatalf("expected reinforcement last report %s, got %+v", helperReports[0].ID, updated)
+	}
+}
+
 func totalFoodForFaction(faction string, troops map[string]int) int {
 	total := 0
 	for unitID, amount := range troops {

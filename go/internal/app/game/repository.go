@@ -202,6 +202,7 @@ type YellowTurbanRepository interface {
 	CreateYellowTurbanMarch(march YellowTurbanMarch) (YellowTurbanMarch, error)
 	GetYellowTurbanMarch(marchID string) (YellowTurbanMarch, error)
 	UpdateYellowTurbanMarch(marchID string, updatedAt time.Time, update func(march *YellowTurbanMarch) error) (YellowTurbanMarch, error)
+	ResolveYellowTurbanBattleTransaction(marchID string, updatedAt time.Time, update func(defender *GameState, reinforcements []Reinforcement, march *YellowTurbanMarch) (BattleReport, []BattleReport, []Reinforcement, error)) (GameState, YellowTurbanMarch, BattleReport, []BattleReport, error)
 	ListYellowTurbanMarchesForPlayer(playerID string) ([]YellowTurbanMarch, error)
 	CountActiveYellowTurbanMarches(playerID string) (int, error)
 	ListDueYellowTurbanMarches(playerID string, now time.Time) ([]YellowTurbanMarch, error)
@@ -293,58 +294,58 @@ type Repository interface {
 }
 
 type MemoryRepository struct {
-	mu                sync.RWMutex
-	accounts          map[string]Account
-	accountByName     map[string]string
-	accountPlayers    map[string][]string
-	players           map[string]GameState
-	playerUpdatedAt   map[string]time.Time
-	reports           map[string][]BattleReport   // playerID → reports
-	mails             map[string][]Mail           // playerID → mails
-	miniGameRecords   map[string][]MiniGameRecord // playerID → records
-	reinforcements    map[string]Reinforcement
-	pvpMarches        map[string]PvpMarch
-	pvpBattles        map[string]PvpBattle
-	pvpPlayerStates   map[string]PvpPlayerState
-	pvpSeasons        map[string]PvpSeasonRecord
-	pvpSeasonPlayers  map[string][]PvpSeasonPlayerRecord
-	worldPositions    map[string]WorldPosition
-	announcements     map[string]Announcement
-	announcementReads map[string]AnnouncementReadState
-	npcSweepTasks     map[string]NpcSweepTask
+	mu                  sync.RWMutex
+	accounts            map[string]Account
+	accountByName       map[string]string
+	accountPlayers      map[string][]string
+	players             map[string]GameState
+	playerUpdatedAt     map[string]time.Time
+	reports             map[string][]BattleReport   // playerID → reports
+	mails               map[string][]Mail           // playerID → mails
+	miniGameRecords     map[string][]MiniGameRecord // playerID → records
+	reinforcements      map[string]Reinforcement
+	pvpMarches          map[string]PvpMarch
+	pvpBattles          map[string]PvpBattle
+	pvpPlayerStates     map[string]PvpPlayerState
+	pvpSeasons          map[string]PvpSeasonRecord
+	pvpSeasonPlayers    map[string][]PvpSeasonPlayerRecord
+	worldPositions      map[string]WorldPosition
+	announcements       map[string]Announcement
+	announcementReads   map[string]AnnouncementReadState
+	npcSweepTasks       map[string]NpcSweepTask
 	yellowTurbanMarches map[string]YellowTurbanMarch
-	ledger            []GoldLedgerEntry
-	ledgerNextID      int64
-	itemLedger        []ItemLedgerEntry
-	eventClaims       map[string]struct{}
-	gameConfigs       map[string]GameConfigRecord
-	reincarnationRuns map[string]ReincarnationRun
+	ledger              []GoldLedgerEntry
+	ledgerNextID        int64
+	itemLedger          []ItemLedgerEntry
+	eventClaims         map[string]struct{}
+	gameConfigs         map[string]GameConfigRecord
+	reincarnationRuns   map[string]ReincarnationRun
 }
 
 func NewMemoryRepository() *MemoryRepository {
 	return &MemoryRepository{
-		accounts:          make(map[string]Account),
-		accountByName:     make(map[string]string),
-		accountPlayers:    make(map[string][]string),
-		players:           make(map[string]GameState),
-		playerUpdatedAt:   make(map[string]time.Time),
-		reports:           make(map[string][]BattleReport),
-		mails:             make(map[string][]Mail),
-		miniGameRecords:   make(map[string][]MiniGameRecord),
-		reinforcements:    make(map[string]Reinforcement),
-		pvpMarches:        make(map[string]PvpMarch),
-		pvpBattles:        make(map[string]PvpBattle),
-		pvpPlayerStates:   make(map[string]PvpPlayerState),
-		pvpSeasons:        make(map[string]PvpSeasonRecord),
-		pvpSeasonPlayers:  make(map[string][]PvpSeasonPlayerRecord),
-		worldPositions:    make(map[string]WorldPosition),
-		announcements:     make(map[string]Announcement),
-		announcementReads: make(map[string]AnnouncementReadState),
-		npcSweepTasks:     make(map[string]NpcSweepTask),
+		accounts:            make(map[string]Account),
+		accountByName:       make(map[string]string),
+		accountPlayers:      make(map[string][]string),
+		players:             make(map[string]GameState),
+		playerUpdatedAt:     make(map[string]time.Time),
+		reports:             make(map[string][]BattleReport),
+		mails:               make(map[string][]Mail),
+		miniGameRecords:     make(map[string][]MiniGameRecord),
+		reinforcements:      make(map[string]Reinforcement),
+		pvpMarches:          make(map[string]PvpMarch),
+		pvpBattles:          make(map[string]PvpBattle),
+		pvpPlayerStates:     make(map[string]PvpPlayerState),
+		pvpSeasons:          make(map[string]PvpSeasonRecord),
+		pvpSeasonPlayers:    make(map[string][]PvpSeasonPlayerRecord),
+		worldPositions:      make(map[string]WorldPosition),
+		announcements:       make(map[string]Announcement),
+		announcementReads:   make(map[string]AnnouncementReadState),
+		npcSweepTasks:       make(map[string]NpcSweepTask),
 		yellowTurbanMarches: make(map[string]YellowTurbanMarch),
-		eventClaims:       make(map[string]struct{}),
-		gameConfigs:       make(map[string]GameConfigRecord),
-		reincarnationRuns: make(map[string]ReincarnationRun),
+		eventClaims:         make(map[string]struct{}),
+		gameConfigs:         make(map[string]GameConfigRecord),
+		reincarnationRuns:   make(map[string]ReincarnationRun),
 	}
 }
 
