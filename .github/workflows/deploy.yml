@@ -204,6 +204,13 @@ jobs:
           rsync -a --delete "$BUILD_DIR/admin/" /var/www/hero3/admin/
           printf '%s %s\n' "${HERO3_SHA:0:7}" "deployed from ${HERO3_REF_NAME}" > /opt/hero3/RELEASE
 
+          log "Stopping hero3 before database migrations"
+          if ! timeout --kill-after=10s 60s systemctl stop hero3; then
+            log "hero3 stop failed or timed out"
+            show_hero3_logs
+            exit 1
+          fi
+
           log "Running database migrations"
           migration_done=0
           for attempt in 1 2 3; do
@@ -219,6 +226,7 @@ jobs:
           done
           if [ "$migration_done" != "1" ]; then
             log "database migration failed"
+            timeout --kill-after=10s 120s systemctl restart hero3 || show_hero3_logs
             exit 1
           fi
 
