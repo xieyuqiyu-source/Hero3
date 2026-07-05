@@ -237,7 +237,8 @@ const GarrisonCard: FC<{
           <span className="shrink-0 text-[10px] font-semibold text-emerald-600">{total.toLocaleString()}</span>
         </div>
         {generals.length > 0 && (
-          <div className="mt-1.5 space-y-1">
+          <div className="mt-1.5 space-y-1 rounded-md border border-emerald-500/15 bg-emerald-500/5 px-2 py-1.5">
+            <div className="text-[9px] font-black text-emerald-600">驻防武将</div>
             {generals.map((general) => (
               <button
                 key={general.id}
@@ -249,6 +250,7 @@ const GarrisonCard: FC<{
                 "
                 title="查看驻防武将信息"
               >
+                <UserRound size={11} className="shrink-0 text-emerald-600" />
                 <span className="min-w-0 flex-1 truncate font-bold text-emerald-600 hover:text-emerald-500">
                   {general.name || general.id}
                 </span>

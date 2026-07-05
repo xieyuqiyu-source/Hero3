@@ -59,7 +59,8 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
   const hasRewards = Object.values(report.rewards).some(v => v > 0)
   const hasLosses = Object.values(report.lostUnits).some(v => v > 0)
   const pvpPointEntries = Object.entries(report.pvpPointsDelta ?? {}).filter(([, amount]) => amount !== 0)
-  const pvpReinforcementCount = report.pvpReinforcements?.length ?? 0
+  const pvpReinforcements = report.pvpReinforcements ?? []
+  const pvpReinforcementCount = pvpReinforcements.length
   const pvpGeneralCount = (report.pvpAttackerGenerals?.length ?? 0) + (report.pvpDefenderGenerals?.length ?? 0)
   const generalExpGained = report.generalExpGained ?? report.detail?.rewards?.generalExp ?? 0
   const generalLevelBefore = report.generalLevelBefore ?? report.detail?.rewards?.generalLevelBefore
@@ -160,6 +161,30 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
                     <span key={key} className={`text-[10px] px-2 py-0.5 rounded-lg font-medium ${amount > 0 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'}`}>
                       {key === 'self' ? '我方' : key === 'target' ? '对方' : key} {amount > 0 ? '+' : ''}{amount}
                     </span>
+                  ))}
+                </div>
+              )}
+              {pvpReinforcements.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  {pvpReinforcements.map((item) => (
+                    <div key={item.reinforcementId} className="rounded-lg border border-indigo-500/15 bg-white/55 px-2 py-1.5 dark:bg-white/5">
+                      <div className="flex items-center gap-2">
+                        <span className="shrink-0 text-[10px] font-black text-indigo-600">{item.sourceTags?.source_type === 'obtained' ? '获得驻防' : '增援驻防'}</span>
+                        <span className="min-w-0 flex-1 truncate text-[10px] text-[var(--color-text-muted)]">{item.fromPlayerId}</span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {Object.entries(item.troops ?? {}).filter(([, amount]) => amount > 0).map(([unitType, amount]) => (
+                          <span key={unitType} className="rounded bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">
+                            {getUnitName(unitType)} {amount.toLocaleString()}
+                          </span>
+                        ))}
+                      </div>
+                      {item.generals && item.generals.length > 0 && (
+                        <div className="mt-1 text-[10px] font-semibold text-emerald-600">
+                          武将：{item.generals.map((general) => `${general.name || general.id}${general.level ? ` Lv.${general.level}` : ''}`).join('、')}
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
