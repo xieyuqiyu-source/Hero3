@@ -205,9 +205,13 @@ jobs:
           printf '%s %s\n' "${HERO3_SHA:0:7}" "deployed from ${HERO3_REF_NAME}" > /opt/hero3/RELEASE
 
           log "Running database migrations"
-          set -a
-          . /etc/hero3/hero3.env
-          set +a
+          HERO3_DATABASE_DSN="$(sed -n 's/^HERO3_DATABASE_DSN=//p' /etc/hero3/hero3.env | tail -n 1)"
+          HERO3_DATABASE_DSN="${HERO3_DATABASE_DSN%\"}"
+          HERO3_DATABASE_DSN="${HERO3_DATABASE_DSN#\"}"
+          HERO3_DATABASE_DSN="${HERO3_DATABASE_DSN%\'}"
+          HERO3_DATABASE_DSN="${HERO3_DATABASE_DSN#\'}"
+          test -n "$HERO3_DATABASE_DSN"
+          export HERO3_DATABASE_DSN
           cd /opt/hero3/go
           timeout --kill-after=10s 120s /opt/hero3/go/bin/hero3-dbtool migrate
 
