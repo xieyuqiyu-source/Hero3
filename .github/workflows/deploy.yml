@@ -205,10 +205,22 @@ jobs:
           printf '%s %s\n' "${HERO3_SHA:0:7}" "deployed from ${HERO3_REF_NAME}" > /opt/hero3/RELEASE
 
           log "Running database migrations"
-          timeout --kill-after=10s 120s systemd-run --wait --collect --pipe --quiet \
-            --property=WorkingDirectory=/opt/hero3/go \
-            --property=EnvironmentFile=/etc/hero3/hero3.env \
-            /opt/hero3/go/bin/hero3-dbtool migrate
+          migration_done=0
+          for attempt in 1 2 3; do
+            if timeout --kill-after=10s 180s systemd-run --wait --collect --pipe --quiet \
+              --property=WorkingDirectory=/opt/hero3/go \
+              --property=EnvironmentFile=/etc/hero3/hero3.env \
+              /opt/hero3/go/bin/hero3-dbtool migrate; then
+              migration_done=1
+              break
+            fi
+            log "database migration attempt ${attempt} failed"
+            sleep $((attempt * 5))
+          done
+          if [ "$migration_done" != "1" ]; then
+            log "database migration failed"
+            exit 1
+          fi
 
           log "Restarting services"
           if [ -d "$BUILD_DIR/deploy/journald" ]; then
