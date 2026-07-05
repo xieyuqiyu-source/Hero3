@@ -216,7 +216,8 @@ func (s *Service) buildWorldMapTargets(viewerID string, self WorldPosition, citi
 		return nil, err
 	}
 	attackLimitReached := requestPvpState.DailyAttackLimit > 0 && requestPvpState.DailyAttackCount >= requestPvpState.DailyAttackLimit
-	targets := make([]WorldMapTarget, 0, len(cities))
+	yellowCities := BuildYellowTurbanCities(GetYellowTurbanConfig())
+	targets := make([]WorldMapTarget, 0, len(cities)+len(yellowCities))
 	for _, city := range cities {
 		position := city.Position
 		relation := WorldRelationOther
@@ -303,6 +304,30 @@ func (s *Service) buildWorldMapTargets(viewerID string, self WorldPosition, citi
 			AttackReason:    attackReason,
 			PlunderReason:   plunderReason,
 			ReinforceReason: reinforceReason,
+		})
+	}
+	for _, city := range yellowCities {
+		targets = append(targets, WorldMapTarget{
+			TargetType:      WorldMapTargetYellowTurban,
+			TargetID:        city.ID,
+			Name:            city.Name,
+			Faction:         city.Faction,
+			Relation:        WorldRelationOther,
+			Level:           1,
+			Status:          WorldTargetStatusUnavailable,
+			X:               city.X,
+			Y:               city.Y,
+			Distance:        worldMapDistance(WorldCoordinate{X: self.X, Y: self.Y}, WorldCoordinate{X: city.X, Y: city.Y}),
+			Direction:       worldMapDirection(WorldCoordinate{X: self.X, Y: self.Y}, WorldCoordinate{X: city.X, Y: city.Y}),
+			CanScout:        false,
+			CanAttack:       false,
+			CanPlunder:      false,
+			CanReinforce:    false,
+			Reason:          "黄巾势力暂不可主动围剿",
+			ScoutReason:     "黄巾势力暂不可侦查",
+			AttackReason:    "第一版暂不开放围剿黄巾城池",
+			PlunderReason:   "黄巾势力不可掠夺",
+			ReinforceReason: "黄巾势力不可增援",
 		})
 	}
 	sort.Slice(targets, func(i, j int) bool {

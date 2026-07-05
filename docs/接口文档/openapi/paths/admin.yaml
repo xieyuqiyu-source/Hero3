@@ -422,3 +422,67 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/yellow-turban/config:
+  get:
+    tags:
+    - Admin
+    summary: GM 读取黄巾起义配置
+    description: 读取千帐营、黄巾检测、压力等级、地区兵种池和行军倍率配置。线上优先读取数据库 game_configs.yellow_turban。
+    operationId: adminGetYellowTurbanConfig
+    security:
+    - adminToken: []
+    responses:
+      '200':
+        description: 当前黄巾起义配置
+        content:
+          application/json:
+            schema:
+              type: object
+  put:
+    tags:
+    - Admin
+    summary: GM 保存黄巾起义配置
+    description: 保存后写入数据库 game_configs.yellow_turban 并立即更新后端内存配置。
+    operationId: adminUpdateYellowTurbanConfig
+    security:
+    - adminToken: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+    responses:
+      '200':
+        description: 保存后的黄巾起义配置
+        content:
+          application/json:
+            schema:
+              type: object
+      '400':
+        description: 配置格式或内容不合法
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/admin/yellow-turban/check-all:
+  post:
+    tags:
+    - Admin
+    summary: GM 手动触发全服黄巾检测
+    description: 对所有玩家执行一次黄巾检测，超出千帐营上限且未达到来袭上限的玩家会新增黄巾来袭。
+    operationId: adminCheckYellowTurbanAll
+    security:
+    - adminToken: []
+    responses:
+      '200':
+        description: 全服检测结果
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                results:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/YellowTurbanCheckResult'

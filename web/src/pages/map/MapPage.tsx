@@ -1,18 +1,20 @@
 /* 本文件实现地图页入口和地图玩法页签切换，默认展示 NPC 城池。 */
 import { Suspense, lazy, useEffect, useRef, useState, type FC, type PointerEvent as ReactPointerEvent } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Castle, Users, Flag, Scroll, Sparkles } from 'lucide-react'
+import { Castle, Users, Flag, Scroll, Sparkles, Tent } from 'lucide-react'
 import WorldMapTab from './components/WorldMapTab'
 
-type MapTab = 'npc' | 'players' | 'stronghold' | 'dungeon' | 'minigames'
+type MapTab = 'npc' | 'players' | 'yellowTurban' | 'stronghold' | 'dungeon' | 'minigames'
 
 const NpcCityTab = lazy(() => import('./components/NpcCityTab'))
 const DungeonTab = lazy(() => import('./components/DungeonTab'))
 const MiniGamesTab = lazy(() => import('./components/MiniGamesTab'))
+const YellowTurbanTab = lazy(() => import('./components/YellowTurbanTab'))
 
 const MAP_TABS = [
   { key: 'npc' as const, label: 'NPC', icon: Castle },
   { key: 'players' as const, label: '玩家', icon: Users },
+  { key: 'yellowTurban' as const, label: '黄巾起义', icon: Tent },
   { key: 'stronghold' as const, label: '据点', icon: Flag },
   { key: 'dungeon' as const, label: '副本', icon: Scroll },
   { key: 'minigames' as const, label: '万象幻境', icon: Sparkles },
@@ -35,7 +37,7 @@ const MapPage: FC = () => {
 
   useEffect(() => {
     const tab = new URLSearchParams(location.search).get('tab')
-    if (tab === 'npc' || tab === 'players' || tab === 'stronghold' || tab === 'dungeon' || tab === 'minigames') {
+    if (tab === 'npc' || tab === 'players' || tab === 'yellowTurban' || tab === 'stronghold' || tab === 'dungeon' || tab === 'minigames') {
       setActiveTab(tab)
     }
   }, [location.search])
@@ -120,6 +122,7 @@ const MapPage: FC = () => {
   const renderActiveTab = () => {
     if (activeTab === 'npc') return <NpcCityTab />
     if (activeTab === 'players') return <WorldMapTab />
+    if (activeTab === 'yellowTurban') return <YellowTurbanTab />
     if (activeTab === 'stronghold') {
       return (
         <div className="flex items-center justify-center py-16">

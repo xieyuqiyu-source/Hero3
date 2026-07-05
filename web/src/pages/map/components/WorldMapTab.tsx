@@ -327,7 +327,9 @@ const WorldMapTab: FC = () => {
     if (target) setCoordinateSearch({ x: String(target.position.x), y: String(target.position.y) })
     setFocusedTargetId(playerId)
     setSelectedEmptyCell(null)
-    void refreshTargetDetail(playerId)
+    if (!target || target.targetType === 'player_city' || !target.targetType) {
+      void refreshTargetDetail(playerId)
+    }
   }, [refreshTargetDetail, targets])
 
   // getUnitName 获取当前阵营兵种名。
@@ -930,6 +932,8 @@ function worldTargetToPvpTarget(target: WorldMapTarget, worldId: string, self: P
   const position = { worldId, x: target.x, y: target.y, regionId: 0 }
   const metrics = buildWorldMapTargetMetrics(self, position)
   return {
+    targetType: target.targetType,
+    targetId: target.targetId,
     playerId: target.playerId ?? target.targetId,
     nickname: target.name,
     faction: target.faction,

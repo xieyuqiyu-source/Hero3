@@ -158,6 +158,9 @@ func registerMapRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("POST /api/v1/map/npc-cities/sweep-tasks", handlers.StartNpcSweepTask)
 	mux.HandleFunc("GET /api/v1/map/npc-cities/sweep-tasks/{taskId}", handlers.GetNpcSweepTask)
 	mux.HandleFunc("POST /api/v1/map/npc-cities/scout", handlers.ScoutNpc)
+	mux.HandleFunc("GET /api/v1/map/yellow-turban/status", handlers.YellowTurbanStatus)
+	mux.HandleFunc("POST /api/v1/map/yellow-turban/check", handlers.CheckYellowTurban)
+	mux.HandleFunc("POST /api/v1/map/yellow-turban/marches/{marchId}/resolve", handlers.ResolveYellowTurbanMarch)
 }
 
 // registerReincarnationRoutes 注册轮回绝境副本路由。
@@ -310,6 +313,9 @@ func registerAdminRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("PUT /api/v1/admin/fishing-config", handlers.UpdateAdminFishingConfig)
 	mux.HandleFunc("GET /api/v1/admin/slot-config", handlers.AdminSlotConfig)
 	mux.HandleFunc("PUT /api/v1/admin/slot-config", handlers.UpdateAdminSlotConfig)
+	mux.HandleFunc("GET /api/v1/admin/yellow-turban/config", handlers.AdminYellowTurbanConfig)
+	mux.HandleFunc("PUT /api/v1/admin/yellow-turban/config", handlers.UpdateAdminYellowTurbanConfig)
+	mux.HandleFunc("POST /api/v1/admin/yellow-turban/check-all", handlers.AdminCheckYellowTurbanAll)
 	mux.HandleFunc("GET /api/v1/admin/general-traits", handlers.AdminGeneralTraitRegistry)
 	mux.HandleFunc("POST /api/v1/admin/mails/send", handlers.AdminSendMail)
 	mux.HandleFunc("GET /api/v1/admin/players/{playerId}/mails", handlers.AdminPlayerMails)

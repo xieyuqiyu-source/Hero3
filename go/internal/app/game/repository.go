@@ -198,6 +198,15 @@ type WorldMapRepository interface {
 	AssignWorldPosition(playerID string, worldID string, x int, y int, assignedBy string) (WorldPosition, error)
 }
 
+type YellowTurbanRepository interface {
+	CreateYellowTurbanMarch(march YellowTurbanMarch) (YellowTurbanMarch, error)
+	GetYellowTurbanMarch(marchID string) (YellowTurbanMarch, error)
+	UpdateYellowTurbanMarch(marchID string, updatedAt time.Time, update func(march *YellowTurbanMarch) error) (YellowTurbanMarch, error)
+	ListYellowTurbanMarchesForPlayer(playerID string) ([]YellowTurbanMarch, error)
+	CountActiveYellowTurbanMarches(playerID string) (int, error)
+	ListDueYellowTurbanMarches(playerID string, now time.Time) ([]YellowTurbanMarch, error)
+}
+
 type AnnouncementRepository interface {
 	PromoteDueScheduledAnnouncements(now time.Time) error
 	GetAnnouncementPlayerContext(playerID string) (AnnouncementPlayerContext, error)
@@ -274,6 +283,7 @@ type Repository interface {
 	ReinforcementRepository
 	PvpRepository
 	WorldMapRepository
+	YellowTurbanRepository
 	AnnouncementRepository
 	GoldLedgerRepository
 	ItemLedgerRepository
@@ -302,6 +312,7 @@ type MemoryRepository struct {
 	announcements     map[string]Announcement
 	announcementReads map[string]AnnouncementReadState
 	npcSweepTasks     map[string]NpcSweepTask
+	yellowTurbanMarches map[string]YellowTurbanMarch
 	ledger            []GoldLedgerEntry
 	ledgerNextID      int64
 	itemLedger        []ItemLedgerEntry
@@ -330,6 +341,7 @@ func NewMemoryRepository() *MemoryRepository {
 		announcements:     make(map[string]Announcement),
 		announcementReads: make(map[string]AnnouncementReadState),
 		npcSweepTasks:     make(map[string]NpcSweepTask),
+		yellowTurbanMarches: make(map[string]YellowTurbanMarch),
 		eventClaims:       make(map[string]struct{}),
 		gameConfigs:       make(map[string]GameConfigRecord),
 		reincarnationRuns: make(map[string]ReincarnationRun),

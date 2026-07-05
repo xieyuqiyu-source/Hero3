@@ -7,6 +7,66 @@ export interface HealthState {
   time: string
 }
 
+export interface FoodPressureState {
+  currentFood: number
+  foodCapacity: number
+  pressure: number
+  overCapacity: boolean
+  thousandTentLevel: number
+  riskLevelId?: number
+  riskLevelName?: string
+  riskColor?: string
+}
+
+export interface YellowTurbanConfig {
+  enabled: boolean
+  thousandTentCamp: {
+    enabled: boolean
+    buildingType: string
+    name: string
+    description: string
+    capacityByLevel: number[]
+    goldUpgradeCostByLevel: number[]
+  }
+  checkIntervalMinutes: number
+  maxIncomingMarchesPerPlayer: number
+  marchSpeedMultiplier: number
+  regions: Array<{
+    id: string
+    name: string
+    faction: string
+    enabled: boolean
+    cityCount: number
+    unitPool?: string[]
+    excludedUnits?: string[]
+    minUnitKinds: number
+    maxUnitKinds: number
+  }>
+  riskLevels: Array<{
+    id: number
+    name: string
+    color: string
+    minPressure: number
+    maxPressure: number
+    minRatio: number
+    maxRatio: number
+    minUnitKinds: number
+    maxUnitKinds: number
+    maxIncoming: number
+    enabled: boolean
+  }>
+}
+
+export interface YellowTurbanCheckResult {
+  checked: boolean
+  spawned: boolean
+  reason?: string
+  foodPressure: FoodPressureState
+  incomingCount: number
+  maxIncoming: number
+  serverTime: string
+}
+
 export interface GameState {
   player: {
     id: string

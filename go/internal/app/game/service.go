@@ -99,6 +99,7 @@ type Service struct {
 	fishingPath       string
 	slotPath          string
 	reincarnationPath string
+	yellowTurbanPath  string
 }
 
 // getPlayerLock 获取指定玩家的互斥锁（懒创建）
@@ -128,6 +129,7 @@ type BootstrapResponse struct {
 	Fishing       FishingConfig       `json:"fishing"`
 	Slot          SlotConfig          `json:"slot"`
 	Reincarnation ReincarnationConfig `json:"reincarnation"`
+	YellowTurban  YellowTurbanConfig  `json:"yellowTurban"`
 	Message       string              `json:"message"`
 }
 
@@ -216,6 +218,15 @@ func (s *Service) SetReincarnationPath(path string) error {
 	return LoadReincarnationConfig(path)
 }
 
+// SetYellowTurbanPath 设置并加载黄巾起义配置。
+func (s *Service) SetYellowTurbanPath(path string) error {
+	s.yellowTurbanPath = path
+	if err := LoadYellowTurbanConfig(path); err != nil {
+		return err
+	}
+	return s.loadYellowTurbanConfigFromRepository(GetYellowTurbanConfig())
+}
+
 func (s *Service) GetGeneralsConfig() GeneralsConfig {
 	return GetGeneralsConfig()
 }
@@ -268,6 +279,48 @@ func (s *Service) GetReincarnationConfig() ReincarnationConfig {
 // UpdateReincarnationConfig 保存轮回绝境配置。
 func (s *Service) UpdateReincarnationConfig(config ReincarnationConfig) error {
 	return SaveReincarnationConfig(s.reincarnationPath, config)
+}
+
+// GetYellowTurbanConfig 返回黄巾起义配置。
+func (s *Service) GetYellowTurbanConfig() YellowTurbanConfig {
+	return GetYellowTurbanConfig()
+}
+
+// UpdateYellowTurbanConfig 保存黄巾起义配置到数据库配置表和内存快照。
+func (s *Service) UpdateYellowTurbanConfig(config YellowTurbanConfig) error {
+	if err := ValidateYellowTurbanConfig(config); err != nil {
+		return err
+	}
+	content, err := json.Marshal(normalizeYellowTurbanConfig(config))
+	if err != nil {
+		return err
+	}
+	if _, err := s.repo.SaveGameConfig(gameConfigKeyYellowTurban, content, "admin", time.Now().UTC()); err != nil {
+		return err
+	}
+	SetYellowTurbanConfig(config)
+	return nil
+}
+
+// loadYellowTurbanConfigFromRepository 优先使用线上 GM 配置表覆盖文件默认配置。
+func (s *Service) loadYellowTurbanConfigFromRepository(fallback YellowTurbanConfig) error {
+	record, exists, err := s.repo.GetGameConfig(gameConfigKeyYellowTurban)
+	if err != nil {
+		return err
+	}
+	if !exists || len(record.ValueJSON) == 0 {
+		SetYellowTurbanConfig(fallback)
+		return nil
+	}
+	var cfg YellowTurbanConfig
+	if err := json.Unmarshal(record.ValueJSON, &cfg); err != nil {
+		return err
+	}
+	if err := ValidateYellowTurbanConfig(cfg); err != nil {
+		return err
+	}
+	SetYellowTurbanConfig(cfg)
+	return nil
 }
 
 func (s *Service) GetFactionsConfig() FactionsConfig {
@@ -683,6 +736,7 @@ func (s *Service) Bootstrap() BootstrapResponse {
 	fishing := GetFishingConfig()
 	slot := GetSlotConfig()
 	reincarnation := GetReincarnationConfig()
+	yellowTurban := GetYellowTurbanConfig()
 	return BootstrapResponse{
 		GameName: "Hero3",
 		Modules: append([]string{
@@ -704,6 +758,7 @@ func (s *Service) Bootstrap() BootstrapResponse {
 		Fishing:       fishing,
 		Slot:          slot,
 		Reincarnation: reincarnation,
+		YellowTurban:  yellowTurban,
 		Message:       "Hero3 后端基础服务已就绪，具体玩法逻辑待接入。",
 	}
 }

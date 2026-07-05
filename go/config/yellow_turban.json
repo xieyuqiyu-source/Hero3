@@ -1,0 +1,139 @@
+{
+  "enabled": true,
+  "thousandTentCamp": {
+    "enabled": true,
+    "buildingType": "thousand_tent_camp",
+    "name": "千帐营",
+    "description": "提升可安全承载的口粮兵力，超出口粮上限后会引来黄巾军持续进攻。",
+    "capacityByLevel": [
+      100000,
+      300000,
+      600000,
+      1000000,
+      2000000,
+      4000000,
+      8000000,
+      15000000,
+      30000000,
+      50000000,
+      80000000,
+      120000000,
+      180000000,
+      280000000,
+      400000000,
+      600000000,
+      900000000,
+      1200000000,
+      1600000000,
+      2000000000
+    ],
+    "goldUpgradeCostByLevel": [
+      0,
+      20,
+      40,
+      70,
+      100,
+      150,
+      220,
+      300,
+      400,
+      520,
+      650,
+      800,
+      980,
+      1180,
+      1380,
+      1550,
+      1700,
+      1840,
+      1940,
+      2000
+    ]
+  },
+  "checkIntervalMinutes": 10,
+  "maxIncomingMarchesPerPlayer": 6,
+  "marchSpeedMultiplier": 2,
+  "regions": [
+    {
+      "id": "wei",
+      "name": "黄巾军·魏地",
+      "faction": "wei",
+      "enabled": true,
+      "cityCount": 10,
+      "minUnitKinds": 2,
+      "maxUnitKinds": 4
+    },
+    {
+      "id": "shu",
+      "name": "黄巾军·蜀地",
+      "faction": "shu",
+      "enabled": true,
+      "cityCount": 10,
+      "minUnitKinds": 2,
+      "maxUnitKinds": 4
+    },
+    {
+      "id": "wu",
+      "name": "黄巾军·吴地",
+      "faction": "wu",
+      "enabled": true,
+      "cityCount": 10,
+      "minUnitKinds": 2,
+      "maxUnitKinds": 4
+    }
+  ],
+  "riskLevels": [
+    {
+      "id": 1,
+      "name": "黄巾·流寇",
+      "color": "#d9a400",
+      "minPressure": 1,
+      "maxPressure": 1.3,
+      "minRatio": 0.08,
+      "maxRatio": 0.12,
+      "minUnitKinds": 2,
+      "maxUnitKinds": 3,
+      "maxIncoming": 6,
+      "enabled": true
+    },
+    {
+      "id": 2,
+      "name": "黄巾·乱军",
+      "color": "#f97316",
+      "minPressure": 1.3,
+      "maxPressure": 1.8,
+      "minRatio": 0.15,
+      "maxRatio": 0.22,
+      "minUnitKinds": 2,
+      "maxUnitKinds": 4,
+      "maxIncoming": 6,
+      "enabled": true
+    },
+    {
+      "id": 3,
+      "name": "黄巾·大营",
+      "color": "#ea580c",
+      "minPressure": 1.8,
+      "maxPressure": 2.5,
+      "minRatio": 0.25,
+      "maxRatio": 0.38,
+      "minUnitKinds": 3,
+      "maxUnitKinds": 5,
+      "maxIncoming": 6,
+      "enabled": true
+    },
+    {
+      "id": 4,
+      "name": "黄巾·军团",
+      "color": "#dc2626",
+      "minPressure": 2.5,
+      "maxPressure": 0,
+      "minRatio": 0.45,
+      "maxRatio": 0.65,
+      "minUnitKinds": 3,
+      "maxUnitKinds": 6,
+      "maxIncoming": 6,
+      "enabled": true
+    }
+  ]
+}

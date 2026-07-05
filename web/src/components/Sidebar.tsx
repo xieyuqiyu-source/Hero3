@@ -61,6 +61,7 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
   const factionUnits = units?.[gameState?.player.faction ?? '']
   const visibleArmy = sortArmyForDisplay(gameState?.army, factionUnits)
   const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
+  const foodPressure = gameState?.foodPressure
   const mainGeneralBusy = Boolean(gameState?.general && gameState.generalAssignments?.some((item) => (
     item.generalId === gameState.general?.id && item.id !== 'main' && item.slot !== 'main'
   )))
@@ -333,8 +334,24 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
                   <Shield size={14} className="text-[var(--color-accent)]" />
                   军队
                 </span>
-                <span className="text-xs font-semibold text-[var(--color-accent)]">{totalArmy}</span>
+                <span className="text-xs font-semibold text-[var(--color-accent)]">{totalArmy.toLocaleString()}</span>
               </div>
+              {foodPressure && (
+                <div className="mb-2 rounded-xl border border-[var(--color-border)] bg-white/60 px-2 py-1.5 dark:bg-white/5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-[var(--color-text-secondary)]">口粮</span>
+                    <span className={`text-[10px] font-bold ${foodPressure.overCapacity ? 'text-red-600' : 'text-[var(--color-accent)]'}`}>
+                      {formatCompactNumber(foodPressure.currentFood)} / {formatCompactNumber(foodPressure.foodCapacity)}
+                    </span>
+                  </div>
+                  {foodPressure.overCapacity && (
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-red-600">{foodPressure.riskLevelName ?? '黄巾集结'}</span>
+                      <span className="text-[10px] font-semibold text-red-600">{Math.round(foodPressure.pressure * 100)}%</span>
+                    </div>
+                  )}
+                </div>
+              )}
               {visibleArmy.length > 0 ? (
                 <div className="space-y-1">
                   {visibleArmy.map((unit) => {
@@ -479,3 +496,10 @@ const PlayerSwitcher: FC<{ nickname: string; civilizationLevel: number; cityGold
 }
 
 export default Sidebar
+
+const formatCompactNumber = (value?: number) => {
+  const amount = value ?? 0
+  if (amount >= 100000000) return `${Number((amount / 100000000).toFixed(1))}亿`
+  if (amount >= 10000) return `${Number((amount / 10000).toFixed(1))}万`
+  return amount.toLocaleString()
+}

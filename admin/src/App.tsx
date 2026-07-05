@@ -21,6 +21,7 @@ import GeneralsConfigPanel from '@/components/GeneralsConfigPanel'
 import FishingConfigPanel from '@/components/FishingConfigPanel'
 import SlotConfigPanel from '@/components/SlotConfigPanel'
 import ItemsConfigPanel from '@/components/ItemsConfigPanel'
+import YellowTurbanConfigPanel from '@/components/YellowTurbanConfigPanel'
 import GoldLedgerPanel from '@/components/GoldLedgerPanel'
 import MailAdminPanel from '@/components/MailAdminPanel'
 import AnnouncementAdminPanel from '@/components/AnnouncementAdminPanel'
@@ -28,7 +29,7 @@ import PvpAdminPanel from '@/components/PvpAdminPanel'
 import DungeonAssetConfigPanel from '@/components/DungeonAssetConfigPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
-import { Sliders, MapPin, Swords, Flag, Shield, Users, Fish, Package, Sparkles } from 'lucide-react'
+import { Sliders, MapPin, Swords, Flag, Shield, Users, Fish, Package, Sparkles, Tent } from 'lucide-react'
 
 function App() {
   const [activePage, setActivePage] = useState<AdminPage>('overview')
@@ -105,6 +106,9 @@ function App() {
           <div className="grid gap-4">
             <CollapsiblePanel icon={<Sliders size={16} className="text-[var(--color-accent)]" />} title="建筑数值">
               <BalanceConfigPanel />
+            </CollapsiblePanel>
+            <CollapsiblePanel icon={<Tent size={16} className="text-[var(--color-accent)]" />} title="黄巾起义">
+              <YellowTurbanConfigPanel />
             </CollapsiblePanel>
             <CollapsiblePanel icon={<MapPin size={16} className="text-[var(--color-accent)]" />} title="NPC 城池">
               <NpcConfigPanel />

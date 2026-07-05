@@ -44,6 +44,7 @@ type MilitaryView struct {
 	General            *General                `json:"general"`
 	Generals           []General               `json:"generals,omitempty"`
 	GeneralAssignments []GeneralAssignment     `json:"generalAssignments,omitempty"`
+	FoodPressure       FoodPressureState       `json:"foodPressure"`
 	ServerTime         string                  `json:"serverTime"`
 }
 
@@ -160,7 +161,19 @@ func (s *Service) GetMilitaryView(playerID string) (MilitaryView, error) {
 	if err := s.SettleDuePvpMarches(playerID); err != nil {
 		return MilitaryView{}, err
 	}
-	return s.repo.GetMilitaryView(playerID)
+	if err := s.SettleDueYellowTurbanMarches(playerID); err != nil {
+		return MilitaryView{}, err
+	}
+	view, err := s.repo.GetMilitaryView(playerID)
+	if err != nil {
+		return MilitaryView{}, err
+	}
+	state, err := s.repo.GetState(playerID)
+	if err != nil {
+		return MilitaryView{}, err
+	}
+	view.FoodPressure = CalculateFoodPressure(state, GetYellowTurbanConfig())
+	return view, nil
 }
 
 // GetInventoryView 返回背包视图。

@@ -820,6 +820,8 @@ export interface PvpWorldPosition {
 }
 
 export interface PvpTargetSummary {
+  targetType?: string
+  targetId?: string
   playerId: string
   nickname: string
   faction: string
@@ -899,6 +901,76 @@ export interface WorldMapViewResponse {
   centerY: number
   radius: number
   targets: WorldMapTarget[]
+  serverTime: string
+}
+
+export interface FoodPressureState {
+  currentFood: number
+  foodCapacity: number
+  pressure: number
+  overCapacity: boolean
+  thousandTentLevel: number
+  riskLevelId?: number
+  riskLevelName?: string
+  riskColor?: string
+}
+
+export interface YellowTurbanMarch {
+  id: string
+  targetPlayerId: string
+  sourceCityId: string
+  sourceName: string
+  sourceFaction: string
+  sourceRegionId: string
+  riskLevelId: number
+  riskLevelName: string
+  playerFood: number
+  foodCapacity: number
+  pressure: number
+  troops: Record<string, number>
+  status: 'marching' | 'resolving' | 'resolved' | 'failed' | string
+  durationSeconds: number
+  startedAt: string
+  arrivesAt: string
+  resolvedAt?: string
+  defenderReportId?: string
+  error?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface YellowTurbanCity {
+  id: string
+  name: string
+  regionId: string
+  faction: string
+  worldId: string
+  x: number
+  y: number
+  enabled: boolean
+}
+
+export interface YellowTurbanStatusResponse {
+  enabled: boolean
+  foodPressure: FoodPressureState
+  checkIntervalMinutes: number
+  nextCheckAt?: string
+  incomingCount: number
+  maxIncoming: number
+  incoming: YellowTurbanMarch[]
+  cities?: YellowTurbanCity[]
+  recentReports?: BattleReport[]
+  serverTime: string
+}
+
+export interface YellowTurbanCheckResult {
+  checked: boolean
+  spawned: boolean
+  reason?: string
+  foodPressure: FoodPressureState
+  march?: YellowTurbanMarch
+  incomingCount: number
+  maxIncoming: number
   serverTime: string
 }
 
@@ -1114,6 +1186,7 @@ export interface GameState {
   generalChangeUntil?: string
   army: ArmyUnit[]
   recruitQueues: RecruitQueue[]
+  foodPressure?: FoodPressureState
   npcState?: NpcState | null
   mapTargets: MapTarget[]
   recentBattleReports: BattleReport[]

@@ -397,3 +397,87 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/map/yellow-turban/status:
+  get:
+    tags:
+    - Map
+    summary: 获取黄巾起义状态
+    description: 返回玩家当前口粮压力、千帐营承载上限、黄巾来袭队列和黄巾城池列表。
+    operationId: getYellowTurbanStatus
+    security:
+    - bearerAuth: []
+    parameters:
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 黄巾起义状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/YellowTurbanStatusResponse'
+      '403':
+        description: 当前账号不拥有该玩家存档
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/map/yellow-turban/check:
+  post:
+    tags:
+    - Map
+    summary: 手动执行一次黄巾检测
+    description: 检测玩家当前口粮是否超出千帐营上限，超限且未达到来袭上限时新增一条黄巾来袭。
+    operationId: checkYellowTurban
+    security:
+    - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/YellowTurbanCheckRequest'
+    responses:
+      '200':
+        description: 检测结果
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/YellowTurbanCheckResult'
+/api/v1/map/yellow-turban/marches/{marchId}/resolve:
+  post:
+    tags:
+    - Map
+    summary: 结算已到达的黄巾来袭
+    description: 第一版用于玩家访问或调试时主动推进已到达黄巾来袭，未到达会返回冲突。
+    operationId: resolveYellowTurbanMarch
+    security:
+    - bearerAuth: []
+    parameters:
+    - name: marchId
+      in: path
+      required: true
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/YellowTurbanCheckRequest'
+    responses:
+      '200':
+        description: 黄巾防守战报
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BattleReport'
+      '409':
+        description: 黄巾尚未到达
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

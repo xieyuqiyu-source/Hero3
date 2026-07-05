@@ -36,6 +36,8 @@ import type {
   WorldMapCoordinateCheck,
   WorldMapOccupancyStats,
   WorldPosition,
+  YellowTurbanCheckResult,
+  YellowTurbanConfig,
 } from '@/types'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1'
@@ -411,6 +413,19 @@ export const adminApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
     })
+  },
+  getYellowTurbanConfig() {
+    return request<YellowTurbanConfig>(`${API_BASE}/admin/yellow-turban/config`)
+  },
+  updateYellowTurbanConfig(config: YellowTurbanConfig) {
+    return request<YellowTurbanConfig>(`${API_BASE}/admin/yellow-turban/config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+  },
+  checkYellowTurbanAll() {
+    return request<{ results: YellowTurbanCheckResult[] }>(`${API_BASE}/admin/yellow-turban/check-all`, { method: 'POST' })
   },
   sendMail(payload: {
     playerId: string

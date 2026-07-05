@@ -75,6 +75,10 @@ func main() {
 		logger.Error("reincarnation config load failed", "path", cfg.ReincarnationPath, "error", err)
 		os.Exit(1)
 	}
+	if err := gameService.SetYellowTurbanPath(cfg.YellowTurbanPath); err != nil {
+		logger.Error("yellow turban config load failed", "path", cfg.YellowTurbanPath, "error", err)
+		os.Exit(1)
+	}
 	if cfg.DatabaseDSN != "" {
 		if err := validateDevelopmentDatabase(cfg); err != nil {
 			logger.Error("database safety check failed", "error", err)
@@ -143,6 +147,10 @@ func main() {
 		}
 		if err := gameService.SetReincarnationPath(cfg.ReincarnationPath); err != nil {
 			logger.Error("reincarnation config load failed", "path", cfg.ReincarnationPath, "error", err)
+			os.Exit(1)
+		}
+		if err := gameService.SetYellowTurbanPath(cfg.YellowTurbanPath); err != nil {
+			logger.Error("yellow turban config load failed", "path", cfg.YellowTurbanPath, "error", err)
 			os.Exit(1)
 		}
 		logger.Info("database storage enabled")

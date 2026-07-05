@@ -767,3 +767,159 @@ NpcTraitConfig:
     weight:
       type: integer
       minimum: 0
+FoodPressureState:
+  type: object
+  required:
+  - currentFood
+  - foodCapacity
+  - pressure
+  - overCapacity
+  - thousandTentLevel
+  properties:
+    currentFood:
+      type: integer
+    foodCapacity:
+      type: integer
+    pressure:
+      type: number
+      format: double
+    overCapacity:
+      type: boolean
+    thousandTentLevel:
+      type: integer
+    riskLevelId:
+      type: integer
+    riskLevelName:
+      type: string
+    riskColor:
+      type: string
+YellowTurbanMarch:
+  type: object
+  required:
+  - id
+  - targetPlayerId
+  - sourceCityId
+  - sourceName
+  - sourceFaction
+  - riskLevelId
+  - riskLevelName
+  - troops
+  - status
+  - startedAt
+  - arrivesAt
+  properties:
+    id:
+      type: string
+    targetPlayerId:
+      type: string
+    sourceCityId:
+      type: string
+    sourceName:
+      type: string
+    sourceFaction:
+      type: string
+    sourceRegionId:
+      type: string
+    riskLevelId:
+      type: integer
+    riskLevelName:
+      type: string
+    playerFood:
+      type: integer
+    foodCapacity:
+      type: integer
+    pressure:
+      type: number
+      format: double
+    troops:
+      type: object
+      additionalProperties:
+        type: integer
+    status:
+      type: string
+    durationSeconds:
+      type: integer
+    startedAt:
+      type: string
+      format: date-time
+    arrivesAt:
+      type: string
+      format: date-time
+    resolvedAt:
+      type: string
+      format: date-time
+    defenderReportId:
+      type: string
+YellowTurbanCity:
+  type: object
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    regionId:
+      type: string
+    faction:
+      type: string
+    worldId:
+      type: string
+    x:
+      type: integer
+    y:
+      type: integer
+    enabled:
+      type: boolean
+YellowTurbanStatusResponse:
+  type: object
+  properties:
+    enabled:
+      type: boolean
+    foodPressure:
+      $ref: '#/components/schemas/FoodPressureState'
+    checkIntervalMinutes:
+      type: integer
+    nextCheckAt:
+      type: string
+      format: date-time
+    incomingCount:
+      type: integer
+    maxIncoming:
+      type: integer
+    incoming:
+      type: array
+      items:
+        $ref: '#/components/schemas/YellowTurbanMarch'
+    cities:
+      type: array
+      items:
+        $ref: '#/components/schemas/YellowTurbanCity'
+    serverTime:
+      type: string
+      format: date-time
+YellowTurbanCheckResult:
+  type: object
+  properties:
+    checked:
+      type: boolean
+    spawned:
+      type: boolean
+    reason:
+      type: string
+    foodPressure:
+      $ref: '#/components/schemas/FoodPressureState'
+    march:
+      $ref: '#/components/schemas/YellowTurbanMarch'
+    incomingCount:
+      type: integer
+    maxIncoming:
+      type: integer
+    serverTime:
+      type: string
+      format: date-time
+YellowTurbanCheckRequest:
+  type: object
+  required:
+  - playerId
+  properties:
+    playerId:
+      type: string

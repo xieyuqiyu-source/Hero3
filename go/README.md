@@ -88,6 +88,7 @@ Effect Pipeline 当前集中在：
 - `service_mail.go`：信函附件已通过标准 `reward` 效果发放。
 - `service_minigame.go`：万象幻境兑换已通过标准 `reward` 效果发放。
 - `slot_config.go`：天机轮转每线押注下限、固定线数、图案权重、Wild、Scatter 免费旋转和 Bonus 奖励配置，默认读取 `config/slot.json`；玩法不设置额外押注上限，只要求当前兵力足以支付总押注。
+- `yellow_turban_config.go` / `service_yellow_turban.go`：黄巾起义按玩法模块接入，读取千帐营等级和玩家兵力口粮，使用独立 `yellow_turban_marches` 保存来袭快照，到达后通过战斗事务扣减防守兵力并写标准防守战报。
 
 后续武将特性、活动、副本如果要影响长期资产，应优先提交标准 Effect。
 

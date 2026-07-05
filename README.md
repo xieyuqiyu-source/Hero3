@@ -78,6 +78,7 @@ go build ./cmd/server
 - 物品系统使用 `go/config/items.json` 和 `go/config/drop_pools.json` 配置注册；背包权威表按格子 `slot_id` 存储，兼容接口仍返回按物品聚合的 `inventory`。
 - NPC 层级可在 `go/config/npc.json` 通过 `dropPoolId` 绑定掉落池；掉落池支持 `slots` 独立槽位和 `none` 空掉落，用于配置保底、低概率和多段概率奖励。
 - NPC 一键扫荡已改为后台任务：玩家端提交 `sweep_task` 后轮询进度，后端在任务内对多个 NPC 使用一次批量战斗资产事务连续结算，最终只保存一条 `battle_type=sweep` 聚合战报；同一玩家同一时间只允许一个活跃扫荡任务，单次最多 50 个目标，服务重启会把遗留活跃任务标记失败，任务记录保留 14 天用于近期排查。
+- 黄巾起义已作为地图玩法模块接入：千帐营提供口粮承载上限，军事视图和左侧军队卡片显示当前口粮/上限；黄巾城池以 `yellow_turban` 假玩家势力展示在世界地图，不写入普通玩家表、排行榜或联盟。黄巾来袭使用独立 `yellow_turban_marches` 队列保存兵力快照，到达后复用战斗引擎结算防守战报，不掠夺、不返程、战后消失；GM 后台可编辑 `game_configs.yellow_turban` 并手动触发全服检测。
 - 万象幻境当前包含仙池垂钓、军营豪赌和天机轮转；军营豪赌与天机轮转均由后端结算并复用 `minigame_records` 库存兑换体系。仙池垂钓的文件配置只作为模板，线上 GM 修改写入数据库 `game_configs.fishing`，避免发布覆盖运营配置；钓鱼鱼饵支持独立 `rarityWeights`、最低/最高品质、神话 `mythic` 池和咬钩等待倍率，旧 `rarityBoost` 仅作为兼容兜底。天机轮转配置仍在 `go/config/slot.json`，GM 后台可调整每线押注、图案权重、倍率、免费旋转和宝匣倍率。天机轮转第二版采用每线押注、固定 5 线、3x3 服务端结果矩阵，并支持 Wild、Scatter 免费旋转和 Bonus 奖励。
 - 物品获得和消耗会写入 `item_ledger`，GM 后台可查看物品配置、玩家背包格子和物品流水。
 - 战斗规则使用 `go/config/combat.json`，GM 后台可调整损失指数、场景规则映射、悬殊战力无损阈值 `noLossPowerRatioThreshold`、阵营城墙系数和城墙硬度预留参数；PVP 守城按阵营城墙系数 `base^城墙等级` 提高防御。

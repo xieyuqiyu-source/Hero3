@@ -304,6 +304,7 @@ const WorldMapGrid: FC<WorldMapGridProps> = ({ view, targets, overviewTargets, h
             {visibleTargets.map((target) => {
               const focused = target.playerId === focusedTargetId
               const self = target.relation === 'self'
+              const isYellowTurban = target.targetType === 'yellow_turban'
               const statusBadge = worldMapStatusBadge(target.status)
               const marchBadge = marchBadges[target.playerId]
               const metrics = buildWorldMapTargetMetrics(view.self, target.position)
@@ -321,8 +322,13 @@ const WorldMapGrid: FC<WorldMapGridProps> = ({ view, targets, overviewTargets, h
                   title={`${target.nickname} · ${metrics.direction} · (${target.position.x}, ${target.position.y}) 距离 ${metrics.distance} · 行军约 ${formatDuration(metrics.seconds)}`}
                   aria-label={`选中${target.nickname}，${metrics.direction}，坐标 (${target.position.x}, ${target.position.y})，距离 ${metrics.distance} 格，行军约 ${formatDuration(metrics.seconds)}`}
                 >
-                  <span className={`relative flex aspect-square h-full w-full min-h-3 items-center justify-center overflow-hidden rounded-[1px] border border-white/40 text-[8px] font-black text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25)] ${worldMapRelationRingClass(target.relation)} ${self ? 'border-sky-800' : ''}`}>
+                  <span className={`relative flex aspect-square h-full w-full min-h-3 items-center justify-center overflow-hidden rounded-[1px] border text-[8px] font-black text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25)] ${isYellowTurban ? 'border-amber-500 ring-1 ring-amber-400' : `border-white/40 ${worldMapRelationRingClass(target.relation)}`} ${self ? 'border-sky-800' : ''}`}>
                     <img className="pointer-events-none absolute inset-0 h-full w-full object-cover" src={cityTileSrc(target.faction)} alt="" aria-hidden="true" />
+                    {isYellowTurban && (
+                      <span className="absolute inset-0 z-10 flex items-center justify-center bg-amber-500/30 text-[9px] font-black text-yellow-50">
+                        黄
+                      </span>
+                    )}
                     {showCityDetail && (
                       <span className={`absolute right-0 top-0 z-20 flex h-3 min-w-3 items-center justify-center rounded-bl-[1px] px-0.5 text-[7px] leading-none ${worldMapRelationBadgeClass(target.relation)}`}>
                         {worldMapRelationBadge(target.relation)}
