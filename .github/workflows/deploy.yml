@@ -211,9 +211,11 @@ jobs:
               found == 0 && /^HERO3_DATABASE_DSN=/ {
                 found = 1
                 value = substr($0, index($0, "=") + 1)
+                sub(/\r$/, "", value)
               }
               found == 1 {
                 while (value ~ /\\$/ && (getline next_line) > 0) {
+                  sub(/\r$/, "", next_line)
                   sub(/\\$/, "", value)
                   value = value next_line
                 }
