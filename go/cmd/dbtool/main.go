@@ -23,6 +23,8 @@ func main() {
 		err = runMigrate(os.Args[2:])
 	case "migrate-yellow-turban":
 		err = runMigrateYellowTurban(os.Args[2:])
+	case "sync-yellow-turban-config":
+		err = runSyncYellowTurbanConfig(os.Args[2:])
 	case "create-test-db":
 		err = runCreateTestDB(os.Args[2:])
 	case "migrate-test":
@@ -116,6 +118,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "命令：")
 	fmt.Fprintln(os.Stderr, "  migrate            迁移当前 HERO3_DATABASE_DSN 数据库")
 	fmt.Fprintln(os.Stderr, "  migrate-yellow-turban 只迁移黄巾起义队列表")
+	fmt.Fprintln(os.Stderr, "  sync-yellow-turban-config 将黄巾起义配置文件同步到 game_configs")
 	fmt.Fprintln(os.Stderr, "  create-test-db     创建当前库对应的 test_ 前缀数据库")
 	fmt.Fprintln(os.Stderr, "  migrate-test       创建并迁移当前库对应的 test_ 前缀数据库")
 	fmt.Fprintln(os.Stderr, "  print-test-dsn     输出当前 DSN 对应的 test_ 前缀库 DSN")

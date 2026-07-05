@@ -240,7 +240,7 @@ var defaultBalance = BalanceConfig{
 			Type:                   ThousandTentCampType,
 			Name:                   "千帐营",
 			GoldUpgradeCostByLevel: thousandTentCampGoldUpgradeCostTable(),
-			UpgradeSecondsByLevel:  militaryUpgradeSecondsTable(120, 20),
+			UpgradeSecondsByLevel:  militaryUpgradeSecondsTable(120, 25),
 		},
 		"weapon_bureau": {
 			Type:                  "weapon_bureau",
@@ -635,7 +635,7 @@ func goldUpgradeCostTable(base int, maxLevel int) map[int]int {
 }
 
 func thousandTentCampGoldUpgradeCostTable() map[int]int {
-	costs := []int{0, 20, 40, 70, 100, 150, 220, 300, 400, 520, 650, 800, 980, 1180, 1380, 1550, 1700, 1840, 1940, 2000}
+	costs := []int{0, 20, 40, 70, 100, 150, 220, 300, 400, 520, 650, 800, 980, 1180, 1380, 1550, 1700, 1840, 1940, 2000, 2200, 2400, 2600, 2800, 3000}
 	table := make(map[int]int, len(costs))
 	for level, cost := range costs {
 		table[level] = cost

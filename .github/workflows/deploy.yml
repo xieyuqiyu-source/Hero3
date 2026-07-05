@@ -230,6 +230,16 @@ jobs:
             exit 1
           fi
 
+          log "Syncing yellow turban config"
+          if ! timeout --kill-after=10s 60s systemd-run --wait --collect --pipe --quiet \
+            --property=WorkingDirectory=/opt/hero3/go \
+            --property=EnvironmentFile=/etc/hero3/hero3.env \
+            /opt/hero3/go/bin/hero3-dbtool sync-yellow-turban-config --allow-non-test --path /opt/hero3/go/config/yellow_turban.json --updated-by deploy; then
+            log "yellow turban config sync failed"
+            timeout --kill-after=10s 120s systemctl restart hero3 || show_hero3_logs
+            exit 1
+          fi
+
           log "Restarting services"
           if [ -d "$BUILD_DIR/deploy/journald" ]; then
             mkdir -p /etc/systemd/journald.conf.d /var/log/journal

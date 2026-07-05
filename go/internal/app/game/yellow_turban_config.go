@@ -132,11 +132,11 @@ func SetYellowTurbanConfig(cfg YellowTurbanConfig) {
 // ValidateYellowTurbanConfig 校验黄巾起义配置，避免 GM 保存不可用规则。
 func ValidateYellowTurbanConfig(cfg YellowTurbanConfig) error {
 	cfg = normalizeYellowTurbanConfig(cfg)
-	if len(cfg.ThousandTentCamp.CapacityByLevel) < 20 {
-		return errors.New("thousand tent camp requires 20 capacity levels")
+	if len(cfg.ThousandTentCamp.CapacityByLevel) < 25 {
+		return errors.New("thousand tent camp requires 25 capacity levels")
 	}
-	if len(cfg.ThousandTentCamp.GoldUpgradeCostByLevel) < 20 {
-		return errors.New("thousand tent camp requires 20 gold upgrade costs")
+	if len(cfg.ThousandTentCamp.GoldUpgradeCostByLevel) < 25 {
+		return errors.New("thousand tent camp requires 25 gold upgrade costs")
 	}
 	if cfg.CheckIntervalMinutes <= 0 {
 		return errors.New("yellow turban check interval must be positive")
@@ -228,12 +228,14 @@ func defaultYellowTurbanConfig() YellowTurbanConfig {
 				4000000, 8000000, 15000000, 30000000, 50000000,
 				80000000, 120000000, 180000000, 280000000, 400000000,
 				600000000, 900000000, 1200000000, 1600000000, 2000000000,
+				2000000000, 4000000000, 6000000000, 8000000000, 10000000000,
 			},
 			GoldUpgradeCostByLevel: []int{
 				0, 20, 40, 70, 100,
 				150, 220, 300, 400, 520,
 				650, 800, 980, 1180, 1380,
 				1550, 1700, 1840, 1940, 2000,
+				2200, 2400, 2600, 2800, 3000,
 			},
 		},
 		Regions: []YellowTurbanRegionConfig{
