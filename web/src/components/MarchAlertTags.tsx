@@ -69,7 +69,15 @@ const MarchAlertTags: FC<MarchAlertTagsProps> = ({ limit = 5 }) => {
       setPvpMarches(pvpResult.status === 'fulfilled' && Array.isArray(pvpResult.value.items) ? pvpResult.value.items : [])
       setSentReinforcements(sentResult.status === 'fulfilled' && Array.isArray(sentResult.value.items) ? sentResult.value.items : [])
       setReceivedReinforcements(receivedResult.status === 'fulfilled' && Array.isArray(receivedResult.value.items) ? receivedResult.value.items : [])
-      setYellowTurbanMarches(yellowTurbanResult.status === 'fulfilled' && Array.isArray(yellowTurbanResult.value.incoming) ? yellowTurbanResult.value.incoming : [])
+      if (yellowTurbanResult.status === 'fulfilled') {
+        setYellowTurbanMarches(Array.isArray(yellowTurbanResult.value.incoming) ? yellowTurbanResult.value.incoming : [])
+        useGameStore.getState().patchState({
+          foodPressure: yellowTurbanResult.value.foodPressure,
+          serverTime: yellowTurbanResult.value.serverTime,
+        })
+      } else {
+        setYellowTurbanMarches([])
+      }
     } catch {
       if (cancelled?.()) return
       setPvpMarches([])
@@ -84,11 +92,18 @@ const MarchAlertTags: FC<MarchAlertTagsProps> = ({ limit = 5 }) => {
 
     void loadMarches(() => cancelled)
     const handleMarchesUpdated = () => void loadMarches(() => cancelled)
+    const handleVisibleRefresh = () => {
+      if (document.visibilityState === 'visible') void loadMarches(() => cancelled)
+    }
     window.addEventListener('hero3:marches-updated', handleMarchesUpdated)
+    window.addEventListener('focus', handleMarchesUpdated)
+    document.addEventListener('visibilitychange', handleVisibleRefresh)
     const refreshTimer = window.setInterval(() => void loadMarches(() => cancelled), 12_000)
     return () => {
       cancelled = true
       window.removeEventListener('hero3:marches-updated', handleMarchesUpdated)
+      window.removeEventListener('focus', handleMarchesUpdated)
+      document.removeEventListener('visibilitychange', handleVisibleRefresh)
       window.clearInterval(refreshTimer)
     }
   }, [loadMarches])
