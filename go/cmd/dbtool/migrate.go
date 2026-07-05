@@ -32,6 +32,19 @@ func runMigrate(args []string) error {
 	return migrateDSN(dsn)
 }
 
+// runMigrateYellowTurban 只迁移黄巾起义队列表。
+func runMigrateYellowTurban(args []string) error {
+	flags := flag.NewFlagSet("migrate-yellow-turban", flag.ContinueOnError)
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	dsn, err := configuredDSN()
+	if err != nil {
+		return err
+	}
+	return migrateYellowTurbanDSN(dsn)
+}
+
 // runCreateTestDB 创建当前库对应的 test 前缀数据库。
 func runCreateTestDB(args []string) error {
 	flags := flag.NewFlagSet("create-test-db", flag.ContinueOnError)
@@ -120,6 +133,30 @@ func migrateDSN(dsn string) error {
 		return err
 	}
 	fmt.Printf("数据库迁移完成：%s\n", databaseName)
+	return nil
+}
+
+// migrateYellowTurbanDSN 对指定 DSN 执行黄巾起义小迁移。
+func migrateYellowTurbanDSN(dsn string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), migrationTimeout)
+	defer cancel()
+	migratorDSN, err := normalizeMigrationDSN(dsn)
+	if err != nil {
+		return err
+	}
+	db, err := storage.OpenMySQL(ctx, migratorDSN)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if err := storage.MigrateMySQLYellowTurban(ctx, db); err != nil {
+		return err
+	}
+	databaseName, err := storage.MySQLDatabaseName(dsn)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("黄巾起义数据库迁移完成：%s\n", databaseName)
 	return nil
 }
 

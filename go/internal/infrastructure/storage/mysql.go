@@ -24,6 +24,32 @@ const (
 	battleReportBackfillBatchSize   = 500
 )
 
+const yellowTurbanMarchesTableSQL = `CREATE TABLE IF NOT EXISTS yellow_turban_marches (
+	id VARCHAR(64) PRIMARY KEY,
+	target_player_id VARCHAR(64) NOT NULL,
+	source_city_id VARCHAR(64) NOT NULL,
+	source_name VARCHAR(64) NOT NULL,
+	source_faction VARCHAR(32) NOT NULL,
+	source_region_id VARCHAR(32) NOT NULL,
+	risk_level_id INT NOT NULL DEFAULT 0,
+	risk_level_name VARCHAR(64) NOT NULL DEFAULT '',
+	player_food INT NOT NULL DEFAULT 0,
+	food_capacity INT NOT NULL DEFAULT 0,
+	pressure DOUBLE NOT NULL DEFAULT 0,
+	troops_json JSON NOT NULL,
+	status VARCHAR(24) NOT NULL,
+	duration_seconds INT NOT NULL DEFAULT 0,
+	started_at DATETIME(6) NULL,
+	arrives_at DATETIME(6) NULL,
+	resolved_at DATETIME(6) NULL,
+	defender_report_id VARCHAR(64) NOT NULL DEFAULT '',
+	error_message VARCHAR(512) NOT NULL DEFAULT '',
+	created_at DATETIME(6) NOT NULL,
+	updated_at DATETIME(6) NOT NULL,
+	INDEX idx_yellow_turban_player_status (target_player_id, status, arrives_at),
+	INDEX idx_yellow_turban_due (status, arrives_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+
 // NewMySQLRepository 创建 MySQL 仓储实例。
 func NewMySQLRepository(db *sql.DB) *MySQLRepository {
 	return &MySQLRepository{db: db}
@@ -386,34 +412,7 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 					FOREIGN KEY (player_id) REFERENCES players(id)
 					ON DELETE CASCADE
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-		`CREATE TABLE IF NOT EXISTS yellow_turban_marches (
-			id VARCHAR(64) PRIMARY KEY,
-			target_player_id VARCHAR(64) NOT NULL,
-			source_city_id VARCHAR(64) NOT NULL,
-			source_name VARCHAR(64) NOT NULL,
-			source_faction VARCHAR(32) NOT NULL,
-			source_region_id VARCHAR(32) NOT NULL,
-			risk_level_id INT NOT NULL DEFAULT 0,
-			risk_level_name VARCHAR(64) NOT NULL DEFAULT '',
-			player_food INT NOT NULL DEFAULT 0,
-			food_capacity INT NOT NULL DEFAULT 0,
-			pressure DOUBLE NOT NULL DEFAULT 0,
-			troops_json JSON NOT NULL,
-			status VARCHAR(24) NOT NULL,
-			duration_seconds INT NOT NULL DEFAULT 0,
-			started_at DATETIME(6) NULL,
-			arrives_at DATETIME(6) NULL,
-			resolved_at DATETIME(6) NULL,
-			defender_report_id VARCHAR(64) NOT NULL DEFAULT '',
-			error_message VARCHAR(512) NOT NULL DEFAULT '',
-			created_at DATETIME(6) NOT NULL,
-			updated_at DATETIME(6) NOT NULL,
-			INDEX idx_yellow_turban_player_status (target_player_id, status, arrives_at),
-			INDEX idx_yellow_turban_due (status, arrives_at),
-			CONSTRAINT fk_yellow_turban_target_player
-				FOREIGN KEY (target_player_id) REFERENCES players(id)
-				ON DELETE CASCADE
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		yellowTurbanMarchesTableSQL,
 		`CREATE TABLE IF NOT EXISTS player_currencies (
 			player_id VARCHAR(64) PRIMARY KEY,
 			city_gold INT NOT NULL DEFAULT 0,
@@ -1207,4 +1206,10 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 	}
 
 	return recordMySQLMigration(ctx, db, mysqlSchemaMigrationID, mysqlSchemaMigrationDescription)
+}
+
+// MigrateMySQLYellowTurban 只创建黄巾起义独立队列表，避免生产热库执行全量兼容迁移。
+func MigrateMySQLYellowTurban(ctx context.Context, db *sql.DB) error {
+	_, err := db.ExecContext(ctx, yellowTurbanMarchesTableSQL)
+	return err
 }
