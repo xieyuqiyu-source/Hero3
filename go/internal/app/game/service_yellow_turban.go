@@ -303,6 +303,7 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 	}); err != nil {
 		return BattleReport{}, err
 	}
+	s.applyReinforcementGeneralExpFromReports(reinforcementReports, now)
 	return report, nil
 }
 

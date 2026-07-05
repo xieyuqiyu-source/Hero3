@@ -97,6 +97,7 @@ func BuildBattleReportDetail(report BattleReport) BattleReportDetail {
 	}
 	if report.ViewType == ReportViewReinforcement {
 		primary.Role = "reinforcement"
+		primary.Generals = reinforcementReportGenerals(report, "reinforcement")
 		secondary = nil
 	}
 
@@ -339,6 +340,11 @@ func buildReportVisibility(report BattleReport) BattleReportVisibility {
 		ShowEnemyCityDefense:    true,
 		Threshold:               0.25,
 	}
+	if report.ViewType == ReportViewReinforcement {
+		visibility.Threshold = 0
+		visibility.ActualLossRatio = 0
+		return visibility
+	}
 	if report.EnemyLossRevealThreshold > 0 {
 		visibility.Threshold = report.EnemyLossRevealThreshold
 	}
@@ -361,15 +367,18 @@ func buildReportVisibility(report BattleReport) BattleReportVisibility {
 func buildReportExtra(report BattleReport, visibility BattleReportVisibility) map[string]interface{} {
 	extra := map[string]interface{}{}
 	if len(report.PvpPointsDelta) > 0 || len(report.PvpReinforcements) > 0 || len(report.PvpReinforcementLosses) > 0 || report.PvpWall != nil {
-		extra["pvp"] = map[string]interface{}{
-			"pointsDelta":              report.PvpPointsDelta,
-			"reinforcements":           report.PvpReinforcements,
-			"reinforcementLosses":      report.PvpReinforcementLosses,
-			"enemyLossRevealThreshold": visibility.Threshold,
-			"enemyLossRatio":           visibility.ActualLossRatio,
-			"enemyRemainingRevealed":   visibility.ShowEnemyRemainingUnits,
-			"wall":                     report.PvpWall,
+		pvp := map[string]interface{}{
+			"pointsDelta":         report.PvpPointsDelta,
+			"reinforcements":      report.PvpReinforcements,
+			"reinforcementLosses": report.PvpReinforcementLosses,
+			"wall":                report.PvpWall,
 		}
+		if report.ViewType != ReportViewReinforcement {
+			pvp["enemyLossRevealThreshold"] = visibility.Threshold
+			pvp["enemyLossRatio"] = visibility.ActualLossRatio
+			pvp["enemyRemainingRevealed"] = visibility.ShowEnemyRemainingUnits
+		}
+		extra["pvp"] = pvp
 	}
 	if len(report.CapturedUnits) > 0 || len(report.CapturedToGarrison) > 0 {
 		extra["capture"] = map[string]interface{}{
@@ -430,6 +439,27 @@ func convertPvpGenerals(generals []PvpGeneralSnapshot, role string) []BattleRepo
 	return result
 }
 
+// reinforcementReportGenerals 将协防战报中的援军武将快照转为标准战报武将。
+func reinforcementReportGenerals(report BattleReport, role string) []BattleReportGeneral {
+	if report.ViewType != ReportViewReinforcement {
+		return nil
+	}
+	result := []BattleReportGeneral{}
+	for _, reinforcement := range report.PvpReinforcements {
+		for _, general := range reinforcement.Generals {
+			result = append(result, BattleReportGeneral{
+				ID:         general.ID,
+				Name:       general.Name,
+				Level:      general.Level,
+				Role:       role,
+				Attributes: cloneFloatMap(general.Attributes),
+				Traits:     append([]GeneralTraitInstance(nil), general.Traits...),
+			})
+		}
+	}
+	return result
+}
+
 // reportOwnerAndTargetGenerals 返回战报拥有者和目标两侧的武将快照。
 func reportOwnerAndTargetGenerals(report BattleReport) ([]PvpGeneralSnapshot, []PvpGeneralSnapshot) {
 	if report.ViewType != ReportViewDefense {
@@ -446,7 +476,14 @@ func reportOwnerAndTargetGenerals(report BattleReport) ([]PvpGeneralSnapshot, []
 
 // syncBattleReportDetailGenerals 校正已有标准详情中的武将侧，兼容已保存的旧错位战报。
 func syncBattleReportDetailGenerals(report *BattleReport) {
-	if report == nil || report.Detail == nil || len(report.PvpAttackerGenerals)+len(report.PvpDefenderGenerals) == 0 {
+	if report == nil || report.Detail == nil {
+		return
+	}
+	if report.ViewType == ReportViewReinforcement {
+		report.Detail.PrimarySide.Generals = reinforcementReportGenerals(*report, "reinforcement")
+		return
+	}
+	if len(report.PvpAttackerGenerals)+len(report.PvpDefenderGenerals) == 0 {
 		return
 	}
 	ownerGenerals, targetGenerals := reportOwnerAndTargetGenerals(*report)

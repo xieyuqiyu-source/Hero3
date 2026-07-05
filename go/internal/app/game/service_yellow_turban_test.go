@@ -243,14 +243,19 @@ func TestYellowTurbanDefenseUsesStationedReinforcements(t *testing.T) {
 		TargetType:        ReinforcementTargetPlayerCity,
 		TargetID:          defender.Player.ID,
 		Status:            ReinforcementStatusStationed,
-		Troops:            map[string]int{"shadowGuard": 40},
-		RemainingTroops:   map[string]int{"shadowGuard": 40},
-		Losses:            map[string]int{},
-		Rules:             defaultGarrisonRules(GarrisonSourceReinforcement),
-		SentAt:            now.Add(-4 * time.Hour).UTC().Format(resourceDateLayout),
-		ArrivedAt:         now.Add(-3 * time.Hour).UTC().Format(resourceDateLayout),
-		CreatedAt:         now.Add(-4 * time.Hour).UTC().Format(resourceDateLayout),
-		UpdatedAt:         now.Add(-3 * time.Hour).UTC().Format(resourceDateLayout),
+		Troops:            map[string]int{"shadowGuard": 400},
+		RemainingTroops:   map[string]int{"shadowGuard": 400},
+		Generals: []ReinforcementGeneralSnapshot{{
+			ID:    "sunquan",
+			Name:  "孙权",
+			Level: 1,
+		}},
+		Losses:    map[string]int{},
+		Rules:     defaultGarrisonRules(GarrisonSourceReinforcement),
+		SentAt:    now.Add(-4 * time.Hour).UTC().Format(resourceDateLayout),
+		ArrivedAt: now.Add(-3 * time.Hour).UTC().Format(resourceDateLayout),
+		CreatedAt: now.Add(-4 * time.Hour).UTC().Format(resourceDateLayout),
+		UpdatedAt: now.Add(-3 * time.Hour).UTC().Format(resourceDateLayout),
 	}
 	repo.reinforcements[reinforcement.ID] = reinforcement
 	march, err := repo.CreateYellowTurbanMarch(YellowTurbanMarch{
@@ -265,7 +270,7 @@ func TestYellowTurbanDefenseUsesStationedReinforcements(t *testing.T) {
 		PlayerFood:      10000,
 		FoodCapacity:    1000,
 		Pressure:        10,
-		Troops:          map[string]int{"qingZhouArmy": 500},
+		Troops:          map[string]int{"qingZhouArmy": 300},
 		Status:          YellowTurbanMarchStatusMarching,
 		DurationSeconds: 1,
 		StartedAt:       now.Add(-2 * time.Minute).Format(resourceDateLayout),
@@ -297,9 +302,30 @@ func TestYellowTurbanDefenseUsesStationedReinforcements(t *testing.T) {
 	if helperReports[0].SourceType != ReportSourceYellowTurban || helperReports[0].BattleType != BattleTypeYellowTurban {
 		t.Fatalf("expected yellow turban reinforcement report type, got %+v", helperReports[0])
 	}
+	if helperReports[0].GeneralExpGained <= 0 || helperReports[0].Detail == nil || helperReports[0].Detail.Rewards.GeneralExp != helperReports[0].GeneralExpGained {
+		t.Fatalf("expected reinforcement general exp in report detail, got %+v", helperReports[0])
+	}
+	if len(helperReports[0].Detail.PrimarySide.Generals) != 1 || helperReports[0].Detail.PrimarySide.Generals[0].ID != "sunquan" {
+		t.Fatalf("expected reinforcement report to show helper general, got %+v", helperReports[0].Detail.PrimarySide.Generals)
+	}
+	if helperReports[0].Detail.Visibility.Threshold != 0 {
+		t.Fatalf("reinforcement report should not show enemy reveal threshold, got %+v", helperReports[0].Detail.Visibility)
+	}
+	if rawPvp, ok := helperReports[0].Detail.Extra["pvp"].(map[string]interface{}); ok {
+		if _, exists := rawPvp["enemyLossRevealThreshold"]; exists {
+			t.Fatalf("reinforcement report pvp extra should not include enemy reveal threshold, got %+v", rawPvp)
+		}
+	}
 	updated := repo.reinforcements[reinforcement.ID]
 	if updated.LastBattleReportID != helperReports[0].ID {
 		t.Fatalf("expected reinforcement last report %s, got %+v", helperReports[0].ID, updated)
+	}
+	updatedHelper, err := repo.GetState(helper.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState helper failed: %v", err)
+	}
+	if got := pvpTestGeneralExp(updatedHelper, "sunquan"); got != helperReports[0].GeneralExpGained {
+		t.Fatalf("expected sunquan exp %d, got %d", helperReports[0].GeneralExpGained, got)
 	}
 }
 

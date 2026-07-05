@@ -1443,21 +1443,41 @@ func (s *Service) applyPvpReinforcementGeneralExp(battle PvpBattle, now time.Tim
 		if exp <= 0 || strings.TrimSpace(record.FromPlayerID) == "" || len(record.Generals) == 0 {
 			continue
 		}
-		generalIDs := make([]string, 0, len(record.Generals))
-		for _, general := range record.Generals {
-			if strings.TrimSpace(general.ID) != "" {
-				generalIDs = append(generalIDs, general.ID)
-			}
+		s.applyReinforcementGeneralExp(record.FromPlayerID, record.Generals, exp, now)
+	}
+}
+
+// applyReinforcementGeneralExp 给一批协防携带武将发放战斗经验。
+func (s *Service) applyReinforcementGeneralExp(playerID string, generals []ReinforcementGeneralSnapshot, exp int, now time.Time) {
+	if exp <= 0 || strings.TrimSpace(playerID) == "" || len(generals) == 0 {
+		return
+	}
+	generalIDs := make([]string, 0, len(generals))
+	for _, general := range generals {
+		if strings.TrimSpace(general.ID) != "" {
+			generalIDs = append(generalIDs, general.ID)
 		}
-		if len(generalIDs) == 0 {
+	}
+	if len(generalIDs) == 0 {
+		return
+	}
+	_, _ = s.repo.UpdateGeneralState(playerID, now, func(state *GameState) error {
+		EnsureGeneralRoster(state, now)
+		applyGeneralBattleExpToRoster(state, generalIDs, exp)
+		refreshGeneralDerivedState(state, now)
+		return nil
+	})
+}
+
+// applyReinforcementGeneralExpFromReports 根据协防战报补发携带武将经验。
+func (s *Service) applyReinforcementGeneralExpFromReports(reports []BattleReport, now time.Time) {
+	for _, report := range reports {
+		if report.ViewType != ReportViewReinforcement || report.GeneralExpGained <= 0 {
 			continue
 		}
-		_, _ = s.repo.UpdateGeneralState(record.FromPlayerID, now, func(state *GameState) error {
-			EnsureGeneralRoster(state, now)
-			applyGeneralBattleExpToRoster(state, generalIDs, exp)
-			refreshGeneralDerivedState(state, now)
-			return nil
-		})
+		for _, reinforcement := range report.PvpReinforcements {
+			s.applyReinforcementGeneralExp(reinforcement.FromPlayerID, reinforcement.Generals, report.GeneralExpGained, now)
+		}
 	}
 }
 
