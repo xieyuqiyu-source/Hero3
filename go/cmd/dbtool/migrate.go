@@ -7,10 +7,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
+
 	"hero3/internal/infrastructure/storage"
 )
 
-const commandTimeout = 30 * time.Second
+const (
+	commandTimeout       = 30 * time.Second
+	migrationReadTimeout = 60 * time.Second
+	migrationTimeout     = 30 * time.Second
+)
 
 // runMigrate 迁移当前 HERO3_DATABASE_DSN 指向的数据库。
 func runMigrate(args []string) error {
@@ -96,7 +102,11 @@ func runPrintTestDSN(args []string) error {
 func migrateDSN(dsn string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
 	defer cancel()
-	db, err := storage.OpenMySQL(ctx, dsn)
+	migratorDSN, err := normalizeMigrationDSN(dsn)
+	if err != nil {
+		return err
+	}
+	db, err := storage.OpenMySQL(ctx, migratorDSN)
 	if err != nil {
 		return err
 	}
@@ -110,4 +120,22 @@ func migrateDSN(dsn string) error {
 	}
 	fmt.Printf("数据库迁移完成：%s\n", databaseName)
 	return nil
+}
+
+// normalizeMigrationDSN 为结构迁移提高 MySQL 连接读写超时，避免低峰 DDL 因服务默认短超时失败。
+func normalizeMigrationDSN(dsn string) (string, error) {
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return "", err
+	}
+	if cfg.Timeout < migrationTimeout {
+		cfg.Timeout = migrationTimeout
+	}
+	if cfg.ReadTimeout < migrationReadTimeout {
+		cfg.ReadTimeout = migrationReadTimeout
+	}
+	if cfg.WriteTimeout < migrationReadTimeout {
+		cfg.WriteTimeout = migrationReadTimeout
+	}
+	return cfg.FormatDSN(), nil
 }
