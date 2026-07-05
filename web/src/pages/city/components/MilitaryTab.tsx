@@ -12,6 +12,7 @@ import {
   Route,
   Eye,
   Store,
+  Tent,
 } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { getBuildingModifierProgressText, getCityWallDefenseBreakdownText, useConfigStore } from '@/store/configStore'
@@ -19,6 +20,30 @@ import BuildingCard from './BuildingCard'
 import type { Building } from '@/types/game'
 
 const EMPTY_BUILDINGS: Building[] = []
+
+/** 千帐营每级对应的黄巾安全口粮上限，与后端黄巾配置保持一致。 */
+const THOUSAND_TENT_CAPACITY_BY_LEVEL = [
+  100000,
+  300000,
+  600000,
+  1000000,
+  2000000,
+  4000000,
+  8000000,
+  15000000,
+  30000000,
+  50000000,
+  80000000,
+  120000000,
+  180000000,
+  280000000,
+  400000000,
+  600000000,
+  900000000,
+  1200000000,
+  1600000000,
+  2000000000,
+]
 
 interface BuildingConfig {
   type: string
@@ -80,6 +105,15 @@ const MILITARY_BUILDINGS: BuildingConfig[] = [
     icon: Sparkles,
     color: 'text-fuchsia-500',
     bgColor: 'bg-fuchsia-500/10',
+    goldBorder: true,
+  },
+  {
+    type: 'thousand_tent_camp',
+    name: '千帐营',
+    description: '金币提升黄巾口粮安全承载上限',
+    icon: Tent,
+    color: 'text-lime-600',
+    bgColor: 'bg-lime-50 dark:bg-lime-950/20',
     goldBorder: true,
   },
 ]
@@ -205,30 +239,30 @@ const BuildingGroup: FC<BuildingGroupProps> = ({ title, icon: GroupIcon, configs
 )
 
 interface MilitaryTabProps {
-  focusConstructionNonce?: number
+  focusBuildingType?: string | null
+  focusBuildingNonce?: number
 }
 
 /** 渲染军事建筑页签 */
-const MilitaryTab: FC<MilitaryTabProps> = ({ focusConstructionNonce = 0 }) => {
+const MilitaryTab: FC<MilitaryTabProps> = ({ focusBuildingType = null, focusBuildingNonce = 0 }) => {
   const buildings = useGameStore((s) => s.state?.buildings ?? EMPTY_BUILDINGS)
   const faction = useGameStore((s) => s.state?.player.faction)
   const [highlightedType, setHighlightedType] = useState<string | null>(null)
   useConfigStore((s) => Boolean(s.balance && s.combat))
 
   useEffect(() => {
-    if (focusConstructionNonce <= 0) return
+    if (focusBuildingNonce <= 0 || !focusBuildingType) return
 
-    const targetType = 'construction_bureau'
-    setHighlightedType(targetType)
+    setHighlightedType(focusBuildingType)
     window.setTimeout(() => {
-      document.getElementById(`city-building-${targetType}`)?.scrollIntoView({
+      document.getElementById(`city-building-${focusBuildingType}`)?.scrollIntoView({
         behavior: 'smooth',
         block: 'center',
       })
     }, 80)
     const timer = window.setTimeout(() => setHighlightedType(null), 1800)
     return () => window.clearTimeout(timer)
-  }, [focusConstructionNonce])
+  }, [focusBuildingNonce, focusBuildingType])
 
   return (
     <div className="space-y-6">
@@ -246,5 +280,23 @@ function buildingEffectText(buildingType: string, level: number, faction?: strin
   if (buildingType === 'city_wall') {
     return getCityWallDefenseBreakdownText(level, faction)
   }
+  if (buildingType === 'thousand_tent_camp') {
+    return thousandTentCampEffectText(level)
+  }
   return getBuildingModifierProgressText(buildingType, level)
+}
+
+/** 返回千帐营当前等级到下一级的安全口粮上限。 */
+function thousandTentCampEffectText(level: number): string {
+  const current = THOUSAND_TENT_CAPACITY_BY_LEVEL[Math.max(0, level - 1)] ?? THOUSAND_TENT_CAPACITY_BY_LEVEL[0]
+  const next = THOUSAND_TENT_CAPACITY_BY_LEVEL[level]
+  if (!next) return `安全口粮 ${formatYellowTurbanCapacity(current)}`
+  return `安全口粮 ${formatYellowTurbanCapacity(current)} -> ${formatYellowTurbanCapacity(next)}`
+}
+
+/** 格式化黄巾口粮上限数字。 */
+function formatYellowTurbanCapacity(value: number): string {
+  if (value >= 100000000) return `${Number((value / 100000000).toFixed(1))}亿`
+  if (value >= 10000) return `${Number((value / 10000).toFixed(1))}万`
+  return String(value)
 }

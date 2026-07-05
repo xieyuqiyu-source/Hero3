@@ -94,7 +94,7 @@ const YellowTurbanTab: FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => navigate('/city')}
+              onClick={() => navigate('/city', { state: { tab: 'military', focusBuildingType: 'thousand_tent_camp' } })}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-accent)]"
             >
               <Shield size={15} />

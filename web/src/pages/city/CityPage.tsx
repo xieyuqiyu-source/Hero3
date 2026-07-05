@@ -1,25 +1,50 @@
 // 城池页面，管理资源建筑和军事建筑两个页签的联动。
 import { useEffect, useState, type FC } from 'react'
+import { useLocation } from 'react-router-dom'
 import ResourceTab from './components/ResourceTab'
 import MilitaryTab from './components/MilitaryTab'
 import { useGameStore } from '@/store/gameStore'
 
 type Tab = 'resource' | 'military'
 
+interface CityRouteState {
+  tab?: Tab
+  focusBuildingType?: string
+}
+
 const CityPage: FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('resource')
   const [resourceExpanded, setResourceExpanded] = useState(true)
-  const [constructionFocusNonce, setConstructionFocusNonce] = useState(0)
+  const [focusBuildingType, setFocusBuildingType] = useState<string | null>(null)
+  const [focusBuildingNonce, setFocusBuildingNonce] = useState(0)
   const loadCityView = useGameStore((s) => s.loadCityView)
+  const location = useLocation()
 
   useEffect(() => {
     void loadCityView()
   }, [loadCityView])
 
+  useEffect(() => {
+    const state = location.state as CityRouteState | null
+    if (!state?.focusBuildingType && state?.tab !== 'military') return
+
+    setActiveTab('military')
+    if (state.focusBuildingType) {
+      setFocusBuildingType(state.focusBuildingType)
+      setFocusBuildingNonce((value) => value + 1)
+    }
+  }, [location.key, location.state])
+
+  /** 跳转到军事建筑并定位指定建筑 */
+  const focusMilitaryBuilding = (buildingType: string) => {
+    setActiveTab('military')
+    setFocusBuildingType(buildingType)
+    setFocusBuildingNonce((value) => value + 1)
+  }
+
   /** 跳转到军事建筑并定位建造司 */
   const handleFocusConstructionBureau = () => {
-    setActiveTab('military')
-    setConstructionFocusNonce((value) => value + 1)
+    focusMilitaryBuilding('construction_bureau')
   }
 
   return (
@@ -65,7 +90,7 @@ const CityPage: FC = () => {
           onRequestNewResourceSlot={handleFocusConstructionBureau}
         />
       ) : (
-        <MilitaryTab focusConstructionNonce={constructionFocusNonce} />
+        <MilitaryTab focusBuildingType={focusBuildingType} focusBuildingNonce={focusBuildingNonce} />
       )}
     </div>
   )
