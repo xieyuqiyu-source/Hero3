@@ -3,7 +3,7 @@ import { type FC, useState } from 'react'
 import { ArrowLeft, Share2, Check } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
-import type { BattleReport, BattleReportSweepDefender, BattleReportSweepExtra, BattleReportUnit } from '@/types/game'
+import type { BattleReport, BattleReportSweepDefender, BattleReportSweepExtra, BattleReportUnit, DefenseReinforcementUnit } from '@/types/game'
 import { formatTraitOutcomeDetail, getTraitMeta } from '@/utils/traits'
 import { sortUnitEntries, sortUnitIds } from '@/utils/unitOrder'
 import { gameApi } from '@/api/game'
@@ -34,6 +34,14 @@ function safeMap(value?: Record<string, number> | null): Record<string, number> 
 // safeArray 兼容旧战报或异常空字段，避免详情页对 null 调用 map。
 function safeArray<T>(value?: T[] | null): T[] {
   return Array.isArray(value) ? value : []
+}
+
+// readDetailReinforcements 兼容标准详情 extra 中保存的驻防快照。
+function readDetailReinforcements(report: BattleReport): DefenseReinforcementUnit[] {
+  const pvp = report.detail?.extra?.pvp
+  if (!pvp || typeof pvp !== 'object') return []
+  const reinforcements = (pvp as { reinforcements?: unknown }).reinforcements
+  return Array.isArray(reinforcements) ? reinforcements as DefenseReinforcementUnit[] : []
 }
 
 // isHiddenReportUnit 判断战报中不展示的非战斗兵种。
@@ -142,7 +150,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const pvpPointEntries = Object.entries(safeMap(report.pvpPointsDelta)).filter(([, amount]) => amount !== 0)
   const pvpAttackerGenerals = safeArray(report.pvpAttackerGenerals)
   const pvpDefenderGenerals = safeArray(report.pvpDefenderGenerals)
-  const pvpReinforcements = safeArray(report.pvpReinforcements)
+  const pvpReinforcements = safeArray(report.pvpReinforcements).length > 0 ? safeArray(report.pvpReinforcements) : readDetailReinforcements(report)
   const pvpReinforcementLosses = report.pvpReinforcementLosses ?? {}
   const hasPvpGenerals = pvpAttackerGenerals.length > 0 || pvpDefenderGenerals.length > 0
   const dispatchedUnits = safeMap(report.dispatchedUnits)
@@ -662,7 +670,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
                       <div className="mt-1 text-[10px] text-[var(--color-text-secondary)]">{formatTroopMap(item.troops)}</div>
                       {item.generals && item.generals.length > 0 && (
                         <div className="mt-1 text-[10px] text-[var(--color-text-muted)]">
-                          武将：{item.generals.map((general) => general.name || general.id).join('、')}
+                          武将：{item.generals.map((general) => `${general.name || general.id}${general.level ? ` Lv.${general.level}` : ''}`).join('、')}
                         </div>
                       )}
                     </div>
