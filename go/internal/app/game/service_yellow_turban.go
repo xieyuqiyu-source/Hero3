@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"hero3/internal/core/combat"
+	"hero3/internal/core/general"
 )
 
 // GetYellowTurbanStatus 返回玩家黄巾起义据点状态。
@@ -155,22 +156,57 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 		if err != nil {
 			return err
 		}
-		defenderUnits, err := buildSimulatedCombatUnits(state.Player.Faction, defenderBefore, now, CollectModifierSources(state)...)
+		defenderGeneralIDs := pvpDefenseGeneralIDs(state)
+		defenderTraits := buildActiveTraitsForGeneralIDs(state, defenderGeneralIDs)
+		defenderUnits, err := buildSimulatedCombatUnits(state.Player.Faction, defenderBefore, now, pvpModifierSourcesForHomeDefense(state)...)
 		if errors.Is(err, ErrNoUnitsSelected) {
 			defenderUnits = []combat.Unit{}
 		} else if err != nil {
 			return err
 		}
+		attackerArmy := combat.Army{Faction: march.SourceFaction, Units: attackerUnits}
+		defenderArmy := combat.Army{Faction: state.Player.Faction, Units: defenderUnits}
+		defenderBeforeCtx := &general.BeforeBattleContext{
+			Attacker:          &attackerArmy,
+			Defender:          &defenderArmy,
+			AttackerOwnsTrait: false,
+			DefenderOwnsTrait: true,
+			IsPvP:             true,
+			SameFaction:       march.SourceFaction == state.Player.Faction,
+		}
+		general.Dispatch(defenderBeforeCtx, defenderTraits)
 		battle := combat.Resolve(combat.CombatInput{
 			RuleID:      activeCombatRuleID(combat.ScenePVPAttack),
-			Attacker:    combat.Army{Faction: march.SourceFaction, Units: attackerUnits},
-			Defender:    combat.Army{Faction: state.Player.Faction, Units: defenderUnits},
+			Attacker:    attackerArmy,
+			Defender:    defenderArmy,
 			WallLevel:   pvpDefenderCityWallLevel(state),
 			WallFaction: state.Player.Faction,
 		})
+		afterCombatCtx := &general.AfterCombatResolveContext{
+			Result:            &battle,
+			Attacker:          &attackerArmy,
+			Defender:          &defenderArmy,
+			AttackerOwnsTrait: false,
+			DefenderOwnsTrait: true,
+			IsAttackerOnly:    true,
+		}
+		general.Dispatch(afterCombatCtx, withTraitOwnerSide(defenderTraits, "defender"))
 		defenderLosses := combatLossMap(battle.DefenderLosses)
 		attackerLosses := combatLossMap(battle.AttackerLosses)
 		applyArmyLosses(state, defenderLosses)
+		defenderArmyMap := armySliceToMap(state.Army)
+		defenderAfterBattleCtx := &general.AfterBattleContext{
+			PlayerArmy:   defenderArmyMap,
+			PlayerLosses: defenderLosses,
+			IsAttacker:   false,
+			Won:          battle.Winner == "defender",
+		}
+		general.Dispatch(defenderAfterBattleCtx, defenderTraits)
+		if len(defenderAfterBattleCtx.Revived) > 0 {
+			state.Army = armyMapToSlice(defenderArmyMap)
+		}
+		defenderExp := calculateGeneralBattleExpFromLosses(march.SourceFaction, battle.AttackerLosses)
+		defenderExpResult := applyGeneralBattleExpToRoster(state, defenderGeneralIDs, defenderExp)
 		nowText := now.Format(resourceDateLayout)
 		reportResult := "attacker_victory"
 		if battle.Winner == "defender" {
@@ -205,6 +241,18 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 			Rewards:           map[string]int{},
 			Read:              false,
 			CreatedAt:         nowText,
+		}
+		report.PvpDefenderGenerals = buildPvpDefenseGeneralSnapshots(state)
+		if len(defenderAfterBattleCtx.Revived) > 0 {
+			report.RevivedUnits = cloneStringIntMap(defenderAfterBattleCtx.Revived)
+		}
+		mergeTraitOutcomes(&report, defenderBeforeCtx.Triggered)
+		mergeTraitOutcomes(&report, afterCombatCtx.Triggered)
+		mergeTraitOutcomes(&report, defenderAfterBattleCtx.Triggered)
+		if defenderExpResult.Gained > 0 {
+			report.GeneralExpGained = defenderExpResult.Gained
+			report.GeneralLevelBefore = defenderExpResult.LevelBefore
+			report.GeneralLevelAfter = defenderExpResult.LevelAfter
 		}
 		report = NormalizeBattleReport(report)
 		state.ServerTime = nowText

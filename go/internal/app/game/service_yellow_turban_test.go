@@ -126,6 +126,77 @@ func TestYellowTurbanCheckRespectsMaxIncoming(t *testing.T) {
 	}
 }
 
+func TestYellowTurbanDefenseUsesHomeGeneralAndGrantsExp(t *testing.T) {
+	if err := LoadFactionsConfig("../../../config/factions.json"); err != nil {
+		t.Fatalf("LoadFactionsConfig failed: %v", err)
+	}
+	if err := LoadGeneralsConfig("../../../config/generals.json"); err != nil {
+		t.Fatalf("LoadGeneralsConfig failed: %v", err)
+	}
+	if err := LoadUnitsConfig("../../../config/units"); err != nil {
+		t.Fatalf("LoadUnitsConfig failed: %v", err)
+	}
+	SetYellowTurbanConfig(defaultYellowTurbanConfig())
+	repo := NewMemoryRepository()
+	svc := NewServiceWithRepository(repo)
+	now := time.Now().UTC()
+	account := Account{ID: "account_yt_general", Username: "yt_general", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("CreateAccount failed: %v", err)
+	}
+	state := newPlayerState("player_yt_general", "防守玩家", "shu", "liubei", now)
+	EnsureGeneralRoster(&state, now)
+	state.Army = []ArmyUnit{{UnitType: "greedyWolf", Amount: 5000}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("CreatePlayer failed: %v", err)
+	}
+
+	march, err := repo.CreateYellowTurbanMarch(YellowTurbanMarch{
+		ID:              "yt_general_march",
+		TargetPlayerID:  state.Player.ID,
+		SourceCityID:    "yt_wei_1",
+		SourceName:      "黄巾军·魏地",
+		SourceFaction:   "wei",
+		SourceRegionID:  "wei",
+		RiskLevelID:     1,
+		RiskLevelName:   "黄巾·流寇",
+		PlayerFood:      10000,
+		FoodCapacity:    1000,
+		Pressure:        10,
+		Troops:          map[string]int{"qingZhouArmy": 1200},
+		Status:          YellowTurbanMarchStatusMarching,
+		DurationSeconds: 1,
+		StartedAt:       now.Add(-2 * time.Minute).Format(resourceDateLayout),
+		ArrivesAt:       now.Add(-time.Minute).Format(resourceDateLayout),
+		CreatedAt:       now.Add(-2 * time.Minute).Format(resourceDateLayout),
+		UpdatedAt:       now.Add(-2 * time.Minute).Format(resourceDateLayout),
+	})
+	if err != nil {
+		t.Fatalf("CreateYellowTurbanMarch failed: %v", err)
+	}
+
+	report, err := svc.ResolveYellowTurbanMarch(march.ID)
+	if err != nil {
+		t.Fatalf("ResolveYellowTurbanMarch failed: %v", err)
+	}
+	if len(report.PvpDefenderGenerals) != 1 || report.PvpDefenderGenerals[0].ID != "liubei" {
+		t.Fatalf("expected yellow turban defense report to show defender general, got %+v", report.PvpDefenderGenerals)
+	}
+	if report.GeneralExpGained <= 0 {
+		t.Fatalf("expected defender general exp in report, got %+v", report)
+	}
+	if report.Detail == nil || report.Detail.Rewards.GeneralExp != report.GeneralExpGained {
+		t.Fatalf("expected standard report detail to show general exp, detail=%+v reportExp=%d", report.Detail, report.GeneralExpGained)
+	}
+	updated, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState failed: %v", err)
+	}
+	if got := pvpTestGeneralExp(updated, "liubei"); got != report.GeneralExpGained {
+		t.Fatalf("expected liubei exp %d, got %d", report.GeneralExpGained, got)
+	}
+}
+
 func totalFoodForFaction(faction string, troops map[string]int) int {
 	total := 0
 	for unitID, amount := range troops {
