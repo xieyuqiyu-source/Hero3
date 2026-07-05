@@ -128,7 +128,7 @@ HERO3_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localho
 
 不配置 `HERO3_DATABASE_DSN` 时，服务使用内存存储，重启后账号和新建存档会丢失。
 
-配置 `HERO3_DATABASE_DSN` 后，服务使用 MySQL/MariaDB。开发环境默认在启动时执行当前需要的轻量迁移；生产环境默认不在 `hero3-server` 启动时执行迁移，避免线上重启抢 DDL/回填锁，结构变更应通过 `make migrate` 或服务器上的 `hero3-dbtool migrate` 在低峰执行：
+配置 `HERO3_DATABASE_DSN` 后，服务使用 MySQL/MariaDB。开发环境默认在启动时执行当前需要的轻量迁移；生产环境默认不在 `hero3-server` 启动时执行迁移，正式发布脚本会在重启服务前显式执行服务器上的 `hero3-dbtool migrate`：
 
 - `accounts`：轻账号
 - `players`：账号绑定的游戏存档，`state_json` 只保留轻量兼容快照，不再保存资源、建筑、兵力、武将、背包、Buff 等权威资产大字段

@@ -204,6 +204,13 @@ jobs:
           rsync -a --delete "$BUILD_DIR/admin/" /var/www/hero3/admin/
           printf '%s %s\n' "${HERO3_SHA:0:7}" "deployed from ${HERO3_REF_NAME}" > /opt/hero3/RELEASE
 
+          log "Running database migrations"
+          set -a
+          . /etc/hero3/hero3.env
+          set +a
+          cd /opt/hero3/go
+          timeout --kill-after=10s 120s /opt/hero3/go/bin/hero3-dbtool migrate
+
           log "Restarting services"
           if [ -d "$BUILD_DIR/deploy/journald" ]; then
             mkdir -p /etc/systemd/journald.conf.d /var/log/journal

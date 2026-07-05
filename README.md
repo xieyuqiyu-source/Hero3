@@ -59,7 +59,7 @@ go build ./cmd/server
 数据库：
 
 - 默认不配置数据库时使用内存存储，适合快速开发。
-- 配置 `HERO3_DATABASE_DSN` 后启用 MySQL/MariaDB；开发环境默认随服务启动执行轻量迁移，生产环境默认跳过启动迁移，结构变更应在低峰通过 `make migrate` 或 `hero3-dbtool migrate` 执行。
+- 配置 `HERO3_DATABASE_DSN` 后启用 MySQL/MariaDB；开发环境默认随服务启动执行轻量迁移，生产环境的 `hero3-server` 默认跳过启动迁移，正式发布脚本会在重启服务前显式执行 `/opt/hero3/go/bin/hero3-dbtool migrate`。
 - `game_configs` 保存线上 GM 配置，配置文件只作为默认模板和数据库缺失时的初始化种子；当前仙池垂钓配置已使用 `game_configs.fishing`，GM 后台保存不会回写发布目录 JSON。
 - 本地开发模式应连接 `test_` 前缀测试库，例如 `test_hero3`，不要直接写稳定玩家库。
 - `make migrate` 迁移当前 DSN 指向的库，`make migrate-test` 创建并迁移 `test_` 前缀测试库。
