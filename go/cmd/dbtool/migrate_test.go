@@ -18,8 +18,8 @@ func TestNormalizeMigrationDSNRaisesShortTimeouts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseDSN failed: %v", err)
 	}
-	if cfg.Timeout < migrationTimeout {
-		t.Fatalf("expected timeout >= %s, got %s", migrationTimeout, cfg.Timeout)
+	if cfg.Timeout < migrationConnTimeout {
+		t.Fatalf("expected timeout >= %s, got %s", migrationConnTimeout, cfg.Timeout)
 	}
 	if cfg.ReadTimeout < migrationReadTimeout {
 		t.Fatalf("expected read timeout >= %s, got %s", migrationReadTimeout, cfg.ReadTimeout)

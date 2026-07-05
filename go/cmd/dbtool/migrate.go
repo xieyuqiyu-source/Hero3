@@ -14,8 +14,9 @@ import (
 
 const (
 	commandTimeout       = 30 * time.Second
+	migrationTimeout     = 5 * time.Minute
 	migrationReadTimeout = 60 * time.Second
-	migrationTimeout     = 30 * time.Second
+	migrationConnTimeout = 30 * time.Second
 )
 
 // runMigrate 迁移当前 HERO3_DATABASE_DSN 指向的数据库。
@@ -100,7 +101,7 @@ func runPrintTestDSN(args []string) error {
 
 // migrateDSN 对指定 DSN 执行迁移。
 func migrateDSN(dsn string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), migrationTimeout)
 	defer cancel()
 	migratorDSN, err := normalizeMigrationDSN(dsn)
 	if err != nil {
@@ -128,8 +129,8 @@ func normalizeMigrationDSN(dsn string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if cfg.Timeout < migrationTimeout {
-		cfg.Timeout = migrationTimeout
+	if cfg.Timeout < migrationConnTimeout {
+		cfg.Timeout = migrationConnTimeout
 	}
 	if cfg.ReadTimeout < migrationReadTimeout {
 		cfg.ReadTimeout = migrationReadTimeout

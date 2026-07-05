@@ -214,7 +214,7 @@ jobs:
           log "Running database migrations"
           migration_done=0
           for attempt in 1 2 3; do
-            if timeout --kill-after=10s 180s systemd-run --wait --collect --pipe --quiet \
+            if timeout --kill-after=10s 360s systemd-run --wait --collect --pipe --quiet \
               --property=WorkingDirectory=/opt/hero3/go \
               --property=EnvironmentFile=/etc/hero3/hero3.env \
               /opt/hero3/go/bin/hero3-dbtool migrate; then
