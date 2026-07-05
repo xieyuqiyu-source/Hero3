@@ -7,6 +7,12 @@ import (
 
 // 本文件验证黄巾起义口粮压力和派兵规则。
 
+func TestYellowTurbanDefaultConfigIsValid(t *testing.T) {
+	if err := ValidateYellowTurbanConfig(defaultYellowTurbanConfig()); err != nil {
+		t.Fatalf("default yellow turban config should be valid: %v", err)
+	}
+}
+
 func TestYellowTurbanFoodPressureUsesThousandTentCamp(t *testing.T) {
 	if err := LoadUnitsConfig("../../../config/units"); err != nil {
 		t.Fatalf("LoadUnitsConfig failed: %v", err)

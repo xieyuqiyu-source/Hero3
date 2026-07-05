@@ -152,7 +152,7 @@ func ValidateYellowTurbanConfig(cfg YellowTurbanConfig) error {
 		if !level.Enabled {
 			continue
 		}
-		if level.ID <= 0 || level.Name == "" || level.MinPressure <= 1 || level.MaxRatio <= 0 || level.MaxRatio < level.MinRatio {
+		if level.ID <= 0 || level.Name == "" || level.MinPressure < 1 || level.MaxRatio <= 0 || level.MaxRatio < level.MinRatio {
 			return errors.New("invalid yellow turban risk level")
 		}
 		enabledLevels++
