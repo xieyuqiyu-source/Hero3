@@ -165,6 +165,9 @@ func main() {
 	})
 
 	server := httpserver.New(cfg, logger, router)
+	schedulerCtx, stopSchedulers := context.WithCancel(context.Background())
+	defer stopSchedulers()
+	startYellowTurbanScheduler(schedulerCtx, logger, gameService)
 
 	serverErrors := make(chan error, 1)
 	go func() {
@@ -182,6 +185,7 @@ func main() {
 	case signal := <-shutdownSignals:
 		logger.Info("shutdown signal received", "signal", signal.String())
 	}
+	stopSchedulers()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -197,6 +201,75 @@ func main() {
 // shouldRunStartupMigrations 判断服务启动时是否自动执行数据库结构迁移。
 func shouldRunStartupMigrations(cfg config.Config) bool {
 	return cfg.RunStartupMigrations
+}
+
+// startYellowTurbanScheduler 启动黄巾起义自动检测后台任务。
+func startYellowTurbanScheduler(ctx context.Context, logger *slog.Logger, gameService *game.Service) {
+	go func() {
+		delay := yellowTurbanInitialDelay(gameService.GetYellowTurbanConfig())
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Info("yellow turban scheduler stopped")
+				return
+			case <-timer.C:
+				runYellowTurbanCheck(logger, gameService)
+				timer.Reset(yellowTurbanCheckInterval(gameService.GetYellowTurbanConfig()))
+			}
+		}
+	}()
+}
+
+// runYellowTurbanCheck 执行一次全服黄巾检测并记录概要日志。
+func runYellowTurbanCheck(logger *slog.Logger, gameService *game.Service) {
+	cfg := gameService.GetYellowTurbanConfig()
+	if !cfg.Enabled {
+		logger.Debug("yellow turban scheduler skipped: disabled")
+		return
+	}
+
+	startedAt := time.Now()
+	results, err := gameService.CheckYellowTurbanForAllPlayers()
+	if err != nil {
+		logger.Error("yellow turban scheduled check failed", "error", err)
+		return
+	}
+
+	checked := 0
+	spawned := 0
+	failed := 0
+	for _, result := range results {
+		if result.Checked {
+			checked++
+		}
+		if result.Spawned {
+			spawned++
+		}
+		if !result.Checked {
+			failed++
+		}
+	}
+	logger.Info("yellow turban scheduled check completed", "players", len(results), "checked", checked, "spawned", spawned, "failed", failed, "duration", time.Since(startedAt).String())
+}
+
+// yellowTurbanInitialDelay 返回服务启动后的首次黄巾检测延迟。
+func yellowTurbanInitialDelay(cfg game.YellowTurbanConfig) time.Duration {
+	interval := yellowTurbanCheckInterval(cfg)
+	if interval < 30*time.Second {
+		return interval
+	}
+	return 30 * time.Second
+}
+
+// yellowTurbanCheckInterval 返回黄巾自动检测周期。
+func yellowTurbanCheckInterval(cfg game.YellowTurbanConfig) time.Duration {
+	if cfg.CheckIntervalMinutes <= 0 {
+		return 10 * time.Minute
+	}
+	return time.Duration(cfg.CheckIntervalMinutes) * time.Minute
 }
 
 // validateDevelopmentDatabase 防止本地开发模式误连稳定玩家库。

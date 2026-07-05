@@ -159,7 +159,6 @@ func registerMapRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("GET /api/v1/map/npc-cities/sweep-tasks/{taskId}", handlers.GetNpcSweepTask)
 	mux.HandleFunc("POST /api/v1/map/npc-cities/scout", handlers.ScoutNpc)
 	mux.HandleFunc("GET /api/v1/map/yellow-turban/status", handlers.YellowTurbanStatus)
-	mux.HandleFunc("POST /api/v1/map/yellow-turban/check", handlers.CheckYellowTurban)
 	mux.HandleFunc("POST /api/v1/map/yellow-turban/marches/{marchId}/resolve", handlers.ResolveYellowTurbanMarch)
 }
 

@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, PlayerDeletionResult, NpcCity, NpcSweepTask, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, GamblingRoundResult, SlotRoundResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, ReinforcementActionResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, WorldMapTarget, WorldMapViewResponse, PvpAttackResponse, PvpScoutResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult, YellowTurbanStatusResponse, YellowTurbanCheckResult } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, PlayerSummary, PlayerDeletionResult, NpcCity, NpcSweepTask, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, GamblingRoundResult, SlotRoundResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, ReinforcementActionResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, WorldMapTarget, WorldMapViewResponse, PvpAttackResponse, PvpScoutResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult, YellowTurbanStatusResponse } from '@/types/game'
 import type { BalanceConfig, CombatConfig, FactionConfig, FishingConfig, SlotConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -181,11 +181,6 @@ export const gameApi = {
   /** 获取黄巾起义状态 */
   getYellowTurbanStatus(playerId: string) {
     return api.get<YellowTurbanStatusResponse>(`/map/yellow-turban/status?playerId=${playerId}`)
-  },
-
-  /** 手动触发一次黄巾检测 */
-  checkYellowTurban(playerId: string) {
-    return api.post<YellowTurbanCheckResult>('/map/yellow-turban/check', { playerId })
   },
 
   /** 获取背包视图 */

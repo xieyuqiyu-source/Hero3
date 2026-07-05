@@ -4,7 +4,9 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 
+	"hero3/internal/app/game"
 	"hero3/internal/platform/config"
 )
 
@@ -74,5 +76,19 @@ func TestShouldRunStartupMigrationsUsesConfigFlag(t *testing.T) {
 	}
 	if shouldRunStartupMigrations(config.Config{RunStartupMigrations: false}) {
 		t.Fatal("expected startup migrations to be skipped when disabled")
+	}
+}
+
+func TestYellowTurbanCheckIntervalUsesConfig(t *testing.T) {
+	interval := yellowTurbanCheckInterval(game.YellowTurbanConfig{CheckIntervalMinutes: 7})
+	if interval != 7*time.Minute {
+		t.Fatalf("expected 7m interval, got %s", interval)
+	}
+}
+
+func TestYellowTurbanCheckIntervalFallback(t *testing.T) {
+	interval := yellowTurbanCheckInterval(game.YellowTurbanConfig{})
+	if interval != 10*time.Minute {
+		t.Fatalf("expected fallback 10m interval, got %s", interval)
 	}
 }

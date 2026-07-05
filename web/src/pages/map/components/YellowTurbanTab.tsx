@@ -1,6 +1,6 @@
 /* 本文件实现据点页中的黄巾起义状态面板。 */
 import { useEffect, useMemo, useState, type FC } from 'react'
-import { AlertTriangle, RefreshCw, Shield, Timer, Tent } from 'lucide-react'
+import { RefreshCw, Shield, Timer, Tent } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { gameApi } from '@/api/game'
 import { useGameStore } from '@/store/gameStore'
@@ -13,7 +13,6 @@ const YellowTurbanTab: FC = () => {
   const navigate = useNavigate()
   const [status, setStatus] = useState<YellowTurbanStatusResponse | null>(null)
   const [loading, setLoading] = useState(false)
-  const [checking, setChecking] = useState(false)
 
   const pressurePct = useMemo(() => Math.round((status?.foodPressure.pressure ?? 0) * 100), [status])
 
@@ -28,20 +27,6 @@ const YellowTurbanTab: FC = () => {
       toast.error(error instanceof Error ? error.message : '黄巾状态读取失败')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const checkNow = async () => {
-    if (!activePlayerId) return
-    setChecking(true)
-    try {
-      const result = await gameApi.checkYellowTurban(activePlayerId)
-      toast.success(result.spawned ? '黄巾军已出兵' : result.reason ?? '检测完成')
-      await loadStatus()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : '黄巾检测失败')
-    } finally {
-      setChecking(false)
     }
   }
 
@@ -82,15 +67,6 @@ const YellowTurbanTab: FC = () => {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={checkNow}
-              disabled={checking}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <AlertTriangle size={15} />
-              {checking ? '检测中' : '立即检测'}
-            </button>
             <button
               type="button"
               onClick={() => navigate('/city', { state: { tab: 'military', focusBuildingType: 'thousand_tent_camp' } })}

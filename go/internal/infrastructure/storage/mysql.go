@@ -33,8 +33,8 @@ const yellowTurbanMarchesTableSQL = `CREATE TABLE IF NOT EXISTS yellow_turban_ma
 	source_region_id VARCHAR(32) NOT NULL,
 	risk_level_id INT NOT NULL DEFAULT 0,
 	risk_level_name VARCHAR(64) NOT NULL DEFAULT '',
-	player_food INT NOT NULL DEFAULT 0,
-	food_capacity INT NOT NULL DEFAULT 0,
+	player_food BIGINT NOT NULL DEFAULT 0,
+	food_capacity BIGINT NOT NULL DEFAULT 0,
 	pressure DOUBLE NOT NULL DEFAULT 0,
 	troops_json JSON NOT NULL,
 	status VARCHAR(24) NOT NULL,
@@ -1204,12 +1204,28 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 	}); err != nil {
 		return err
 	}
+	if err := migrateYellowTurbanMarchNumericColumns(ctx, db); err != nil {
+		return err
+	}
 
 	return recordMySQLMigration(ctx, db, mysqlSchemaMigrationID, mysqlSchemaMigrationDescription)
 }
 
 // MigrateMySQLYellowTurban 只创建黄巾起义独立队列表，避免生产热库执行全量兼容迁移。
 func MigrateMySQLYellowTurban(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, yellowTurbanMarchesTableSQL)
-	return err
+	if _, err := db.ExecContext(ctx, yellowTurbanMarchesTableSQL); err != nil {
+		return err
+	}
+	return migrateYellowTurbanMarchNumericColumns(ctx, db)
+}
+
+// migrateYellowTurbanMarchNumericColumns 放宽黄巾口粮快照字段，支持亿级以上口粮。
+func migrateYellowTurbanMarchNumericColumns(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE yellow_turban_marches MODIFY COLUMN player_food BIGINT NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `ALTER TABLE yellow_turban_marches MODIFY COLUMN food_capacity BIGINT NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	return nil
 }
