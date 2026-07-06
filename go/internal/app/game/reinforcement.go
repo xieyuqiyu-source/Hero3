@@ -137,6 +137,7 @@ type ReinforcementListResponse struct {
 type DefenseReinforcementUnit struct {
 	ReinforcementID string                         `json:"reinforcementId"`
 	FromPlayerID    string                         `json:"fromPlayerId"`
+	FromPlayerName  string                         `json:"fromPlayerName,omitempty"`
 	Faction         string                         `json:"faction"`
 	Troops          map[string]int                 `json:"troops"`
 	Generals        []ReinforcementGeneralSnapshot `json:"generals,omitempty"`

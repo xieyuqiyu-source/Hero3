@@ -37,6 +37,25 @@ func (h *Handlers) GetReport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, report)
 }
 
+// GetReportEvent 返回当前玩家可见的同事件战报上下文。
+func (h *Handlers) GetReportEvent(w http.ResponseWriter, r *http.Request) {
+	reportID := r.PathValue("reportId")
+	playerID := r.URL.Query().Get("playerId")
+	if reportID == "" || playerID == "" {
+		writeError(w, http.StatusBadRequest, "playerId and reportId are required")
+		return
+	}
+	if !h.requireOwnership(w, r, playerID) {
+		return
+	}
+	result, err := h.gameService.GetReportEventForPlayer(playerID, reportID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "report event not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *Handlers) ListReports(w http.ResponseWriter, r *http.Request) {
 	playerID := r.URL.Query().Get("playerId")
 	if playerID == "" {
@@ -76,6 +95,7 @@ func (h *Handlers) ListReports(w http.ResponseWriter, r *http.Request) {
 		SourceType:     r.URL.Query().Get("sourceType"),
 		BattleType:     r.URL.Query().Get("battleType"),
 		Result:         r.URL.Query().Get("result"),
+		OwnerOutcome:   r.URL.Query().Get("ownerOutcome"),
 		Page:           page,
 		PageSize:       pageSize,
 		IncludeDeleted: r.URL.Query().Get("includeDeleted") == "true",

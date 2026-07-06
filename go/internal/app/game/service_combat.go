@@ -1587,6 +1587,43 @@ func (s *Service) GetReportForPlayer(playerID string, reportID string) (BattleRe
 	return NormalizeBattleReport(report), nil
 }
 
+// GetReportEventForPlayer 获取玩家可见的同事件战报上下文。
+func (s *Service) GetReportEventForPlayer(playerID string, reportID string) (BattleReportEventContext, error) {
+	report, err := s.GetReportForPlayer(playerID, reportID)
+	if err != nil {
+		return BattleReportEventContext{}, err
+	}
+	eventID := strings.TrimSpace(report.EventID)
+	if eventID == "" {
+		return BattleReportEventContext{}, errors.New("event not found")
+	}
+	event, err := s.GetBattleEventForAdmin(eventID)
+	if err != nil {
+		return BattleReportEventContext{}, err
+	}
+	allReports, err := s.ListReportsByEventForAdmin(eventID)
+	if err != nil {
+		return BattleReportEventContext{}, err
+	}
+	reports := make([]BattleReport, 0, len(allReports))
+	for _, item := range allReports {
+		if item.PlayerID == playerID || item.OwnerPlayerID == playerID {
+			reports = append(reports, NormalizeBattleReport(item))
+		}
+	}
+	allParticipants, err := s.ListParticipantsByEventForAdmin(eventID)
+	if err != nil {
+		return BattleReportEventContext{}, err
+	}
+	participants := make([]BattleReportParticipant, 0, len(allParticipants))
+	for _, item := range allParticipants {
+		if item.PlayerID == playerID {
+			participants = append(participants, item)
+		}
+	}
+	return BattleReportEventContext{Event: event, Reports: reports, Participants: participants}, nil
+}
+
 // GetSharedReportByToken 通过分享 token 读取公开战报。
 func (s *Service) GetSharedReportByToken(token string) (BattleReport, error) {
 	token = strings.TrimSpace(token)
@@ -1692,6 +1729,7 @@ func (s *Service) CreateBattleReports(input BattleReportCreateInput) (BattleRepo
 		report.SourceType = valueOrDefault(report.SourceType, input.SourceType)
 		report.BattleType = valueOrDefault(report.BattleType, input.BattleType)
 		report.Result = valueOrDefault(report.Result, input.Result)
+		report.OwnerOutcome = valueOrDefault(report.OwnerOutcome, input.OwnerOutcome)
 		report.CreatedAt = valueOrDefault(report.CreatedAt, occurredAt)
 		report = NormalizeBattleReport(report)
 		reports = append(reports, report)

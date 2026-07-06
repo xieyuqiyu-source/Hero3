@@ -934,7 +934,8 @@ func (r *MemoryRepository) ListReports(playerID string, limit int, offset int) (
 	total := 0
 	threeDaysAgo := time.Now().Add(-3 * 24 * time.Hour)
 
-	for _, report := range all {
+	for _, raw := range all {
+		report := NormalizeBattleReport(raw)
 		if report.DeletedByPlayer {
 			continue
 		}
@@ -1002,6 +1003,9 @@ func (r *MemoryRepository) ListReportsByQuery(query BattleReportQuery) ([]Battle
 			continue
 		}
 		if query.Result != "" && report.Result != query.Result {
+			continue
+		}
+		if query.OwnerOutcome != "" && report.OwnerOutcome != query.OwnerOutcome {
 			continue
 		}
 		total++

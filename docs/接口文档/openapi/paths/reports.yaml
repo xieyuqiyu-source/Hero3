@@ -25,6 +25,11 @@
       in: query
       schema:
         type: string
+    - name: ownerOutcome
+      in: query
+      schema:
+        type: string
+        enum: [victory, defeat, draw, intel_success, intel_failed, notice]
     - name: page
       in: query
       schema:
@@ -67,6 +72,28 @@
           application/json:
             schema:
               $ref: '#/components/schemas/BattleReport'
+/api/v1/report-events/{reportId}:
+  get:
+    tags: [News]
+    summary: 获取当前玩家可见的同事件战报上下文
+    parameters:
+    - name: reportId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: playerId
+      in: query
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: 当前玩家可见的同事件上下文。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BattleReportEventContext'
 /api/v1/reports/{reportId}/read:
   post:
     tags: [News]
@@ -239,6 +266,10 @@
       schema:
         type: string
     - name: result
+      in: query
+      schema:
+        type: string
+    - name: ownerOutcome
       in: query
       schema:
         type: string

@@ -163,10 +163,11 @@ type PvpBattle struct {
 
 // PvpGeneralSnapshot 记录 PVP 战斗中实际参战的玩家武将快照。
 type PvpGeneralSnapshot struct {
-	ID    string             `json:"id"`
-	Name  string             `json:"name,omitempty"`
-	Level int                `json:"level,omitempty"`
-	Buffs map[string]float64 `json:"buffs,omitempty"`
+	ID     string                 `json:"id"`
+	Name   string                 `json:"name,omitempty"`
+	Level  int                    `json:"level,omitempty"`
+	Buffs  map[string]float64     `json:"buffs,omitempty"`
+	Traits []GeneralTraitInstance `json:"traits,omitempty"`
 }
 
 // PvpRevengeRecord 记录一次玩家被攻击后生成的复仇机会。

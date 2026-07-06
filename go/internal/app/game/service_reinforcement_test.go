@@ -42,6 +42,35 @@ func TestSendReinforcementConsumesArmyAndReservesGeneral(t *testing.T) {
 	}
 }
 
+func TestSendReinforcementSettlesCaoCaoGuardProductionBeforeConsume(t *testing.T) {
+	svc, repo, from, to := newReinforcementTestService(t)
+	setRealCaoCaoGuardConfig(t)
+	settledAt := time.Now().UTC().Add(-24 * time.Hour)
+	from.Army = []ArmyUnit{}
+	from.ResourceSettledAt = settledAt.Format(resourceDateLayout)
+	from.ServerTime = settledAt.Format(resourceDateLayout)
+	repo.players[from.Player.ID] = from
+
+	result, err := svc.SendReinforcement(SendReinforcementRequest{
+		FromPlayerID:   from.Player.ID,
+		TargetPlayerID: to.Player.ID,
+		Troops:         map[string]int{"huWei": 1},
+	})
+	if err != nil {
+		t.Fatalf("SendReinforcement should use settled Cao Cao guard production: %v", err)
+	}
+	if got := result.Reinforcement.Troops["huWei"]; got != 1 {
+		t.Fatalf("expected sent huWei 1, got %d", got)
+	}
+	stored, err := repo.GetState(from.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState failed: %v", err)
+	}
+	if got := armySliceToMap(stored.Army)["huWei"]; got != 2999 {
+		t.Fatalf("expected remaining settled huWei 2999, got %d army=%+v", got, stored.Army)
+	}
+}
+
 func TestReinforcementSourceSlotLimitAndSameSourceAppend(t *testing.T) {
 	svc, repo, from, to := newReinforcementTestService(t)
 	from.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 500}}

@@ -6,6 +6,11 @@ import type {
   AdminSettlePvpSeasonResponse,
   AdminPvpOverviewResponse,
   AdminAnnouncementPage,
+  AdminBattleEvent,
+  AdminBattleEventPage,
+  AdminBattleReport,
+  AdminBattleReportPage,
+  AdminBattleReportParticipant,
   Announcement,
   BalanceConfig,
   CombatConfig,
@@ -130,6 +135,23 @@ export const adminApi = {
   },
   cancelPvpMarch(marchId: string) {
     return request<PvpMarchActionResponse>(`${API_BASE}/admin/pvp/marches/${marchId}/cancel`, { method: 'POST' })
+  },
+  getBattleEvents(params: Record<string, string>) {
+    const query = new URLSearchParams(params)
+    return request<AdminBattleEventPage>(`${API_BASE}/admin/battle-events${query.toString() ? `?${query.toString()}` : ''}`)
+  },
+  getBattleEvent(eventId: string) {
+    return request<AdminBattleEvent>(`${API_BASE}/admin/battle-events/${encodeURIComponent(eventId)}`)
+  },
+  getBattleEventReports(eventId: string) {
+    return request<{ reports: AdminBattleReport[] }>(`${API_BASE}/admin/battle-events/${encodeURIComponent(eventId)}/reports`)
+  },
+  getBattleEventParticipants(eventId: string) {
+    return request<{ participants: AdminBattleReportParticipant[] }>(`${API_BASE}/admin/battle-events/${encodeURIComponent(eventId)}/participants`)
+  },
+  getAdminReports(params: Record<string, string>) {
+    const query = new URLSearchParams(params)
+    return request<AdminBattleReportPage>(`${API_BASE}/admin/reports${query.toString() ? `?${query.toString()}` : ''}`)
   },
   adjustResources(playerId: string, adjustments: Record<string, number>) {
     return request<{ state: GameState }>(`${API_BASE}/admin/resources/adjust`, {

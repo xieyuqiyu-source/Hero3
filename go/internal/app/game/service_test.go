@@ -55,6 +55,61 @@ func TestSettleResourcesAddsProducedResources(t *testing.T) {
 	}
 }
 
+func TestGetMilitaryViewPersistsCaoCaoGuardProduction(t *testing.T) {
+	setRealCaoCaoGuardConfig(t)
+	now := time.Now().UTC()
+	settledAt := now.Add(-24 * time.Hour)
+	repo := NewMemoryRepository()
+	svc := NewServiceWithRepository(repo)
+	state := newPlayerState("player_guard_view", "主公", "wei", "caocao", settledAt)
+	state.Army = []ArmyUnit{}
+	state.ResourceSettledAt = settledAt.Format(resourceDateLayout)
+	state.ServerTime = settledAt.Format(resourceDateLayout)
+	repo.players[state.Player.ID] = state
+
+	view, err := svc.GetMilitaryView(state.Player.ID)
+	if err != nil {
+		t.Fatalf("GetMilitaryView failed: %v", err)
+	}
+	if got := armySliceToMap(view.Army)["huWei"]; got != 3000 {
+		t.Fatalf("expected military view huWei 3000, got %d army=%+v", got, view.Army)
+	}
+	stored, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState failed: %v", err)
+	}
+	if got := armySliceToMap(stored.Army)["huWei"]; got != 3000 {
+		t.Fatalf("expected persisted huWei 3000, got %d army=%+v", got, stored.Army)
+	}
+}
+
+func setRealCaoCaoGuardConfig(t *testing.T) {
+	t.Helper()
+	originalUnits := GetUnitsConfig()
+	originalFactions := GetFactionsConfig()
+	originalGenerals := GetGeneralsConfig()
+	if err := LoadFactionsConfig(filepath.Join("..", "..", "..", "config", "factions.json")); err != nil {
+		t.Fatalf("LoadFactionsConfig failed: %v", err)
+	}
+	if err := LoadUnitsConfig(filepath.Join("..", "..", "..", "config", "units")); err != nil {
+		t.Fatalf("LoadUnitsConfig failed: %v", err)
+	}
+	if err := LoadGeneralsConfig(filepath.Join("..", "..", "..", "config", "generals.json")); err != nil {
+		t.Fatalf("LoadGeneralsConfig failed: %v", err)
+	}
+	t.Cleanup(func() {
+		unitsMu.Lock()
+		activeUnits = originalUnits
+		unitsMu.Unlock()
+		factionsMu.Lock()
+		activeFactions = originalFactions
+		factionsMu.Unlock()
+		generalsMu.Lock()
+		activeGenerals = originalGenerals
+		generalsMu.Unlock()
+	})
+}
+
 func TestSettleResourcesCapsAtCapacity(t *testing.T) {
 	settledAt := time.Date(2026, 5, 22, 10, 0, 0, 0, time.UTC)
 	state := newPlayerState("player_test", "主公", "wei", "caocao", settledAt)

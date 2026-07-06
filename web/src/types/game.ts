@@ -346,6 +346,9 @@ export interface BattleReport {
   viewType?: 'attack' | 'defense' | 'reinforcement' | 'scout' | 'system' | string
   sourceType?: 'npc_city' | 'player_city' | 'stronghold' | 'dungeon' | 'resource_point' | 'event_target' | 'world_boss' | 'system' | string
   battleType?: string
+  winnerSide?: 'attacker' | 'defender' | 'draw' | 'none' | string
+  ownerSide?: 'attacker' | 'defender' | 'reinforcement' | 'scout' | 'observer' | string
+  ownerOutcome?: 'victory' | 'defeat' | 'draw' | 'intel_success' | 'intel_failed' | 'notice' | string
   title?: string
   summary?: string
   detail?: BattleReportDetailData
@@ -400,6 +403,12 @@ export interface BattleReportShare {
   createdAt?: string
 }
 
+export interface BattleReportEventContext {
+  event: Record<string, unknown>
+  reports: BattleReport[]
+  participants: Array<Record<string, unknown>>
+}
+
 export interface BattleReportDetailData {
   id: string
   eventId?: string
@@ -410,6 +419,9 @@ export interface BattleReportDetailData {
   sourceLabel: string
   battleType: string
   result: string
+  winnerSide?: string
+  ownerSide?: string
+  ownerOutcome?: string
   title: string
   summary?: string
   occurredAt: string
@@ -425,6 +437,10 @@ export interface BattleReportDetailData {
 
 export interface BattleReportExtra {
   sweep?: BattleReportSweepExtra
+  scout?: BattleReportScoutExtra
+  reinforcement?: BattleReportReinforcementExtra
+  yellowTurban?: BattleReportYellowTurbanExtra
+  dungeon?: { rewardMode?: 'preview' | 'granted' | 'settlement' | string; [key: string]: unknown }
   [key: string]: unknown
 }
 
@@ -434,7 +450,54 @@ export interface BattleReportSweepExtra {
   failed?: number
   stopped?: boolean
   mode?: string
+  detailMode?: 'lightweight' | 'full' | string
   defenders?: BattleReportSweepDefender[]
+}
+
+export interface BattleReportScoutExtra {
+  success?: boolean
+  scoutUnitType?: string
+  scoutSent?: number
+  scoutLost?: number
+  scoutReturned?: number
+  counterScoutUnitType?: string
+  counterScoutLost?: number
+  revealResources?: boolean
+  revealUnits?: boolean
+  reason?: string
+}
+
+export interface BattleReportReinforcementExtra {
+  reinforcementId?: string
+  hostPlayerId?: string
+  hostPlayerName?: string
+  hostCityName?: string
+  attackerPlayerId?: string
+  attackerName?: string
+  attackerCityName?: string
+  battleEventId?: string
+  battleResult?: string
+  host?: { playerId?: string; playerName?: string; cityName?: string }
+  attacker?: { playerId?: string; playerName?: string; cityName?: string }
+  ownerContribution?: {
+    troopsBefore?: Record<string, number>
+    troopsLost?: Record<string, number>
+    troopsSurvived?: Record<string, number>
+    generalExp?: number
+    generals?: Array<{ id: string; name?: string; level?: number }>
+  }
+}
+
+export interface BattleReportYellowTurbanExtra {
+  marchId?: string
+  sourceCityId?: string
+  sourceCityName?: string
+  riskLevelId?: number
+  riskLevelName?: string
+  currentFood?: number
+  foodCapacity?: number
+  foodPressure?: number
+  spawnMultiplier?: number
 }
 
 export interface BattleReportSweepDefender {
@@ -484,6 +547,7 @@ export interface BattleReportGeneral {
   role?: string
   power?: number
   attributes?: Record<string, number>
+  traits?: GeneralTraitInstance[]
 }
 
 export interface BattleReportTrait {
@@ -805,6 +869,7 @@ export interface ReinforcementActionResponse {
 export interface DefenseReinforcementUnit {
   reinforcementId: string
   fromPlayerId: string
+  fromPlayerName?: string
   faction: string
   troops: Record<string, number>
   generals?: ReinforcementGeneralSnapshot[]
@@ -1025,6 +1090,7 @@ export interface PvpGeneralSnapshot {
   name?: string
   level?: number
   buffs?: Record<string, number>
+  traits?: GeneralTraitInstance[]
 }
 
 export interface PvpRevengeRecord {

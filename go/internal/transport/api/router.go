@@ -186,6 +186,7 @@ func registerReportRoutes(mux *http.ServeMux, handlers *Handlers) {
 	mux.HandleFunc("POST /api/v1/news/delete-report", handlers.DeleteReport)
 	mux.HandleFunc("POST /api/v1/news/delete-all-reports", handlers.DeleteAllReports)
 	mux.HandleFunc("GET /api/v1/reports", handlers.ListReports)
+	mux.HandleFunc("GET /api/v1/report-events/{reportId}", handlers.GetReportEvent)
 	mux.HandleFunc("GET /api/v1/reports/{reportId}", handlers.GetReport)
 	mux.HandleFunc("POST /api/v1/reports/{reportId}/read", handlers.MarkReportReadByPath)
 	mux.HandleFunc("POST /api/v1/reports/read-all", handlers.MarkAllReportsReadByPath)

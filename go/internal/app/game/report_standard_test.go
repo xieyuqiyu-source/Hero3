@@ -131,6 +131,49 @@ func TestNormalizeBattleReportBuildsDefenseDetail(t *testing.T) {
 	}
 }
 
+func TestNormalizeBattleReportInfersOwnerOutcome(t *testing.T) {
+	defenderLoss := NormalizeBattleReport(BattleReport{
+		ID:          "br_defender_loss",
+		PlayerID:    "player_defender_loss",
+		Type:        "defense",
+		ViewType:    ReportViewDefense,
+		Result:      "defender_defeat",
+		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+		TargetID:    "player_attacker",
+		TargetName:  "攻击方",
+		PlayerName:  "防守方",
+		SourceType:  ReportSourcePlayerCity,
+		BattleType:  "attack",
+		PlayerPower: 10,
+		EnemyPower:  20,
+	})
+	if defenderLoss.WinnerSide != ReportWinnerAttacker || defenderLoss.OwnerSide != ReportOwnerSideDefender || defenderLoss.OwnerOutcome != ReportOwnerOutcomeDefeat {
+		t.Fatalf("expected legacy defender_defeat to mean attacker victory and owner defeat, got winner=%s ownerSide=%s ownerOutcome=%s", defenderLoss.WinnerSide, defenderLoss.OwnerSide, defenderLoss.OwnerOutcome)
+	}
+	if defenderLoss.Detail == nil || defenderLoss.Detail.OwnerOutcome != ReportOwnerOutcomeDefeat {
+		t.Fatalf("expected detail ownerOutcome synced, got %+v", defenderLoss.Detail)
+	}
+}
+
+func TestNormalizeBattleReportClassifiesScoutView(t *testing.T) {
+	report := NormalizeBattleReport(BattleReport{
+		ID:              "br_scout_classify",
+		PlayerID:        "player_scout",
+		Type:            "scout",
+		Result:          "attacker_victory",
+		DispatchedUnits: map[string]int{"weiScout": 5},
+		LostUnits:       map[string]int{"weiScout": 2},
+		CreatedAt:       time.Now().UTC().Format(time.RFC3339),
+	})
+	if report.ViewType != ReportViewScout || report.OwnerSide != ReportOwnerSideScout || report.OwnerOutcome != ReportOwnerOutcomeIntelSuccess {
+		t.Fatalf("expected scout semantic fields, got view=%s ownerSide=%s ownerOutcome=%s", report.ViewType, report.OwnerSide, report.OwnerOutcome)
+	}
+	scoutExtra, ok := report.Detail.Extra["scout"].(map[string]interface{})
+	if !ok || scoutExtra["scoutSent"] != 5 || scoutExtra["scoutReturned"] != 3 {
+		t.Fatalf("expected scout extra with sent/lost/returned, got %+v", report.Detail.Extra)
+	}
+}
+
 func TestNormalizeBattleReportRepairsDefenseDetailGenerals(t *testing.T) {
 	report := NormalizeBattleReport(BattleReport{
 		ID:            "br_defense_repair",
@@ -349,6 +392,13 @@ func TestCreateBattleReportsUsesStandardBatchEntry(t *testing.T) {
 	}
 	if stored[0].Detail == nil || stored[1].Detail == nil {
 		t.Fatalf("expected stored reports to have standard detail: %+v", stored)
+	}
+	context, err := service.GetReportEventForPlayer("player_create_attacker", "br_create_attacker")
+	if err != nil {
+		t.Fatalf("GetReportEventForPlayer failed: %v", err)
+	}
+	if context.Event.ID != "event_create_batch" || len(context.Reports) != 1 || context.Reports[0].PlayerID != "player_create_attacker" {
+		t.Fatalf("expected player-visible event context only, got %+v", context)
 	}
 }
 

@@ -215,8 +215,8 @@ func normalizeYellowTurbanConfig(cfg YellowTurbanConfig) YellowTurbanConfig {
 func defaultYellowTurbanConfig() YellowTurbanConfig {
 	return YellowTurbanConfig{
 		Enabled:                     true,
-		CheckIntervalMinutes:        10,
-		MaxIncomingMarchesPerPlayer: 6,
+		CheckIntervalMinutes:        30,
+		MaxIncomingMarchesPerPlayer: 3,
 		MarchSpeedMultiplier:        2,
 		ThousandTentCamp: ThousandTentCampConfig{
 			Enabled:      true,
@@ -244,10 +244,10 @@ func defaultYellowTurbanConfig() YellowTurbanConfig {
 			{ID: "wu", Name: "黄巾军·吴地", Faction: "wu", Enabled: true, CityCount: 10, MinUnitKinds: 2, MaxUnitKinds: 4},
 		},
 		RiskLevels: []YellowTurbanRiskLevelConfig{
-			{ID: 1, Name: "黄巾·流寇", Color: "#d9a400", MinPressure: 1, MaxPressure: 1.3, MinRatio: 0.08, MaxRatio: 0.12, MinUnitKinds: 2, MaxUnitKinds: 3, MaxIncoming: 6, Enabled: true},
-			{ID: 2, Name: "黄巾·乱军", Color: "#f97316", MinPressure: 1.3, MaxPressure: 1.8, MinRatio: 0.15, MaxRatio: 0.22, MinUnitKinds: 2, MaxUnitKinds: 4, MaxIncoming: 6, Enabled: true},
-			{ID: 3, Name: "黄巾·大营", Color: "#ea580c", MinPressure: 1.8, MaxPressure: 2.5, MinRatio: 0.25, MaxRatio: 0.38, MinUnitKinds: 3, MaxUnitKinds: 5, MaxIncoming: 6, Enabled: true},
-			{ID: 4, Name: "黄巾·军团", Color: "#dc2626", MinPressure: 2.5, MaxPressure: 0, MinRatio: 0.45, MaxRatio: 0.65, MinUnitKinds: 3, MaxUnitKinds: 6, MaxIncoming: 6, Enabled: true},
+			{ID: 1, Name: "黄巾·流寇", Color: "#d9a400", MinPressure: 1, MaxPressure: 1.3, MinRatio: 0.08, MaxRatio: 0.12, MinUnitKinds: 2, MaxUnitKinds: 3, MaxIncoming: 3, Enabled: true},
+			{ID: 2, Name: "黄巾·乱军", Color: "#f97316", MinPressure: 1.3, MaxPressure: 1.8, MinRatio: 0.15, MaxRatio: 0.22, MinUnitKinds: 2, MaxUnitKinds: 4, MaxIncoming: 3, Enabled: true},
+			{ID: 3, Name: "黄巾·大营", Color: "#ea580c", MinPressure: 1.8, MaxPressure: 2.5, MinRatio: 0.25, MaxRatio: 0.38, MinUnitKinds: 3, MaxUnitKinds: 5, MaxIncoming: 3, Enabled: true},
+			{ID: 4, Name: "黄巾·军团", Color: "#dc2626", MinPressure: 2.5, MaxPressure: 0, MinRatio: 0.45, MaxRatio: 0.65, MinUnitKinds: 3, MaxUnitKinds: 6, MaxIncoming: 3, Enabled: true},
 		},
 	}
 }

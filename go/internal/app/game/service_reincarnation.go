@@ -765,7 +765,7 @@ func buildReincarnationReport(run ReincarnationRun, wave ReincarnationWave, stat
 		playerPower = int(result.DefensePower)
 		enemyPower = int(result.AttackPower)
 	}
-	return NormalizeBattleReport(BattleReport{
+	report := NormalizeBattleReport(BattleReport{
 		ID:                "br_" + randomID(8),
 		EventID:           "event_ra_" + randomID(8),
 		PlayerID:          state.Player.ID,
@@ -793,6 +793,12 @@ func buildReincarnationReport(run ReincarnationRun, wave ReincarnationWave, stat
 		Read:              false,
 		CreatedAt:         now.Format(resourceDateLayout),
 	})
+	if report.Detail != nil {
+		report.Detail.Extra = mergeReportExtraMap(report.Detail.Extra, map[string]interface{}{
+			"dungeon": map[string]interface{}{"rewardMode": "preview"},
+		})
+	}
+	return report
 }
 
 func addIntMaps(left map[string]int, right map[string]int) map[string]int {

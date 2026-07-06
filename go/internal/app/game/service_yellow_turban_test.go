@@ -292,6 +292,9 @@ func TestYellowTurbanDefenseUsesStationedReinforcements(t *testing.T) {
 	if len(report.PvpReinforcementLosses[reinforcement.ID]) == 0 {
 		t.Fatalf("expected reinforcement losses in yellow turban report, got %+v", report.PvpReinforcementLosses)
 	}
+	if report.Detail == nil || report.Detail.Extra["yellowTurban"] == nil {
+		t.Fatalf("expected yellow turban context in defense report detail, got %+v", report.Detail)
+	}
 	helperReports, total, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: helper.Player.ID, ViewType: ReportViewReinforcement, Page: 1, PageSize: 10})
 	if err != nil {
 		t.Fatalf("ListReportsByQuery helper failed: %v", err)
@@ -301,6 +304,9 @@ func TestYellowTurbanDefenseUsesStationedReinforcements(t *testing.T) {
 	}
 	if helperReports[0].SourceType != ReportSourceYellowTurban || helperReports[0].BattleType != BattleTypeYellowTurban {
 		t.Fatalf("expected yellow turban reinforcement report type, got %+v", helperReports[0])
+	}
+	if helperReports[0].Detail == nil || helperReports[0].Detail.Extra["yellowTurban"] == nil || helperReports[0].Detail.Extra["reinforcement"] == nil {
+		t.Fatalf("expected yellow turban reinforcement detail contexts, got %+v", helperReports[0].Detail)
 	}
 	if helperReports[0].GeneralExpGained <= 0 || helperReports[0].Detail == nil || helperReports[0].Detail.Rewards.GeneralExp != helperReports[0].GeneralExpGained {
 		t.Fatalf("expected reinforcement general exp in report detail, got %+v", helperReports[0])

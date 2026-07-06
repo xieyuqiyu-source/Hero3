@@ -15,15 +15,33 @@ BattleReport:
       enum: [attack, defense, reinforcement, scout, system]
     sourceType:
       type: string
-      enum: [npc_city, player_city, stronghold, dungeon, resource_point, alliance, event_target, world_boss, system]
+      enum: [npc_city, player_city, yellow_turban, stronghold, dungeon, resource_point, alliance, event_target, world_boss, system]
     battleType:
       type: string
+    winnerSide:
+      type: string
+      enum: [attacker, defender, draw, none]
+    ownerSide:
+      type: string
+      enum: [attacker, defender, reinforcement, scout, observer]
+    ownerOutcome:
+      type: string
+      enum: [victory, defeat, draw, intel_success, intel_failed, notice]
     title:
       type: string
     summary:
       type: string
     result:
       type: string
+    winnerSide:
+      type: string
+      enum: [attacker, defender, draw, none]
+    ownerSide:
+      type: string
+      enum: [attacker, defender, reinforcement, scout, observer]
+    ownerOutcome:
+      type: string
+      enum: [victory, defeat, draw, intel_success, intel_failed, notice]
     targetId:
       type: string
     targetName:
@@ -59,6 +77,20 @@ BattleReportPage:
     total:
       type: integer
       example: 23
+BattleReportEventContext:
+  type: object
+  required: [event, reports, participants]
+  properties:
+    event:
+      $ref: '#/components/schemas/BattleEvent'
+    reports:
+      type: array
+      items:
+        $ref: '#/components/schemas/BattleReport'
+    participants:
+      type: array
+      items:
+        $ref: '#/components/schemas/BattleReportParticipant'
 BattleEvent:
   type: object
   description: 一次真实发生的战斗或侦查事件，可关联多份玩家视角战报。
@@ -164,8 +196,7 @@ BattleReportDetail:
     visibility:
       $ref: '#/components/schemas/BattleReportVisibility'
     extra:
-      type: object
-      additionalProperties: true
+      $ref: '#/components/schemas/BattleReportExtra'
     read:
       type: boolean
     share:
@@ -308,6 +339,140 @@ BattleReportVisibility:
       type: number
     actualLossRatio:
       type: number
+BattleReportExtra:
+  type: object
+  description: 玩法上下文扩展。新 UI 只读取这里的结构化上下文，未知字段保持透传。
+  additionalProperties: true
+  properties:
+    sweep:
+      $ref: '#/components/schemas/BattleReportSweepExtra'
+    scout:
+      $ref: '#/components/schemas/BattleReportScoutExtra'
+    reinforcement:
+      $ref: '#/components/schemas/BattleReportReinforcementExtra'
+    yellowTurban:
+      $ref: '#/components/schemas/BattleReportYellowTurbanExtra'
+    dungeon:
+      $ref: '#/components/schemas/BattleReportDungeonExtra'
+BattleReportSweepExtra:
+  type: object
+  properties:
+    requested:
+      type: integer
+    success:
+      type: integer
+    failed:
+      type: integer
+    stopped:
+      type: boolean
+    mode:
+      type: string
+    detailMode:
+      type: string
+      enum: [lightweight, full]
+    defenders:
+      type: array
+      items:
+        $ref: '#/components/schemas/BattleReportSweepDefender'
+BattleReportSweepDefender:
+  type: object
+  properties:
+    targetId:
+      type: string
+    targetName:
+      type: string
+    faction:
+      type: string
+    factionLabel:
+      type: string
+    power:
+      type: integer
+    result:
+      type: string
+    defenderRevealed:
+      type: boolean
+    units:
+      type: array
+      items:
+        $ref: '#/components/schemas/BattleReportUnit'
+    resources:
+      type: object
+      additionalProperties:
+        type: integer
+BattleReportScoutExtra:
+  type: object
+  properties:
+    success:
+      type: boolean
+    scoutUnitType:
+      type: string
+    scoutSent:
+      type: integer
+    scoutLost:
+      type: integer
+    scoutReturned:
+      type: integer
+    counterScoutUnitType:
+      type: string
+    counterScoutLost:
+      type: integer
+    revealResources:
+      type: boolean
+    revealUnits:
+      type: boolean
+    reason:
+      type: string
+BattleReportReinforcementExtra:
+  type: object
+  properties:
+    reinforcementId:
+      type: string
+    hostPlayerId:
+      type: string
+    hostPlayerName:
+      type: string
+    hostCityName:
+      type: string
+    attackerPlayerId:
+      type: string
+    attackerName:
+      type: string
+    attackerCityName:
+      type: string
+    battleEventId:
+      type: string
+    battleResult:
+      type: string
+    ownerContribution:
+      type: object
+      additionalProperties: true
+BattleReportYellowTurbanExtra:
+  type: object
+  properties:
+    marchId:
+      type: string
+    sourceCityId:
+      type: string
+    sourceCityName:
+      type: string
+    riskLevelId:
+      type: integer
+    riskLevelName:
+      type: string
+    currentFood:
+      type: integer
+    foodCapacity:
+      type: integer
+    foodPressure:
+      type: number
+    spawnMultiplier:
+      type: number
+BattleReportDungeonExtra:
+  type: object
+  properties:
+    rewardMode:
+      type: string
+      enum: [preview, granted, settlement]
 BattleReportShareLink:
   type: object
   properties:

@@ -4,7 +4,7 @@ import { useGameStore } from '@/store/gameStore'
 import { gameApi } from '@/api/game'
 import type { BattleReport } from '@/types/game'
 import BattleReportDetail from './components/BattleReportDetail'
-import { REPORT_SOURCE_CONFIG, REPORT_VIEW_CONFIG, REPORT_VIEW_TABS, reportTotalPages, shouldShowEmptyReports } from './reportPresentation'
+import { REPORT_OUTCOME_CONFIG, REPORT_SOURCE_CONFIG, REPORT_VIEW_CONFIG, REPORT_VIEW_TABS, buildReportListParams, reportTotalPages, resolveReportOutcome, shouldShowEmptyReports } from './reportPresentation'
 
 const EMPTY_REPORTS: BattleReport[] = []
 const PAGE_SIZE = 10
@@ -37,7 +37,7 @@ const NewsPage: FC = () => {
     }
     setLoading(true)
     try {
-      const result = await gameApi.listReports(activePlayerId, page, PAGE_SIZE, activeView === 'all' ? undefined : { viewType: activeView })
+      const result = await gameApi.listReports(activePlayerId, page, PAGE_SIZE, buildReportListParams(activeView))
       const nextReports = Array.isArray(result.reports) ? result.reports : EMPTY_REPORTS
       const nextTotal = typeof result.total === 'number' ? result.total : nextReports.length
       setReports(nextReports)
@@ -126,7 +126,7 @@ const NewsPage: FC = () => {
 
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-5 gap-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-1">
+      <div className="grid grid-cols-3 gap-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)] p-1 sm:grid-cols-6">
         {REPORT_VIEW_TABS.map((tab) => (
           <button
             key={tab.key}
@@ -177,7 +177,8 @@ const NewsPage: FC = () => {
           const sourceType = report.sourceType || 'npc_city'
           const viewConfig = REPORT_VIEW_CONFIG[viewType] ?? REPORT_VIEW_CONFIG.attack
           const sourceConfig = REPORT_SOURCE_CONFIG[sourceType] ?? REPORT_SOURCE_CONFIG.npc_city
-          const isVictory = report.result === 'attacker_victory'
+          const outcome = resolveReportOutcome(report)
+          const outcomeConfig = REPORT_OUTCOME_CONFIG[outcome] ?? REPORT_OUTCOME_CONFIG.notice
           const rewards = safeReportMap(report.rewards)
           const lostUnits = safeReportMap(report.lostUnits)
           const hasRewards = Object.values(rewards).some(v => v > 0)
@@ -206,8 +207,8 @@ const NewsPage: FC = () => {
                   {viewConfig.label}
                 </span>
                 {/* 胜负 */}
-                <span className={`text-xs font-bold ${isVictory ? 'text-green-600' : 'text-red-600'}`}>
-                  {isVictory ? '胜' : report.result === 'draw' ? '平' : '败'}
+                <span className={`text-xs font-bold ${outcomeConfig.color}`}>
+                  {outcomeConfig.label}
                 </span>
                 {/* 目标 */}
                 <span className="text-xs text-[var(--color-text-primary)] truncate flex-1">{title}</span>

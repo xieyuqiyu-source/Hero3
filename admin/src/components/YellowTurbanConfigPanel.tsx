@@ -89,7 +89,7 @@ export default function YellowTurbanConfigPanel() {
 
       <div className="mb-3 grid gap-2 md:grid-cols-4">
         <Metric label="检测开关" value={config?.enabled ? '开启' : '关闭'} />
-        <Metric label="检测间隔" value={`${config?.checkIntervalMinutes ?? 10} 分钟`} />
+        <Metric label="检测间隔" value={`${config?.checkIntervalMinutes ?? 30} 分钟`} />
         <Metric label="满级承载" value={formatCompactNumber(maxCapacity)} />
         <Metric label="最高升级金币" value={maxGoldCost.toLocaleString()} />
       </div>

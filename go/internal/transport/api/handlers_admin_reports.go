@@ -34,6 +34,7 @@ func (h *Handlers) AdminReports(w http.ResponseWriter, r *http.Request) {
 		SourceType:     strings.TrimSpace(r.URL.Query().Get("sourceType")),
 		BattleType:     strings.TrimSpace(r.URL.Query().Get("battleType")),
 		Result:         strings.TrimSpace(r.URL.Query().Get("result")),
+		OwnerOutcome:   strings.TrimSpace(r.URL.Query().Get("ownerOutcome")),
 		Page:           page,
 		PageSize:       pageSize,
 		IncludeDeleted: true,

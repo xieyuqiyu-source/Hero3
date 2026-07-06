@@ -146,6 +146,8 @@ paths:
     $ref: ./paths/reports.yaml#/~1api~1v1~1reports
   /api/v1/reports/{reportId}:
     $ref: ./paths/reports.yaml#/~1api~1v1~1reports~1{reportId}
+  /api/v1/report-events/{reportId}:
+    $ref: ./paths/reports.yaml#/~1api~1v1~1report-events~1{reportId}
   /api/v1/reports/{reportId}/read:
     $ref: ./paths/reports.yaml#/~1api~1v1~1reports~1{reportId}~1read
   /api/v1/reports/read-all:

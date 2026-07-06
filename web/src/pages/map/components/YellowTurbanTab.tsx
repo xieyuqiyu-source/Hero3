@@ -86,7 +86,7 @@ const YellowTurbanTab: FC = () => {
           <div className="space-y-2 text-sm text-[var(--color-text-secondary)]">
             <div className="flex justify-between gap-3">
               <span>检测间隔</span>
-              <span className="font-semibold text-[var(--color-text-primary)]">{status?.checkIntervalMinutes ?? 10} 分钟</span>
+              <span className="font-semibold text-[var(--color-text-primary)]">{status?.checkIntervalMinutes ?? 30} 分钟</span>
             </div>
             <div className="flex justify-between gap-3">
               <span>下次检测</span>

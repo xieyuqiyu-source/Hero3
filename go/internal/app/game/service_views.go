@@ -1,7 +1,10 @@
 // 本文件归口玩家局部视图查询，供前端按页面读取必要字段。
 package game
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type PlayerSummaryView struct {
 	Player             Player  `json:"player"`
@@ -158,10 +161,14 @@ func (s *Service) GetResourceView(playerID string) (ResourceView, error) {
 
 // GetMilitaryView 返回军事视图。
 func (s *Service) GetMilitaryView(playerID string) (MilitaryView, error) {
+	now := time.Now().UTC()
 	if err := s.SettleDuePvpMarches(playerID); err != nil {
 		return MilitaryView{}, err
 	}
 	if err := s.SettleDueYellowTurbanMarches(playerID); err != nil {
+		return MilitaryView{}, err
+	}
+	if _, err := s.settlePlayerProduction(playerID, now); err != nil {
 		return MilitaryView{}, err
 	}
 	view, err := s.repo.GetMilitaryView(playerID)
@@ -174,6 +181,58 @@ func (s *Service) GetMilitaryView(playerID string) (MilitaryView, error) {
 	}
 	view.FoodPressure = CalculateFoodPressure(state, GetYellowTurbanConfig())
 	return view, nil
+}
+
+// settlePlayerProduction 把离线资源和产兵类武将特性结算进权威资产表。
+func (s *Service) settlePlayerProduction(playerID string, now time.Time) (GameState, error) {
+	playerID = strings.TrimSpace(playerID)
+	if playerID == "" {
+		return GameState{}, ErrPlayerNotFound
+	}
+	return s.repo.UpdatePlayerState(playerID, now, func(state *GameState) error {
+		EnsureGeneralRoster(state, now)
+		if !hasPendingGuardProduction(state, now) {
+			return nil
+		}
+		next, _ := settleResources(*state, now)
+		*state = next
+		return nil
+	})
+}
+
+// hasPendingGuardProduction 判断主将产兵特性是否已经累积到至少 1 个兵。
+func hasPendingGuardProduction(state *GameState, now time.Time) bool {
+	if state == nil || state.General == nil {
+		return false
+	}
+	settledAtText := strings.TrimSpace(state.ResourceSettledAt)
+	if settledAtText == "" {
+		return false
+	}
+	settledAt, err := time.Parse(resourceDateLayout, settledAtText)
+	if err != nil {
+		return false
+	}
+	elapsedSeconds := now.UTC().Sub(settledAt.UTC()).Seconds()
+	if elapsedSeconds <= 0 {
+		return false
+	}
+	generalCopy := cloneGeneral(*state.General)
+	applyHeroConfigToGeneral(&generalCopy)
+	for _, trait := range generalCopy.Traits {
+		perMinute := trait.Params["guardPerMinute"]
+		if perMinute <= 0 {
+			continue
+		}
+		amount := int(perMinute * elapsedSeconds / 60)
+		if maxPerSettle := int(trait.Params["maxGuardPerDay"]); maxPerSettle > 0 && amount > maxPerSettle {
+			amount = maxPerSettle
+		}
+		if amount > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // GetInventoryView 返回背包视图。

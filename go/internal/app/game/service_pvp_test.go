@@ -258,6 +258,9 @@ func TestPvpScoutUsesFactionScoutUnitsAndRevealsOnSurvival(t *testing.T) {
 		t.Fatalf("expected one attacker scout report, total=%d reports=%+v err=%v", total, attackerReports, err)
 	}
 	report := attackerReports[0]
+	if report.ViewType != ReportViewScout || report.OwnerOutcome != ReportOwnerOutcomeIntelSuccess {
+		t.Fatalf("expected scout view and intel success, got view=%s ownerOutcome=%s", report.ViewType, report.OwnerOutcome)
+	}
 	if !report.DefenderRevealed || report.DispatchedUnits["weiScout"] != 5 || report.LostUnits["weiScout"] != 2 {
 		t.Fatalf("unexpected successful scout report: %+v", report)
 	}
@@ -443,6 +446,9 @@ func TestPvpMarchResolvesBattleAndReturnsSurvivors(t *testing.T) {
 	}
 	if len(defenderReports[0].PvpDefenderGenerals) != 1 || defenderReports[0].PvpDefenderGenerals[0].ID != "liubei" {
 		t.Fatalf("expected defender report auto general snapshot, got %+v", defenderReports[0].PvpDefenderGenerals)
+	}
+	if defenderReports[0].Result == "defender_defeat" || defenderReports[0].OwnerSide != ReportOwnerSideDefender || defenderReports[0].OwnerOutcome == "" {
+		t.Fatalf("expected defender report to use standard owner semantics, got result=%s ownerSide=%s ownerOutcome=%s", defenderReports[0].Result, defenderReports[0].OwnerSide, defenderReports[0].OwnerOutcome)
 	}
 	attackerLosses := pvpTestLossesFromBattle(t, battle, "attacker")
 	defenderLosses := pvpTestLossesFromBattle(t, battle, "defender")
@@ -680,6 +686,10 @@ func TestPvpBattleCreatesReinforcementOwnerReport(t *testing.T) {
 	}
 	if helperReports[0].EventID != battle.ID || helperReports[0].Detail == nil || helperReports[0].Detail.SecondarySide != nil {
 		t.Fatalf("unexpected helper report detail: %+v", helperReports[0])
+	}
+	reinforcementExtra, ok := helperReports[0].Detail.Extra["reinforcement"].(map[string]interface{})
+	if !ok || reinforcementExtra["hostPlayerId"] != defender.Player.ID || reinforcementExtra["attackerPlayerId"] != attacker.Player.ID {
+		t.Fatalf("expected reinforcement context with host and attacker, got %+v", helperReports[0].Detail.Extra)
 	}
 	updated := repo.reinforcements[reinforcement.ID]
 	if updated.LastBattleReportID != helperReports[0].ID {

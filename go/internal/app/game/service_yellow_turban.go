@@ -222,6 +222,7 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 			PlayerID:          state.Player.ID,
 			OwnerPlayerID:     state.Player.ID,
 			ViewType:          ReportViewDefense,
+			OwnerSide:         ReportOwnerSideDefender,
 			SourceType:        ReportSourceYellowTurban,
 			BattleType:        BattleTypeYellowTurban,
 			Title:             march.SourceName + " 进攻 " + state.Player.Nickname,
@@ -261,13 +262,24 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 			report.GeneralLevelAfter = defenderExpResult.LevelAfter
 		}
 		report = NormalizeBattleReport(report)
-		reinforcementReports := buildPvpReinforcementReports(eventID, state, changedReinforcements, totalReinforcementLosses, reinforcementGeneralExp, reportResult, nowText)
+		report.Detail.Extra = mergeReportExtraMap(report.Detail.Extra, map[string]interface{}{
+			"yellowTurban": buildYellowTurbanReportExtra(lockedMarch),
+		})
+		reinforcementReports := buildPvpReinforcementReports(eventID, nil, state, changedReinforcements, totalReinforcementLosses, reinforcementGeneralExp, reportResult, nowText)
 		for i := range reinforcementReports {
 			reinforcementReports[i].SourceType = ReportSourceYellowTurban
 			reinforcementReports[i].BattleType = BattleTypeYellowTurban
 			reinforcementReports[i].TargetID = march.SourceCityID
 			reinforcementReports[i].TargetName = state.Player.Nickname + "（黄巾防守）"
 			reinforcementReports[i].Title = "协防" + state.Player.Nickname + "抵御黄巾"
+			if reinforcementReports[i].Detail != nil {
+				reinforcementReports[i].Detail.SourceType = ReportSourceYellowTurban
+				reinforcementReports[i].Detail.SourceLabel = reportSourceLabel(ReportSourceYellowTurban)
+				reinforcementReports[i].Detail.BattleType = BattleTypeYellowTurban
+				reinforcementReports[i].Detail.Extra = mergeReportExtraMap(reinforcementReports[i].Detail.Extra, map[string]interface{}{
+					"yellowTurban": buildYellowTurbanReportExtra(lockedMarch),
+				})
+			}
 			reinforcementReports[i] = NormalizeBattleReport(reinforcementReports[i])
 		}
 		lockedMarch.Status = YellowTurbanMarchStatusResolved
@@ -317,6 +329,24 @@ func (s *Service) ResolveYellowTurbanMarchForPlayer(playerID string, marchID str
 		return BattleReport{}, ErrYellowTurbanMarchNotFound
 	}
 	return s.ResolveYellowTurbanMarch(march.ID)
+}
+
+// buildYellowTurbanReportExtra 构造黄巾战报专用上下文，说明风险和口粮触发原因。
+func buildYellowTurbanReportExtra(march *YellowTurbanMarch) map[string]interface{} {
+	if march == nil {
+		return map[string]interface{}{}
+	}
+	return map[string]interface{}{
+		"marchId":         march.ID,
+		"sourceCityId":    march.SourceCityID,
+		"sourceCityName":  march.SourceName,
+		"riskLevelId":     march.RiskLevelID,
+		"riskLevelName":   march.RiskLevelName,
+		"currentFood":     march.PlayerFood,
+		"foodCapacity":    march.FoodCapacity,
+		"foodPressure":    march.Pressure,
+		"spawnMultiplier": 0,
+	}
 }
 
 // CalculateFoodPressure 根据玩家兵力和千帐营等级计算口粮压力。

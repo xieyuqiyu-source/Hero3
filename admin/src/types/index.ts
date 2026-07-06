@@ -857,6 +857,81 @@ export interface PvpBattle {
   updatedAt: string
 }
 
+export interface AdminBattleReport {
+  id: string
+  eventId?: string
+  playerId: string
+  ownerPlayerId?: string
+  viewType?: string
+  sourceType?: string
+  battleType?: string
+  result: string
+  winnerSide?: string
+  ownerSide?: string
+  ownerOutcome?: string
+  title?: string
+  summary?: string
+  targetId?: string
+  targetName?: string
+  detail?: {
+    title?: string
+    summary?: string
+    ownerOutcome?: string
+    extra?: Record<string, unknown>
+    [key: string]: unknown
+  }
+  createdAt: string
+}
+
+export interface AdminBattleReportPage {
+  reports: AdminBattleReport[]
+  page: number
+  pageSize: number
+  total: number
+}
+
+export interface AdminBattleEvent {
+  id: string
+  sourceType: string
+  sourceId?: string
+  scene?: string
+  battleType: string
+  result: string
+  attackerPlayerId?: string
+  defenderPlayerId?: string
+  attackerName?: string
+  defenderName?: string
+  relatedMarchId?: string
+  relatedReinforcementId?: string
+  summary?: Record<string, unknown>
+  occurredAt: string
+  createdAt: string
+}
+
+export interface AdminBattleEventPage {
+  items: AdminBattleEvent[]
+  page: number
+  pageSize: number
+  total: number
+}
+
+export interface AdminBattleReportParticipant {
+  id: string
+  eventId: string
+  reportId?: string
+  playerId?: string
+  role: string
+  faction?: string
+  nickname?: string
+  cityName?: string
+  troopsBefore?: Record<string, number>
+  troopsLost?: Record<string, number>
+  troopsSurvived?: Record<string, number>
+  rewards?: Record<string, unknown>
+  extra?: Record<string, unknown>
+  createdAt: string
+}
+
 export interface AdminPvpOverviewResponse {
   playerId?: string
   player?: PvpStateResponse

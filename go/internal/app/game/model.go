@@ -175,6 +175,9 @@ type BattleReport struct {
 	ViewType                 string                        `json:"viewType,omitempty"`
 	SourceType               string                        `json:"sourceType,omitempty"`
 	BattleType               string                        `json:"battleType,omitempty"`
+	WinnerSide               string                        `json:"winnerSide,omitempty"`
+	OwnerSide                string                        `json:"ownerSide,omitempty"`
+	OwnerOutcome             string                        `json:"ownerOutcome,omitempty"`
 	Title                    string                        `json:"title,omitempty"`
 	Summary                  string                        `json:"summary,omitempty"`
 	Detail                   *BattleReportDetail           `json:"detail,omitempty"`
@@ -240,6 +243,13 @@ type BattleReportPage struct {
 	Total    int            `json:"total"`
 }
 
+// BattleReportEventContext 是玩家可见的同事件战报上下文。
+type BattleReportEventContext struct {
+	Event        BattleEvent               `json:"event"`
+	Reports      []BattleReport            `json:"reports"`
+	Participants []BattleReportParticipant `json:"participants"`
+}
+
 // BattleReportCreateInput 是玩法模块接入统一战报服务的标准输入。
 type BattleReportCreateInput struct {
 	EventID                string                 `json:"eventId,omitempty"`
@@ -247,6 +257,7 @@ type BattleReportCreateInput struct {
 	SourceID               string                 `json:"sourceId,omitempty"`
 	BattleType             string                 `json:"battleType"`
 	Result                 string                 `json:"result"`
+	OwnerOutcome           string                 `json:"ownerOutcome,omitempty"`
 	RelatedMarchID         string                 `json:"relatedMarchId,omitempty"`
 	RelatedReinforcementID string                 `json:"relatedReinforcementId,omitempty"`
 	OccurredAt             string                 `json:"occurredAt,omitempty"`
@@ -294,6 +305,9 @@ type BattleReportDetail struct {
 	SourceLabel   string                 `json:"sourceLabel"`
 	BattleType    string                 `json:"battleType"`
 	Result        string                 `json:"result"`
+	WinnerSide    string                 `json:"winnerSide,omitempty"`
+	OwnerSide     string                 `json:"ownerSide,omitempty"`
+	OwnerOutcome  string                 `json:"ownerOutcome,omitempty"`
 	Title         string                 `json:"title"`
 	Summary       string                 `json:"summary,omitempty"`
 	OccurredAt    string                 `json:"occurredAt"`
@@ -420,6 +434,7 @@ type BattleReportQuery struct {
 	SourceType     string
 	BattleType     string
 	Result         string
+	OwnerOutcome   string
 	Page           int
 	PageSize       int
 	IncludeDeleted bool

@@ -579,6 +579,10 @@ func buildReportWhere(query game.BattleReportQuery, timeFrom time.Time) (string,
 		conditions = append(conditions, "result = ?")
 		args = append(args, query.Result)
 	}
+	if query.OwnerOutcome != "" {
+		conditions = append(conditions, "(JSON_UNQUOTE(JSON_EXTRACT(detail_json, '$.ownerOutcome')) = ? OR JSON_UNQUOTE(JSON_EXTRACT(report_json, '$.ownerOutcome')) = ?)")
+		args = append(args, query.OwnerOutcome, query.OwnerOutcome)
+	}
 	if !query.TimeTo.IsZero() {
 		conditions = append(conditions, "created_at <= ?")
 		args = append(args, query.TimeTo.UTC())

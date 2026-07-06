@@ -26,6 +26,7 @@ import GoldLedgerPanel from '@/components/GoldLedgerPanel'
 import MailAdminPanel from '@/components/MailAdminPanel'
 import AnnouncementAdminPanel from '@/components/AnnouncementAdminPanel'
 import PvpAdminPanel from '@/components/PvpAdminPanel'
+import BattleEventReportPanel from '@/components/BattleEventReportPanel'
 import DungeonAssetConfigPanel from '@/components/DungeonAssetConfigPanel'
 import { useAdminDashboard } from '@/hooks/useAdminDashboard'
 import type { AccountSummary, PlayerSummary } from '@/types'
@@ -99,6 +100,8 @@ function App() {
         return <AnnouncementAdminPanel />
       case 'pvp':
         return <PvpAdminPanel accounts={accounts} />
+      case 'battleReports':
+        return <BattleEventReportPanel />
       case 'dungeons':
         return <DungeonAssetConfigPanel />
       case 'balance':

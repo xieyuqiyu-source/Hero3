@@ -56,6 +56,9 @@ func TestReincarnationStartAndAttack(t *testing.T) {
 	if result.BattleReport == nil || result.BattleReport.SourceType != ReportSourceDungeon {
 		t.Fatalf("expected dungeon battle report, got %+v", result.BattleReport)
 	}
+	if result.BattleReport.Detail == nil || result.BattleReport.Detail.Extra["dungeon"] == nil {
+		t.Fatalf("expected dungeon reward mode extra, got %+v", result.BattleReport.Detail)
+	}
 	if len(result.Army) == 0 {
 		t.Fatalf("expected army patch after battle")
 	}

@@ -43,6 +43,8 @@ func (s *Service) SendReinforcement(req SendReinforcementRequest) (Reinforcement
 		if err := ensureReinforcementSourceSlot(fromPlayerID, targetRecords); err != nil {
 			return Reinforcement{}, err
 		}
+		nextFrom, _ := settleResources(*from, now)
+		*from = nextFrom
 		if _, err := validateAndConsumeArmy(from, troops); err != nil {
 			return Reinforcement{}, err
 		}
@@ -466,6 +468,7 @@ func (s *Service) BuildDefenseReinforcementUnits(targetPlayerID string) ([]Defen
 		units = append(units, DefenseReinforcementUnit{
 			ReinforcementID: record.ID,
 			FromPlayerID:    record.OwnerPlayerID,
+			FromPlayerName:  record.FromPlayerName,
 			Faction:         record.FromPlayerFaction,
 			Troops:          cloneStringIntMap(record.RemainingTroops),
 			Generals:        cloneReinforcementGenerals(record.Generals),

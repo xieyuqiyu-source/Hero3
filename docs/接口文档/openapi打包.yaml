@@ -1724,6 +1724,17 @@ paths:
         in: query
         schema:
           type: string
+      - name: ownerOutcome
+        in: query
+        schema:
+          type: string
+          enum:
+          - victory
+          - defeat
+          - draw
+          - intel_success
+          - intel_failed
+          - notice
       - name: page
         in: query
         schema:
@@ -1767,6 +1778,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BattleReport'
+  /api/v1/report-events/{reportId}:
+    get:
+      tags:
+      - News
+      summary: 获取当前玩家可见的同事件战报上下文
+      parameters:
+      - name: reportId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: playerId
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 当前玩家可见的同事件上下文。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BattleReportEventContext'
   /api/v1/reports/{reportId}/read:
     post:
       tags:
@@ -3080,6 +3114,10 @@ paths:
         schema:
           type: string
       - name: result
+        in: query
+        schema:
+          type: string
+      - name: ownerOutcome
         in: query
         schema:
           type: string
@@ -4639,6 +4677,7 @@ components:
           enum:
           - npc_city
           - player_city
+          - yellow_turban
           - stronghold
           - dungeon
           - resource_point
@@ -4648,6 +4687,30 @@ components:
           - system
         battleType:
           type: string
+        winnerSide:
+          type: string
+          enum:
+          - attacker
+          - defender
+          - draw
+          - none
+        ownerSide:
+          type: string
+          enum:
+          - attacker
+          - defender
+          - reinforcement
+          - scout
+          - observer
+        ownerOutcome:
+          type: string
+          enum:
+          - victory
+          - defeat
+          - draw
+          - intel_success
+          - intel_failed
+          - notice
         title:
           type: string
         summary:
@@ -4813,8 +4876,7 @@ components:
         visibility:
           $ref: '#/components/schemas/BattleReportVisibility'
         extra:
-          type: object
-          additionalProperties: true
+          $ref: '#/components/schemas/BattleReportExtra'
         read:
           type: boolean
         share:

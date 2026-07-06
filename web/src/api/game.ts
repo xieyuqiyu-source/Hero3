@@ -1,7 +1,7 @@
 /* 游戏业务 API */
 
 import { api } from './client'
-import type { AccountSession, GameState, BattleReport, PlayerSummary, PlayerDeletionResult, NpcCity, NpcSweepTask, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, GamblingRoundResult, SlotRoundResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, ReinforcementActionResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, WorldMapTarget, WorldMapViewResponse, PvpAttackResponse, PvpScoutResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult, YellowTurbanStatusResponse } from '@/types/game'
+import type { AccountSession, GameState, BattleReport, BattleReportEventContext, PlayerSummary, PlayerDeletionResult, NpcCity, NpcSweepTask, Mail, MailClaimResult, ServerBroadcastMailResult, MiniGameRecord, MiniGameSummary, MiniGameRedeemResult, MiniGameRedeemAllResult, GamblingRoundResult, SlotRoundResult, FishingBaitUseResult, ItemDefinition, GeneralViewActionResult, ReinforcementListResponse, ReinforcementResponse, ReinforcementActionResponse, Reinforcement, CityActionResult, ResourceActionResult, MilitaryActionResult, ResourceState, ArmyUnit, General, CurrencyActionResult, ReportActionResult, UseItemResult, AnnouncementPage, AnnouncementDetail, AnnouncementSummary, AnnouncementReadState, PvpTargetsResponse, WorldMapTarget, WorldMapViewResponse, PvpAttackResponse, PvpScoutResponse, PvpMarchActionResponse, PvpMarch, PvpBattle, PvpStateResponse, PvpRevengeRecord, PvpSeasonResponse, PvpRankingResponse, ReincarnationConfig, ReincarnationRunResponse, ReincarnationActionResult, YellowTurbanStatusResponse } from '@/types/game'
 import type { BalanceConfig, CombatConfig, FactionConfig, FishingConfig, SlotConfig, UnitConfig } from '@/store/configStore'
 
 export interface CombatUnit {
@@ -338,6 +338,11 @@ export const gameApi = {
     return api.get<BattleReport>(`/reports/${reportId}${query}`)
   },
 
+  /** 获取当前玩家可见的同事件战报上下文 */
+  getReportEvent(reportId: string, playerId: string) {
+    return api.get<BattleReportEventContext>(`/report-events/${reportId}?playerId=${encodeURIComponent(playerId)}`)
+  },
+
   /** 通过分享 token 获取公开战报 */
   getSharedReport(token: string) {
     return api.get<BattleReport>(`/reports/shared/${encodeURIComponent(token)}`)
@@ -352,12 +357,13 @@ export const gameApi = {
   },
 
   /** 分页获取军情战报 */
-  listReports(playerId: string, page: number, pageSize: number, params?: { viewType?: string; sourceType?: string; battleType?: string; result?: string }) {
+  listReports(playerId: string, page: number, pageSize: number, params?: { viewType?: string; sourceType?: string; battleType?: string; result?: string; ownerOutcome?: string }) {
     const query = new URLSearchParams({ playerId, page: String(page), pageSize: String(pageSize) })
     if (params?.viewType) query.set('viewType', params.viewType)
     if (params?.sourceType) query.set('sourceType', params.sourceType)
     if (params?.battleType) query.set('battleType', params.battleType)
     if (params?.result) query.set('result', params.result)
+    if (params?.ownerOutcome) query.set('ownerOutcome', params.ownerOutcome)
     return api.get<BattleReportPage>(`/reports?${query.toString()}`)
   },
 

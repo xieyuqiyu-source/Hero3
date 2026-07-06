@@ -16,6 +16,24 @@ const (
 	ReportSourcePlayerCity = "player_city"
 	ReportSourceDungeon    = "dungeon"
 	ReportSourceSystem     = "system"
+
+	ReportWinnerAttacker = "attacker"
+	ReportWinnerDefender = "defender"
+	ReportWinnerDraw     = "draw"
+	ReportWinnerNone     = "none"
+
+	ReportOwnerSideAttacker      = "attacker"
+	ReportOwnerSideDefender      = "defender"
+	ReportOwnerSideReinforcement = "reinforcement"
+	ReportOwnerSideScout         = "scout"
+	ReportOwnerSideObserver      = "observer"
+
+	ReportOwnerOutcomeVictory      = "victory"
+	ReportOwnerOutcomeDefeat       = "defeat"
+	ReportOwnerOutcomeDraw         = "draw"
+	ReportOwnerOutcomeIntelSuccess = "intel_success"
+	ReportOwnerOutcomeIntelFailed  = "intel_failed"
+	ReportOwnerOutcomeNotice       = "notice"
 )
 
 // NormalizeBattleReport 补齐标准战报字段，让旧战报也能按新结构展示。
@@ -35,6 +53,15 @@ func NormalizeBattleReport(report BattleReport) BattleReport {
 	if report.SourceType == "" {
 		report.SourceType = inferReportSourceType(report)
 	}
+	if report.WinnerSide == "" {
+		report.WinnerSide = inferReportWinnerSide(report)
+	}
+	if report.OwnerSide == "" {
+		report.OwnerSide = inferReportOwnerSide(report)
+	}
+	if report.OwnerOutcome == "" {
+		report.OwnerOutcome = inferReportOwnerOutcome(report)
+	}
 	if report.Title == "" {
 		report.Title = buildReportTitle(report)
 	}
@@ -49,6 +76,7 @@ func NormalizeBattleReport(report BattleReport) BattleReport {
 	if report.Share != nil {
 		report.Detail.Share = report.Share
 	}
+	syncBattleReportDetailOutcome(&report)
 	syncBattleReportDetailGenerals(&report)
 	return report
 }
@@ -58,6 +86,9 @@ func BuildBattleReportDetail(report BattleReport) BattleReportDetail {
 	report.ViewType = valueOrDefault(report.ViewType, inferReportViewType(report))
 	report.SourceType = valueOrDefault(report.SourceType, inferReportSourceType(report))
 	report.BattleType = valueOrDefault(report.BattleType, report.Type)
+	report.WinnerSide = valueOrDefault(report.WinnerSide, inferReportWinnerSide(report))
+	report.OwnerSide = valueOrDefault(report.OwnerSide, inferReportOwnerSide(report))
+	report.OwnerOutcome = valueOrDefault(report.OwnerOutcome, inferReportOwnerOutcome(report))
 	ownerGenerals, targetGenerals := reportOwnerAndTargetGenerals(report)
 
 	primary := BattleReportSide{
@@ -112,6 +143,9 @@ func BuildBattleReportDetail(report BattleReport) BattleReportDetail {
 		SourceLabel:   reportSourceLabel(report.SourceType),
 		BattleType:    report.BattleType,
 		Result:        report.Result,
+		WinnerSide:    report.WinnerSide,
+		OwnerSide:     report.OwnerSide,
+		OwnerOutcome:  report.OwnerOutcome,
 		Title:         valueOrDefault(report.Title, buildReportTitle(report)),
 		Summary:       valueOrDefault(report.Summary, buildReportSummary(report)),
 		OccurredAt:    report.CreatedAt,
@@ -137,6 +171,9 @@ func BuildBattleReportDetail(report BattleReport) BattleReportDetail {
 
 // inferReportViewType 根据旧字段推导玩家视角。
 func inferReportViewType(report BattleReport) string {
+	if report.BattleType == "scout" || report.Type == "scout" {
+		return ReportViewScout
+	}
 	switch report.Type {
 	case "reinforce", "reinforcement":
 		return ReportViewReinforcement
@@ -145,6 +182,78 @@ func inferReportViewType(report BattleReport) string {
 	default:
 		return ReportViewAttack
 	}
+}
+
+// inferReportWinnerSide 从旧 result 推导客观胜方。
+func inferReportWinnerSide(report BattleReport) string {
+	switch report.Result {
+	case "attacker_victory", "defender_defeat":
+		return ReportWinnerAttacker
+	case "defender_victory":
+		return ReportWinnerDefender
+	case "draw":
+		return ReportWinnerDraw
+	default:
+		if report.BattleType == "scout" || report.Type == "scout" {
+			return ReportWinnerNone
+		}
+		return ""
+	}
+}
+
+// inferReportOwnerSide 从视角推导当前玩家所在侧。
+func inferReportOwnerSide(report BattleReport) string {
+	viewType := valueOrDefault(report.ViewType, inferReportViewType(report))
+	switch viewType {
+	case ReportViewDefense:
+		return ReportOwnerSideDefender
+	case ReportViewReinforcement:
+		return ReportOwnerSideReinforcement
+	case ReportViewScout:
+		return ReportOwnerSideScout
+	case ReportViewAttack:
+		return ReportOwnerSideAttacker
+	default:
+		return ReportOwnerSideObserver
+	}
+}
+
+// inferReportOwnerOutcome 从视角、胜方和侦查语义推导当前玩家结果。
+func inferReportOwnerOutcome(report BattleReport) string {
+	if report.BattleType == "scout" || report.Type == "scout" {
+		if report.ViewType == ReportViewDefense {
+			return ReportOwnerOutcomeNotice
+		}
+		if report.Result == "attacker_victory" {
+			return ReportOwnerOutcomeIntelSuccess
+		}
+		return ReportOwnerOutcomeIntelFailed
+	}
+	winnerSide := valueOrDefault(report.WinnerSide, inferReportWinnerSide(report))
+	ownerSide := valueOrDefault(report.OwnerSide, inferReportOwnerSide(report))
+	if winnerSide == ReportWinnerDraw {
+		return ReportOwnerOutcomeDraw
+	}
+	switch ownerSide {
+	case ReportOwnerSideAttacker:
+		if winnerSide == ReportWinnerAttacker {
+			return ReportOwnerOutcomeVictory
+		}
+		if winnerSide == ReportWinnerDefender {
+			return ReportOwnerOutcomeDefeat
+		}
+	case ReportOwnerSideDefender, ReportOwnerSideReinforcement:
+		if winnerSide == ReportWinnerDefender {
+			return ReportOwnerOutcomeVictory
+		}
+		if winnerSide == ReportWinnerAttacker {
+			return ReportOwnerOutcomeDefeat
+		}
+	}
+	if winnerSide == ReportWinnerNone {
+		return ReportOwnerOutcomeNotice
+	}
+	return ""
 }
 
 // inferReportSourceType 根据旧目标字段推导来源类型。
@@ -390,12 +499,36 @@ func buildReportExtra(report BattleReport, visibility BattleReportVisibility) ma
 		extra["revive"] = map[string]interface{}{"revivedUnits": report.RevivedUnits}
 	}
 	if report.Type == "scout" || report.BattleType == "scout" {
+		scoutUnitType := firstReportUnitType(report.DispatchedUnits)
+		counterScoutUnitType := firstReportUnitType(report.DefenderLostUnits)
+		scoutSent := report.DispatchedUnits[scoutUnitType]
+		scoutLost := report.LostUnits[scoutUnitType]
+		counterScoutLost := report.DefenderLostUnits[counterScoutUnitType]
 		extra["scout"] = map[string]interface{}{
-			"success":           report.Result == "attacker_victory",
-			"scoutUnitType":     firstReportUnitType(report.DispatchedUnits),
-			"scoutPower":        report.PlayerPower,
-			"counterScoutPower": report.EnemyPower,
+			"success":              report.Result == "attacker_victory",
+			"scoutUnitType":        scoutUnitType,
+			"scoutSent":            scoutSent,
+			"scoutLost":            scoutLost,
+			"scoutReturned":        maxInt(0, scoutSent-scoutLost),
+			"counterScoutUnitType": counterScoutUnitType,
+			"counterScoutLost":     counterScoutLost,
+			"revealResources":      visibility.ShowEnemyResources,
+			"revealUnits":          visibility.ShowEnemyRemainingUnits,
+			"reason":               visibility.Reason,
+			"scoutPower":           report.PlayerPower,
+			"counterScoutPower":    report.EnemyPower,
 		}
+	}
+	if report.BattleType == "sweep" || report.Type == "sweep" {
+		sweep, _ := extra["sweep"].(map[string]interface{})
+		if sweep == nil {
+			sweep = map[string]interface{}{}
+		}
+		sweep["detailMode"] = "lightweight"
+		extra["sweep"] = sweep
+	}
+	if report.SourceType == ReportSourceDungeon {
+		extra["dungeon"] = map[string]interface{}{"rewardMode": "preview"}
 	}
 	return extra
 }
@@ -430,10 +563,11 @@ func convertPvpGenerals(generals []PvpGeneralSnapshot, role string) []BattleRepo
 	result := make([]BattleReportGeneral, 0, len(generals))
 	for _, general := range generals {
 		result = append(result, BattleReportGeneral{
-			ID:    general.ID,
-			Name:  general.Name,
-			Level: general.Level,
-			Role:  role,
+			ID:     general.ID,
+			Name:   general.Name,
+			Level:  general.Level,
+			Role:   role,
+			Traits: append([]GeneralTraitInstance(nil), general.Traits...),
 		})
 	}
 	return result
@@ -528,6 +662,26 @@ func cloneReportIntMap(input map[string]int) map[string]int {
 	return output
 }
 
+// mergeReportExtraMap 合并标准战报 extra，玩法上下文覆盖同名旧值。
+func mergeReportExtraMap(base map[string]interface{}, patch map[string]interface{}) map[string]interface{} {
+	output := map[string]interface{}{}
+	for key, value := range base {
+		output[key] = value
+	}
+	for key, value := range patch {
+		output[key] = value
+	}
+	return output
+}
+
+// maxInt 返回两个整数中的较大值。
+func maxInt(left int, right int) int {
+	if left > right {
+		return left
+	}
+	return right
+}
+
 // valueOrDefault 返回非空字符串或默认值。
 func valueOrDefault(value string, fallback string) string {
 	if strings.TrimSpace(value) != "" {
@@ -558,7 +712,7 @@ func reportViewLabel(viewType string) string {
 	case ReportViewDefense:
 		return "防守"
 	case ReportViewReinforcement:
-		return "增援"
+		return "协防"
 	case ReportViewScout:
 		return "侦查"
 	default:
@@ -571,6 +725,8 @@ func reportSourceLabel(sourceType string) string {
 	switch sourceType {
 	case ReportSourcePlayerCity:
 		return "玩家"
+	case ReportSourceYellowTurban:
+		return "黄巾"
 	case "stronghold":
 		return "据点"
 	case "dungeon":
@@ -586,6 +742,16 @@ func reportSourceLabel(sourceType string) string {
 	default:
 		return "NPC"
 	}
+}
+
+// syncBattleReportDetailOutcome 校正已有详情中的新结果语义，兼容已保存的旧战报。
+func syncBattleReportDetailOutcome(report *BattleReport) {
+	if report == nil || report.Detail == nil {
+		return
+	}
+	report.Detail.WinnerSide = valueOrDefault(report.Detail.WinnerSide, report.WinnerSide)
+	report.Detail.OwnerSide = valueOrDefault(report.Detail.OwnerSide, report.OwnerSide)
+	report.Detail.OwnerOutcome = valueOrDefault(report.Detail.OwnerOutcome, report.OwnerOutcome)
 }
 
 // factionLabel 返回阵营中文标签。
