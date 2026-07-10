@@ -42,6 +42,31 @@ func TestSendReinforcementConsumesArmyAndReservesGeneral(t *testing.T) {
 	}
 }
 
+// TestSendReinforcementRejectsMultipleGenerals 确保单批增援只能携带一名武将。
+func TestSendReinforcementRejectsMultipleGenerals(t *testing.T) {
+	svc, repo, from, to := newReinforcementTestService(t)
+	from.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	from.Generals = append(from.Generals, *newGeneral("wei", "xiahoudun"))
+	repo.players[from.Player.ID] = from
+
+	if _, err := svc.SendReinforcement(SendReinforcementRequest{
+		FromPlayerID:   from.Player.ID,
+		TargetPlayerID: to.Player.ID,
+		Troops:         map[string]int{"weiInfantry": 10},
+		GeneralIDs:     []string{"caocao", "xiahoudun"},
+	}); !errors.Is(err, ErrInvalidGeneral) {
+		t.Fatalf("expected multiple generals to be rejected, got %v", err)
+	}
+
+	stored, err := repo.GetState(from.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState failed: %v", err)
+	}
+	if got := armySliceToMap(stored.Army)["weiInfantry"]; got != 100 {
+		t.Fatalf("failed reinforcement must not consume troops, got %d", got)
+	}
+}
+
 func TestSendReinforcementSettlesCaoCaoGuardProductionBeforeConsume(t *testing.T) {
 	svc, repo, from, to := newReinforcementTestService(t)
 	setRealCaoCaoGuardConfig(t)

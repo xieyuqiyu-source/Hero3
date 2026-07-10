@@ -71,7 +71,7 @@ go build ./cmd/server
 - `hero3-dbtool publish-daily-update-announcement` 会按 `/opt/hero3/RELEASE` 和 `/opt/hero3/source` 的提交范围判断是否有新版本，并读取当天 `announcements/daily/YYYY-MM-DD.md` 生成玩家可读的“每日更新公告”；`memory/YYYY-MM-DD.md` 只记录开发记忆，不再作为玩家公告正文来源。
 - 生产自动部署由 GitHub Actions SSH 调度，服务器通过本地 `mihomo` 代理 `127.0.0.1:7890` 在 `/opt/hero3/source` 拉取指定提交，然后在本机构建 Go 后端、`hero3-dbtool`、玩家前端和 GM 后台；Actions 不构建 release 产物。
 - 战报清理默认按差异化保留执行：普通/NPC/扫荡 72 小时，PVP/玩家城池来源、防守/侦查 168 小时，玩家软删除 24 小时；有效分享链接会被保护。
-- 战报系统采用标准详情契约：`sourceType / battleType / viewType / winnerSide / ownerSide / ownerOutcome` 分离来源、动作、视角和当前玩家结果；玩家端军情列表支持进攻、防守、协防、侦查、扫荡分类，详情页优先渲染 `detail.primarySide / secondarySide / extra`，并由服务端按 `visibility` 脱敏敌军兵力、资源、武将和城防。内部详情必须登录并校验玩家归属，匿名分享只允许使用分享 token；批量删除复用当前列表的 `viewType / battleType` 筛选。GM 后台“战报排查”可按事件 ID 查看同一战斗下所有玩家视角战报和参与方原始快照。
+- 战报系统采用标准详情契约：`sourceType / battleType / viewType / winnerSide / ownerSide / ownerOutcome` 分离来源、动作、视角和当前玩家结果；玩家端军情列表支持进攻、防守、协防、侦查、扫荡分类，详情页优先渲染 `detail.primarySide / secondarySide / extra`，并由服务端按 `visibility` 脱敏敌军兵力、资源、武将和城防。战报参战方按“进攻方 → 交战 → 防守方 → 增援方”纵向排列，只展示出动/阵亡；同玩家或同来源城池的多批增援会合并兵力与战损，且每个聚合参战方最多展示一名武将。内部详情必须登录并校验玩家归属，匿名分享只允许使用分享 token；批量删除复用当前列表的 `viewType / battleType` 筛选。GM 后台“战报排查”可按事件 ID 查看同一战斗下所有玩家视角战报和参与方原始快照。
 - `make ensure-report-cleanup-indexes-dry-run` 用于检查战报清理和可见上限所需索引；正式库创建缺失索引需直接调用 dbtool 并显式传 `--execute --allow-non-test`，建议低峰执行。
 - `make maintenance-status` 是只读维护巡检汇总，会同时检查战报统计、战报生命周期索引、可清理候选量和权威表健康；缺索引时会跳过候选量统计并返回异常。生产环境每小时自动执行一次并写入 systemd journal。
 - `clone-data` 允许目标测试库比源库多出迁移后的新列，复制时只写公共列；源库列在目标库不存在时会中止。

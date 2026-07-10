@@ -15,6 +15,7 @@ interface BattleParticipantBlockProps {
   effectText?: string
   effectTone?: 'normal' | 'highlight'
   result?: 'victory' | 'defeat' | 'draw' | 'none'
+  settlement?: 'attacker' | 'defender' | 'none'
   buildingDamage?: string
   showUnits?: boolean
   showResources?: boolean
@@ -25,16 +26,16 @@ const KAI_FONT = '"KaiTi", "STKaiti", "Kaiti SC", serif'
 
 // formatGenerals 将参战武将压缩为一行文本。
 function formatGenerals(side: BattleReportSide): string {
-  const generals = side.generals ?? []
-  if (generals.length === 0) return '-'
-  return generals.map((general) => `${general.name || general.id}${general.level ? ` Lv.${general.level}` : ''}`).join('、')
+  const general = side.generals?.[0]
+  if (!general) return '无参战武将'
+  return `${general.name || general.id}${general.level ? ` Lv.${general.level}` : ''}`
 }
 
-// getFutureTextField 读取后续后端可能补上的称号字段，当前没有则统一占位。
+// getFutureTextField 读取后续后端可能补上的称号字段。
 function getFutureTextField(side: BattleReportSide, keys: string[]): string {
   const view = side as unknown as Record<string, unknown>
   const value = keys.map((key) => view[key]).find((item) => typeof item === 'string' && item.trim())
-  return typeof value === 'string' ? value : '-'
+  return typeof value === 'string' ? value : ''
 }
 
 // resolveIdentityName 生成标题栏右侧的玩家、NPC 或增援方名称。
@@ -85,13 +86,15 @@ function formatDrops(rewards?: BattleReportRewards): string {
 }
 
 // formatRewardFeedback 生成战后奖励和反馈说明。
-function formatRewardFeedback(rewards?: BattleReportRewards, fallback?: string): string {
+function formatRewardFeedback(rewards?: BattleReportRewards, fallback?: string, includeResources = false): string {
   const parts: string[] = []
   if ((rewards?.generalExp ?? 0) > 0) parts.push(`武将经验 +${rewards?.generalExp}`)
   if ((rewards?.cityGold ?? 0) > 0) parts.push(`城金 +${rewards?.cityGold}`)
-  Object.entries(rewards?.resources ?? {}).forEach(([key, amount]) => {
-    if (amount > 0) parts.push(`${RESOURCE_LABELS[key] || key} +${amount.toLocaleString()}`)
-  })
+  if (includeResources) {
+    Object.entries(rewards?.resources ?? {}).forEach(([key, amount]) => {
+      if (amount > 0) parts.push(`${RESOURCE_LABELS[key] || key} +${amount.toLocaleString()}`)
+    })
+  }
   return parts.join('，') || fallback || '无'
 }
 
@@ -104,92 +107,84 @@ const BattleParticipantBlock: FC<BattleParticipantBlockProps> = ({
   effectText,
   effectTone = 'normal',
   result = 'none',
+  settlement = 'none',
   buildingDamage = '无',
   showUnits = true,
   showResources = true,
   showGenerals = true,
 }) => {
-  const hasGenerals = showGenerals && (side.generals ?? []).length > 0
   const titleName = resolveIdentityName(side)
   const factionName = resolveFactionName(side)
   const seal = resultSealView(result)
+  const officialTitle = getFutureTextField(side, ['officialTitle', 'officeTitle', 'officialRank', 'office'])
+  const militaryRank = getFutureTextField(side, ['militaryRank', 'rankTitle', 'rank'])
 
   return (
     <section className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
-      <div className="flex items-center justify-start gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2 text-xs font-black">
-        <span className="text-amber-500">{title}</span>
-        <span className="min-w-0 truncate text-left text-amber-300">{titleName}</span>
-      </div>
-
-    <div className="grid grid-cols-[64px_1fr] border-b border-[var(--color-border)] sm:grid-cols-[72px_1fr_1fr_1fr_64px]">
-      <div className="row-span-3 flex items-stretch justify-stretch border-r border-[var(--color-border)]">
-        <div className={`flex min-h-full w-full items-center justify-center border text-center text-2xl font-black leading-none ${factionToneClass(side.factionLabel || side.faction)}`} style={{ fontFamily: KAI_FONT }}>
-          <span className="line-clamp-2 break-all">{factionName}</span>
-        </div>
-      </div>
-      {!hasGenerals && side.role === 'defender' ? (
-        <div className="border-b border-[var(--color-border)] px-3 py-2 text-center text-[11px] font-semibold text-[var(--color-text-secondary)] sm:col-span-3">
-          -
-        </div>
-      ) : (
-        <>
-          <div className="border-b border-[var(--color-border)] px-3 py-2 text-[11px] sm:border-r">
-            <span className="text-[var(--color-text-muted)]">将领名称：</span>
-            <span className="font-bold text-[var(--color-text-primary)]">{showGenerals ? formatGenerals(side) : '情报未揭示'}</span>
-          </div>
-          <div className="border-b border-[var(--color-border)] px-3 py-2 text-[11px] sm:border-r">
-            <span className="text-[var(--color-text-muted)]">官职：</span>
-            <span className="font-semibold text-[var(--color-text-secondary)]">
-              {getFutureTextField(side, ['officialTitle', 'officeTitle', 'officialRank', 'office'])}
-            </span>
-          </div>
-          <div className="border-b border-[var(--color-border)] px-3 py-2 text-[11px]">
-            <span className="text-[var(--color-text-muted)]">军衔：</span>
-            <span className="font-semibold text-[var(--color-text-secondary)]">
-              {getFutureTextField(side, ['militaryRank', 'rankTitle', 'rank'])}
-            </span>
-          </div>
-        </>
-      )}
-      <div className="hidden row-span-3 items-center justify-center border-l border-[var(--color-border)] p-2 sm:flex">
-        <div className={`flex h-11 w-11 items-center justify-center rounded-md border text-2xl font-black leading-none ${seal.className}`} style={{ fontFamily: KAI_FONT }}>
+      <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-dim)] px-3 py-2 text-xs font-black">
+        <span className="shrink-0 text-amber-500">{title}</span>
+        <span className="min-w-0 flex-1 truncate text-left text-[var(--color-text-primary)]">{titleName}</span>
+        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded border text-base font-black leading-none ${seal.className}`} style={{ fontFamily: KAI_FONT }}>
           {seal.label}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-[64px_minmax(0,1fr)] border-b border-[var(--color-border)] sm:grid-cols-[72px_minmax(0,1fr)]">
+        <div className="flex items-stretch justify-stretch border-r border-[var(--color-border)]">
+          <div className={`flex min-h-full w-full items-center justify-center border text-center text-2xl font-black leading-none ${factionToneClass(side.factionLabel || side.faction)}`} style={{ fontFamily: KAI_FONT }}>
+            <span className="line-clamp-2 break-all">{factionName}</span>
+          </div>
+        </div>
+        <div>
+          <div className="grid gap-2 border-b border-[var(--color-border)] px-3 py-2 text-[11px] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div className="min-w-0">
+              <span className="text-[var(--color-text-muted)]">将领名称：</span>
+              <span className="font-bold text-[var(--color-text-primary)]">{showGenerals ? formatGenerals(side) : '情报未揭示'}</span>
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[var(--color-text-secondary)]">
+              {officialTitle && <span>官职：<b className="text-[var(--color-text-primary)]">{officialTitle}</b></span>}
+              {militaryRank && <span>军衔：<b className="text-[var(--color-text-primary)]">{militaryRank}</b></span>}
+              {side.power > 0 && <span>战力：<b className="text-amber-500">{side.power.toLocaleString()}</b></span>}
+            </div>
+          </div>
+          <div className={`px-3 py-2 text-center text-[11px] ${effectTone === 'highlight' ? 'font-bold text-amber-500' : 'text-[var(--color-text-secondary)]'}`}>
+            {effectText || '本场无触发效果'}
+          </div>
         </div>
       </div>
-      <div className="col-span-1 px-3 py-2 text-[11px] text-[var(--color-text-secondary)] sm:col-span-3">
-        -
-      </div>
-      <div className={`col-span-1 border-t border-[var(--color-border)] px-3 py-2 text-center text-[11px] sm:col-span-3 ${effectTone === 'highlight' ? 'font-bold text-amber-500' : 'text-[var(--color-text-secondary)]'}`}>
-        {effectText || '-'}
-      </div>
-    </div>
 
-    {showUnits ? (
-      <UnitLossMatrix title="兵种" units={side.units} />
-    ) : (
-      <div className="border-t border-[var(--color-border)] px-3 py-4 text-center text-xs font-semibold text-[var(--color-text-muted)]">
-        敌方剩余兵力情报未揭示
-      </div>
-    )}
+      {showUnits ? (
+        <UnitLossMatrix title="兵种" units={side.units} />
+      ) : (
+        <div className="border-t border-[var(--color-border)] px-3 py-4 text-center text-xs font-semibold text-[var(--color-text-muted)]">
+          敌方兵力情报未揭示
+        </div>
+      )}
 
-    <div className="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)] text-[11px]">
-      <div className="grid grid-cols-[88px_1fr]">
-        <div className="bg-[var(--color-surface-dim)] px-3 py-2 font-bold text-amber-500">掠夺资源</div>
-        <div className="px-3 py-2 text-center text-[var(--color-text-secondary)]">{showResources ? formatResources(rewards?.resources || side.resources) : '情报未揭示'}</div>
-      </div>
-      <div className="grid grid-cols-[88px_1fr]">
-        <div className="bg-[var(--color-surface-dim)] px-3 py-2 font-bold text-amber-500">建筑战损</div>
-        <div className="px-3 py-2 text-center text-[var(--color-text-secondary)]">{buildingDamage}</div>
-      </div>
-      <div className="grid grid-cols-[88px_1fr]">
-        <div className="bg-[var(--color-surface-dim)] px-3 py-2 font-bold text-amber-500">战损反馈</div>
-        <div className="px-3 py-2 text-center text-[var(--color-text-secondary)]">{formatRewardFeedback(rewards, feedback)}</div>
-      </div>
-      <div className="grid grid-cols-[88px_1fr]">
-        <div className="bg-[var(--color-surface-dim)] px-3 py-2 font-bold text-amber-500">宝物掉落</div>
-        <div className="px-3 py-2 text-center text-[var(--color-text-secondary)]">{formatDrops(rewards)}</div>
-      </div>
-    </div>
+      {settlement !== 'none' && (
+        <div className="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)] text-[11px]">
+          {settlement === 'attacker' && (
+            <div className="grid grid-cols-[88px_1fr]">
+              <div className="bg-[var(--color-surface-dim)] px-3 py-2 font-bold text-amber-500">掠夺资源</div>
+              <div className="px-3 py-2 text-center text-[var(--color-text-secondary)]">{showResources ? formatResources(rewards?.resources) : '情报未揭示'}</div>
+            </div>
+          )}
+          {settlement === 'defender' && (
+            <div className="grid grid-cols-[88px_1fr]">
+              <div className="bg-[var(--color-surface-dim)] px-3 py-2 font-bold text-amber-500">建筑损坏</div>
+              <div className="px-3 py-2 text-center text-[var(--color-text-secondary)]">{buildingDamage}</div>
+            </div>
+          )}
+          <div className="grid grid-cols-[88px_1fr]">
+            <div className="bg-[var(--color-surface-dim)] px-3 py-2 font-bold text-amber-500">战损反馈</div>
+            <div className="px-3 py-2 text-center text-[var(--color-text-secondary)]">{formatRewardFeedback(rewards, feedback, settlement === 'defender')}</div>
+          </div>
+          <div className="grid grid-cols-[88px_1fr]">
+            <div className="bg-[var(--color-surface-dim)] px-3 py-2 font-bold text-amber-500">宝物掉落</div>
+            <div className="px-3 py-2 text-center text-[var(--color-text-secondary)]">{formatDrops(rewards)}</div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

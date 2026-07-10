@@ -86,3 +86,18 @@ test('标准详情支持全兵种固定列和特性触发展示', () => {
   }), true)
   assert.equal(hasTraitEntries({ traits: [] }), false)
 })
+
+test('标准战报只展示出动和阵亡，不重复顶部胜负和协防贡献', () => {
+  const matrixSource = readFileSync(new URL('../src/pages/news/components/report-detail/UnitLossMatrix.tsx', import.meta.url), 'utf8')
+  const headerSource = readFileSync(new URL('../src/pages/news/components/report-detail/BattleReportHeader.tsx', import.meta.url), 'utf8')
+  const reinforcementSource = readFileSync(new URL('../src/pages/news/components/report-detail/ReportReinforcementContext.tsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(matrixSource, /剩余/)
+  assert.doesNotMatch(headerSource, /BattleOutcomeSeal/)
+  assert.doesNotMatch(reinforcementSource, /我的贡献/)
+})
+
+test('战报详情先聚合增援批次，且增援区块不显示结算行', () => {
+  const detailSource = readFileSync(new URL('../src/pages/news/components/BattleReportDetail.tsx', import.meta.url), 'utf8')
+  assert.match(detailSource, /aggregateReinforcementSnapshots/)
+  assert.match(detailSource, /settlement="none"/)
+})

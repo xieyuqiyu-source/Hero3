@@ -4,10 +4,17 @@ import { gameApi } from '@/api/game'
 import { useAccountStore } from '@/store/accountStore'
 import { useConfigStore } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
-import type { BattleReport, BattleReportDetailData, BattleReportGeneral, BattleReportSide, BattleReportUnit, DefenseReinforcementUnit, General, GeneralTraitInstance } from '@/types/game'
-import { GENERAL_TRAITS, formatParamLabel, formatParamValue, getTraitMeta } from '@/utils/traits'
+import type {
+  BattleReport,
+  BattleReportDetailData,
+  BattleReportSide,
+  BattleReportTrait,
+  BattleReportUnit,
+  DefenseReinforcementUnit,
+} from '@/types/game'
 import { sortUnitIds } from '@/utils/unitOrder'
 import { buildReportShareURL, resolveReportOutcome } from '../reportPresentation'
+import { aggregateReinforcementSnapshots } from '../reportAggregation'
 import BattleReportHeader from './report-detail/BattleReportHeader'
 import BattleParticipantBlock from './report-detail/BattleParticipantBlock'
 import ReportEffectStrip from './report-detail/ReportEffectStrip'
@@ -176,21 +183,22 @@ function withExpandedUnits(side: BattleReportSide, unitsConfig: UnitsConfigView 
 // buildReinforcementSides 从战报 extra 中构造多个协防/增援方区块。
 function buildReinforcementSides(detail: BattleReportDetailData, unitsConfig: UnitsConfigView | undefined, playerNameById: PlayerNameMap): BattleReportSide[] {
   const pvp = readPvpExtra(detail)
-  return (pvp.reinforcements ?? []).map((reinforcement, index) => {
-    const view = reinforcement as DefenseReinforcementUnit & { fromPlayerName?: string; sourceName?: string }
-    const losses = pvp.reinforcementLosses?.[reinforcement.reinforcementId] ?? {}
-    const sourceType = reinforcement.sourceTags?.source_type
-    const sourcePlayerId = reinforcement.sourceTags?.source_player_id || reinforcement.fromPlayerId
-    const playerName = view.fromPlayerName || view.sourceName || playerNameById[sourcePlayerId] || (sourceType === 'obtained' ? '获得驻防' : reinforcement.fromPlayerId)
+  const groups = aggregateReinforcementSnapshots(pvp.reinforcements ?? [], pvp.reinforcementLosses ?? {})
+  return groups.map((group, index) => {
+    const playerName = playerNameById[group.sourcePlayerId]
+      || group.playerName
+      || (group.sourceType === 'obtained' ? '获得驻防' : group.sourceId)
     return {
       role: 'reinforcement',
-      playerId: reinforcement.fromPlayerId,
+      targetId: group.groupKey,
+      playerId: group.sourcePlayerId,
       playerName,
-      cityName: `增援方 ${index + 1}`,
-      faction: reinforcement.faction,
-      factionLabel: reinforcement.faction,
+      cityId: group.sourcePlayerId ? undefined : group.sourceId,
+      cityName: group.sourcePlayerId ? undefined : group.playerName || `增援方 ${index + 1}`,
+      faction: group.faction,
+      factionLabel: group.faction,
       power: 0,
-      generals: (reinforcement.generals ?? []).map((general) => ({
+      generals: group.generals.map((general) => ({
         id: general.id,
         name: general.name,
         level: general.level,
@@ -198,7 +206,7 @@ function buildReinforcementSides(detail: BattleReportDetailData, unitsConfig: Un
         attributes: general.attributes,
         traits: general.traits,
       })),
-      units: buildRowsFromTroopMaps(reinforcement.faction, reinforcement.troops ?? {}, losses, unitsConfig),
+      units: buildRowsFromTroopMaps(group.faction, group.troops, group.losses, unitsConfig),
     }
   })
 }
@@ -210,37 +218,20 @@ function sideLossFeedback(side: BattleReportSide): string {
   return `本方阵亡 ${totalLost.toLocaleString()} 兵`
 }
 
-// fallbackGeneralTraits 为旧战报补全未持久化的武将特性。
-function fallbackGeneralTraits(general: BattleReportGeneral, currentGenerals: General[]): GeneralTraitInstance[] {
-  if ((general.traits ?? []).length > 0) return general.traits ?? []
-  const current = currentGenerals.find((item) => item.id === general.id)
-  if ((current?.traits ?? []).length > 0) return current?.traits ?? []
-  return (GENERAL_TRAITS[general.id] ?? []).map((traitId) => {
-    const meta = getTraitMeta(traitId)
-    return { traitId, name: meta.name, params: {} }
+// sideTriggeredEffectText 只展示本场真实触发结果，不用当前武将静态特性冒充战斗效果。
+function sideTriggeredEffectText(traits: BattleReportTrait[] | undefined, side: BattleReportSide, sideKey: 'primary' | 'secondary' | 'reinforcement'): string {
+  const generalIds = new Set((side.generals ?? []).map((general) => general.id))
+  const visible = (traits ?? []).filter((trait) => {
+    if (trait.generalId && generalIds.has(trait.generalId)) return true
+    if (trait.ownerSide === sideKey) return true
+    if (trait.ownerRole && trait.ownerRole === side.role) return true
+    return sideKey === 'primary' && !trait.ownerSide && !trait.ownerRole && !trait.generalId
   })
-}
-
-// sideTraitText 将当前参战方将领自带特性压缩成详细文字。
-function sideTraitText(side: BattleReportSide, currentGenerals: General[]): string {
-  const generals = side.generals ?? []
-  if (generals.length === 0) return '-'
-  const items = generals.flatMap((general) => {
-    const traits = fallbackGeneralTraits(general, currentGenerals)
-    return traits.map((trait) => {
-      const meta = getTraitMeta(trait.traitId)
-      const params = Object.entries(trait.params ?? {})
-        .map(([key, value]) => `${formatParamLabel(key)} ${formatParamValue(key, value)}`)
-        .join('，')
-      return [
-        `${general.name || general.id}：${meta.name}`,
-        meta.trigger ? `触发 ${meta.trigger}` : '',
-        meta.description,
-        params ? `参数 ${params}` : '',
-      ].filter(Boolean).join('，')
-    })
-  })
-  return items.join('；') || '-'
+  if (visible.length === 0) return '本场无触发效果'
+  return visible.map((trait) => {
+    const name = trait.traitName || trait.traitId
+    return [trait.generalName ? `${trait.generalName}：${name}` : name, trait.summary].filter(Boolean).join(' · ')
+  }).join('；')
 }
 
 // participantResult 按战报胜方计算当前参与方的胜败印。
@@ -258,19 +249,19 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   const detail = useMemo(() => normalizeDetail(report), [report])
   const unitsConfig = useConfigStore((state) => state.units) as UnitsConfigView | undefined
   const accountPlayers = useAccountStore((state) => state.players)
-  const currentState = useGameStore((state) => state.state)
-  const currentGenerals = currentState?.generals ?? []
+  const currentPlayer = useGameStore((state) => state.state?.player)
   const [copied, setCopied] = useState(false)
   const playerNameById = useMemo(() => {
     const entries = accountPlayers.map((player) => [player.id, player.nickname])
-    if (currentState?.player) entries.push([currentState.player.id, currentState.player.nickname])
+    if (currentPlayer) entries.push([currentPlayer.id, currentPlayer.nickname])
     return Object.fromEntries(entries)
-  }, [accountPlayers, currentState?.player])
+  }, [accountPlayers, currentPlayer])
   const attackerSide = withExpandedUnits(detail.primarySide, unitsConfig)
   const defenderSide = detail.secondarySide ? withExpandedUnits(detail.secondarySide, unitsConfig) : null
   const reinforcementSides = detail.viewType === 'reinforcement' ? [] : buildReinforcementSides(detail, unitsConfig, playerNameById)
-  const attackerTraitText = sideTraitText(attackerSide, currentGenerals)
-  const defenderTraitText = defenderSide ? sideTraitText(defenderSide, currentGenerals) : '-'
+  const attackerTraitText = sideTriggeredEffectText(detail.traits, attackerSide, 'primary')
+  const defenderTraitText = defenderSide ? sideTriggeredEffectText(detail.traits, defenderSide, 'secondary') : '本场无触发效果'
+  const showCombatSettlement = detail.viewType !== 'reinforcement' && detail.viewType !== 'scout' && detail.battleType !== 'scout'
 
   // handleShare 创建或复用分享 token 并复制公开链接。
   const handleShare = async () => {
@@ -295,6 +286,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
 
       <ReportEffectStrip detail={detail} />
       <ReportIntelPanel visibility={detail.visibility} />
+      {detail.viewType === 'reinforcement' && <ReportReinforcementContext reinforcement={detail.extra?.reinforcement} />}
 
       <BattleParticipantBlock
         title={detail.viewType === 'reinforcement' ? '增援方' : '攻击方'}
@@ -302,8 +294,9 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
         rewards={detail.ownerSide === 'defender' ? undefined : detail.rewards}
         feedback={sideLossFeedback(attackerSide)}
         effectText={attackerTraitText}
-        effectTone={attackerTraitText !== '-' ? 'highlight' : 'normal'}
+        effectTone={attackerTraitText === '本场无触发效果' ? 'normal' : 'highlight'}
         result={participantResult(detail, attackerSide)}
+        settlement={showCombatSettlement ? 'attacker' : 'none'}
         showUnits={detail.ownerSide !== 'defender' || detail.visibility.showEnemyRemainingUnits}
         showResources={detail.ownerSide !== 'defender' || detail.visibility.showEnemyResources}
         showGenerals={detail.ownerSide !== 'defender' || detail.visibility.showEnemyGenerals}
@@ -325,25 +318,27 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
           rewards={detail.ownerSide === 'defender' ? detail.rewards : undefined}
           feedback={sideLossFeedback(defenderSide)}
           effectText={defenderTraitText}
-          effectTone={defenderTraitText !== '-' ? 'highlight' : 'normal'}
+          effectTone={defenderTraitText === '本场无触发效果' ? 'normal' : 'highlight'}
           result={participantResult(detail, defenderSide)}
+          settlement={showCombatSettlement ? 'defender' : 'none'}
           showUnits={!['attacker', 'scout'].includes(detail.ownerSide || '') || detail.visibility.showEnemyRemainingUnits}
           showResources={!['attacker', 'scout'].includes(detail.ownerSide || '') || detail.visibility.showEnemyResources}
           showGenerals={!['attacker', 'scout'].includes(detail.ownerSide || '') || detail.visibility.showEnemyGenerals}
         />
       )}
 
-      {reinforcementSides.map((side, index) => {
-        const reinforcementTraitText = sideTraitText(side, currentGenerals)
+      {reinforcementSides.map((side) => {
+        const reinforcementTraitText = sideTriggeredEffectText(detail.traits, side, 'reinforcement')
         return (
           <BattleParticipantBlock
-            key={`${side.playerId || 'reinforcement'}-${index}`}
+            key={side.targetId}
             title="增援方"
             side={side}
             feedback={sideLossFeedback(side)}
             effectText={reinforcementTraitText}
-            effectTone={reinforcementTraitText !== '-' ? 'highlight' : 'normal'}
+            effectTone={reinforcementTraitText === '本场无触发效果' ? 'normal' : 'highlight'}
             result={participantResult(detail, side)}
+            settlement="none"
             showUnits={!['attacker', 'scout'].includes(detail.ownerSide || '') || detail.visibility.showEnemyRemainingUnits}
             showResources={!['attacker', 'scout'].includes(detail.ownerSide || '') || detail.visibility.showEnemyResources}
             showGenerals={!['attacker', 'scout'].includes(detail.ownerSide || '') || detail.visibility.showEnemyGenerals}
@@ -353,7 +348,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
 
       <ReportScoutContext scout={detail.extra?.scout} />
       <ReportSweepContext sweep={detail.extra?.sweep} />
-      <ReportReinforcementContext reinforcement={detail.extra?.reinforcement} />
+      {detail.viewType !== 'reinforcement' && <ReportReinforcementContext reinforcement={detail.extra?.reinforcement} />}
       <ReportYellowTurbanContext yellowTurban={detail.extra?.yellowTurban} />
     </div>
   )

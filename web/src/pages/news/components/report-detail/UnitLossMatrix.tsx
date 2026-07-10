@@ -1,4 +1,4 @@
-/* 本文件渲染战报兵种出动、阵亡和剩余矩阵。 */
+/* 本文件按标准战报模板渲染兵种出动和阵亡矩阵。 */
 import type { FC } from 'react'
 import type { BattleReportUnit } from '@/types/game'
 
@@ -31,7 +31,6 @@ const UnitLossMatrix: FC<UnitLossMatrixProps> = ({ title, units = [] }) => {
                 {[
                   ['出动', 'dispatched'],
                   ['阵亡', 'lost'],
-                  ['剩余', 'survived'],
                 ].map(([label, key]) => (
                   <tr key={key} className="border-t border-[var(--color-border)]">
                     <td className="py-1.5 text-left font-semibold text-[var(--color-text-secondary)]">{label}</td>
@@ -49,10 +48,9 @@ const UnitLossMatrix: FC<UnitLossMatrixProps> = ({ title, units = [] }) => {
             {rows.map((unit) => (
               <div key={unit.unitType} className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-dim)] px-2 py-1.5">
                 <div className="text-[11px] font-bold text-[var(--color-text-primary)]">{unit.unitName || unit.unitType}</div>
-                <div className="mt-1 grid grid-cols-3 gap-1 text-[10px] text-[var(--color-text-secondary)]">
+                <div className="mt-1 grid grid-cols-2 gap-1 text-[10px] text-[var(--color-text-secondary)]">
                   <span>出动 {unit.dispatched.toLocaleString()}</span>
                   <span className={unit.lost > 0 ? 'font-bold text-red-500' : ''}>阵亡 {unit.lost.toLocaleString()}</span>
-                  <span>剩余 {unit.survived.toLocaleString()}</span>
                 </div>
               </div>
             ))}

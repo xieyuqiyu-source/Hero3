@@ -152,7 +152,7 @@ const NewsPage: FC = () => {
           className="flex items-center gap-1 text-[10px] text-red-500 hover:text-red-600 cursor-pointer transition-colors px-2 py-1 rounded-lg hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {clearingReports ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-          {clearingReports ? '清空中' : '清空全部'}
+          {clearingReports ? '清空中' : activeView === 'all' ? '清空全部' : '清空当前分类'}
         </button>
       </div>
 
