@@ -30,11 +30,21 @@ func (r *MySQLRepository) SaveReport(report game.BattleReport) error {
 
 // SaveReports 在同一事务内批量保存一组标准战报。
 func (r *MySQLRepository) SaveReports(reports []game.BattleReport) error {
+	return r.SaveReportBundle(game.BattleEvent{}, reports)
+}
+
+// SaveReportBundle 在同一事务内保存事件和它的全部玩家视角，防止管理端事件索引与战报脱节。
+func (r *MySQLRepository) SaveReportBundle(event game.BattleEvent, reports []game.BattleReport) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
+	if event.ID != "" {
+		if err := upsertBattleEventTx(tx, event); err != nil {
+			return err
+		}
+	}
 	for _, report := range reports {
 		if err := insertBattleReportTx(tx, report); err != nil {
 			return err
@@ -131,27 +141,69 @@ func insertBattleEventForReportTx(tx *sql.Tx, report game.BattleReport, occurred
 	if report.EventID == "" {
 		return nil
 	}
-	_, err := tx.Exec(
+	event := game.BuildBattleEventFromReport(report)
+	event.OccurredAt = occurredAt.UTC().Format(time.RFC3339)
+	event.CreatedAt = event.OccurredAt
+	summaryJSON, err := json.Marshal(event.Summary)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(
 		`INSERT IGNORE INTO battle_events (
 			id, source_type, source_id, scene, battle_type, result,
 			attacker_player_id, defender_player_id, attacker_name, defender_name,
 			attacker_faction, defender_faction, related_march_id, related_reinforcement_id,
-			occurred_at, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', ?, ?)`,
-		report.EventID,
-		report.SourceType,
-		report.TargetID,
-		report.ViewType,
-		report.BattleType,
-		report.Result,
-		report.PlayerID,
-		report.TargetID,
-		report.PlayerName,
-		report.TargetName,
-		report.PlayerFaction,
-		report.DefenderFaction,
+			summary_json, occurred_at, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?)`,
+		event.ID, event.SourceType, event.SourceID, event.Scene, event.BattleType, event.Result,
+		event.AttackerPlayerID, event.DefenderPlayerID, event.AttackerName, event.DefenderName,
+		event.AttackerFaction, event.DefenderFaction, summaryJSON,
 		occurredAt,
 		occurredAt,
+	)
+	return err
+}
+
+// upsertBattleEventTx 完整写入显式战斗事件，包括关联行军和管理端诊断快照。
+func upsertBattleEventTx(tx *sql.Tx, event game.BattleEvent) error {
+	summaryJSON, err := json.Marshal(event.Summary)
+	if err != nil {
+		return err
+	}
+	snapshotJSON, err := json.Marshal(event.Snapshot)
+	if err != nil {
+		return err
+	}
+	resultJSON, err := json.Marshal(event.ResultData)
+	if err != nil {
+		return err
+	}
+	occurredAt, _ := time.Parse(time.RFC3339, event.OccurredAt)
+	if occurredAt.IsZero() {
+		occurredAt = time.Now().UTC()
+	}
+	createdAt, _ := time.Parse(time.RFC3339, event.CreatedAt)
+	if createdAt.IsZero() {
+		createdAt = occurredAt
+	}
+	_, err = tx.Exec(
+		`INSERT INTO battle_events (
+			id, source_type, source_id, scene, battle_type, result,
+			attacker_player_id, defender_player_id, attacker_name, defender_name,
+			attacker_faction, defender_faction, related_march_id, related_reinforcement_id,
+			summary_json, snapshot_json, result_json, occurred_at, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE source_type=VALUES(source_type), source_id=VALUES(source_id), scene=VALUES(scene),
+			battle_type=VALUES(battle_type), result=VALUES(result), attacker_player_id=VALUES(attacker_player_id),
+			defender_player_id=VALUES(defender_player_id), attacker_name=VALUES(attacker_name), defender_name=VALUES(defender_name),
+			attacker_faction=VALUES(attacker_faction), defender_faction=VALUES(defender_faction),
+			related_march_id=VALUES(related_march_id), related_reinforcement_id=VALUES(related_reinforcement_id),
+			summary_json=VALUES(summary_json), snapshot_json=VALUES(snapshot_json), result_json=VALUES(result_json),
+			occurred_at=VALUES(occurred_at)`,
+		event.ID, event.SourceType, event.SourceID, event.Scene, event.BattleType, event.Result,
+		event.AttackerPlayerID, event.DefenderPlayerID, event.AttackerName, event.DefenderName,
+		event.AttackerFaction, event.DefenderFaction, event.RelatedMarchID, event.RelatedReinforcementID,
+		summaryJSON, snapshotJSON, resultJSON, occurredAt.UTC(), createdAt.UTC(),
 	)
 	return err
 }
@@ -303,12 +355,18 @@ func scanBattleReportJSON(reportJSON []byte, detailJSON []byte, isRead bool) (ga
 }
 
 const battleReportSummaryColumns = `id, player_id, event_id, owner_player_id, view_type, source_type, battle_type, result,
-	title, summary, target_id, target_name, type, is_read, deleted_by_player, created_at`
+	title, summary, target_id, target_name, type, is_read, deleted_by_player, created_at,
+	COALESCE(JSON_UNQUOTE(JSON_EXTRACT(report_json, '$.winnerSide')), ''),
+	COALESCE(JSON_UNQUOTE(JSON_EXTRACT(report_json, '$.ownerSide')), ''),
+	COALESCE(JSON_UNQUOTE(JSON_EXTRACT(report_json, '$.ownerOutcome')), ''),
+	COALESCE(CAST(JSON_EXTRACT(report_json, '$.rewards') AS CHAR), '{}'),
+	COALESCE(CAST(JSON_EXTRACT(report_json, '$.lostUnits') AS CHAR), '{}')`
 
 // scanBattleReportSummary 从索引列构造军情列表摘要，避免列表读取完整 report_json。
 func scanBattleReportSummary(scanner interface{ Scan(dest ...any) error }) (game.BattleReport, error) {
 	var report game.BattleReport
 	var createdAt time.Time
+	var rewardsJSON, lostUnitsJSON []byte
 	if err := scanner.Scan(
 		&report.ID,
 		&report.PlayerID,
@@ -326,14 +384,25 @@ func scanBattleReportSummary(scanner interface{ Scan(dest ...any) error }) (game
 		&report.Read,
 		&report.DeletedByPlayer,
 		&createdAt,
+		&report.WinnerSide,
+		&report.OwnerSide,
+		&report.OwnerOutcome,
+		&rewardsJSON,
+		&lostUnitsJSON,
 	); err != nil {
 		return game.BattleReport{}, err
 	}
 	report.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+	if err := json.Unmarshal(rewardsJSON, &report.Rewards); err != nil {
+		return game.BattleReport{}, err
+	}
+	if err := json.Unmarshal(lostUnitsJSON, &report.LostUnits); err != nil {
+		return game.BattleReport{}, err
+	}
 	return report, nil
 }
 
-// GetReportByID 公开获取单条战报，保留旧分享链接兼容。
+// GetReportByID 供管理端读取原始战报；玩家端必须走归属校验或分享令牌入口。
 func (r *MySQLRepository) GetReportByID(reportID string) (game.BattleReport, error) {
 	var reportJSON []byte
 	var detailJSON []byte
@@ -710,10 +779,22 @@ func (r *MySQLRepository) DeleteReport(playerID string, reportID string) error {
 
 // DeleteReportsByView 物理删除指定视角 Tab 下的战报。
 func (r *MySQLRepository) DeleteReportsByView(playerID string, viewType string) error {
-	if strings.TrimSpace(viewType) == "" {
-		return r.DeleteAllReports(playerID)
+	return r.DeleteReportsByFilter(game.BattleReportDeleteFilter{PlayerID: playerID, ViewType: viewType})
+}
+
+// DeleteReportsByFilter 按列表相同的视角和战斗类型条件物理删除战报。
+func (r *MySQLRepository) DeleteReportsByFilter(filter game.BattleReportDeleteFilter) error {
+	where := `WHERE player_id = ?`
+	args := []any{strings.TrimSpace(filter.PlayerID)}
+	if viewType := strings.TrimSpace(filter.ViewType); viewType != "" {
+		where += ` AND view_type = ?`
+		args = append(args, viewType)
 	}
-	rows, err := r.selectReportDeleteTargets(`WHERE player_id = ? AND view_type = ?`, playerID, viewType)
+	if battleType := strings.TrimSpace(filter.BattleType); battleType != "" {
+		where += ` AND battle_type = ?`
+		args = append(args, battleType)
+	}
+	rows, err := r.selectReportDeleteTargets(where, args...)
 	if err != nil {
 		return err
 	}

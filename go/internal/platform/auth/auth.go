@@ -235,8 +235,8 @@ func isPublicPath(path string, publicSet map[string]bool) bool {
 	if publicSet[path] {
 		return true
 	}
-	// 战报详情公开（用于分享）
-	if strings.HasPrefix(path, "/api/v1/reports/") {
+	// 只有带分享令牌的战报入口公开，内部战报详情必须登录并校验归属。
+	if strings.HasPrefix(path, "/api/v1/reports/shared/") {
 		return true
 	}
 	return false

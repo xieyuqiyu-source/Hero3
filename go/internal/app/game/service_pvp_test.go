@@ -43,6 +43,55 @@ func TestPvpAttackRejectsSelfAndSameAccount(t *testing.T) {
 	}
 }
 
+// TestPvpReinforcementReportIncludesZeroLossParticipant 验证实际参战但零损失的援军仍收到协防战报。
+func TestPvpReinforcementReportIncludesZeroLossParticipant(t *testing.T) {
+	now := time.Date(2026, 7, 10, 13, 0, 0, 0, time.UTC)
+	record := Reinforcement{
+		ID:                "rein_zero_loss",
+		OwnerPlayerID:     "player_rein_owner",
+		FromPlayerID:      "player_rein_owner",
+		FromPlayerName:    "零损援军",
+		FromPlayerFaction: "wei",
+		Status:            ReinforcementStatusStationed,
+		RemainingTroops:   map[string]int{"weiInfantry": 100},
+		Rules:             GarrisonRules{CanFight: true},
+	}
+	changed := applyPvpReinforcementLosses([]Reinforcement{record}, map[string]map[string]int{}, now)
+	if len(changed) != 1 {
+		t.Fatalf("expected zero-loss participant recorded as changed, got %+v", changed)
+	}
+	attacker := newPlayerState("player_rein_attacker", "进攻方", "shu", "liubei", now)
+	defender := newPlayerState("player_rein_defender", "防守方", "wei", "caocao", now)
+	reports := buildPvpReinforcementReports("event_zero_loss", &attacker, &defender, changed, map[string]map[string]int{}, map[string]int{record.ID: 12}, "defender_victory", now.Format(resourceDateLayout))
+	if len(reports) != 1 || reports[0].GeneralExpGained != 12 {
+		t.Fatalf("expected zero-loss reinforcement report with exp, got %+v", reports)
+	}
+}
+
+// TestPvpBattleProjectionCannotBypassReportVisibility 验证 PVP 战斗接口不能绕过战报可见性读取防守快照。
+func TestPvpBattleProjectionCannotBypassReportVisibility(t *testing.T) {
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	report := NormalizeBattleReport(BattleReport{
+		ID: "br_pvp_hidden", PlayerID: "player_pvp_hidden", OwnerPlayerID: "player_pvp_hidden",
+		ViewType: ReportViewAttack, SourceType: ReportSourcePlayerCity, BattleType: "attack", Type: "attack",
+		TargetID: "player_pvp_target", Result: "defender_victory", DefenderRevealed: false,
+		CreatedAt: time.Now().UTC().Format(resourceDateLayout),
+	})
+	report.Detail.Visibility.ShowEnemyGenerals = false
+	if err := repo.SaveReport(report); err != nil {
+		t.Fatalf("SaveReport failed: %v", err)
+	}
+	battle := service.projectPvpBattleForPlayer(PvpBattle{
+		AttackerPlayerID: "player_pvp_hidden", AttackerReportID: report.ID,
+		DefenderSnapshot:      map[string]any{"troops": map[string]int{"shuInfantry": 100}},
+		ReinforcementSnapshot: []DefenseReinforcementUnit{{ReinforcementID: "rein_hidden", Troops: map[string]int{"shuInfantry": 20}, Generals: []ReinforcementGeneralSnapshot{{ID: "guanyu"}}}},
+	}, report.PlayerID)
+	if battle.DefenderSnapshot != nil || len(battle.ReinforcementSnapshot[0].Troops) != 0 || len(battle.ReinforcementSnapshot[0].Generals) != 0 {
+		t.Fatalf("expected PVP enemy snapshots redacted, got %+v", battle)
+	}
+}
+
 func TestPvpTargetsExposeStableWorldPositions(t *testing.T) {
 	svc, repo, attacker, defender := newPvpTestService(t)
 	if _, err := repo.AssignWorldPosition(attacker.Player.ID, defaultWorldID, 0, 0, "test"); err != nil {

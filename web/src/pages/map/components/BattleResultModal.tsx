@@ -8,6 +8,8 @@ import { useGameStore } from '@/store/gameStore'
 import { formatTraitOutcomeDetail, getTraitMeta } from '@/utils/traits'
 import { sortUnitEntries } from '@/utils/unitOrder'
 import { mergeBattleReportDrops } from '@/utils/reportDrops'
+import { gameApi } from '@/api/game'
+import { buildReportShareURL } from '../../news/reportPresentation'
 
 interface BattleResultModalProps {
   report: BattleReport
@@ -34,6 +36,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
   const navigate = useNavigate()
   const nickname = useGameStore((s) => s.state?.player.nickname ?? '我方')
   const faction = useGameStore((s) => s.state?.player.faction ?? 'wei')
+  const activePlayerId = useGameStore((s) => s.activePlayerId)
   const units = useConfigStore((s) => s.units)
   const factionUnits = units?.[faction] ?? {}
 
@@ -71,6 +74,21 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
   const isSweepReport = report.battleType === 'sweep' || sweepDefenders.length > 0
   const sweepExtra = report.detail?.extra?.sweep
   const sweepLossTotal = Object.values(report.defenderLostUnits ?? {}).reduce((sum, amount) => sum + Math.max(0, amount), 0)
+
+  // handleShare 创建公开令牌后复制分享地址，内部战报 ID 不再作为匿名入口。
+  const handleShare = async () => {
+    let token = report.share?.token || report.detail?.share?.token
+    if (!token && activePlayerId) {
+      const link = await gameApi.shareReport(activePlayerId, report.id)
+      token = link.token
+    }
+    if (!token) return
+    const shareURL = buildReportShareURL(window.location.origin, report, token)
+    if (!shareURL) return
+    await navigator.clipboard.writeText(shareURL)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   return (
     <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4">
@@ -385,12 +403,7 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
           </button>
           <button
             type="button"
-            onClick={() => {
-              const url = `${window.location.origin}/report/${report.id}`
-              navigator.clipboard.writeText(url)
-              setCopied(true)
-              setTimeout(() => setCopied(false), 2000)
-            }}
+            onClick={handleShare}
             className="w-full flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium text-blue-500 bg-blue-500/10 hover:bg-blue-500/20 cursor-pointer transition-colors"
           >
             {copied ? <Check size={12} /> : <Share2 size={12} />}

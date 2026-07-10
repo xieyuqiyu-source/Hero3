@@ -307,7 +307,10 @@ func TestMySQLBattleReportEventStateAndShare(t *testing.T) {
 		CreatedAt:         now.Format(time.RFC3339),
 	})
 
-	if err := repo.SaveReports([]game.BattleReport{attackerReport, defenderReport}); err != nil {
+	event := game.BuildBattleEventFromReport(attackerReport)
+	event.RelatedMarchID = "march_" + suffix
+	event.Snapshot = map[string]interface{}{"source": "integration_test"}
+	if err := repo.SaveReportBundle(event, []game.BattleReport{attackerReport, defenderReport}); err != nil {
 		t.Fatalf("insert attacker report: %v", err)
 	}
 
@@ -317,6 +320,13 @@ func TestMySQLBattleReportEventStateAndShare(t *testing.T) {
 	}
 	if eventCount != 1 {
 		t.Fatalf("expected one battle event, got %d", eventCount)
+	}
+	var relatedMarchID string
+	if err := db.QueryRow(`SELECT related_march_id FROM battle_events WHERE id = ?`, eventID).Scan(&relatedMarchID); err != nil {
+		t.Fatalf("read battle event march: %v", err)
+	}
+	if relatedMarchID != event.RelatedMarchID {
+		t.Fatalf("expected related march %s, got %s", event.RelatedMarchID, relatedMarchID)
 	}
 	var stateCount int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM battle_report_states WHERE report_id IN (?, ?)`, attackerReportID, defenderReportID).Scan(&stateCount); err != nil {
@@ -348,6 +358,12 @@ func TestMySQLBattleReportEventStateAndShare(t *testing.T) {
 	}
 	if attackReports[0].Detail != nil {
 		t.Fatalf("expected report list to return summary without heavy detail, got %+v", attackReports[0].Detail)
+	}
+	if attackReports[0].WinnerSide != game.ReportWinnerAttacker || attackReports[0].OwnerOutcome != game.ReportOwnerOutcomeVictory {
+		t.Fatalf("expected summary winner and owner outcome, got %+v", attackReports[0])
+	}
+	if attackReports[0].Rewards["wood"] != 100 || attackReports[0].LostUnits["weiInfantry"] != 5 {
+		t.Fatalf("expected summary rewards and losses, got rewards=%+v losses=%+v", attackReports[0].Rewards, attackReports[0].LostUnits)
 	}
 	attackDetail, err := repo.GetReportForPlayer(attackerPlayerID, attackerReportID)
 	if err != nil {

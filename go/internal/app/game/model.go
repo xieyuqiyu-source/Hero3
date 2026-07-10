@@ -442,6 +442,13 @@ type BattleReportQuery struct {
 	TimeTo         time.Time
 }
 
+// BattleReportDeleteFilter 描述玩家批量删除战报时使用的标准筛选条件。
+type BattleReportDeleteFilter struct {
+	PlayerID   string
+	ViewType   string
+	BattleType string
+}
+
 // BattleReportShareLink 是持久化的分享链接记录。
 type BattleReportShareLink struct {
 	ID         string `json:"id"`

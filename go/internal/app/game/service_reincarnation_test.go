@@ -180,6 +180,9 @@ func TestReincarnationDefenseReportMapsPlayerAsDefender(t *testing.T) {
 	report.PvpDefenderGenerals = buildPvpGeneralSnapshots(&state, []string{"caocao"})
 	report.Detail = nil
 	report = NormalizeBattleReport(report)
+	if report.Result != "defender_victory" || report.WinnerSide != ReportWinnerDefender || report.OwnerOutcome != ReportOwnerOutcomeVictory {
+		t.Fatalf("expected successful defense to be defender victory, got result=%s winner=%s ownerOutcome=%s", report.Result, report.WinnerSide, report.OwnerOutcome)
+	}
 
 	if report.PlayerPower != 1200 || report.EnemyPower != 900 {
 		t.Fatalf("expected player defense power 1200 and enemy attack power 900, got player=%d enemy=%d", report.PlayerPower, report.EnemyPower)
@@ -198,6 +201,25 @@ func TestReincarnationDefenseReportMapsPlayerAsDefender(t *testing.T) {
 	}
 	if len(report.Detail.SecondarySide.Generals) != 1 || report.Detail.SecondarySide.Generals[0].ID != "caocao" {
 		t.Fatalf("expected player general on defender side, got %+v", report.Detail.SecondarySide.Generals)
+	}
+}
+
+// TestReincarnationDefenseFailureReportMarksOwnerDefeat 验证防守波失败不会被误写成玩家胜利。
+func TestReincarnationDefenseFailureReportMarksOwnerDefeat(t *testing.T) {
+	now := time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC)
+	state := newPlayerState("player_reincarnation_defense_failure", "防守失败", "wei", "caocao", now)
+	run := ReincarnationRun{ID: "run_defense_failure", Level: 1, Status: ReincarnationRunRunning}
+	wave := ReincarnationWave{
+		WaveIndex:      2,
+		WaveType:       ReincarnationWaveDefense,
+		EnemyFaction:   "shu",
+		EnemyRemaining: map[string]int{"shuInfantry": 80},
+	}
+	result := combat.CombatResult{Winner: "attacker", AttackPower: 1200, DefensePower: 900}
+
+	report := buildReincarnationReport(run, wave, &state, map[string]int{"qingZhouArmy": 100}, map[string]int{"qingZhouArmy": 100}, map[string]int{"shuInfantry": 5}, result, ReportViewDefense, false, now)
+	if report.Result != "attacker_victory" || report.WinnerSide != ReportWinnerAttacker || report.OwnerOutcome != ReportOwnerOutcomeDefeat {
+		t.Fatalf("expected failed defense to be owner defeat, got result=%s winner=%s ownerOutcome=%s", report.Result, report.WinnerSide, report.OwnerOutcome)
 	}
 }
 

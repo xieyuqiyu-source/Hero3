@@ -94,5 +94,5 @@ export function hasTraitEntries(detail: Pick<BattleReportDetailData, 'traits'>):
 // buildReportShareURL 根据 token 构造公开分享链接，避免暴露内部战报 ID。
 export function buildReportShareURL(origin: string, report: Pick<BattleReport, 'id' | 'share' | 'detail'>, token?: string): string {
   const shareToken = token || report.share?.token || report.detail?.share?.token
-  return `${origin}/report/${shareToken || report.id}`
+  return shareToken ? `${origin}/report/${shareToken}` : ''
 }

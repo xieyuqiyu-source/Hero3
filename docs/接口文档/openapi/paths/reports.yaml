@@ -62,7 +62,7 @@
         type: string
     - name: playerId
       in: query
-      required: false
+      required: true
       schema:
         type: string
     responses:
@@ -175,7 +175,7 @@
 /api/v1/reports/delete-all:
   post:
     tags: [News]
-    summary: 按视角或全部删除玩家战报
+    summary: 按列表视角、战斗类型或全部删除玩家战报
     requestBody:
       required: true
       content:
@@ -189,6 +189,9 @@
               viewType:
                 type: string
                 enum: [attack, defense, reinforcement, scout, system]
+              battleType:
+                type: string
+                description: 与军情列表 battleType 筛选一致，例如 scout 或 sweep。
     responses:
       '200':
         description: 战报操作后的局部状态。

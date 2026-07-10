@@ -333,9 +333,8 @@ export const gameApi = {
   },
 
   /** 获取单条玩家战报 */
-  getReport(reportId: string, playerId?: string) {
-    const query = playerId ? `?playerId=${encodeURIComponent(playerId)}` : ''
-    return api.get<BattleReport>(`/reports/${reportId}${query}`)
+  getReport(reportId: string, playerId: string) {
+    return api.get<BattleReport>(`/reports/${reportId}?playerId=${encodeURIComponent(playerId)}`)
   },
 
   /** 获取当前玩家可见的同事件战报上下文 */
@@ -556,9 +555,9 @@ export const gameApi = {
     return api.post<ReportActionResult>(`/reports/${reportId}/delete`, { playerId })
   },
 
-  /** 一键删除指定视角或全部战报 */
-  deleteAllReports(playerId: string, viewType?: string) {
-    return api.post<ReportActionResult>('/reports/delete-all', { playerId, viewType })
+  /** 一键删除与当前列表筛选一致的战报 */
+  deleteAllReports(playerId: string, filter?: { viewType?: string; battleType?: string }) {
+    return api.post<ReportActionResult>('/reports/delete-all', { playerId, ...filter })
   },
 
   /** 分页获取信函 */

@@ -15,20 +15,14 @@ func (h *Handlers) GetReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	playerID := r.URL.Query().Get("playerId")
-	if playerID != "" {
-		if !h.requireOwnership(w, r, playerID) {
-			return
-		}
-		report, err := h.gameService.GetReportForPlayer(playerID, reportID)
-		if err != nil {
-			writeError(w, http.StatusNotFound, "report not found")
-			return
-		}
-		writeJSON(w, http.StatusOK, report)
+	if playerID == "" {
+		writeError(w, http.StatusBadRequest, "playerId is required")
 		return
 	}
-
-	report, err := h.gameService.GetReportByID(reportID)
+	if !h.requireOwnership(w, r, playerID) {
+		return
+	}
+	report, err := h.gameService.GetReportForPlayer(playerID, reportID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "report not found")
 		return
@@ -292,8 +286,9 @@ func (h *Handlers) DeleteAllReports(w http.ResponseWriter, r *http.Request) {
 // DeleteAllReportsByPath 删除指定视角或全部战报。
 func (h *Handlers) DeleteAllReportsByPath(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
-		PlayerID string `json:"playerId"`
-		ViewType string `json:"viewType"`
+		PlayerID   string `json:"playerId"`
+		ViewType   string `json:"viewType"`
+		BattleType string `json:"battleType"`
 	}
 	if !decodeJSON(w, r, &payload) {
 		return
@@ -301,7 +296,11 @@ func (h *Handlers) DeleteAllReportsByPath(w http.ResponseWriter, r *http.Request
 	if !h.requireOwnership(w, r, payload.PlayerID) {
 		return
 	}
-	result, err := h.gameService.DeleteReportsByView(payload.PlayerID, payload.ViewType)
+	result, err := h.gameService.DeleteReportsByFilter(game.BattleReportDeleteFilter{
+		PlayerID:   payload.PlayerID,
+		ViewType:   payload.ViewType,
+		BattleType: payload.BattleType,
+	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

@@ -111,7 +111,7 @@ const NewsPage: FC = () => {
     if (!activePlayerId || clearingReports) return
     setClearingReports(true)
     try {
-      const res = await gameApi.deleteAllReports(activePlayerId, activeView === 'all' ? undefined : activeView)
+      const res = await gameApi.deleteAllReports(activePlayerId, buildReportListParams(activeView))
       patchState({ unreadMessageCount: res.unreadMessageCount, serverTime: res.serverTime })
       setReports(EMPTY_REPORTS)
       setTotalReports(0)

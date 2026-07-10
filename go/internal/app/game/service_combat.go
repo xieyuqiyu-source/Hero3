@@ -2,6 +2,7 @@
 package game
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -1564,7 +1565,7 @@ func findScoutUnit(faction string) string {
 	return ""
 }
 
-// GetReportByID 公开获取单条战报（用于分享链接）
+// GetReportByID 供 GM 内部查询按主键读取原始战报。
 func (s *Service) GetReportByID(reportID string) (BattleReport, error) {
 	report, err := s.repo.GetReportByID(reportID)
 	if err != nil {
@@ -1584,7 +1585,7 @@ func (s *Service) GetReportForPlayer(playerID string, reportID string) (BattleRe
 	if err != nil {
 		return BattleReport{}, err
 	}
-	return NormalizeBattleReport(report), nil
+	return projectBattleReportForViewer(report), nil
 }
 
 // GetReportEventForPlayer 获取玩家可见的同事件战报上下文。
@@ -1608,7 +1609,7 @@ func (s *Service) GetReportEventForPlayer(playerID string, reportID string) (Bat
 	reports := make([]BattleReport, 0, len(allReports))
 	for _, item := range allReports {
 		if item.PlayerID == playerID || item.OwnerPlayerID == playerID {
-			reports = append(reports, NormalizeBattleReport(item))
+			reports = append(reports, projectBattleReportForViewer(item))
 		}
 	}
 	allParticipants, err := s.ListParticipantsByEventForAdmin(eventID)
@@ -1621,7 +1622,15 @@ func (s *Service) GetReportEventForPlayer(playerID string, reportID string) (Bat
 			participants = append(participants, item)
 		}
 	}
-	return BattleReportEventContext{Event: event, Reports: reports, Participants: participants}, nil
+	return BattleReportEventContext{Event: projectBattleEventForViewer(event), Reports: reports, Participants: participants}, nil
+}
+
+// projectBattleEventForViewer 玩家同事件上下文只保留事件索引，不返回 GM 原始快照和结算诊断数据。
+func projectBattleEventForViewer(event BattleEvent) BattleEvent {
+	event.Summary = nil
+	event.Snapshot = nil
+	event.ResultData = nil
+	return event
 }
 
 // GetSharedReportByToken 通过分享 token 读取公开战报。
@@ -1634,7 +1643,7 @@ func (s *Service) GetSharedReportByToken(token string) (BattleReport, error) {
 	if err != nil {
 		return BattleReport{}, err
 	}
-	return NormalizeBattleReport(report), nil
+	return projectBattleReportForViewer(report), nil
 }
 
 // ListReports 分页获取玩家军情战报。
@@ -1734,20 +1743,24 @@ func (s *Service) CreateBattleReports(input BattleReportCreateInput) (BattleRepo
 		report = NormalizeBattleReport(report)
 		reports = append(reports, report)
 	}
-	if err := s.saveBattleReportsWithConfirmation(reports); err != nil {
+	event := buildBattleEventFromReports(input, eventID, occurredAt, reports)
+	if err := s.saveBattleReportsWithConfirmation(event, reports); err != nil {
 		return BattleReportCreateResult{}, err
 	}
-	event := buildBattleEventFromReports(input, eventID, occurredAt, reports)
-	return BattleReportCreateResult{Event: event, Reports: reports}, nil
+	visibleReports := make([]BattleReport, 0, len(reports))
+	for _, report := range reports {
+		visibleReports = append(visibleReports, projectBattleReportForViewer(report))
+	}
+	return BattleReportCreateResult{Event: event, Reports: visibleReports}, nil
 }
 
 // saveBattleReportsWithConfirmation 保存战报并在失败时重试、查回确认，避免战斗已完成但战报静默丢失。
-func (s *Service) saveBattleReportsWithConfirmation(reports []BattleReport) error {
+func (s *Service) saveBattleReportsWithConfirmation(event BattleEvent, reports []BattleReport) error {
 	var lastErr error
 	for attempt := 1; attempt <= battleReportSaveAttempts; attempt++ {
-		if err := s.repo.SaveReports(reports); err != nil {
+		if err := s.repo.SaveReportBundle(event, reports); err != nil {
 			lastErr = err
-			if s.battleReportsPersisted(reports) {
+			if s.battleReportBundlePersisted(event, reports) {
 				return nil
 			}
 			if attempt < battleReportSaveAttempts {
@@ -1759,10 +1772,22 @@ func (s *Service) saveBattleReportsWithConfirmation(reports []BattleReport) erro
 		}
 		return nil
 	}
-	if s.battleReportsPersisted(reports) {
+	if s.battleReportBundlePersisted(event, reports) {
 		return nil
 	}
 	return fmt.Errorf("battle report save failed after %d attempts: %w", battleReportSaveAttempts, lastErr)
+}
+
+// battleReportBundlePersisted 同时确认事件和全部玩家视角战报已经落库。
+func (s *Service) battleReportBundlePersisted(event BattleEvent, reports []BattleReport) bool {
+	if !s.battleReportsPersisted(reports) {
+		return false
+	}
+	if strings.TrimSpace(event.ID) == "" {
+		return true
+	}
+	stored, err := s.repo.GetBattleEventForAdmin(event.ID)
+	return err == nil && stored.ID == event.ID
 }
 
 // battleReportsPersisted 按玩家和战报 ID 查回确认，用于处理提交成功但连接返回失败的边界情况。
@@ -1784,29 +1809,225 @@ func (s *Service) battleReportsPersisted(reports []BattleReport) bool {
 // buildBattleEventFromReports 从标准战报创建输入生成事件快照。
 func buildBattleEventFromReports(input BattleReportCreateInput, eventID string, occurredAt string, reports []BattleReport) BattleEvent {
 	first := reports[0]
+	event := BuildBattleEventFromReport(first)
 	sourceType := valueOrDefault(input.SourceType, first.SourceType)
 	battleType := valueOrDefault(input.BattleType, first.BattleType)
 	result := valueOrDefault(input.Result, first.Result)
 	sourceID := valueOrDefault(input.SourceID, first.TargetID)
 	createdAt := occurredAt
-	return BattleEvent{
-		ID:                     eventID,
-		SourceType:             sourceType,
-		SourceID:               sourceID,
-		Scene:                  first.ViewType,
-		BattleType:             battleType,
-		Result:                 result,
-		AttackerPlayerID:       first.PlayerID,
-		DefenderPlayerID:       first.TargetID,
-		AttackerName:           first.PlayerName,
-		DefenderName:           first.TargetName,
-		AttackerFaction:        first.PlayerFaction,
-		DefenderFaction:        first.DefenderFaction,
-		RelatedMarchID:         input.RelatedMarchID,
-		RelatedReinforcementID: input.RelatedReinforcementID,
-		Summary:                input.Extra,
-		OccurredAt:             occurredAt,
-		CreatedAt:              createdAt,
+	event.ID = eventID
+	event.SourceType = sourceType
+	event.SourceID = sourceID
+	event.Scene = first.ViewType
+	event.BattleType = battleType
+	event.Result = result
+	event.RelatedMarchID = input.RelatedMarchID
+	event.RelatedReinforcementID = input.RelatedReinforcementID
+	event.Summary = input.Extra
+	event.OccurredAt = occurredAt
+	event.CreatedAt = createdAt
+	return event
+}
+
+// BuildBattleEventFromReport 从标准双方快照推导事件攻守方，兼容只有防守视角的战报。
+func BuildBattleEventFromReport(report BattleReport) BattleEvent {
+	report = NormalizeBattleReport(report)
+	event := BattleEvent{
+		ID:         report.EventID,
+		SourceType: report.SourceType,
+		SourceID:   report.TargetID,
+		Scene:      report.ViewType,
+		BattleType: report.BattleType,
+		Result:     report.Result,
+		OccurredAt: report.CreatedAt,
+		CreatedAt:  report.CreatedAt,
+	}
+	if report.Detail == nil {
+		event.AttackerPlayerID = report.PlayerID
+		event.DefenderPlayerID = report.TargetID
+		event.AttackerName = report.PlayerName
+		event.DefenderName = report.TargetName
+		event.AttackerFaction = report.PlayerFaction
+		event.DefenderFaction = report.DefenderFaction
+		return event
+	}
+	attacker := report.Detail.PrimarySide
+	event.AttackerPlayerID = battleReportSideID(attacker)
+	event.AttackerName = battleReportSideName(attacker)
+	event.AttackerFaction = attacker.Faction
+	if report.Detail.SecondarySide != nil {
+		defender := *report.Detail.SecondarySide
+		event.DefenderPlayerID = battleReportSideID(defender)
+		event.DefenderName = battleReportSideName(defender)
+		event.DefenderFaction = defender.Faction
+	}
+	event.Summary = report.Detail.Extra
+	return event
+}
+
+// battleReportSideID 返回参战方的玩家或目标标识。
+func battleReportSideID(side BattleReportSide) string {
+	return valueOrDefault(side.PlayerID, valueOrDefault(side.TargetID, side.CityID))
+}
+
+// battleReportSideName 返回参战方的玩家、目标或城池名称。
+func battleReportSideName(side BattleReportSide) string {
+	return valueOrDefault(side.PlayerName, valueOrDefault(side.TargetName, side.CityName))
+}
+
+// projectBattleReportForViewer 对玩家和公开分享响应执行服务端情报脱敏，原始快照仍仅供 GM 排查。
+func projectBattleReportForViewer(raw BattleReport) BattleReport {
+	report := cloneBattleReport(raw)
+	report = NormalizeBattleReport(report)
+	if report.Detail == nil {
+		return report
+	}
+	visibility := report.Detail.Visibility
+	enemy := battleReportEnemySide(&report)
+	if !visibility.ShowEnemyRemainingUnits {
+		report.DefenderUnits = map[string]int{}
+		if enemy != nil {
+			enemy.Units = []BattleReportUnit{}
+		}
+		if report.OwnerSide == ReportOwnerSideAttacker || report.OwnerSide == ReportOwnerSideScout {
+			report.Detail.Extra = cloneBattleReportExtraForRedaction(report.Detail.Extra)
+			for i := range report.PvpReinforcements {
+				report.PvpReinforcements[i].Troops = map[string]int{}
+			}
+			redactReportExtraReinforcementTroops(report.Detail.Extra)
+		}
+	}
+	if !visibility.ShowEnemyResources {
+		report.DefenderResources = map[string]int{}
+		if enemy != nil {
+			enemy.Resources = map[string]int{}
+		}
+	}
+	if !visibility.ShowEnemyGenerals {
+		if enemy != nil {
+			enemy.Generals = []BattleReportGeneral{}
+		}
+		if report.OwnerSide == ReportOwnerSideDefender {
+			report.PvpAttackerGenerals = nil
+		} else {
+			report.PvpDefenderGenerals = nil
+			report.Detail.Extra = cloneBattleReportExtraForRedaction(report.Detail.Extra)
+			for i := range report.PvpReinforcements {
+				report.PvpReinforcements[i].Generals = nil
+			}
+			redactReportExtraReinforcementGenerals(report.Detail.Extra)
+		}
+	}
+	if !visibility.ShowEnemyCityDefense {
+		report.PvpWall = nil
+		report.Detail.Extra = cloneBattleReportExtraForRedaction(report.Detail.Extra)
+		redactReportExtraCityDefense(report.Detail.Extra)
+	}
+	return report
+}
+
+// cloneBattleReport 深拷贝战报，避免响应脱敏修改仓储中的原始快照。
+func cloneBattleReport(report BattleReport) BattleReport {
+	cloned := report
+	cloned.DispatchedUnits = cloneStringIntMap(report.DispatchedUnits)
+	cloned.LostUnits = cloneStringIntMap(report.LostUnits)
+	cloned.DefenderUnits = cloneStringIntMap(report.DefenderUnits)
+	cloned.DefenderLostUnits = cloneStringIntMap(report.DefenderLostUnits)
+	cloned.DefenderResources = cloneStringIntMap(report.DefenderResources)
+	cloned.Rewards = cloneStringIntMap(report.Rewards)
+	cloned.PvpAttackerGenerals = append([]PvpGeneralSnapshot(nil), report.PvpAttackerGenerals...)
+	cloned.PvpDefenderGenerals = append([]PvpGeneralSnapshot(nil), report.PvpDefenderGenerals...)
+	cloned.PvpReinforcements = append([]DefenseReinforcementUnit(nil), report.PvpReinforcements...)
+	for i := range cloned.PvpReinforcements {
+		cloned.PvpReinforcements[i].Troops = cloneStringIntMap(report.PvpReinforcements[i].Troops)
+	}
+	if report.Detail != nil {
+		detail := *report.Detail
+		detail.PrimarySide = cloneBattleReportSide(report.Detail.PrimarySide)
+		if report.Detail.SecondarySide != nil {
+			secondary := cloneBattleReportSide(*report.Detail.SecondarySide)
+			detail.SecondarySide = &secondary
+		}
+		cloned.Detail = &detail
+	}
+	return cloned
+}
+
+// cloneBattleReportSide 复制响应脱敏会修改的参与方集合。
+func cloneBattleReportSide(side BattleReportSide) BattleReportSide {
+	cloned := side
+	cloned.Units = append([]BattleReportUnit(nil), side.Units...)
+	cloned.Resources = cloneStringIntMap(side.Resources)
+	cloned.Generals = append([]BattleReportGeneral(nil), side.Generals...)
+	return cloned
+}
+
+// cloneBattleReportExtraForRedaction 仅在需要删除动态情报时复制 Extra，保留普通响应里的强类型扩展值。
+func cloneBattleReportExtraForRedaction(extra map[string]interface{}) map[string]interface{} {
+	data, err := json.Marshal(extra)
+	if err != nil {
+		return map[string]interface{}{}
+	}
+	cloned := map[string]interface{}{}
+	if err := json.Unmarshal(data, &cloned); err != nil {
+		return map[string]interface{}{}
+	}
+	return cloned
+}
+
+// battleReportEnemySide 返回当前拥有者视角下的敌方标准快照。
+func battleReportEnemySide(report *BattleReport) *BattleReportSide {
+	if report == nil || report.Detail == nil {
+		return nil
+	}
+	if report.OwnerSide == ReportOwnerSideDefender {
+		return &report.Detail.PrimarySide
+	}
+	if report.OwnerSide == ReportOwnerSideReinforcement {
+		return report.Detail.SecondarySide
+	}
+	return report.Detail.SecondarySide
+}
+
+// redactReportExtraReinforcementTroops 清除动态 extra 中可反推敌方剩余兵力的援军快照。
+func redactReportExtraReinforcementTroops(extra map[string]interface{}) {
+	pvp, ok := extra["pvp"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	items, ok := pvp["reinforcements"].([]interface{})
+	if !ok {
+		return
+	}
+	for _, item := range items {
+		if snapshot, ok := item.(map[string]interface{}); ok {
+			snapshot["troops"] = map[string]interface{}{}
+		}
+	}
+}
+
+// redactReportExtraReinforcementGenerals 清除动态援军快照里的敌方武将情报。
+func redactReportExtraReinforcementGenerals(extra map[string]interface{}) {
+	pvp, ok := extra["pvp"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	items, ok := pvp["reinforcements"].([]interface{})
+	if !ok {
+		return
+	}
+	for _, item := range items {
+		if snapshot, ok := item.(map[string]interface{}); ok {
+			snapshot["generals"] = []interface{}{}
+		}
+	}
+}
+
+// redactReportExtraCityDefense 清除当前视角不可见的城防快照。
+func redactReportExtraCityDefense(extra map[string]interface{}) {
+	pvp, ok := extra["pvp"].(map[string]interface{})
+	if ok {
+		delete(pvp, "wall")
 	}
 }
 
@@ -1915,14 +2136,21 @@ func (s *Service) DeleteReport(playerID string, reportID string) (ReportActionRe
 	return s.buildReportActionResult(playerID)
 }
 
-// DeleteReportsByView 删除指定视角 Tab 下的战报。
+// DeleteReportsByView 删除指定视角 Tab 下的战报，保留旧调用兼容。
 func (s *Service) DeleteReportsByView(playerID string, viewType string) (ReportActionResult, error) {
-	playerID = strings.TrimSpace(playerID)
-	viewType = strings.TrimSpace(viewType)
+	return s.DeleteReportsByFilter(BattleReportDeleteFilter{PlayerID: playerID, ViewType: viewType})
+}
+
+// DeleteReportsByFilter 按与列表一致的视角和战斗类型筛选批量删除战报。
+func (s *Service) DeleteReportsByFilter(filter BattleReportDeleteFilter) (ReportActionResult, error) {
+	playerID := strings.TrimSpace(filter.PlayerID)
+	filter.PlayerID = playerID
+	filter.ViewType = strings.TrimSpace(filter.ViewType)
+	filter.BattleType = strings.TrimSpace(filter.BattleType)
 	if playerID == "" {
 		return ReportActionResult{}, ErrPlayerNotFound
 	}
-	if err := s.repo.DeleteReportsByView(playerID, viewType); err != nil {
+	if err := s.repo.DeleteReportsByFilter(filter); err != nil {
 		return ReportActionResult{}, err
 	}
 	return s.buildReportActionResult(playerID)

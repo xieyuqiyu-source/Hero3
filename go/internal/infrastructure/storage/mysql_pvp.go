@@ -261,6 +261,28 @@ func (r *MySQLRepository) ResolvePvpBattleTransaction(marchID string, updatedAt 
 			return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
 		}
 	}
+	// PVP 行军、双方快照与结果必须和玩家战报处于同一事务，供管理端按事件追溯。
+	eventReport := attackerReport
+	if eventReport.ID == "" {
+		eventReport = defenderReport
+	}
+	if eventReport.ID != "" {
+		event := game.BuildBattleEventFromReport(eventReport)
+		event.RelatedMarchID = march.ID
+		event.Snapshot = map[string]interface{}{
+			"attacker":       battle.AttackerSnapshot,
+			"defender":       battle.DefenderSnapshot,
+			"reinforcements": battle.ReinforcementSnapshot,
+		}
+		event.ResultData = map[string]interface{}{
+			"result":  battle.Result,
+			"losses":  battle.Losses,
+			"plunder": battle.Plunder,
+		}
+		if err := upsertBattleEventTx(tx, event); err != nil {
+			return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
 	}

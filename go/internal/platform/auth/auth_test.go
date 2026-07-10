@@ -246,18 +246,32 @@ func TestMiddleware_InvalidAdminToken_Returns401(t *testing.T) {
 	}
 }
 
-func TestMiddleware_PublicReportPath(t *testing.T) {
-	// 战报详情 /api/v1/reports/{reportId} 公开（用于分享）
+func TestMiddleware_InternalReportPathRequiresAuthentication(t *testing.T) {
+	// 内部战报 ID 只能由已认证玩家按归属读取。
 	cfg := testCfg()
 	mw := AuthMiddleware(cfg, []string{})
-	handler := mw(newTestHandler(t, "", false))
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("internal report handler should not be reached without token")
+	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/abc123", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for internal report path, got %d", w.Code)
+	}
+}
+
+func TestMiddleware_SharedReportTokenPathIsPublic(t *testing.T) {
+	cfg := testCfg()
+	mw := AuthMiddleware(cfg, []string{})
+	handler := mw(newTestHandler(t, "", false))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/shared/br_public_token", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 for public report path, got %d", w.Code)
+		t.Errorf("expected 200 for shared report token path, got %d", w.Code)
 	}
 }
 

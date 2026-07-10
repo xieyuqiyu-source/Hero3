@@ -268,7 +268,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   }, [accountPlayers, currentState?.player])
   const attackerSide = withExpandedUnits(detail.primarySide, unitsConfig)
   const defenderSide = detail.secondarySide ? withExpandedUnits(detail.secondarySide, unitsConfig) : null
-  const reinforcementSides = buildReinforcementSides(detail, unitsConfig, playerNameById)
+  const reinforcementSides = detail.viewType === 'reinforcement' ? [] : buildReinforcementSides(detail, unitsConfig, playerNameById)
   const attackerTraitText = sideTraitText(attackerSide, currentGenerals)
   const defenderTraitText = defenderSide ? sideTraitText(defenderSide, currentGenerals) : '-'
 
@@ -282,7 +282,9 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
         token = link.token
       }
     }
-    await navigator.clipboard.writeText(buildReportShareURL(window.location.origin, report, token))
+    const shareURL = buildReportShareURL(window.location.origin, report, token)
+    if (!shareURL) return
+    await navigator.clipboard.writeText(shareURL)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 2000)
   }
@@ -295,13 +297,16 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
       <ReportIntelPanel visibility={detail.visibility} />
 
       <BattleParticipantBlock
-        title="攻击方"
+        title={detail.viewType === 'reinforcement' ? '增援方' : '攻击方'}
         side={attackerSide}
-        rewards={detail.rewards}
+        rewards={detail.ownerSide === 'defender' ? undefined : detail.rewards}
         feedback={sideLossFeedback(attackerSide)}
         effectText={attackerTraitText}
         effectTone={attackerTraitText !== '-' ? 'highlight' : 'normal'}
         result={participantResult(detail, attackerSide)}
+        showUnits={detail.ownerSide !== 'defender' || detail.visibility.showEnemyRemainingUnits}
+        showResources={detail.ownerSide !== 'defender' || detail.visibility.showEnemyResources}
+        showGenerals={detail.ownerSide !== 'defender' || detail.visibility.showEnemyGenerals}
       />
 
       {(defenderSide || reinforcementSides.length > 0) && (
@@ -317,10 +322,14 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
         <BattleParticipantBlock
           title="防守方"
           side={defenderSide}
+          rewards={detail.ownerSide === 'defender' ? detail.rewards : undefined}
           feedback={sideLossFeedback(defenderSide)}
           effectText={defenderTraitText}
           effectTone={defenderTraitText !== '-' ? 'highlight' : 'normal'}
           result={participantResult(detail, defenderSide)}
+          showUnits={!['attacker', 'scout'].includes(detail.ownerSide || '') || detail.visibility.showEnemyRemainingUnits}
+          showResources={!['attacker', 'scout'].includes(detail.ownerSide || '') || detail.visibility.showEnemyResources}
+          showGenerals={!['attacker', 'scout'].includes(detail.ownerSide || '') || detail.visibility.showEnemyGenerals}
         />
       )}
 
@@ -335,6 +344,9 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
             effectText={reinforcementTraitText}
             effectTone={reinforcementTraitText !== '-' ? 'highlight' : 'normal'}
             result={participantResult(detail, side)}
+            showUnits={!['attacker', 'scout'].includes(detail.ownerSide || '') || detail.visibility.showEnemyRemainingUnits}
+            showResources={!['attacker', 'scout'].includes(detail.ownerSide || '') || detail.visibility.showEnemyResources}
+            showGenerals={!['attacker', 'scout'].includes(detail.ownerSide || '') || detail.visibility.showEnemyGenerals}
           />
         )
       })}

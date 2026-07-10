@@ -1,5 +1,6 @@
 // 本文件验证军情战报前端展示规则的纯逻辑。
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
@@ -14,8 +15,15 @@ import {
   shouldShowEmptyReports,
 } from '../src/pages/news/reportPresentation.ts'
 
-test('军情页固定展示全部、进攻、防守、增援、侦查 Tab', () => {
-  assert.deepEqual(REPORT_VIEW_TABS.map((tab) => tab.key), ['all', 'attack', 'defense', 'reinforcement', 'scout'])
+test('军情页固定展示全部、进攻、防守、增援、侦查、扫荡 Tab', () => {
+	assert.deepEqual(REPORT_VIEW_TABS.map((tab) => tab.key), ['all', 'attack', 'defense', 'reinforcement', 'scout', 'sweep'])
+})
+
+test('战斗结果弹窗分享前创建公开 token', () => {
+	const source = readFileSync(new URL('../src/pages/map/components/BattleResultModal.tsx', import.meta.url), 'utf8')
+	assert.match(source, /gameApi\.shareReport/)
+	assert.match(source, /buildReportShareURL/)
+	assert.doesNotMatch(source, /window\.location\.origin\}\/report\/\$\{report\.id\}/)
 })
 
 test('来源和视角标签使用不同颜色配置', () => {
@@ -53,6 +61,7 @@ test('分享链接优先使用 token，不直接暴露内部战报 ID', () => {
     buildReportShareURL('http://localhost:5173', { id: 'report_internal', detail: { share: { token: 'token_detail' } } }),
     'http://localhost:5173/report/token_detail',
   )
+  assert.equal(buildReportShareURL('http://localhost:5173', { id: 'report_internal' }), '')
 })
 
 test('空列表和分页状态稳定', () => {

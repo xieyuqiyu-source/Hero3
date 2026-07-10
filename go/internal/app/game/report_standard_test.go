@@ -113,7 +113,6 @@ func TestNormalizeBattleReportBuildsDefenseDetail(t *testing.T) {
 		},
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	})
-
 	if report.Detail == nil || report.Detail.ViewType != ReportViewDefense {
 		t.Fatalf("expected defense detail, got %+v", report.Detail)
 	}
@@ -341,11 +340,15 @@ func TestCreateBattleReportsUsesStandardBatchEntry(t *testing.T) {
 	service := NewServiceWithRepository(repo)
 	now := time.Now().UTC().Format(time.RFC3339)
 	result, err := service.CreateBattleReports(BattleReportCreateInput{
-		EventID:    "event_create_batch",
-		SourceType: ReportSourcePlayerCity,
-		BattleType: "attack",
-		Result:     "attacker_victory",
-		OccurredAt: now,
+		EventID:                "event_create_batch",
+		SourceType:             ReportSourcePlayerCity,
+		SourceID:               "source_create_batch",
+		BattleType:             "attack",
+		Result:                 "attacker_victory",
+		RelatedMarchID:         "march_create_batch",
+		RelatedReinforcementID: "reinforcement_create_batch",
+		OccurredAt:             now,
+		Extra:                  map[string]interface{}{"trace": "complete"},
 		Reports: []BattleReport{
 			{
 				ID:               "br_create_attacker",
@@ -393,12 +396,19 @@ func TestCreateBattleReportsUsesStandardBatchEntry(t *testing.T) {
 	if stored[0].Detail == nil || stored[1].Detail == nil {
 		t.Fatalf("expected stored reports to have standard detail: %+v", stored)
 	}
+	adminEvent, err := repo.GetBattleEventForAdmin("event_create_batch")
+	if err != nil || adminEvent.SourceID != "source_create_batch" || adminEvent.RelatedMarchID != "march_create_batch" || adminEvent.RelatedReinforcementID != "reinforcement_create_batch" || adminEvent.Summary["trace"] != "complete" {
+		t.Fatalf("expected complete admin event input persisted, got event=%+v err=%v", adminEvent, err)
+	}
 	context, err := service.GetReportEventForPlayer("player_create_attacker", "br_create_attacker")
 	if err != nil {
 		t.Fatalf("GetReportEventForPlayer failed: %v", err)
 	}
 	if context.Event.ID != "event_create_batch" || len(context.Reports) != 1 || context.Reports[0].PlayerID != "player_create_attacker" {
 		t.Fatalf("expected player-visible event context only, got %+v", context)
+	}
+	if context.Event.SourceID != "source_create_batch" || context.Event.RelatedMarchID != "march_create_batch" || context.Event.RelatedReinforcementID != "reinforcement_create_batch" || context.Event.Summary != nil || context.Event.Snapshot != nil || context.Event.ResultData != nil {
+		t.Fatalf("expected player event index without GM diagnostic snapshots, got %+v", context.Event)
 	}
 }
 
@@ -430,5 +440,60 @@ func TestReportVisibilityUsesLossThresholdSnapshot(t *testing.T) {
 	}
 	if report.Detail.Visibility.Threshold != 0.4 || report.Detail.Visibility.ActualLossRatio != 0.3 {
 		t.Fatalf("expected threshold snapshot in visibility, got %+v", report.Detail.Visibility)
+	}
+}
+
+// TestGetReportForPlayerRedactsHiddenEnemyTroops 验证玩家详情响应不会携带不可见的敌方剩余兵力。
+func TestGetReportForPlayerRedactsHiddenEnemyTroops(t *testing.T) {
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	report := NormalizeBattleReport(BattleReport{
+		ID:                  "br_hidden_response",
+		PlayerID:            "player_hidden_response",
+		OwnerPlayerID:       "player_hidden_response",
+		ViewType:            ReportViewAttack,
+		SourceType:          ReportSourcePlayerCity,
+		BattleType:          "attack",
+		Type:                "attack",
+		Result:              "defender_victory",
+		TargetID:            "player_hidden_target",
+		TargetName:          "隐藏目标",
+		DefenderUnits:       map[string]int{"shuInfantry": 100},
+		DefenderLostUnits:   map[string]int{"shuInfantry": 10},
+		DefenderResources:   map[string]int{"wood": 999},
+		PvpDefenderGenerals: []PvpGeneralSnapshot{{ID: "liubei", Name: "刘备"}},
+		PvpReinforcements:   []DefenseReinforcementUnit{{ReinforcementID: "rein_hidden", Troops: map[string]int{"shuInfantry": 50}, Generals: []ReinforcementGeneralSnapshot{{ID: "guanyu", Name: "关羽"}}}},
+		PvpWall:             &PvpWallSnapshot{Faction: "shu", Level: 10},
+		DefenderRevealed:    false,
+		CreatedAt:           time.Now().UTC().Format(time.RFC3339),
+	})
+	report.Detail.Visibility.ShowEnemyResources = false
+	report.Detail.Visibility.ShowEnemyGenerals = false
+	report.Detail.Visibility.ShowEnemyCityDefense = false
+	if err := repo.SaveReport(report); err != nil {
+		t.Fatalf("SaveReport failed: %v", err)
+	}
+
+	visible, err := service.GetReportForPlayer(report.PlayerID, report.ID)
+	if err != nil {
+		t.Fatalf("GetReportForPlayer failed: %v", err)
+	}
+	if len(visible.DefenderUnits) != 0 {
+		t.Fatalf("expected legacy enemy troops redacted, got %+v", visible.DefenderUnits)
+	}
+	if visible.Detail == nil || visible.Detail.SecondarySide == nil || len(visible.Detail.SecondarySide.Units) != 0 {
+		t.Fatalf("expected standard enemy troop matrix redacted, got %+v", visible.Detail)
+	}
+	if len(visible.DefenderResources) != 0 || len(visible.PvpDefenderGenerals) != 0 || len(visible.PvpReinforcements[0].Troops) != 0 || len(visible.PvpReinforcements[0].Generals) != 0 || visible.PvpWall != nil {
+		t.Fatalf("expected enemy resources, generals and reinforcement troops redacted, got %+v", visible)
+	}
+	if pvp, ok := visible.Detail.Extra["pvp"].(map[string]interface{}); ok {
+		if _, exists := pvp["wall"]; exists {
+			t.Fatalf("expected enemy wall snapshot redacted, got %+v", pvp)
+		}
+	}
+	raw, err := repo.GetReportForPlayer(report.PlayerID, report.ID)
+	if err != nil || len(raw.DefenderUnits) == 0 || len(raw.PvpReinforcements[0].Troops) == 0 {
+		t.Fatalf("expected repository raw snapshot unchanged, got report=%+v err=%v", raw, err)
 	}
 }

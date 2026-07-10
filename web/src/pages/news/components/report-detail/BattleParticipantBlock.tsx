@@ -16,6 +16,9 @@ interface BattleParticipantBlockProps {
   effectTone?: 'normal' | 'highlight'
   result?: 'victory' | 'defeat' | 'draw' | 'none'
   buildingDamage?: string
+  showUnits?: boolean
+  showResources?: boolean
+  showGenerals?: boolean
 }
 
 const KAI_FONT = '"KaiTi", "STKaiti", "Kaiti SC", serif'
@@ -102,8 +105,11 @@ const BattleParticipantBlock: FC<BattleParticipantBlockProps> = ({
   effectTone = 'normal',
   result = 'none',
   buildingDamage = '无',
+  showUnits = true,
+  showResources = true,
+  showGenerals = true,
 }) => {
-  const hasGenerals = (side.generals ?? []).length > 0
+  const hasGenerals = showGenerals && (side.generals ?? []).length > 0
   const titleName = resolveIdentityName(side)
   const factionName = resolveFactionName(side)
   const seal = resultSealView(result)
@@ -129,7 +135,7 @@ const BattleParticipantBlock: FC<BattleParticipantBlockProps> = ({
         <>
           <div className="border-b border-[var(--color-border)] px-3 py-2 text-[11px] sm:border-r">
             <span className="text-[var(--color-text-muted)]">将领名称：</span>
-            <span className="font-bold text-[var(--color-text-primary)]">{formatGenerals(side)}</span>
+            <span className="font-bold text-[var(--color-text-primary)]">{showGenerals ? formatGenerals(side) : '情报未揭示'}</span>
           </div>
           <div className="border-b border-[var(--color-border)] px-3 py-2 text-[11px] sm:border-r">
             <span className="text-[var(--color-text-muted)]">官职：</span>
@@ -158,12 +164,18 @@ const BattleParticipantBlock: FC<BattleParticipantBlockProps> = ({
       </div>
     </div>
 
-    <UnitLossMatrix title="兵种" units={side.units} />
+    {showUnits ? (
+      <UnitLossMatrix title="兵种" units={side.units} />
+    ) : (
+      <div className="border-t border-[var(--color-border)] px-3 py-4 text-center text-xs font-semibold text-[var(--color-text-muted)]">
+        敌方剩余兵力情报未揭示
+      </div>
+    )}
 
     <div className="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)] text-[11px]">
       <div className="grid grid-cols-[88px_1fr]">
         <div className="bg-[var(--color-surface-dim)] px-3 py-2 font-bold text-amber-500">掠夺资源</div>
-        <div className="px-3 py-2 text-center text-[var(--color-text-secondary)]">{formatResources(rewards?.resources || side.resources)}</div>
+        <div className="px-3 py-2 text-center text-[var(--color-text-secondary)]">{showResources ? formatResources(rewards?.resources || side.resources) : '情报未揭示'}</div>
       </div>
       <div className="grid grid-cols-[88px_1fr]">
         <div className="bg-[var(--color-surface-dim)] px-3 py-2 font-bold text-amber-500">建筑战损</div>

@@ -747,12 +747,11 @@ func hasReincarnationBattleForWave(run ReincarnationRun, waveID string) bool {
 }
 
 func buildReincarnationReport(run ReincarnationRun, wave ReincarnationWave, state *GameState, troops map[string]int, losses map[string]int, enemyLosses map[string]int, result combat.CombatResult, viewType string, passed bool, now time.Time) BattleReport {
-	reportResult := "defender_victory"
-	if passed {
+	reportResult := "draw"
+	if result.Winner == "attacker" {
 		reportResult = "attacker_victory"
-	}
-	if result.Winner == "draw" {
-		reportResult = "draw"
+	} else if result.Winner == "defender" {
+		reportResult = "defender_victory"
 	}
 	battleType := "dungeon_reincarnation_attack"
 	if wave.WaveType == ReincarnationWaveDefense {

@@ -605,6 +605,9 @@ func (s *Service) ListPvpBattles(playerID string) (PvpBattleListResponse, error)
 	if err != nil {
 		return PvpBattleListResponse{}, err
 	}
+	for i := range items {
+		items[i] = s.projectPvpBattleForPlayer(items[i], playerID)
+	}
 	sort.Slice(items, func(i, j int) bool { return items[i].UpdatedAt > items[j].UpdatedAt })
 	return PvpBattleListResponse{Items: items}, nil
 }
@@ -622,7 +625,57 @@ func (s *Service) GetPvpBattle(playerID string, battleID string) (PvpBattle, err
 	if battle.AttackerPlayerID != playerID && battle.DefenderPlayerID != playerID {
 		return PvpBattle{}, ErrPlayerNotFound
 	}
-	return battle, nil
+	return s.projectPvpBattleForPlayer(battle, playerID), nil
+}
+
+// projectPvpBattleForPlayer 让 PVP 战斗接口服从对应玩家战报的情报可见性，避免绕过战报详情读取原始快照。
+func (s *Service) projectPvpBattleForPlayer(battle PvpBattle, playerID string) PvpBattle {
+	reportID := battle.AttackerReportID
+	isAttacker := battle.AttackerPlayerID == playerID
+	if !isAttacker {
+		reportID = battle.DefenderReportID
+	}
+	report, err := s.repo.GetReportForPlayer(playerID, reportID)
+	if err != nil {
+		if isAttacker {
+			battle.DefenderSnapshot = nil
+			battle.ReinforcementSnapshot = nil
+		} else {
+			battle.AttackerSnapshot = nil
+		}
+		return battle
+	}
+	visible := projectBattleReportForViewer(report)
+	if visible.Detail == nil {
+		if isAttacker {
+			battle.DefenderSnapshot = nil
+			battle.ReinforcementSnapshot = nil
+		} else {
+			battle.AttackerSnapshot = nil
+		}
+		return battle
+	}
+	visibility := visible.Detail.Visibility
+	if !visibility.ShowEnemyRemainingUnits || !visibility.ShowEnemyResources || !visibility.ShowEnemyGenerals || !visibility.ShowEnemyCityDefense {
+		if isAttacker {
+			battle.DefenderSnapshot = nil
+		} else {
+			battle.AttackerSnapshot = nil
+		}
+	}
+	if isAttacker && (!visibility.ShowEnemyRemainingUnits || !visibility.ShowEnemyGenerals) {
+		battle.ReinforcementSnapshot = append([]DefenseReinforcementUnit(nil), battle.ReinforcementSnapshot...)
+		for i := range battle.ReinforcementSnapshot {
+			if !visibility.ShowEnemyRemainingUnits {
+				battle.ReinforcementSnapshot[i].Troops = map[string]int{}
+			}
+			if !visibility.ShowEnemyGenerals {
+				battle.ReinforcementSnapshot[i].Generals = nil
+				battle.ReinforcementSnapshot[i].Buffs = nil
+			}
+		}
+	}
+	return battle
 }
 
 // GetPvpState 返回玩家 PVP 状态、积分统计和复仇记录。
@@ -2745,14 +2798,16 @@ func applyArmyLosses(state *GameState, losses map[string]int) {
 	state.Army = armyMapToSlice(armySliceToMap(state.Army))
 }
 
+// applyPvpReinforcementLosses 记录所有实际参战驻防；即使零损失也必须进入战报和经验结算链路。
 func applyPvpReinforcementLosses(records []Reinforcement, losses map[string]map[string]int, now time.Time) []Reinforcement {
 	changed := []Reinforcement{}
 	nowText := now.Format(resourceDateLayout)
 	for _, record := range records {
-		unitLosses := losses[record.ID]
-		if len(unitLosses) == 0 {
+		normalizeGarrisonRecord(&record)
+		if record.Status != ReinforcementStatusStationed || !record.Rules.CanFight || totalTroops(record.RemainingTroops) <= 0 {
 			continue
 		}
+		unitLosses := losses[record.ID]
 		if record.Losses == nil {
 			record.Losses = map[string]int{}
 		}
@@ -2790,9 +2845,6 @@ func buildPvpReinforcementReports(eventID string, attacker *GameState, defender 
 		record := &changed[i]
 		normalizeGarrisonRecord(record)
 		unitLosses := cloneStringIntMap(losses[record.ID])
-		if len(unitLosses) == 0 {
-			continue
-		}
 		before := cloneStringIntMap(record.RemainingTroops)
 		for unitType, lost := range unitLosses {
 			if lost > 0 {

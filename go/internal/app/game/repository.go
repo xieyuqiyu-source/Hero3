@@ -116,6 +116,7 @@ type AccountAssetRepository interface {
 type ReportRepository interface {
 	SaveReport(report BattleReport) error
 	SaveReports(reports []BattleReport) error
+	SaveReportBundle(event BattleEvent, reports []BattleReport) error
 	GetReportByID(reportID string) (BattleReport, error)
 	GetReportForPlayer(playerID string, reportID string) (BattleReport, error)
 	GetReportByShareToken(token string) (BattleReport, error)
@@ -127,6 +128,7 @@ type ReportRepository interface {
 	MarkSingleReportRead(playerID string, reportID string) error
 	DeleteReport(playerID string, reportID string) error
 	DeleteReportsByView(playerID string, viewType string) error
+	DeleteReportsByFilter(filter BattleReportDeleteFilter) error
 	DeleteAllReports(playerID string) error
 	CreateBattleReportShareLink(playerID string, reportID string, visibility string, expiresAt time.Time) (BattleReportShareLink, error)
 	ListBattleEventsForAdmin(query BattleEventQuery) ([]BattleEvent, int, error)
@@ -300,7 +302,8 @@ type MemoryRepository struct {
 	accountPlayers      map[string][]string
 	players             map[string]GameState
 	playerUpdatedAt     map[string]time.Time
-	reports             map[string][]BattleReport   // playerID → reports
+	reports             map[string][]BattleReport // playerID → reports
+	battleEvents        map[string]BattleEvent
 	mails               map[string][]Mail           // playerID → mails
 	miniGameRecords     map[string][]MiniGameRecord // playerID → records
 	reinforcements      map[string]Reinforcement
@@ -330,6 +333,7 @@ func NewMemoryRepository() *MemoryRepository {
 		players:             make(map[string]GameState),
 		playerUpdatedAt:     make(map[string]time.Time),
 		reports:             make(map[string][]BattleReport),
+		battleEvents:        make(map[string]BattleEvent),
 		mails:               make(map[string][]Mail),
 		miniGameRecords:     make(map[string][]MiniGameRecord),
 		reinforcements:      make(map[string]Reinforcement),
@@ -857,13 +861,28 @@ func (r *MemoryRepository) SaveReport(report BattleReport) error {
 func (r *MemoryRepository) SaveReports(reports []BattleReport) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.saveReportsLocked(reports)
+	return nil
+}
 
+// SaveReportBundle 在同一内存事务中保存标准事件和全部玩家视角战报。
+func (r *MemoryRepository) SaveReportBundle(event BattleEvent, reports []BattleReport) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.saveReportsLocked(reports)
+	if strings.TrimSpace(event.ID) != "" {
+		r.battleEvents[event.ID] = event
+	}
+	return nil
+}
+
+// saveReportsLocked 在已持有仓储锁时批量保存战报。
+func (r *MemoryRepository) saveReportsLocked(reports []BattleReport) {
 	for _, report := range reports {
 		report = NormalizeBattleReport(report)
 		r.reports[report.PlayerID] = append([]BattleReport{report}, r.reports[report.PlayerID]...)
 		enforceMemoryBattleReportVisibleCap(r.reports[report.PlayerID], report.ViewType)
 	}
-	return nil
 }
 
 // enforceMemoryBattleReportVisibleCap 软删除同一视角超过上限的旧可见战报。
@@ -1078,13 +1097,20 @@ func (r *MemoryRepository) DeleteReport(playerID string, reportID string) error 
 
 // DeleteReportsByView 物理删除指定视角 Tab 下的战报。
 func (r *MemoryRepository) DeleteReportsByView(playerID string, viewType string) error {
+	return r.DeleteReportsByFilter(BattleReportDeleteFilter{PlayerID: playerID, ViewType: viewType})
+}
+
+// DeleteReportsByFilter 按视角和战斗类型物理删除匹配的内存战报。
+func (r *MemoryRepository) DeleteReportsByFilter(filter BattleReportDeleteFilter) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	deletedIDs := map[string]bool{}
-	r.reports[playerID] = filterMemoryReports(r.reports[playerID], func(report BattleReport) bool {
+	r.reports[filter.PlayerID] = filterMemoryReports(r.reports[filter.PlayerID], func(report BattleReport) bool {
 		normalized := NormalizeBattleReport(report)
-		if viewType == "" || normalized.ViewType == viewType {
+		viewMatches := filter.ViewType == "" || normalized.ViewType == filter.ViewType
+		battleMatches := filter.BattleType == "" || normalized.BattleType == filter.BattleType
+		if viewMatches && battleMatches {
 			deletedIDs[normalized.ID] = true
 			return false
 		}
@@ -1167,49 +1193,24 @@ func (r *MemoryRepository) ListBattleEventsForAdmin(query BattleEventQuery) ([]B
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	eventsByID := map[string]BattleEvent{}
+	eventsByID := make(map[string]BattleEvent, len(r.battleEvents))
+	for eventID, event := range r.battleEvents {
+		eventsByID[eventID] = event
+	}
 	for _, reports := range r.reports {
 		for _, raw := range reports {
 			report := NormalizeBattleReport(raw)
-			if query.PlayerID != "" && report.PlayerID != query.PlayerID {
-				continue
-			}
-			if query.EventID != "" && report.EventID != query.EventID {
-				continue
-			}
-			if query.SourceType != "" && report.SourceType != query.SourceType {
-				continue
-			}
-			if query.BattleType != "" && report.BattleType != query.BattleType {
-				continue
-			}
-			if query.Result != "" && report.Result != query.Result {
-				continue
-			}
 			if _, exists := eventsByID[report.EventID]; exists {
 				continue
 			}
-			eventsByID[report.EventID] = BattleEvent{
-				ID:               report.EventID,
-				SourceType:       report.SourceType,
-				SourceID:         report.TargetID,
-				Scene:            report.ViewType,
-				BattleType:       report.BattleType,
-				Result:           report.Result,
-				AttackerPlayerID: report.PlayerID,
-				DefenderPlayerID: report.TargetID,
-				AttackerName:     report.PlayerName,
-				DefenderName:     report.TargetName,
-				AttackerFaction:  report.PlayerFaction,
-				DefenderFaction:  report.DefenderFaction,
-				OccurredAt:       report.CreatedAt,
-				CreatedAt:        report.CreatedAt,
-			}
+			eventsByID[report.EventID] = BuildBattleEventFromReport(report)
 		}
 	}
 	items := make([]BattleEvent, 0, len(eventsByID))
 	for _, event := range eventsByID {
-		items = append(items, event)
+		if battleEventMatchesQuery(event, query) {
+			items = append(items, event)
+		}
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].OccurredAt > items[j].OccurredAt })
 	total := len(items)
@@ -1229,6 +1230,35 @@ func (r *MemoryRepository) ListBattleEventsForAdmin(query BattleEventQuery) ([]B
 		end = len(items)
 	}
 	return items[start:end], total, nil
+}
+
+// battleEventMatchesQuery 判断内存事件是否符合 GM 查询条件。
+func battleEventMatchesQuery(event BattleEvent, query BattleEventQuery) bool {
+	if query.PlayerID != "" && event.AttackerPlayerID != query.PlayerID && event.DefenderPlayerID != query.PlayerID {
+		return false
+	}
+	if query.EventID != "" && event.ID != query.EventID {
+		return false
+	}
+	if query.SourceType != "" && event.SourceType != query.SourceType {
+		return false
+	}
+	if query.SourceID != "" && event.SourceID != query.SourceID {
+		return false
+	}
+	if query.BattleType != "" && event.BattleType != query.BattleType {
+		return false
+	}
+	if query.Result != "" && event.Result != query.Result {
+		return false
+	}
+	if query.RelatedMarchID != "" && event.RelatedMarchID != query.RelatedMarchID {
+		return false
+	}
+	if query.RelatedReinforcementID != "" && event.RelatedReinforcementID != query.RelatedReinforcementID {
+		return false
+	}
+	return true
 }
 
 // GetBattleEventForAdmin 获取单个战斗事件。

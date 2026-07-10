@@ -306,8 +306,27 @@ func backfillBattleReportCompatibility(ctx context.Context, db *sql.DB) error {
 	); err != nil {
 		return err
 	}
+	// 旧迁移曾把攻击掠夺战报的 view_type 错写成 plunder，这里只修复该已知错误形态。
+	if err := runMySQLBackfillBatches(ctx, db,
+		`UPDATE battle_reports SET view_type = 'attack' WHERE view_type = 'plunder' AND type = 'plunder' LIMIT ?`,
+		battleReportBackfillBatchSize,
+	); err != nil {
+		return err
+	}
+	// 仅映射确定属于视角枚举的历史 type，不能再把玩法类型无条件写进 view_type。
+	if err := runMySQLBackfillBatches(ctx, db,
+		`UPDATE battle_reports SET view_type = CASE
+			WHEN type = 'defense' THEN 'defense'
+			WHEN type IN ('reinforce', 'reinforcement') THEN 'reinforcement'
+			WHEN type = 'scout' THEN 'scout'
+			ELSE view_type END
+		 WHERE view_type = '' AND type IN ('defense', 'reinforce', 'reinforcement', 'scout') LIMIT ?`,
+		battleReportBackfillBatchSize,
+	); err != nil {
+		return err
+	}
 	return runMySQLBackfillBatches(ctx, db,
-		`UPDATE battle_reports SET view_type = type WHERE (view_type = '' OR view_type = 'attack') AND type <> '' AND type <> view_type LIMIT ?`,
+		`UPDATE battle_reports SET view_type = 'attack' WHERE view_type = '' LIMIT ?`,
 		battleReportBackfillBatchSize,
 	)
 }
@@ -1133,7 +1152,11 @@ func MigrateMySQL(ctx context.Context, db *sql.DB) error {
 	if err := addColumnIfMissing(ctx, db, `ALTER TABLE battle_reports ADD COLUMN detail_json JSON NULL AFTER target_name`); err != nil {
 		return err
 	}
-	if err := backfillBattleReportCompatibility(ctx, db); err != nil {
+	if err := runMySQLMigrationOnce(ctx, db,
+		"20260710_battle_report_view_type_compatibility_v2",
+		"修复战报视角兼容回填并停止玩法类型污染视角字段",
+		func() error { return backfillBattleReportCompatibility(ctx, db) },
+	); err != nil {
 		return err
 	}
 	if _, err := db.ExecContext(ctx, `CREATE INDEX idx_battle_reports_owner ON battle_reports (owner_player_id, view_type, created_at)`); err != nil && !isDuplicateKeyName(err) {
