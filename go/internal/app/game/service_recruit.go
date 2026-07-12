@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+// MaxRecruitQueues 定义每个玩家允许同时存在的征兵队列上限。
+const MaxRecruitQueues = 20
+
 func (s *Service) Recruit(playerID string, unitID string, amount int) (GameState, error) {
 	playerID = strings.TrimSpace(playerID)
 	unitID = strings.TrimSpace(unitID)
@@ -25,7 +28,7 @@ func (s *Service) Recruit(playerID string, unitID string, amount int) (GameState
 		*state = nextState
 		before = snapshotCoreAssets(state)
 
-		if len(state.RecruitQueues) >= 5 {
+		if len(state.RecruitQueues) >= MaxRecruitQueues {
 			return ErrQueueFull
 		}
 

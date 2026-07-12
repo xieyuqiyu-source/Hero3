@@ -1482,6 +1482,38 @@ func TestInstantCompleteRecruitChargesRemainingTime(t *testing.T) {
 	}
 }
 
+func TestRecruitAllowsTwentyQueuesAndRejectsTwentyFirst(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	svc := NewService()
+	repo := svc.repo.(*MemoryRepository)
+	now := time.Now()
+	account := Account{ID: "acc_recruit_limit", Username: "recruit-limit", PasswordHash: "x", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	state := newPlayerState("player_recruit_limit", "QueueLimit", "wei", "caocao", now)
+	for key := range state.Resources.Items {
+		state.Resources.Items[key] = 100000000
+		state.Resources.Capacity[key] = 100000000
+	}
+	for index := 0; index < MaxRecruitQueues-1; index++ {
+		state.RecruitQueues = append(state.RecruitQueues, RecruitQueue{ID: fmt.Sprintf("rq_%d", index), UnitType: "weiInfantry", Amount: 1, EndsAt: now.Add(time.Duration(index+1) * time.Hour).UTC().Format(resourceDateLayout)})
+	}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+	next, err := svc.Recruit(state.Player.ID, "weiInfantry", 1)
+	if err != nil {
+		t.Fatalf("expected twentieth queue to succeed: %v", err)
+	}
+	if len(next.RecruitQueues) != MaxRecruitQueues {
+		t.Fatalf("expected %d queues, got %d", MaxRecruitQueues, len(next.RecruitQueues))
+	}
+	if _, err := svc.Recruit(state.Player.ID, "weiInfantry", 1); !errors.Is(err, ErrQueueFull) {
+		t.Fatalf("expected twenty-first queue to fail with ErrQueueFull, got %v", err)
+	}
+}
+
 func TestInstantCompleteRecruitPublishesUnitChangedEvent(t *testing.T) {
 	setTestCombatUnitsConfig(t)
 	svc := NewService()

@@ -1,0 +1,665 @@
+/*==========================================================================
+ *
+ * 外部长条样式
+ * 请从下面部分开始修改，清空上面部分
+ *
+ *==========================================================================*/
+#im_center {
+	position: fixed;
+	/* fuck ie6 */
+	_position: absolute;
+	left: 5%;
+	top: 95%;
+	font-family: verdana;
+	font-size: 12px;
+}
+
+
+#im_center select,#im_center input,#im_center textarea {
+	border: 1px solid #0A0A08;
+	font-family: verdana;
+	font-size: 12px;
+}
+#im_center input {
+	height:15px;
+	line-height:15px;
+	padding:2px;
+}
+/* 整个外部长条样式，主要用来设定聊天中心的位置 */
+#im_box {
+	position: absolute;
+	bottom: 0px;
+	z-index: 1;
+	padding: 0px;
+}
+
+
+/* 整个外部长条的内部样式，设定长条的高度，背景等 */
+#im_border {
+	background:transparent url(http://static.sg.9wee.com/im/mini_bg.gif) no-repeat center center;
+	height:34px;
+	width:133px;
+	cursor:move;
+}
+
+/* 整个外部长条左边的标题样式 */
+#im_content_title {
+	background-color:#E7E7E7;
+	display:none;
+	float:left;
+	font-weight:bold;
+	height:10px;
+	line-height:20px;
+	margin-bottom:3px;
+	overflow:hidden;
+	text-indent:5px;
+	width:40px;
+}
+
+/*==========================================================================
+ *
+ * 整体里板样式
+ *
+ *==========================================================================*/
+
+/* 整个里板样式 */
+#im_inner_box {
+	position: absolute;
+	bottom: 0px;
+	z-index: 2;
+	width: 462px;
+	/*padding: 0 2px 5px 2px;
+	background: #41413f;*/
+	border: 1px solid #0a0a08;
+	overflow-x: hidden;
+}
+
+/* 整个里板的缩小样式 */
+#im_inner_box.lite .im_content {
+	height: 42px;
+	overflow: hidden;
+	padding: 0 5px 0 5px;
+}
+
+#im_inner_box.lite .im_content li {
+	border: none;
+	padding: 0;
+	margin: 0;
+}
+
+#im_inner_box.lite #im_center_tab {
+	display: none;
+	visibility: hidden;
+}
+
+#im_inner_box.lite .im_desc {
+	display: none;
+	visibility: hidden;
+}
+
+#im_inner_box.lite #im_close_button {
+	background:transparent url(http://static.sg.9wee.com/im/icon-arrow-expand.gif) no-repeat center center;
+    height:22px;
+    width:80px;
+}
+#im_hint {
+	width:450px;
+	height:15px;
+	line-height:15px;
+	clear:both;
+	padding:5px;
+	border:1px solid #FFCC00;
+	background-color:#FFE274;
+	margin-bottom:3px;
+}
+#im_hint_content {
+	float:left;
+	overflow:hidden;
+	white-space:nowrap;
+
+	height:15px;
+}
+
+/*==========================================================================
+ *
+ * 里板内的频道标签样式
+ *
+ *==========================================================================*/
+
+#im_inner_box.full #im_center_tab {
+    height:24px;
+	line-height:24px;
+	background: #41413f;
+}
+#im_post_table{
+	background: #41413f;
+	clear:both;
+	height:24px;
+	padding:5px;
+}
+
+#im_inner_box.full #im_center_tab ul {
+    height:24px;
+	line-height:24px;
+}
+
+#im_inner_box.full #im_center_tab li {
+    width:50px;
+    border-left:1px solid #2a2a28;
+    border-right:1px solid #2a2a28;
+    border-top:1px solid #2a2a28;
+    float:left;
+    margin-right:3px;
+    padding:3px 0 2px;
+    bottom:-1px;
+    position:relative;
+    text-align:center;
+	cursor: pointer;
+	line-height:18px;
+	color:#FFFFFF;
+}
+
+/* 被选中时的tab样式 */
+#im_inner_box.full #im_center_tab li.selected {
+    background-color:#383836;
+}
+
+/* 有新信息来时的样式 */
+#im_inner_box.full #im_center_tab li.new {
+    background-color:#870202;
+	_filter:alpha(opacity=60);
+	opacity:0.6;
+}
+
+/*==========================================================================
+ *
+ * 里板内的按钮样式
+ *
+ *==========================================================================*/
+
+/* 下方展开按钮 */
+#im_extend_button {
+	background:transparent url(http://static.sg.9wee.com/im/icon-arrow-expand.gif) no-repeat scroll left center;
+	cursor:pointer;
+	float:left;
+	height:22px;
+	margin:5px;
+	width:80px;
+}
+/* 下方关闭按钮 */
+#im_close_button {
+	float: right;
+	margin-left: 10px;
+	cursor: pointer;
+    background:transparent url(http://static.sg.9wee.com/im/icon-arrow-down.gif) no-repeat scroll center center;
+    height:16px;
+    width:16px;
+}
+
+/* 上方的最小化按钮 */
+#im_mini_icon {
+	position: absolute;
+	top: 17px;
+	right: 25px;
+	float: right;
+	width: 20px;
+	height: 21px;
+	cursor: pointer;
+	background: url(http://static.sg.9wee.com/im/icon-mini.gif) no-repeat center;
+	display:none;
+}
+
+/* 最小化按钮 */
+#im_inner_box.full #im_mini_icon {
+	display:block;
+	margin: -16px 0 0 0;
+}
+
+/* 最大化按钮 */
+#im_inner_box.lite #im_mini_icon {
+	display:block;
+	margin: -16px 0 0 0;
+	background: url(http://static.sg.9wee.com/im/icon-max.gif) no-repeat center;
+}
+
+/* 上方的举报按钮 */
+#im_report_icon {
+	position: absolute;
+	margin:-16px 0 0;
+	top: 17px;
+	right: 45px;
+	float: right;
+	width: 20px;
+	height: 21px;
+	cursor: pointer;
+	background: url(http://static.sg.9wee.com/im/icon-report.gif) no-repeat center;
+	display:none;
+}
+
+/* 上方的关闭按钮 */
+#im_close_icon {
+	margin: -16px 0 0 0;
+	position: absolute;
+	top: 17px;
+	right: 5px;
+	float: right;
+	width: 20px;
+	height: 21px;
+	cursor: pointer;
+	background: url(http://static.sg.9wee.com/im/icon-close.gif) no-repeat center;
+}
+
+#im_speaker_icon {
+	margin: -16px 0 0 0;
+	position: absolute;
+	top: 17px;
+	right: 45px;
+	float: right;
+	width: 20px;
+	height: 21px;
+	cursor: pointer;
+	background: url(http://static.sg.9wee.com/im/icon-speaker.gif) no-repeat center;
+
+
+}
+
+#im_user_html {
+	margin-right:5px;
+}
+
+#im_operation_icon {
+	cursor:pointer;
+}
+
+#im_inner_box_nsize {
+	height:10px;
+	cursor:n-resize;
+}
+
+/*==========================================================================
+ *
+ * 里板内的整体消息框样式
+ *
+ *==========================================================================*/
+
+#im_content {
+	/*background: #383838 url(http://static.sg.9wee.com/im/content_bg.gif) no-repeat center;
+	padding: 5px;*/
+	border: 1px solid #2a2a28;
+	line-height: 200%;
+    float:left;
+    width:458px;
+    /*margin-bottom:3px;*/
+	margin-left:2px;
+    margin-right:2px;
+	color:#c3be84;
+	position:absolute;
+	left:0px;
+	top:0px;
+	z-index:2;
+}
+
+.im_content_all {
+	position:relative;
+}
+
+.im_content_bg {
+	background: #383838 url(http://static.sg.9wee.com/im/content_bg.gif) no-repeat center;
+	position:absolute;
+	left:0px;
+	top:0px;
+	filter:alpha(opacity=70);
+	-moz-opacity:0.70;
+	opacity: 0.70;
+	z-index:1;
+	width:462px;
+}
+
+/*==========================================================================
+ *
+ * 里板内的发送框样式
+ *
+ *==========================================================================*/
+
+#im_operation, #im_select_input, #im_select_img , #im_post, #im_select{
+	float:left;
+}
+
+/* 私聊对象的样式 */
+#im_post_target {
+	width:60px;
+	text-align:center;
+	background:#65574e;
+	color:#FFFFFF;
+}
+
+/* 输入框 */
+#im_post_content {
+}
+
+/* 没有私聊对象的发送框样式 */
+.no_target {
+	width:400px;
+	color:#FFFFFF;
+	border-top:1px solid #000;
+	border-left:1px solid #000;
+	border-right:1px solid #9e9e9e;
+	border-bottom:1px solid #9e9e9e;
+	background:transparent url(http://static.sg.9wee.com/im/im-input-bg.gif) no-repeat scroll center right;
+	background-color:#65574E;
+
+}
+#im_post.with_target {
+	margin-left:5px;
+}
+/* 有私聊对象的发送框样式 */
+.with_target {
+	background:transparent url(http://static.sg.9wee.com/im/im-input-bg.gif) no-repeat scroll center right;
+	background-color:#65574E;
+	width:265px;
+	margin-left:5px;
+	color:#FFFFFF;
+	border-top:1px solid #000;
+	border-left:1px solid #000;
+	border-right:1px solid #9e9e9e;
+	border-bottom:1px solid #9e9e9e;
+	_filter:alpha(opacity=60);
+	opacity:0.6;
+}
+
+/* 私聊对象那个下拉框的样式 */
+#im_select_img {
+	#margin-top:1px;
+	background:transparent url(http://static.sg.9wee.com/im/select.gif) no-repeat scroll center center;
+	border-right:solid 1px #2a2a28;
+	border-top:solid 1px #2a2a28;
+	border-bottom:solid 1px #2a2a28;
+	height:19px;
+	width:17px;
+	display:block;
+}
+
+#im_select_img:hover {
+	#margin-top:1px;
+	border-right:solid 1px #2a2a28;
+	border-top:solid 1px #2a2a28;
+	border-bottom:solid 1px #2a2a28;
+	background:transparent url(http://static.sg.9wee.com/im/select_hover.gif) no-repeat scroll center center;
+	height:19px;
+	width:17px;
+	display:block;
+}
+
+/*最近聊天列表*/
+.im_select_menu {
+	width:78px;
+	border:solid 1px #2a2a28;
+	background-color:#65574E;
+	cursor:default;
+	position:absolute;
+	bottom:31px;
+	left:4px;
+	text-align:center;
+	z-index:3;
+}
+
+.im_select_menu a {
+	padding:2px;
+	width:74px;
+	display:block;
+	text-decoration:none;
+	background:#65574e
+	cursor:default;
+	overflow-x:hidden;
+}
+
+.im_select_menu a.parent {
+	background:#65574e url(http://static.sg.9wee.com/im/select_menu.gif) no-repeat scroll right center;
+}
+
+.im_select_menu a:hover {
+	background-color:#9E420A;
+	color:#FFFFFF;
+	padding:2px;
+}
+
+#im_private_menu.child {
+	z-index:4;
+	left:82px;
+}
+
+/*==========================================================================
+ *
+ * 里板内的其他样式
+ *
+ *==========================================================================*/
+
+/* 滚动的部分，点击这里跟玩家聊天 */
+#im_bulletin_content {
+	display:none;
+    float:left;
+    overflow: hidden;
+    height: 21px;
+    line-height: 21px;
+    width: 295px;
+}
+
+/* 新私聊信息的提示 */
+#im_new_msg {
+    display:none;
+}
+
+#im_new_msg.new {
+    background:transparent url(http://static.sg.9wee.com/im/new_msg.gif) no-repeat scroll center center;
+	position: absolute;
+	height:21px;
+	width:78px;
+	left: 55px;
+	bottom: 7px;
+	cursor: pointer;
+	display: block;
+	z-index: 3;
+}
+
+/* 消息框内的右键菜单样式 */
+.im_RightMenu
+{
+    z-index:30000;
+    text-align:left;
+    cursor: default;
+    position: fixed;
+	_position: absolute;
+    border: 1px solid #2A2A28;
+    display:none;
+    padding:3px 0;
+    background-color: #65574E;
+	width:95px;
+}
+
+
+
+.im_RightMenuItem
+{
+	 color:#FFE78D;
+	 height:17px;
+	 line-height: 17px;
+	 padding:1px 15px;
+	 text-align: center;
+	 width: 65px;
+}
+/**** 鼠标悬停的css ****/
+.im_RightMenuItem_over
+{
+    height:17px;
+	width: 65px;
+	line-height: 17px;
+    padding:1px 15px;
+	text-align: center;
+	background-color:#9E420A;
+	color:#FFFFFF;
+}
+
+/* 欢迎信息样式，示例中是：聊天中心 */
+.im_inner_box_title {
+	cursor: move;
+	padding: 5px 0 5px 0;
+	text-indent: 5px;
+	color:#ffcc00;
+	background: #41413f;
+}
+
+/* 消息内容的样式，如世界的消息内容，私聊的消息内容，都属于这个样式 */
+.im_content {
+	overflow-y:auto;
+	height:300px;
+	overflow-x:hidden;
+}
+
+/* 每条信息样式 */
+.im_content li {
+    border-bottom: 1px solid #4e4e4c;
+    padding: 2px;
+}
+.im_content li a{color:#c3be84;}
+
+.font_list {
+	clear:both;
+}
+
+
+/*==========================================================================
+ *
+ * 里板内的每条消息样式
+ *
+ *==========================================================================*/
+
+/* 消息的标题 */
+.im_inner_title {
+
+	white-space:normal;
+	height:24px;
+}
+
+/* 消息的内容 */
+.im_inner_content {
+	white-space:normal;
+}
+
+/* 频道标题 */
+.im_call_title {
+	text-decoration:none;
+	margin-right:5px;
+	cursor:pointer;
+}
+
+.im_call_to {
+	margin-right:5px;
+}
+
+/* 用户名的样式 */
+.im_call_msg {
+	margin-right:2px;
+}
+
+/* 发送时间的样式 */
+.im_post_time {
+	margin-right: 5px;
+	margin-left: 5px;
+	display:none;
+}
+
+/* 右边小框样式 */
+.im_right_menu {
+	float:left;
+	padding-left:10px;
+	height:300px;
+	width:105px;
+	overflow:hidden;
+	overflow-y:auto;
+	position:relative;
+}
+
+/* 有右边小框时的左边样式 */
+.im_splitleft {
+	width:320px;
+	float: left;
+	overflow-y: auto;
+	height: 300px;
+	padding-right:5px;
+	border-right:1px solid #2a2a28;
+}
+
+/*==========================================================================
+ *
+ * 各种频道样式，具体的看使用说明，以下是示例
+ *
+ *==========================================================================*/
+
+/* 系统字体样式 */
+.im_content li.font0 {
+    color:#FF0000;
+}
+/* 世界字体样式 */
+.im_content li.font1 {
+    color:#00FF00;
+}
+/* 私聊字体样式 */
+.im_content li.font3 {
+    color: #E29C22;
+}
+
+/* 联盟字体样式 */
+.im_content li.fontU {
+    color:#FFE78D;
+}
+
+/* 国家字体样式 */
+.im_content li.fontC {
+    color: #C7BEC3;
+}
+
+/*==========================================================================
+ *
+ * 私聊频道内的私聊标签样式
+ *
+ *==========================================================================*/
+
+#im_inner_box.full #im_private_tab {
+	width:110px;
+	padding-left: 0px;
+	left:-1px;
+}
+
+#im_inner_box.full #im_private_tab li {
+	border-bottom:1px solid #2a2a28;
+	border-right:1px solid #2a2a28;
+	border-top:1px solid #2a2a28;
+	cursor:pointer;
+	margin-bottom:5px;
+	height:25px;
+}
+
+#im_inner_box.full #im_private_tab li.selected {
+	background-color:#383836;
+}
+
+#im_inner_box.full #im_private_tab li.new {
+    background-color:#FFC055;
+	_filter:alpha(opacity=60);
+	opacity:0.6;
+}
+
+/*关闭私聊tab的按钮*/
+.im_close_tab {
+	background:transparent url(http://static.sg.9wee.com/im/close_tab.gif) no-repeat scroll center center;
+	width:16px;
+	float:right;
+	height:24px;
+}
+
+/*私聊tab的姓名*/
+.im_tab_name {
+	float:left;
+	width:80%;
+	overflow-x:hidden;
+}
