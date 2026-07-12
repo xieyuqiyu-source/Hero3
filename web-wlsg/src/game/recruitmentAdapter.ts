@@ -14,6 +14,7 @@ export interface RecruitmentUnitViewModel {
   owned: number
   cost: Record<string, number>
   trainSeconds: number
+  dispatchable: boolean
 }
 
 export interface RecruitmentCategoryViewModel {
@@ -75,6 +76,7 @@ function mapUnit(id: string, config: UnitConfig, owned: number): RecruitmentUnit
     owned,
     cost: { ...(config.cost ?? {}) },
     trainSeconds: Math.max(0, Number(config.trainSeconds ?? 0)),
+    dispatchable: config.role !== 'transport' && stat('upkeep') > 0,
   }
 }
 

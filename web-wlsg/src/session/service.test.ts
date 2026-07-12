@@ -37,10 +37,17 @@ function mockApi(players: PlayerSummary[] = [player]): GameApi {
     players: vi.fn(async () => ({ players })),
     gameState: vi.fn(async () => { throw new Error('当前测试不读取游戏状态') }),
     upgradeBuilding: vi.fn(async () => { throw new Error('当前测试不执行建造') }),
+    instantCompleteBuilding: vi.fn(async () => { throw new Error('当前测试不执行建造加速') }),
     fillResourcesPaid: vi.fn(async () => { throw new Error('当前测试不执行一键爆仓') }),
     militaryView: vi.fn(async () => { throw new Error('当前测试不读取军事状态') }),
     recruit: vi.fn(async () => { throw new Error('当前测试不执行征兵') }),
     instantCompleteRecruit: vi.fn(async () => { throw new Error('当前测试不执行征兵加速') }),
+    worldMapView: vi.fn(async () => { throw new Error('当前测试不读取世界地图') }),
+    scoutPvpTarget: vi.fn(async () => { throw new Error('当前测试不执行侦查') }),
+    startPvpAttack: vi.fn(async () => { throw new Error('当前测试不执行 PVP 行军') }),
+    sendReinforcement: vi.fn(async () => { throw new Error('当前测试不执行增援') }),
+    pvpMarches: vi.fn(async () => ({ items: [] })),
+    sentReinforcements: vi.fn(async () => ({ items: [] })),
   }
 }
 

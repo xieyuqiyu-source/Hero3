@@ -33,6 +33,16 @@ export interface GeneralState {
   level: number
 }
 
+export interface GeneralAssignmentState {
+  id: string
+  generalId: string
+  slot: string
+  moduleId?: string
+  status?: string
+  assignedAt?: string
+  endsAt?: string
+}
+
 export interface ArmyUnitState {
   unitType: string
   amount: number
@@ -55,6 +65,7 @@ export interface GameStateResponse {
   resourceSlots?: ResourceSlotState[]
   general: GeneralState | null
   generals?: GeneralState[]
+  generalAssignments?: GeneralAssignmentState[]
   army: ArmyUnitState[]
   recruitQueues: RecruitQueueState[]
   unreadMessageCount: number
@@ -98,6 +109,72 @@ export interface MilitaryActionResponse {
   resources: ResourceState
   cityGold: number
   serverTime: string
+}
+
+export type WorldMapMarchAction = 'attack' | 'plunder' | 'scout' | 'reinforce'
+
+export interface PvpMarchState {
+  id: string
+  marchType: string
+  status: string
+  attackTroops: Record<string, number>
+  attackGenerals?: string[]
+  durationSeconds: number
+  startedAt: string
+  arrivesAt: string
+}
+
+export interface PvpDispatchResponse {
+  march: PvpMarchState
+  army: ArmyUnitState[]
+  generals?: GeneralState[]
+  generalAssignments?: GeneralAssignmentState[]
+  serverTime: string
+}
+
+export interface ReinforcementState {
+  reinforcementId: string
+  status: string
+  troops: Record<string, number>
+  marchSeconds: number
+  sentAt: string
+  arriveAt?: string
+}
+
+export interface ReinforcementDispatchResponse {
+  reinforcement: ReinforcementState
+  patch?: {
+    army?: ArmyUnitState[]
+    generals?: GeneralState[]
+    generalAssignments?: GeneralAssignmentState[]
+    serverTime: string
+  }
+}
+
+export interface PvpMarchListItem extends PvpMarchState {
+  attackerPlayerId: string
+  attackerName: string
+  defenderPlayerId: string
+  defenderName: string
+  returnsAt?: string
+}
+
+export interface ReinforcementListItem extends ReinforcementState {
+  fromPlayerId: string
+  fromPlayerName?: string
+  toPlayerId: string
+  toPlayerName?: string
+  expectedReturnedAt?: string
+}
+
+export interface OutgoingMarchViewModel {
+  id: string
+  kind: WorldMapMarchAction
+  label: string
+  targetName: string
+  troops: Record<string, number>
+  status: string
+  endsAt: string
 }
 
 export interface ResourceViewModel {

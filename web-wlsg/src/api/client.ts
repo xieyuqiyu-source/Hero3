@@ -35,6 +35,17 @@ const errorMessages: Record<string, string> = {
   'invalid recruit amount': '征兵数量必须是 1 至 100000 的整数',
   'recruit queue is full': '征兵队列已满',
   'insufficient city gold': '城金不足',
+  'no units selected for dispatch': '请至少选择一个出征兵种',
+  'insufficient army for dispatch': '可用兵力不足',
+  'cannot attack self': '不能对自己的城池执行该命令',
+  'cannot attack another save in same account': '不能攻击同账号的其他存档',
+  'pvp target is protected': '目标当前处于保护状态',
+  'pvp daily attack limit reached': '今日攻击次数已用完',
+  'cannot reinforce yourself': '不能增援自己的城池',
+  'npc cannot be reinforced': 'NPC 据点不能接受增援',
+  'reinforcement source slots are full': '目标的增援来源已满',
+  'general is already assigned': '所选武将正在执行其他任务',
+  'general not found': '所选武将不存在',
 }
 
 /** 从后端响应中提取适合展示的中文错误。 */

@@ -171,7 +171,7 @@ function unitImage(code: number | null) { return code ? `/assets/official/recrui
               <div class="recruit-unit-info">
                 <h2>{{ unit.name }}</h2>
                 <dl class="recruit-stats"><div v-for="(stat, index) in unit.stats" :key="recruitmentStatLabels[index]"><dt>{{ recruitmentStatLabels[index] }}</dt><dd>{{ stat }}</dd></div></dl>
-                <div class="recruit-owned">当前有 <b>{{ formatNumber(unit.owned) }}</b>
+                <div class="recruit-owned"><span>当前有 <b>{{ formatNumber(unit.owned) }}</b></span>
                   <button type="button" :disabled="actionBusy || queues.length >= RECRUIT_QUEUE_LIMIT" :title="queues.length >= RECRUIT_QUEUE_LIMIT ? '征兵队列已满' : `征募${unit.name}`" @click.stop="openRecruitment(unit)"><img src="/assets/official/recruitment/n_zm.gif" :alt="`征募${unit.name}`" /></button>
                 </div>
               </div>
