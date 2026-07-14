@@ -604,6 +604,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/city/boost/prices:
+    get:
+      tags:
+      - City
+      summary: 查询资源加成价格
+      description: 返回当前配置开放的四档倍率与四档时长组合价格，键格式为倍率x_时长h，单位为城金。
+      operationId: getBoostPrices
+      responses:
+        '200':
+          description: 当前加成价格表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoostPricesResponse'
+  /api/v1/city/capacity-boost:
+    post:
+      tags:
+      - City
+      summary: 购买仓库容量扩容
+      description: 消耗城金购买仓库容量倍率。同倍率购买会在未到期时间上续时，不同倍率或已过期时从当前时间重新计算。
+      operationId: purchaseCapacityBoost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CapacityBoostRequest'
+      responses:
+        '200':
+          description: 扩容成功，返回最新容量、倍率、到期时间、城金和实际费用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceActionResult'
+        '400':
+          description: 倍率或持续时间不在当前配置中
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 玩家不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: 城金不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/military/recruit:
     post:
       tags:
@@ -6333,6 +6385,44 @@ components:
         serverTime:
           type: string
           format: date-time
+    CapacityBoostRequest:
+      type: object
+      required:
+      - playerId
+      - multiplier
+      - hours
+      properties:
+        playerId:
+          type: string
+          example: player_47f23e0eeb08ab50402fedfc
+        multiplier:
+          type: integer
+          enum:
+          - 2
+          - 4
+          - 8
+          - 16
+          description: 仓库容量倍率。
+          example: 4
+        hours:
+          type: integer
+          enum:
+          - 1
+          - 6
+          - 12
+          - 24
+          description: 扩容持续小时数。
+          example: 6
+    BoostPricesResponse:
+      type: object
+      description: 以“倍率x_时长h”为键、城金价格为值的组合价格表。
+      additionalProperties:
+        type: integer
+        minimum: 0
+      example:
+        2x_1h: 30
+        4x_6h: 450
+        16x_24h: 9600
     RecruitRequest:
       type: object
       required:

@@ -95,17 +95,21 @@ function mapResourceBuildings(state: GameStateResponse): ResourceBuildingViewMod
 /** 将后端完整状态转换为本页唯一展示数据源。 */
 export function toCityGameViewModel(state: GameStateResponse, accountGold: number): CityGameViewModel {
   const allResourceKeys = [...resourceOrder, ...Object.keys(state.resources.items).filter((key) => !resourceOrder.includes(key)).sort()]
+  const busyGeneralIds = new Set((state.generalAssignments ?? []).filter((assignment) => assignment.id !== 'main' && assignment.slot !== 'main').map((assignment) => assignment.generalId))
+  const homeGeneral = state.general && !busyGeneralIds.has(state.general.id) ? state.general : null
   return {
     player: { nickname: state.player.nickname, faction: state.player.faction, factionName: factionNames[state.player.faction] ?? state.player.faction },
     serverTime: state.serverTime,
     accountGold,
     cityGold: state.cityGold ?? 0,
+    capacityBoost: state.capacityBoost ?? 0,
+    capacityBoostEnd: state.capacityBoostEnd ?? '',
     resources: allResourceKeys.map((key) => ({
       key, name: resourceDefinitions[key]?.name ?? key, icon: resourceDefinitions[key]?.icon ?? 'icon-operation.gif',
       amount: state.resources.items[key] ?? 0, capacity: state.resources.capacity[key] ?? 0, productionPerHour: state.resourceProduction[key] ?? 0,
     })),
     resourceBuildings: mapResourceBuildings(state),
-    general: state.general ? { name: state.general.name, level: state.general.level, icon: generalIcons[state.player.faction] ?? 'general_tag_1.gif' } : null,
+    general: homeGeneral ? { name: homeGeneral.name, level: homeGeneral.level, icon: generalIcons[state.player.faction] ?? 'general_tag_1.gif' } : null,
     army: (state.army ?? []).map((unit) => {
       const definition = unitDefinitions[unit.unitType]
       const category: ArmyUnitViewModel['category'] = definition?.category ?? 'unknown'

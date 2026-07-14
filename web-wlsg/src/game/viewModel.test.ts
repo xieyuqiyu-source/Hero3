@@ -86,4 +86,12 @@ describe('当前城池视图模型', () => {
     expect(shu.general?.icon).toBe('general_tag_2.gif')
     expect(wu.general?.icon).toBe('general_tag_3.gif')
   })
+
+  it('武将增援或出征后不再显示为本城直属武将', () => {
+    const general = { id: 'g1', name: '曹操', level: 56 }
+    const atHome = toCityGameViewModel(gameState({ general, generals: [general], generalAssignments: [{ id: 'main', generalId: 'g1', slot: 'main' }] }), 0)
+    const reinforcing = toCityGameViewModel(gameState({ general, generals: [general], generalAssignments: [{ id: 'main', generalId: 'g1', slot: 'main' }, { id: 'reinforcement-r1-g1', generalId: 'g1', slot: 'reinforcement', moduleId: 'reinforcement', status: 'marching' }] }), 0)
+    expect(atHome.general?.name).toBe('曹操')
+    expect(reinforcing.general).toBeNull()
+  })
 })

@@ -7,6 +7,7 @@ import { formatRemaining, useServerClock } from '../game/useServerClock'
 
 const props = defineProps<{
   subNavigation: string[]
+  activeMilitaryIndex: number
   categories: RecruitmentCategoryViewModel[]
   queues: RecruitmentQueueViewModel[]
   resources: Record<string, number>
@@ -24,7 +25,7 @@ const props = defineProps<{
   actionSucceeded: boolean
   actionType: 'recruit' | 'instant' | null
 }>()
-const emit = defineEmits<{ retry: []; recruit: [unitId: string, amount: number]; instant: [queueId: string] }>()
+const emit = defineEmits<{ retry: []; recruit: [unitId: string, amount: number]; instant: [queueId: string]; selectMilitary: [index: number] }>()
 const activeCategoryId = ref('infantry')
 const selectedUnit = ref<RecruitmentUnitViewModel | null>(null)
 const instantQueue = ref<RecruitmentQueueViewModel | null>(null)
@@ -66,6 +67,9 @@ watch(nowMs, () => {
 
 /** 切换征兵分类。 */
 function selectCategory(categoryId: string) { activeCategoryId.value = categoryId }
+
+/** 只允许切换至已经完成的战争页或当前征兵页。 */
+function selectMilitary(index: number) { if (index === 0 || index === 2) emit('selectMilitary', index) }
 
 /** 打开真实征兵确认弹窗。 */
 function openRecruitment(unit: RecruitmentUnitViewModel) {
@@ -129,7 +133,7 @@ function unitImage(code: number | null) { return code ? `/assets/official/recrui
   <section class="main-stage recruitment-stage" aria-label="军事征兵页">
     <div class="panel-top"><i></i><span></span><b></b></div>
     <div class="panel-center recruitment-panel-center">
-      <nav class="secondary-navigation" aria-label="军事二级导航"><button v-for="(item, index) in subNavigation" :key="item" type="button" :class="{ active: index === 2 }" :disabled="index !== 2">{{ item }}</button></nav>
+      <nav class="secondary-navigation" aria-label="军事二级导航"><button v-for="(item, index) in subNavigation" :key="item" type="button" :class="{ active: index === activeMilitaryIndex }" :disabled="index !== 0 && index !== 2" :title="index === 1 || index === 3 ? '当前页面尚未复刻' : ''" @click="selectMilitary(index)">{{ item }}</button></nav>
       <nav class="stage-toolbar recruitment-tabs" aria-label="征兵分类">
         <button v-for="category in categories" :key="category.id" type="button" :class="{ active: category.id === activeCategory?.id }" @click="selectCategory(category.id)">{{ category.label }}</button>
       </nav>

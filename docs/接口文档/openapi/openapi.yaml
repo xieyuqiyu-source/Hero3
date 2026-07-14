@@ -76,6 +76,10 @@ paths:
     $ref: ./paths/city.yaml#/~1api~1v1~1city~1buildings~1upgrade-batch
   /api/v1/city/resources/fill:
     $ref: ./paths/city.yaml#/~1api~1v1~1city~1resources~1fill
+  /api/v1/city/boost/prices:
+    $ref: ./paths/city.yaml#/~1api~1v1~1city~1boost~1prices
+  /api/v1/city/capacity-boost:
+    $ref: ./paths/city.yaml#/~1api~1v1~1city~1capacity-boost
   /api/v1/military/recruit:
     $ref: ./paths/military.yaml#/~1api~1v1~1military~1recruit
   /api/v1/military/recruit/instant:
@@ -447,6 +451,10 @@ components:
       $ref: ./schemas/city.yaml#/CityActionResult
     ResourceActionResult:
       $ref: ./schemas/city.yaml#/ResourceActionResult
+    CapacityBoostRequest:
+      $ref: ./schemas/city.yaml#/CapacityBoostRequest
+    BoostPricesResponse:
+      $ref: ./schemas/city.yaml#/BoostPricesResponse
     RecruitRequest:
       $ref: ./schemas/military.yaml#/RecruitRequest
     InstantCompleteRecruitRequest:

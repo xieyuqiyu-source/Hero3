@@ -154,6 +154,7 @@ func (h *Handlers) PurchaseBoost(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, game.BuildResourceActionResult(state, 0))
 }
 
+// BoostPrices 返回当前配置开放的全部倍率与时长组合价格。
 func (h *Handlers) BoostPrices(w http.ResponseWriter, r *http.Request) {
 	prices := map[string]int{}
 	for _, m := range game.GetBoostMultipliers() {
@@ -166,6 +167,7 @@ func (h *Handlers) BoostPrices(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, prices)
 }
 
+// PurchaseCapacityBoost 校验存档归属并购买仓库容量扩容。
 func (h *Handlers) PurchaseCapacityBoost(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		PlayerID   string `json:"playerId"`
@@ -198,7 +200,7 @@ func (h *Handlers) PurchaseCapacityBoost(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, game.BuildResourceActionResult(state, 0))
+	writeJSON(w, http.StatusOK, game.BuildResourceActionResult(state, game.GetBoostCost(payload.Multiplier, payload.Hours)))
 }
 
 func (h *Handlers) UpgradeBuildingBatch(w http.ResponseWriter, r *http.Request) {

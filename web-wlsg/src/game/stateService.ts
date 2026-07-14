@@ -1,7 +1,7 @@
 /** 当前玩家完整状态的加载、重试、取消和过期结果保护服务。 */
 import type { GameApi } from '../api/gameApi'
 import { toOutgoingMarches } from './marchAdapter'
-import type { GameStateResponse, OutgoingMarchViewModel, WorldMapMarchAction } from './types'
+import type { GameStateResponse, OutgoingMarchViewModel, ReinforcementListItem, WorldMapMarchAction } from './types'
 
 export type GameStatePhase = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -20,6 +20,11 @@ export interface GameStateStore {
   fillingResources: boolean
   resourceActionMessage: string
   resourceActionSucceeded: boolean
+  capacityBoostPrices: Record<string, number>
+  capacityBoostPricesLoading: boolean
+  capacityBoosting: boolean
+  capacityBoostMessage: string
+  capacityBoostSucceeded: boolean
   recruitingUnitId: string | null
   completingRecruitQueueId: string | null
   militaryRefreshing: boolean
@@ -32,6 +37,8 @@ export interface GameStateStore {
   marchActionSucceeded: boolean
   marchResultVersion: number
   outgoingMarches: OutgoingMarchViewModel[]
+  sentReinforcements: ReinforcementListItem[]
+  receivedReinforcements: ReinforcementListItem[]
   outgoingMarchesLoading: boolean
   outgoingMarchesError: string
   operatingMarchId: string | null
@@ -48,6 +55,8 @@ export interface GameStateService {
   instantCompleteBuilding: (buildingId: string) => Promise<void>
   instantCompleteAllBuildings: () => Promise<void>
   fillResourcesPaid: () => Promise<void>
+  loadCapacityBoostPrices: (force?: boolean) => Promise<void>
+  purchaseCapacityBoost: (multiplier: number, hours: number) => Promise<void>
   refreshMilitary: () => Promise<void>
   recruit: (unitId: string, amount: number) => Promise<void>
   instantCompleteRecruit: (queueId: string) => Promise<void>
@@ -68,9 +77,9 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
   let marchesController: AbortController | null = null
 
   /** 将后端军事局部响应合并到完整玩家状态。 */
-  function patchMilitary(result: { army: GameStateResponse['army']; recruitQueues: GameStateResponse['recruitQueues']; resources: GameStateResponse['resources']; cityGold: number; serverTime: string }) {
+  function patchMilitary(result: { army: GameStateResponse['army']; recruitQueues: GameStateResponse['recruitQueues']; resources: GameStateResponse['resources']; cityGold: number; serverTime: string; general?: GameStateResponse['general']; generals?: GameStateResponse['generals']; generalAssignments?: GameStateResponse['generalAssignments'] }) {
     if (!state.data) return
-    Object.assign(state.data, { army: result.army ?? [], recruitQueues: result.recruitQueues ?? [], resources: result.resources, cityGold: result.cityGold, serverTime: result.serverTime })
+    Object.assign(state.data, { army: result.army ?? [], recruitQueues: result.recruitQueues ?? [], resources: result.resources, cityGold: result.cityGold, general: result.general === undefined ? state.data.general : result.general, generals: result.generals ?? state.data.generals, generalAssignments: result.generalAssignments ?? state.data.generalAssignments, serverTime: result.serverTime })
     state.receivedAt = Date.now()
   }
 
@@ -85,7 +94,7 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
     controller = null
     militaryController = null
     marchesController = null
-    Object.assign(state, { phase: 'idle', playerId: null, data: null, receivedAt: null, error: '', upgradingBuildingId: null, actionMessage: '', completingBuildingId: null, completingAllBuildings: false, buildingInstantMessage: '', buildingInstantSucceeded: false, fillingResources: false, resourceActionMessage: '', resourceActionSucceeded: false, recruitingUnitId: null, completingRecruitQueueId: null, militaryRefreshing: false, recruitActionMessage: '', recruitResultVersion: 0, recruitActionSucceeded: false, recruitActionType: null, dispatchingMarch: false, marchActionMessage: '', marchActionSucceeded: false, marchResultVersion: 0, outgoingMarches: [], outgoingMarchesLoading: false, outgoingMarchesError: '', operatingMarchId: null, operatingMarchAction: null, marchOperationMessage: '', marchOperationSucceeded: false })
+    Object.assign(state, { phase: 'idle', playerId: null, data: null, receivedAt: null, error: '', upgradingBuildingId: null, actionMessage: '', completingBuildingId: null, completingAllBuildings: false, buildingInstantMessage: '', buildingInstantSucceeded: false, fillingResources: false, resourceActionMessage: '', resourceActionSucceeded: false, capacityBoostPrices: {}, capacityBoostPricesLoading: false, capacityBoosting: false, capacityBoostMessage: '', capacityBoostSucceeded: false, recruitingUnitId: null, completingRecruitQueueId: null, militaryRefreshing: false, recruitActionMessage: '', recruitResultVersion: 0, recruitActionSucceeded: false, recruitActionType: null, dispatchingMarch: false, marchActionMessage: '', marchActionSucceeded: false, marchResultVersion: 0, outgoingMarches: [], sentReinforcements: [], receivedReinforcements: [], outgoingMarchesLoading: false, outgoingMarchesError: '', operatingMarchId: null, operatingMarchAction: null, marchOperationMessage: '', marchOperationSucceeded: false })
   }
 
   /** 加载指定且已由会话层校验的玩家状态。 */
@@ -95,7 +104,7 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
     const currentVersion = requestVersion
     controller?.abort()
     controller = new AbortController()
-    Object.assign(state, { phase: 'loading', playerId, data: null, receivedAt: null, error: '', actionMessage: '', completingBuildingId: null, completingAllBuildings: false, buildingInstantMessage: '', buildingInstantSucceeded: false, fillingResources: false, resourceActionMessage: '', resourceActionSucceeded: false, recruitingUnitId: null, completingRecruitQueueId: null, militaryRefreshing: false, recruitActionMessage: '', recruitActionSucceeded: false, recruitActionType: null, dispatchingMarch: false, marchActionMessage: '', marchActionSucceeded: false, outgoingMarches: [], outgoingMarchesLoading: false, outgoingMarchesError: '', operatingMarchId: null, operatingMarchAction: null, marchOperationMessage: '', marchOperationSucceeded: false })
+    Object.assign(state, { phase: 'loading', playerId, data: null, receivedAt: null, error: '', actionMessage: '', completingBuildingId: null, completingAllBuildings: false, buildingInstantMessage: '', buildingInstantSucceeded: false, fillingResources: false, resourceActionMessage: '', resourceActionSucceeded: false, capacityBoosting: false, capacityBoostMessage: '', capacityBoostSucceeded: false, recruitingUnitId: null, completingRecruitQueueId: null, militaryRefreshing: false, recruitActionMessage: '', recruitActionSucceeded: false, recruitActionType: null, dispatchingMarch: false, marchActionMessage: '', marchActionSucceeded: false, outgoingMarches: [], sentReinforcements: [], receivedReinforcements: [], outgoingMarchesLoading: false, outgoingMarchesError: '', operatingMarchId: null, operatingMarchAction: null, marchOperationMessage: '', marchOperationSucceeded: false })
     try {
       const data = await api.gameState(playerId, controller.signal)
       if (currentVersion !== requestVersion) return
@@ -148,6 +157,8 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
     try {
       const [pvp, reinforcements, receivedReinforcements] = await Promise.all([api.pvpMarches(playerId, marchesController.signal), api.sentReinforcements(playerId, marchesController.signal), api.receivedReinforcements(playerId, marchesController.signal)])
       if (currentVersion !== marchesRequestVersion || state.playerId !== playerId) return
+      state.sentReinforcements = reinforcements.items ?? []
+      state.receivedReinforcements = receivedReinforcements.items ?? []
       state.outgoingMarches = toOutgoingMarches(playerId, pvp.items ?? [], reinforcements.items ?? [], receivedReinforcements.items ?? [])
     } catch (error) {
       if (currentVersion !== marchesRequestVersion || (error instanceof DOMException && error.name === 'AbortError')) return
@@ -370,6 +381,47 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
     }
   }
 
+  /** 读取容量扩容价格表；已读取时复用，避免每次打开弹窗重复请求。 */
+  async function loadCapacityBoostPrices(force = false) {
+    if (state.capacityBoostPricesLoading) return
+    state.capacityBoostMessage = ''
+    state.capacityBoostSucceeded = false
+    if (!force && Object.keys(state.capacityBoostPrices).length) return
+    state.capacityBoostPricesLoading = true
+    try {
+      state.capacityBoostPrices = await api.capacityBoostPrices()
+    } catch (error) {
+      state.capacityBoostMessage = error instanceof Error ? error.message : '扩容价格读取失败'
+      state.capacityBoostSucceeded = false
+    } finally {
+      state.capacityBoostPricesLoading = false
+    }
+  }
+
+  /** 购买真实仓库容量加成，并以后端局部响应更新容量、城金和到期时间。 */
+  async function purchaseCapacityBoost(multiplier: number, hours: number) {
+    if (!state.playerId || !state.data || state.phase !== 'ready' || state.capacityBoosting) return
+    const playerId = state.playerId
+    const currentVersion = requestVersion
+    state.capacityBoosting = true
+    state.capacityBoostMessage = ''
+    try {
+      const result = await api.purchaseCapacityBoost(playerId, multiplier, hours)
+      if (currentVersion !== requestVersion || state.playerId !== playerId || !state.data) return
+      Object.assign(state.data, { resources: result.resources, resourceProduction: result.resourceProduction, resourceSettledAt: result.resourceSettledAt, capacityBoost: result.capacityBoost ?? multiplier, capacityBoostEnd: result.capacityBoostEnd ?? '', cityGold: result.cityGold, serverTime: result.serverTime })
+      state.receivedAt = Date.now()
+      const cost = result.cost ?? state.capacityBoostPrices[`${multiplier}x_${hours}h`] ?? 0
+      state.capacityBoostMessage = `爆仓扩容成功：容量 ×${multiplier}，持续 ${hours} 小时${cost ? `，消耗 ${cost} 城金` : ''}`
+      state.capacityBoostSucceeded = true
+    } catch (error) {
+      if (currentVersion !== requestVersion || state.playerId !== playerId) return
+      state.capacityBoostMessage = error instanceof Error ? error.message : '爆仓扩容失败'
+      state.capacityBoostSucceeded = false
+    } finally {
+      if (currentVersion === requestVersion && state.playerId === playerId) state.capacityBoosting = false
+    }
+  }
+
   /** 将建筑加速接口返回的城池事实合并到完整玩家状态。 */
   function patchCityAction(result: Awaited<ReturnType<GameApi['instantCompleteBuilding']>>) {
     if (!state.data) return
@@ -428,5 +480,5 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
     }
   }
 
-  return { state, load, refresh, refreshMilitary, refreshOutgoingMarches, accelerateOutgoingMarch, recallOutgoingMarch, recruit, instantCompleteRecruit, dispatchWorldMapCommand, upgradeBuilding, fillResourcesPaid, instantCompleteBuilding, instantCompleteAllBuildings, clear }
+  return { state, load, refresh, refreshMilitary, refreshOutgoingMarches, accelerateOutgoingMarch, recallOutgoingMarch, recruit, instantCompleteRecruit, dispatchWorldMapCommand, upgradeBuilding, fillResourcesPaid, loadCapacityBoostPrices, purchaseCapacityBoost, instantCompleteBuilding, instantCompleteAllBuildings, clear }
 }

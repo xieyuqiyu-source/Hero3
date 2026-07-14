@@ -35,6 +35,8 @@ const errorMessages: Record<string, string> = {
   'invalid recruit amount': '征兵数量必须是 1 至 100000 的整数',
   'recruit queue is full': '征兵队列已满',
   'insufficient city gold': '城金不足',
+  'invalid boost multiplier': '请选择有效的扩容倍率',
+  'invalid boost duration': '请选择有效的扩容时长',
   'insufficient gold': '账号金币不足',
   'no units selected for dispatch': '请至少选择一个出征兵种',
   'insufficient army for dispatch': '可用兵力不足',

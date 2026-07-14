@@ -28,6 +28,36 @@ AdjustResourcesRequest:
       example:
         wood: 5000
         iron: -200
+CapacityBoostRequest:
+  type: object
+  required:
+  - playerId
+  - multiplier
+  - hours
+  properties:
+    playerId:
+      type: string
+      example: player_47f23e0eeb08ab50402fedfc
+    multiplier:
+      type: integer
+      enum: [2, 4, 8, 16]
+      description: 仓库容量倍率。
+      example: 4
+    hours:
+      type: integer
+      enum: [1, 6, 12, 24]
+      description: 扩容持续小时数。
+      example: 6
+BoostPricesResponse:
+  type: object
+  description: 以“倍率x_时长h”为键、城金价格为值的组合价格表。
+  additionalProperties:
+    type: integer
+    minimum: 0
+  example:
+    2x_1h: 30
+    4x_6h: 450
+    16x_24h: 9600
 CityActionResult:
   type: object
   required:

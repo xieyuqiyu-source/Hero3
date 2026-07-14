@@ -1,7 +1,7 @@
 /** V0.2 范围内的 Hero3 业务接口适配层。 */
 import type { ApiClient } from './client'
 import type { AccountInfo, AccountSession, BootstrapResponse, PlayerSummary } from './types'
-import type { BattleReportPageResponse, BattleReportState, CityActionResponse, GameStateResponse, MilitaryActionResponse, MilitaryViewResponse, NpcAttackResponse, NpcCommandAction, NpcRefreshResponse, NpcScoutResponse, NpcStateResponse, PvpDispatchResponse, PvpMarchActionResponse, PvpMarchListItem, ReinforcementActionResponse, ReinforcementDispatchResponse, ReinforcementListItem, ReportActionResponse, ResourceActionResponse, WorldMapMarchAction } from '../game/types'
+import type { BattleReportPageResponse, BattleReportState, BoostPricesResponse, CityActionResponse, GameStateResponse, MilitaryActionResponse, MilitaryViewResponse, NpcAttackResponse, NpcCommandAction, NpcRefreshResponse, NpcScoutResponse, NpcStateResponse, PvpDispatchResponse, PvpMarchActionResponse, PvpMarchListItem, ReinforcementActionResponse, ReinforcementDispatchResponse, ReinforcementListItem, ReportActionResponse, ResourceActionResponse, WorldMapMarchAction } from '../game/types'
 import type { WorldMapViewResponse } from '../worldMap/types'
 
 /** 基于统一客户端创建登录选档 API。 */
@@ -23,6 +23,10 @@ export function createGameApi(client: ApiClient) {
     instantCompleteBuilding: (playerId: string, buildingId: string) => client.post<CityActionResponse>('/city/buildings/instant', { playerId, buildingId }),
     /** 使用城金将当前城池全部资源补至容量上限。 */
     fillResourcesPaid: (playerId: string) => client.post<ResourceActionResponse>('/city/resources/fill-paid', { playerId }),
+    /** 读取后端当前开放的四档容量倍率与四档时长价格。 */
+    capacityBoostPrices: () => client.get<BoostPricesResponse>('/city/boost/prices'),
+    /** 使用城金购买仓库容量倍率；同倍率续时，不同倍率重算。 */
+    purchaseCapacityBoost: (playerId: string, multiplier: number, hours: number) => client.post<ResourceActionResponse>('/city/capacity-boost', { playerId, multiplier, hours }),
     /** 读取当前玩家的军事局部视图并结算到期征兵队列。 */
     militaryView: (playerId: string, signal?: AbortSignal) => client.get<MilitaryViewResponse>(`/military/view?playerId=${encodeURIComponent(playerId)}`, { signal }),
     /** 提交真实征兵请求。 */

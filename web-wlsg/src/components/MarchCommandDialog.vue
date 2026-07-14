@@ -5,20 +5,30 @@ import type { GeneralAssignmentState, GeneralState, WorldMapMarchAction } from '
 import type { RecruitmentUnitViewModel } from '../game/recruitmentAdapter'
 import type { WorldMapTarget } from '../worldMap/types'
 
-const props = defineProps<{ target: WorldMapTarget; sourceName: string; units: RecruitmentUnitViewModel[]; generals: GeneralState[]; assignments: GeneralAssignmentState[]; initialAction: WorldMapMarchAction; submitting: boolean; message: string; succeeded: boolean; resultVersion: number }>()
+const props = withDefaults(defineProps<{ target?: WorldMapTarget | null; targetOptions?: WorldMapTarget[]; sourceName: string; units: RecruitmentUnitViewModel[]; generals: GeneralState[]; assignments: GeneralAssignmentState[]; initialAction: WorldMapMarchAction; submitting: boolean; message: string; succeeded: boolean; resultVersion: number }>(), { target: null, targetOptions: () => [] })
 const emit = defineEmits<{ close: []; submit: [action: WorldMapMarchAction, targetPlayerId: string, troops: Record<string, number>, generalIds: string[]] }>()
 const action = ref<WorldMapMarchAction>(props.initialAction)
 const amounts = reactive<Record<string, number>>({})
 const selectedGeneralId = ref('')
+const selectedTargetId = ref('')
 const inputError = ref('')
 const actions: Array<{ key: WorldMapMarchAction; label: string }> = [{ key: 'attack', label: '攻击' }, { key: 'plunder', label: '掠夺' }, { key: 'scout', label: '侦察' }, { key: 'reinforce', label: '增援' }]
-const actionAllowed = computed(() => ({ attack: props.target.canAttack, plunder: props.target.canPlunder, scout: props.target.canScout, reinforce: props.target.canReinforce }))
+const currentTarget = computed(() => props.target ?? props.targetOptions.find((target) => target.targetId === selectedTargetId.value) ?? null)
+const actionAllowed = computed(() => ({ attack: Boolean(currentTarget.value?.canAttack), plunder: Boolean(currentTarget.value?.canPlunder), scout: Boolean(currentTarget.value?.canScout), reinforce: Boolean(currentTarget.value?.canReinforce) }))
+const actionSelectable = computed(() => props.targetOptions.length ? {
+  attack: props.targetOptions.some((target) => target.canAttack),
+  plunder: props.targetOptions.some((target) => target.canPlunder),
+  scout: props.targetOptions.some((target) => target.canScout),
+  reinforce: props.targetOptions.some((target) => target.canReinforce),
+} : actionAllowed.value)
+const availableTargets = computed(() => props.targetOptions.filter((target) => ({ attack: target.canAttack, plunder: target.canPlunder, scout: target.canScout, reinforce: target.canReinforce })[action.value]))
 const scoutUnit = computed(() => props.units.find((unit) => ['zhanYingTanMa', 'flyingKite', 'secretAgent'].includes(unit.id)) ?? null)
 const hasTroops = computed(() => action.value === 'scout' ? (scoutUnit.value?.owned ?? 0) > 0 : props.units.some((unit) => unit.dispatchable && normalizedAmount(unit) > 0))
 
 /** 目标或初始动作变化时清空上一次尚未提交的表单。 */
-watch(() => [props.target.targetId, props.initialAction] as const, () => {
+watch(() => [props.target?.targetId ?? '', props.initialAction, props.targetOptions.map((target) => target.targetId).join('|')] as const, () => {
   action.value = props.initialAction
+  selectedTargetId.value = props.target?.targetId ?? availableTargets.value[0]?.targetId ?? ''
   props.units.forEach((unit) => { amounts[unit.id] = 0 })
   selectedGeneralId.value = ''
   inputError.value = ''
@@ -51,14 +61,16 @@ function fillUnit(unit: RecruitmentUnitViewModel) { if (action.value !== 'scout'
 
 /** 切换动作时只允许后端目标能力明确开放的命令。 */
 function selectAction(next: WorldMapMarchAction) {
-  if (!actionAllowed.value[next] || props.submitting) return
+  if (!actionSelectable.value[next] || props.submitting) return
   action.value = next
+  if (!availableTargets.value.some((target) => target.targetId === selectedTargetId.value)) selectedTargetId.value = availableTargets.value[0]?.targetId ?? ''
   inputError.value = ''
 }
 
 /** 校验表单后提交当前账号已验证存档、目标玩家和兵力。 */
 function submitCommand() {
-  if (!props.target.playerId || props.submitting || !actionAllowed.value[action.value]) return
+  const target = currentTarget.value
+  if (!target?.playerId || props.submitting || !actionAllowed.value[action.value]) return
   if (!hasTroops.value) {
     inputError.value = action.value === 'scout' ? '本城没有可派出的侦察兵' : '请至少选择一个出征兵种'
     return
@@ -68,7 +80,7 @@ function submitCommand() {
     if (amount > 0) result[unit.id] = amount
     return result
   }, {})
-  emit('submit', action.value, props.target.playerId, troops, selectedGeneralId.value ? [selectedGeneralId.value] : [])
+  emit('submit', action.value, target.playerId, troops, selectedGeneralId.value ? [selectedGeneralId.value] : [])
 }
 </script>
 
@@ -78,12 +90,13 @@ function submitCommand() {
       <header class="march-command-title"><span>战争命令操作</span></header>
       <div class="march-command-body">
         <div class="march-command-modes">
-          <label v-for="item in actions" :key="item.key" :class="{ disabled: !actionAllowed[item.key] }"><input type="radio" name="march-action" :checked="action === item.key" :disabled="!actionAllowed[item.key] || submitting" @change="selectAction(item.key)" />{{ item.label }}</label>
+          <label v-for="item in actions" :key="item.key" :class="{ disabled: !actionSelectable[item.key] }"><input type="radio" name="march-action" :checked="action === item.key" :disabled="!actionSelectable[item.key] || submitting" @change="selectAction(item.key)" />{{ item.label }}</label>
           <button type="button" disabled title="坐标收藏夹已在地图下方提供">坐标收藏夹</button>
         </div>
         <div class="march-command-destination">
-          <label>目的地：<input :value="target.name" type="text" readonly /></label>
-          <span>或坐标 X：<input :value="target.x" type="text" readonly /></span><span>Y：<input :value="target.y" type="text" readonly /></span>
+          <label v-if="targetOptions.length">目的地：<select v-model="selectedTargetId" :disabled="submitting"><option v-for="item in availableTargets" :key="item.targetId" :value="item.targetId">{{ item.name }}（{{ item.x }}|{{ item.y }}）</option></select></label>
+          <label v-else>目的地：<input :value="currentTarget?.name ?? ''" type="text" readonly /></label>
+          <span>或坐标 X：<input :value="currentTarget?.x ?? ''" type="text" readonly /></span><span>Y：<input :value="currentTarget?.y ?? ''" type="text" readonly /></span>
           <label>派兵城池：<select disabled><option>{{ sourceName }}</option></select></label>
         </div>
         <div class="march-command-general">
@@ -104,8 +117,9 @@ function submitCommand() {
           </label>
         </div>
         <p class="march-command-difference">Hero3 当前接口不支持指定攻城器械的建筑目标；最终行军时间、武将占用和兵力扣除以后端为准。</p>
+        <p v-if="targetOptions.length && !availableTargets.length" class="march-command-message error">当前世界地图中没有可执行该命令的玩家城池。</p>
         <p v-if="inputError || message" class="march-command-message" :class="{ success: succeeded && !inputError, error: inputError || (!succeeded && message) }" aria-live="polite">{{ inputError || message }}</p>
-        <footer><button type="button" :disabled="submitting || !actionAllowed[action] || !hasTroops" @click="submitCommand"><img src="/assets/official/map/command/n_qd.gif" alt="确定" /></button><button type="button" :disabled="submitting" @click="emit('close')"><img src="/assets/official/map/command/n_gb.gif" alt="关闭" /></button><span v-if="submitting">提交命令中…</span></footer>
+        <footer><button type="button" :disabled="submitting || !currentTarget || !actionAllowed[action] || !hasTroops" @click="submitCommand"><img src="/assets/official/map/command/n_qd.gif" alt="确定" /></button><button type="button" :disabled="submitting" @click="emit('close')"><img src="/assets/official/map/command/n_gb.gif" alt="关闭" /></button><span v-if="submitting">提交命令中…</span></footer>
       </div>
     </section>
   </div>

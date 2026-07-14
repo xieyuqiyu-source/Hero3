@@ -119,6 +119,8 @@ export interface GameStateResponse {
   resources: ResourceState
   resourceProduction: Record<string, number>
   resourceSettledAt: string
+  capacityBoost?: number
+  capacityBoostEnd?: string
   cityGold: number
   buildings: BuildingState[]
   resourceSlots?: ResourceSlotState[]
@@ -146,10 +148,17 @@ export interface ResourceActionResponse {
   resources: ResourceState
   resourceProduction: Record<string, number>
   resourceSettledAt: string
+  productionBoost?: number
+  productionBoostEnd?: string
+  capacityBoost?: number
+  capacityBoostEnd?: string
   cityGold: number
   cost?: number
   serverTime: string
 }
+
+/** 后端按“倍率x_时长h”返回的城金价格表。 */
+export type BoostPricesResponse = Record<string, number>
 
 export interface MilitaryViewResponse {
   army: ArmyUnitState[]
@@ -159,6 +168,7 @@ export interface MilitaryViewResponse {
   buildings?: BuildingState[]
   general: GeneralState | null
   generals?: GeneralState[]
+  generalAssignments?: GeneralAssignmentState[]
   serverTime: string
 }
 
@@ -197,6 +207,8 @@ export interface ReinforcementState {
   reinforcementId: string
   status: string
   troops: Record<string, number>
+  remainingTroops?: Record<string, number>
+  generals?: Array<{ id: string; name?: string; level?: number; assignment?: string }>
   marchSeconds: number
   sentAt: string
   arriveAt?: string
@@ -243,6 +255,9 @@ export interface ReinforcementListItem extends ReinforcementState {
   fromPlayerName?: string
   toPlayerId: string
   toPlayerName?: string
+  fromPlayerFaction?: string
+  toPlayerFaction?: string
+  sourceType?: string
   expectedReturnedAt?: string
 }
 
@@ -433,6 +448,8 @@ export interface CityGameViewModel {
   serverTime: string
   accountGold: number
   cityGold: number
+  capacityBoost: number
+  capacityBoostEnd: string
   resources: ResourceViewModel[]
   resourceBuildings: ResourceBuildingViewModel[]
   general: { name: string; level: number; icon: string } | null

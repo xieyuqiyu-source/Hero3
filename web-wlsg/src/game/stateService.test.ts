@@ -17,7 +17,7 @@ function deferred<T>() {
 }
 
 /** 创建玩家状态服务初始状态。 */
-function store(): GameStateStore { return { phase: 'idle', playerId: null, data: null, receivedAt: null, error: '', upgradingBuildingId: null, actionMessage: '', completingBuildingId: null, completingAllBuildings: false, buildingInstantMessage: '', buildingInstantSucceeded: false, fillingResources: false, resourceActionMessage: '', resourceActionSucceeded: false, recruitingUnitId: null, completingRecruitQueueId: null, militaryRefreshing: false, recruitActionMessage: '', recruitResultVersion: 0, recruitActionSucceeded: false, recruitActionType: null, dispatchingMarch: false, marchActionMessage: '', marchActionSucceeded: false, marchResultVersion: 0, outgoingMarches: [], outgoingMarchesLoading: false, outgoingMarchesError: '', operatingMarchId: null, operatingMarchAction: null, marchOperationMessage: '', marchOperationSucceeded: false } }
+function store(): GameStateStore { return { phase: 'idle', playerId: null, data: null, receivedAt: null, error: '', upgradingBuildingId: null, actionMessage: '', completingBuildingId: null, completingAllBuildings: false, buildingInstantMessage: '', buildingInstantSucceeded: false, fillingResources: false, resourceActionMessage: '', resourceActionSucceeded: false, capacityBoostPrices: {}, capacityBoostPricesLoading: false, capacityBoosting: false, capacityBoostMessage: '', capacityBoostSucceeded: false, recruitingUnitId: null, completingRecruitQueueId: null, militaryRefreshing: false, recruitActionMessage: '', recruitResultVersion: 0, recruitActionSucceeded: false, recruitActionType: null, dispatchingMarch: false, marchActionMessage: '', marchActionSucceeded: false, marchResultVersion: 0, outgoingMarches: [], sentReinforcements: [], receivedReinforcements: [], outgoingMarchesLoading: false, outgoingMarchesError: '', operatingMarchId: null, operatingMarchAction: null, marchOperationMessage: '', marchOperationSucceeded: false } }
 
 describe('玩家真实状态服务', () => {
   it('后发请求覆盖前一请求且旧结果不能回写', async () => {
@@ -104,6 +104,28 @@ describe('玩家真实状态服务', () => {
     expect(state).toMatchObject({ recruitActionSucceeded: true, recruitActionType: 'recruit', recruitResultVersion: 1 })
   })
 
+  it('军事局部刷新同步真实守军、武将占用和服务端时间', async () => {
+    const state = store()
+    const current = stateFor('p1')
+    current.general = { id: 'g1', name: '曹操', level: 56 }
+    Object.assign(state, { phase: 'ready', playerId: 'p1', data: current })
+    const militaryView = vi.fn(async () => ({ army: [{ unitType: 'huWei', amount: 7 }], recruitQueues: [], resources: current.resources, cityGold: 9, general: current.general, generals: [current.general!], generalAssignments: [{ id: 'reinforcement-r1-g1', generalId: 'g1', slot: 'reinforcement', status: 'marching' }], serverTime: '2026-07-14T08:00:00Z' }))
+    await createGameStateService({ militaryView } as unknown as GameApi, state).refreshMilitary()
+    expect(militaryView).toHaveBeenCalledWith('p1', expect.any(AbortSignal))
+    expect(state.data).toMatchObject({ army: [{ unitType: 'huWei', amount: 7 }], cityGold: 9, serverTime: '2026-07-14T08:00:00Z' })
+    expect(state.data?.generalAssignments?.[0]).toMatchObject({ generalId: 'g1', slot: 'reinforcement' })
+  })
+
+  it('军事接口明确返回空武将时清除旧的驻城武将', async () => {
+    const state = store()
+    const current = stateFor('p1')
+    current.general = { id: 'g1', name: '旧武将', level: 1 }
+    Object.assign(state, { phase: 'ready', playerId: 'p1', data: current })
+    const militaryView = vi.fn(async () => ({ army: [], recruitQueues: [], resources: current.resources, cityGold: 0, general: null, generals: [], generalAssignments: [], serverTime: '2026-07-14T08:00:00Z' }))
+    await createGameStateService({ militaryView } as unknown as GameApi, state).refreshMilitary()
+    expect(state.data?.general).toBeNull()
+  })
+
   it('非法数量与重复点击都不会产生重复征兵请求', async () => {
     const pending = deferred<never>()
     const recruit = vi.fn(() => pending.promise)
@@ -176,6 +198,30 @@ describe('玩家真实状态服务', () => {
     await service.fillResourcesPaid()
     expect(fillResourcesPaid).toHaveBeenCalledOnce()
     expect(state.data?.resources.items.wood).toBe(12)
+  })
+
+  it('读取一次后复用后端四倍率与四时长价格表', async () => {
+    const state = store()
+    const capacityBoostPrices = vi.fn(async () => ({ '2x_1h': 30, '16x_24h': 9600 }))
+    const service = createGameStateService({ capacityBoostPrices } as unknown as GameApi, state)
+    await service.loadCapacityBoostPrices()
+    await service.loadCapacityBoostPrices()
+    expect(capacityBoostPrices).toHaveBeenCalledOnce()
+    expect(state.capacityBoostPrices['16x_24h']).toBe(9600)
+  })
+
+  it('购买容量爆仓后回写真实容量、倍率、到期时间与城金', async () => {
+    const state = store()
+    const current = stateFor('p1')
+    current.cityGold = 1000
+    Object.assign(state, { phase: 'ready', playerId: 'p1', data: current, capacityBoostPrices: { '4x_6h': 450 } })
+    const purchaseCapacityBoost = vi.fn(async () => ({ resources: { items: { wood: 10 }, capacity: { wood: 400 } }, resourceProduction: {}, resourceSettledAt: '2026-07-14T04:00:00Z', capacityBoost: 4, capacityBoostEnd: '2026-07-14T10:00:00Z', cityGold: 50, cost: 450, serverTime: '2026-07-14T04:00:00Z' }))
+    await createGameStateService({ purchaseCapacityBoost } as unknown as GameApi, state).purchaseCapacityBoost(4, 6)
+    expect(purchaseCapacityBoost).toHaveBeenCalledWith('p1', 4, 6)
+    expect(state.data?.resources.capacity.wood).toBe(400)
+    expect(state.data).toMatchObject({ capacityBoost: 4, capacityBoostEnd: '2026-07-14T10:00:00Z', cityGold: 50 })
+    expect(state).toMatchObject({ capacityBoosting: false, capacityBoostSucceeded: true })
+    expect(state.capacityBoostMessage).toContain('容量 ×4')
   })
 
   it('单条建造加速成功后合并后端建筑与城金', async () => {
@@ -285,6 +331,8 @@ describe('玩家真实状态服务', () => {
     await createGameStateService({ pvpMarches, sentReinforcements, receivedReinforcements } as unknown as GameApi, state).refreshOutgoingMarches()
     expect(state.outgoingMarches.map((item) => item.id)).toEqual(['rr1', 'r1', 'm1'])
     expect(state.outgoingMarches[0]).toMatchObject({ label: '被增援', reinforcementRole: 'received' })
+    expect(state.sentReinforcements.map((item) => item.reinforcementId)).toEqual(['r1'])
+    expect(state.receivedReinforcements.map((item) => item.reinforcementId)).toEqual(['rr1'])
     expect(state.outgoingMarchesLoading).toBe(false)
   })
 

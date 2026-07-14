@@ -77,6 +77,9 @@ button { font: inherit; }
 .side-section { width: 217px; margin: 0; }
 .side-section h2 { width: 189px; height: 21px; margin: 0; padding: 0 14px; color: #d58836; background: url('/assets/official/images/bg_title.gif') no-repeat; font-size: 12px; line-height: 21px; font-weight: normal; }
 .resource-section { margin-bottom: 2px; }
+.resource-section h2 { display: flex; align-items: center; justify-content: space-between; }
+.capacity-boost-entry { padding: 0; border: 0; color: #ffd200; background: transparent; font: inherit; line-height: 21px; cursor: pointer; text-shadow: 0 1px #000; }
+.capacity-boost-entry:hover, .capacity-boost-entry:focus-visible, .capacity-boost-entry.active { color: #fff000; text-decoration: underline; }
 .resource-row { display: flex; align-items: center; width: 179px; height: 26px; padding: 0 19px; background: url('/assets/official/images/bg_li.gif') repeat-y; }
 .resource-row > img { width: 20px; height: 20px; margin-right: 6px; }
 .resource-row strong { width: 111px; color: #fff; font-size: 12px; white-space: nowrap; }
@@ -547,6 +550,85 @@ button { font: inherit; }
 .march-command-dialog footer img { display: block; width: 72px; height: 28px; }
 .march-command-dialog footer span { color: #d7b27c; }
 .instant-modal { width: 390px; }
+
+/* Hero3 仓库扩容沿用原站深色面板、铜色细边与黄色操作文字。 */
+.capacity-boost-mask { position: fixed; z-index: 140; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .66); }
+.capacity-boost-dialog { box-sizing: border-box; width: 520px; color: #d8d0c9; border: 2px solid #15100c; background: #332c27; box-shadow: 0 0 0 2px #74604c, 0 10px 38px #000; font-size: 14px; }
+.capacity-boost-dialog > header { display: flex; align-items: center; justify-content: space-between; height: 34px; padding-left: 14px; border-bottom: 1px solid #110c08; background: linear-gradient(#3e2c23, #211916); }
+.capacity-boost-dialog > header strong { color: #ffcf52; font-size: 16px; text-shadow: 0 1px #000; }
+.capacity-boost-dialog > header button { width: 34px; height: 34px; padding: 0; border: 0; color: #d7a06c; background: #321d17; font-size: 22px; cursor: pointer; }
+.capacity-boost-body { padding: 14px 18px 10px; background: radial-gradient(circle at 50% 30%, rgba(113, 84, 55, .22), transparent 62%); }
+.capacity-boost-current { margin: 0 0 8px; padding: 7px 10px; color: #ffe06a; border: 1px solid #17110d; background: rgba(15, 13, 11, .58); text-align: center; }
+.capacity-boost-tip { margin: 0 0 12px; color: #c9beb4; line-height: 1.6; }
+.capacity-boost-dialog fieldset { margin: 9px 0; padding: 9px 10px 10px; border: 1px solid #66513d; }
+.capacity-boost-dialog legend { padding: 0 8px; color: #d58a35; }
+.capacity-option-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.capacity-option-grid button { height: 34px; color: #e0d6cb; border: 1px solid #18120e; outline: 1px solid #65503e; background: linear-gradient(#55463a, #2b241f); cursor: pointer; }
+.capacity-option-grid button:hover, .capacity-option-grid button:focus-visible { color: #ffe16c; border-color: #a56c2f; }
+.capacity-option-grid button.selected { color: #fff000; border-color: #d88a27; outline-color: #f2bd55; background: linear-gradient(#71391e, #3b2117); box-shadow: inset 0 0 7px rgba(255, 184, 60, .3); }
+.capacity-boost-price { display: grid; grid-template-columns: 1fr auto; align-items: center; margin-top: 12px; padding: 9px 12px; border: 1px solid #17110d; background: #201b17; }
+.capacity-boost-price span { color: #c99a61; }
+.capacity-boost-price strong { color: #fff000; font-size: 17px; }
+.capacity-boost-price small { grid-column: 1 / -1; margin-top: 4px; color: #9c9187; text-align: right; }
+.capacity-boost-loading { padding: 15px; color: #d5c9bd; text-align: center; }
+.capacity-boost-loading.error, .capacity-boost-message.error { color: #ff7676; }
+.capacity-boost-message { min-height: 18px; margin: 10px 0 0; text-align: center; }
+.capacity-boost-message.success { color: #8ee45b; }
+.capacity-boost-dialog > footer { display: flex; justify-content: center; gap: 14px; padding: 10px; border-top: 1px solid #15100c; background: #261f1b; }
+.capacity-boost-dialog > footer button { min-width: 92px; height: 30px; color: #ffe1a2; border: 1px solid #8a5d32; background: linear-gradient(#6b321f, #351911); cursor: pointer; }
+.capacity-boost-dialog > footer button:disabled { color: #7b7169; border-color: #51463d; background: #302a26; cursor: not-allowed; }
+
+/* 军事战争页限定样式：复刻官方调兵遣将的高密度暗色表格和四项战争指令。 */
+.military-war-panel-center { min-height: 746px; }
+.war-page-tabs { display: flex; align-items: center; box-sizing: border-box; width: 762px; height: 35px; padding: 3px 8px 2px; border-bottom: 1px solid #120d09; background: linear-gradient(#2c2621, #171411); }
+.war-page-tabs > button { width: 83px; height: 30px; padding: 0; border: 1px solid #0d0907; color: #c8b8a6; background: linear-gradient(#49342b, #241d19); font-weight: bold; cursor: pointer; }
+.war-page-tabs > button.active { color: #fff000; border-color: #805138; background: linear-gradient(#68352a, #32201c); }
+.war-page-tabs > button:disabled:not(.active) { color: #a69282; opacity: .72; cursor: not-allowed; }
+.war-page-tabs > span { flex: 1; }
+.war-page-tabs > a { color: #ffd400; font-size: 11px; text-decoration: none; white-space: nowrap; }
+.war-page-tabs > i { width: 5px; height: 5px; margin: 0 7px; border-radius: 50%; background: #ac6631; box-shadow: 0 0 0 2px #2c1b10; }
+.military-war-content { box-sizing: border-box; width: 762px; padding: 9px 16px 14px; color: #c6bcad; background: #2d2924; }
+.war-description { box-sizing: border-box; width: 730px; min-height: 79px; padding: 13px 19px; border: 2px solid #14100c; outline: 1px solid #584e44; background: #211e1b; line-height: 1.8; text-indent: 2em; }
+.war-description b { color: #e0bf55; font-weight: normal; }
+.war-demo-warning { color: #918573; font-size: 11px; }
+.war-command-panel, .war-army-panel { box-sizing: border-box; width: 730px; margin-top: 11px; border: 1px solid #15110d; outline: 1px solid #564c42; background: #141616; }
+.war-command-panel > header, .war-army-panel > header { display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; height: 36px; padding: 0 13px; color: #d58836; background: linear-gradient(#35332e, #1f211f); box-shadow: inset 0 1px rgba(255,255,255,.07); }
+.war-command-panel > header strong, .war-army-panel > header strong { display: flex; align-items: center; font-size: 12px; }
+.war-command-panel > header strong i, .war-army-panel > header strong i { width: 10px; height: 10px; margin-right: 8px; border: 2px solid #664b2e; border-radius: 50%; background: #178096; box-shadow: inset 0 0 0 2px #222; }
+.war-command-panel > header > div { display: flex; align-items: center; gap: 11px; }
+.war-command-panel > header button, .war-army-panel > header button { padding: 0; border: 0; color: #eee4d8; background: transparent; font-size: 11px; cursor: pointer; }
+.war-command-panel > header button:hover, .war-army-panel > header button:hover { color: #fff000; }
+.war-command-panel > header button:disabled { color: #766e64; cursor: not-allowed; }
+.war-command-panel > header img { width: 15px; height: 16px; margin-left: -5px; }
+.war-command-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; padding: 12px 18px 8px; background: radial-gradient(circle at center, #302b24, #171714 76%); }
+.war-command-grid button { width: 148px; height: 65px; padding: 3px; border: 1px solid #5c4635; outline: 1px solid #0c0907; background: #221b17; cursor: pointer; }
+.war-command-grid button:hover, .war-command-grid button.selected { border-color: #bd7636; box-shadow: 0 0 8px rgba(237, 142, 56, .35); }
+.war-command-grid img { display: block; width: 141px; height: 58px; }
+.war-command-preview { min-height: 18px; margin: 0; padding: 1px 18px 5px; color: #978d80; background: #171714; font-size: 11px; text-align: center; }
+.war-command-grid button.selected + * { color: inherit; }
+.war-army-panel > header button { margin-right: 24px; }
+.war-guard-table, .war-empty-army-panel table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.war-guard-table th, .war-guard-table td, .war-empty-army-panel td { height: 29px; padding: 0; border: 1px solid #363532; color: #c8bd83; text-align: center; }
+.war-guard-table th { width: 75px; color: #d9a55f; font-weight: normal; }
+.war-general-row th img, .war-unit-icons img { display: block; width: 20px; height: 20px; margin: auto; }
+.war-general-row td { color: #e0d9cc; background: #073033; }
+.war-unit-icons td { background: #161819; }
+.war-unit-fallback { display: grid; place-items: center; width: 20px; height: 20px; margin: auto; color: #d7b36b; border: 1px solid #65523e; background: #211b17; font-size: 11px; }
+.war-unit-amounts td { color: #d7caa5; background: #171817; }
+.war-food-row th { padding-left: 16px; text-align: left; }
+.war-reinforcement-detachment > header span { color: #fff000; font-size: 11px; }
+.war-empty-army-panel { margin-top: 11px; }
+.war-empty-army-panel > header { height: 36px; }
+.war-empty-army-panel table td { height: 31px; color: #c9bd83; background: #11191a; }
+.war-reinforcement-panel table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.war-reinforcement-panel th, .war-reinforcement-panel td { box-sizing: border-box; height: 30px; padding: 3px 7px; border: 1px solid #363532; overflow: hidden; color: #d7caa5; background: #151818; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.war-reinforcement-panel th { color: #d9a55f; background: #202322; font-weight: normal; }
+.war-reinforcement-panel th:nth-child(1) { width: 18%; }.war-reinforcement-panel th:nth-child(2) { width: 22%; }.war-reinforcement-panel th:nth-child(3) { width: 38%; }.war-reinforcement-panel th:nth-child(4) { width: 22%; }
+.war-data-state { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 32px; margin-top: 10px; color: #d7caa5; border: 1px solid #554536; background: #191715; }
+.war-data-state.error { color: #ef8c75; }.war-data-state button { padding: 2px 10px; color: #ffd875; border: 1px solid #715332; background: #2e2018; cursor: pointer; }
+@media (max-height: 820px) {
+  .military-war-content { padding-bottom: 8px; }
+}
 .instant-body { padding: 16px 22px; line-height: 24px; }
 .instant-body p { margin: 3px 0; }
 .instant-body b { color: #ffdb68; }
