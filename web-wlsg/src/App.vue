@@ -7,6 +7,8 @@ import PlayerSelectView from './components/PlayerSelectView.vue'
 import { playerGameState } from './game'
 import { sessionService } from './session'
 import { worldMapState } from './worldMap'
+import { intelligenceState } from './intelligence'
+import { npcState } from './npc'
 
 const state = sessionService.state
 
@@ -21,7 +23,15 @@ onMounted(() => sessionService.initialize())
 function logout() {
   playerGameState.clear()
   worldMapState.clear()
+  intelligenceState.clear()
+  npcState.clear()
   sessionService.logout()
+}
+
+/** 扣费刷新 NPC 后同步页头的账户金币权威余额。 */
+async function refreshNpcCities() {
+  const accountGold = await npcState.refresh()
+  if (accountGold !== null) sessionService.updateAccountGold(accountGold)
 }
 
 watch(
@@ -34,6 +44,8 @@ watch(
     } else {
       playerGameState.clear()
       worldMapState.clear()
+      intelligenceState.clear()
+      npcState.clear()
     }
   },
 )
@@ -44,5 +56,5 @@ watch(
   <main v-else-if="state.phase === 'error'" class="auth-page"><section class="status-card"><h1>暂时无法进入游戏</h1><p class="form-error">{{ state.error }}</p><button type="button" @click="sessionService.initialize">重新连接</button></section></main>
   <LoginView v-else-if="state.phase === 'login'" :submitting="state.submitting" :error="state.error" @login="login" />
   <PlayerSelectView v-else-if="state.phase === 'players' && state.account" :account="state.account" :players="state.players" :error="state.error" @select="sessionService.selectPlayer" @logout="sessionService.logout" />
-  <GameShell v-else-if="state.phase === 'game' && state.account && state.currentPlayer" :account="state.account" :players="state.players" :current-player-id="state.currentPlayer.id" :game="playerGameState.state" :world-map="worldMapState.state" :building-configs="state.bootstrap?.balance.buildings ?? {}" :units-config="state.bootstrap?.units ?? {}" :city-gold-per-second="state.bootstrap?.balance.cityGoldPerSecond ?? 120" @select-player="sessionService.selectPlayer" @retry="playerGameState.refresh" @refresh-military="playerGameState.refreshMilitary" @refresh-map="worldMapState.refresh" @refresh-marches="playerGameState.refreshOutgoingMarches" @navigate-map="worldMapState.navigate" @return-map-home="worldMapState.returnHome" @dispatch-march="playerGameState.dispatchWorldMapCommand" @upgrade="playerGameState.upgradeBuilding" @fill-resources="playerGameState.fillResourcesPaid" @instant-building="playerGameState.instantCompleteBuilding" @instant-all-buildings="playerGameState.instantCompleteAllBuildings" @recruit="playerGameState.recruit" @instant-recruit="playerGameState.instantCompleteRecruit" @logout="logout" />
+  <GameShell v-else-if="state.phase === 'game' && state.account && state.currentPlayer" :account="state.account" :players="state.players" :current-player-id="state.currentPlayer.id" :game="playerGameState.state" :world-map="worldMapState.state" :npc="npcState.state" :building-configs="state.bootstrap?.balance.buildings ?? {}" :units-config="state.bootstrap?.units ?? {}" :city-gold-per-second="state.bootstrap?.balance.cityGoldPerSecond ?? 120" @select-player="sessionService.selectPlayer" @retry="playerGameState.refresh" @refresh-military="playerGameState.refreshMilitary" @refresh-map="worldMapState.refresh" @load-npc="npcState.load" @refresh-npc="refreshNpcCities" @dispatch-npc="npcState.dispatch" @refresh-marches="playerGameState.refreshOutgoingMarches" @accelerate-march="playerGameState.accelerateOutgoingMarch" @recall-march="playerGameState.recallOutgoingMarch" @navigate-map="worldMapState.navigate" @return-map-home="worldMapState.returnHome" @dispatch-march="playerGameState.dispatchWorldMapCommand" @upgrade="playerGameState.upgradeBuilding" @fill-resources="playerGameState.fillResourcesPaid" @instant-building="playerGameState.instantCompleteBuilding" @instant-all-buildings="playerGameState.instantCompleteAllBuildings" @recruit="playerGameState.recruit" @instant-recruit="playerGameState.instantCompleteRecruit" @logout="logout" />
 </template>

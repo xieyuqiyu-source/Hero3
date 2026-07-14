@@ -243,6 +243,9 @@ func TestWorldMapTargetDisablesSameAccountScout(t *testing.T) {
 	if target.PlayerID == "" {
 		t.Fatalf("expected same account target in view, got %+v", view.Targets)
 	}
+	if !target.SameAccount {
+		t.Fatalf("expected same account target marker, got %+v", target)
+	}
 	if target.CanScout || target.CanAttack || target.CanPlunder {
 		t.Fatalf("expected same account scout/attack/plunder disabled, got %+v", target)
 	}

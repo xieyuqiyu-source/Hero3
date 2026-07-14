@@ -281,7 +281,7 @@ effectiveDefense := ApplyTraits(baseDefense, "cavalryDefenseBonus", npc.TraitBuf
 
 ### 9.2 手动刷新
 
-- 消耗金币（GM 可配置价格）
+- 消耗 100 账户金币（当前正式价格；GM 配置默认值同步为 100）
 - 立即生成新的 12 个城池
 - 旧城池数据完全替换
 
@@ -294,7 +294,7 @@ effectiveDefense := ApplyTraits(baseDefense, "cavalryDefenseBonus", npc.TraitBuf
   "baseProduction": 24500,
   "baseStorage": 320000,
   "refreshIntervalHours": 24,
-  "manualRefreshCostGold": 50,
+  "manualRefreshCostGold": 100,
   "goldenAppearRate": 0.2,
   "tiers": {
     "small": {

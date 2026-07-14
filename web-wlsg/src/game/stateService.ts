@@ -34,6 +34,10 @@ export interface GameStateStore {
   outgoingMarches: OutgoingMarchViewModel[]
   outgoingMarchesLoading: boolean
   outgoingMarchesError: string
+  operatingMarchId: string | null
+  operatingMarchAction: 'accelerate' | 'recall' | null
+  marchOperationMessage: string
+  marchOperationSucceeded: boolean
 }
 
 export interface GameStateService {
@@ -49,6 +53,8 @@ export interface GameStateService {
   instantCompleteRecruit: (queueId: string) => Promise<void>
   dispatchWorldMapCommand: (action: WorldMapMarchAction, targetPlayerId: string, troops: Record<string, number>, generalIds: string[]) => Promise<void>
   refreshOutgoingMarches: () => Promise<void>
+  accelerateOutgoingMarch: (marchId: string) => Promise<void>
+  recallOutgoingMarch: (marchId: string) => Promise<void>
   clear: () => void
 }
 
@@ -79,7 +85,7 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
     controller = null
     militaryController = null
     marchesController = null
-    Object.assign(state, { phase: 'idle', playerId: null, data: null, receivedAt: null, error: '', upgradingBuildingId: null, actionMessage: '', completingBuildingId: null, completingAllBuildings: false, buildingInstantMessage: '', buildingInstantSucceeded: false, fillingResources: false, resourceActionMessage: '', resourceActionSucceeded: false, recruitingUnitId: null, completingRecruitQueueId: null, militaryRefreshing: false, recruitActionMessage: '', recruitResultVersion: 0, recruitActionSucceeded: false, recruitActionType: null, dispatchingMarch: false, marchActionMessage: '', marchActionSucceeded: false, marchResultVersion: 0, outgoingMarches: [], outgoingMarchesLoading: false, outgoingMarchesError: '' })
+    Object.assign(state, { phase: 'idle', playerId: null, data: null, receivedAt: null, error: '', upgradingBuildingId: null, actionMessage: '', completingBuildingId: null, completingAllBuildings: false, buildingInstantMessage: '', buildingInstantSucceeded: false, fillingResources: false, resourceActionMessage: '', resourceActionSucceeded: false, recruitingUnitId: null, completingRecruitQueueId: null, militaryRefreshing: false, recruitActionMessage: '', recruitResultVersion: 0, recruitActionSucceeded: false, recruitActionType: null, dispatchingMarch: false, marchActionMessage: '', marchActionSucceeded: false, marchResultVersion: 0, outgoingMarches: [], outgoingMarchesLoading: false, outgoingMarchesError: '', operatingMarchId: null, operatingMarchAction: null, marchOperationMessage: '', marchOperationSucceeded: false })
   }
 
   /** 加载指定且已由会话层校验的玩家状态。 */
@@ -89,7 +95,7 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
     const currentVersion = requestVersion
     controller?.abort()
     controller = new AbortController()
-    Object.assign(state, { phase: 'loading', playerId, data: null, receivedAt: null, error: '', actionMessage: '', completingBuildingId: null, completingAllBuildings: false, buildingInstantMessage: '', buildingInstantSucceeded: false, fillingResources: false, resourceActionMessage: '', resourceActionSucceeded: false, recruitingUnitId: null, completingRecruitQueueId: null, militaryRefreshing: false, recruitActionMessage: '', recruitActionSucceeded: false, recruitActionType: null, dispatchingMarch: false, marchActionMessage: '', marchActionSucceeded: false, outgoingMarches: [], outgoingMarchesLoading: false, outgoingMarchesError: '' })
+    Object.assign(state, { phase: 'loading', playerId, data: null, receivedAt: null, error: '', actionMessage: '', completingBuildingId: null, completingAllBuildings: false, buildingInstantMessage: '', buildingInstantSucceeded: false, fillingResources: false, resourceActionMessage: '', resourceActionSucceeded: false, recruitingUnitId: null, completingRecruitQueueId: null, militaryRefreshing: false, recruitActionMessage: '', recruitActionSucceeded: false, recruitActionType: null, dispatchingMarch: false, marchActionMessage: '', marchActionSucceeded: false, outgoingMarches: [], outgoingMarchesLoading: false, outgoingMarchesError: '', operatingMarchId: null, operatingMarchAction: null, marchOperationMessage: '', marchOperationSucceeded: false })
     try {
       const data = await api.gameState(playerId, controller.signal)
       if (currentVersion !== requestVersion) return
@@ -129,7 +135,7 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
     }
   }
 
-  /** 并行读取 PVP 与增援活动行军，统一映射到右侧出征状态。 */
+  /** 并行读取 PVP、派出增援和收到增援，映射为右侧独立行军状态。 */
   async function refreshOutgoingMarches() {
     if (!state.playerId || !state.data || state.outgoingMarchesLoading) return
     marchesRequestVersion += 1
@@ -140,9 +146,9 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
     state.outgoingMarchesLoading = true
     state.outgoingMarchesError = ''
     try {
-      const [pvp, reinforcements] = await Promise.all([api.pvpMarches(playerId, marchesController.signal), api.sentReinforcements(playerId, marchesController.signal)])
+      const [pvp, reinforcements, receivedReinforcements] = await Promise.all([api.pvpMarches(playerId, marchesController.signal), api.sentReinforcements(playerId, marchesController.signal), api.receivedReinforcements(playerId, marchesController.signal)])
       if (currentVersion !== marchesRequestVersion || state.playerId !== playerId) return
-      state.outgoingMarches = toOutgoingMarches(playerId, pvp.items ?? [], reinforcements.items ?? [])
+      state.outgoingMarches = toOutgoingMarches(playerId, pvp.items ?? [], reinforcements.items ?? [], receivedReinforcements.items ?? [])
     } catch (error) {
       if (currentVersion !== marchesRequestVersion || (error instanceof DOMException && error.name === 'AbortError')) return
       state.outgoingMarchesError = error instanceof Error ? error.message : '出征状态加载失败'
@@ -150,6 +156,60 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
       if (currentVersion === marchesRequestVersion) state.outgoingMarchesLoading = false
     }
   }
+
+  /** 调用 PVP 或增援的真实加速/召回接口，并以后端响应和重新查询结果刷新右侧队列。 */
+  async function operateOutgoingMarch(marchId: string, action: 'accelerate' | 'recall') {
+    if (!state.playerId || !state.data || state.phase !== 'ready' || state.operatingMarchId || state.outgoingMarchesLoading) return
+    const march = state.outgoingMarches.find((item) => item.id === marchId)
+    if (!march || march.status !== 'marching' || march.reinforcementRole === 'received') return
+    const playerId = state.playerId
+    const currentVersion = requestVersion
+    state.operatingMarchId = marchId
+    state.operatingMarchAction = action
+    state.marchOperationMessage = ''
+    try {
+      const result = march.kind === 'reinforce'
+        ? action === 'accelerate' ? await api.accelerateReinforcement(playerId, marchId) : await api.recallReinforcement(playerId, marchId)
+        : action === 'accelerate' ? await api.acceleratePvpMarch(playerId, marchId) : await api.recallPvpMarch(playerId, marchId)
+      if (currentVersion !== requestVersion || state.playerId !== playerId || !state.data) return
+      if ('march' in result) {
+        Object.assign(state.data, {
+          army: result.army ?? state.data.army,
+          generals: result.generals ?? state.data.generals,
+          cityGold: result.cityGold ?? state.data.cityGold,
+          serverTime: result.serverTime || state.data.serverTime,
+        })
+        state.marchOperationMessage = action === 'accelerate' ? `行军已加速，消耗 ${result.cost ?? 10} 城金` : '队伍已召回，正在返程'
+      } else {
+        Object.assign(state.data, {
+          army: result.patch?.army ?? state.data.army,
+          generals: result.patch?.generals ?? state.data.generals,
+          generalAssignments: result.patch?.generalAssignments ?? state.data.generalAssignments,
+          cityGold: result.cityGold ?? state.data.cityGold,
+          serverTime: result.serverTime || result.patch?.serverTime || state.data.serverTime,
+        })
+        state.marchOperationMessage = action === 'accelerate' ? `增援已加速，消耗 ${result.cost ?? 10} 城金` : '增援已召回，正在返程'
+      }
+      state.receivedAt = Date.now()
+      state.marchOperationSucceeded = true
+      await refreshOutgoingMarches()
+    } catch (error) {
+      if (currentVersion !== requestVersion || state.playerId !== playerId) return
+      state.marchOperationMessage = error instanceof Error ? error.message : action === 'accelerate' ? '加速行军失败' : '召回队伍失败'
+      state.marchOperationSucceeded = false
+    } finally {
+      if (currentVersion === requestVersion && state.playerId === playerId) {
+        state.operatingMarchId = null
+        state.operatingMarchAction = null
+      }
+    }
+  }
+
+  /** 加速指定右侧本人派出队列。 */
+  async function accelerateOutgoingMarch(marchId: string) { await operateOutgoingMarch(marchId, 'accelerate') }
+
+  /** 召回指定右侧本人派出队列。 */
+  async function recallOutgoingMarch(marchId: string) { await operateOutgoingMarch(marchId, 'recall') }
 
   /** 提交真实征兵操作并合并后端返回的队列和资源。 */
   async function recruit(unitId: string, amount: number) {
@@ -368,5 +428,5 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
     }
   }
 
-  return { state, load, refresh, refreshMilitary, refreshOutgoingMarches, recruit, instantCompleteRecruit, dispatchWorldMapCommand, upgradeBuilding, fillResourcesPaid, instantCompleteBuilding, instantCompleteAllBuildings, clear }
+  return { state, load, refresh, refreshMilitary, refreshOutgoingMarches, accelerateOutgoingMarch, recallOutgoingMarch, recruit, instantCompleteRecruit, dispatchWorldMapCommand, upgradeBuilding, fillResourcesPaid, instantCompleteBuilding, instantCompleteAllBuildings, clear }
 }

@@ -43,11 +43,24 @@ function mockApi(players: PlayerSummary[] = [player]): GameApi {
     recruit: vi.fn(async () => { throw new Error('当前测试不执行征兵') }),
     instantCompleteRecruit: vi.fn(async () => { throw new Error('当前测试不执行征兵加速') }),
     worldMapView: vi.fn(async () => { throw new Error('当前测试不读取世界地图') }),
+    npcCities: vi.fn(async () => ({ cities: [], lastRefreshedAt: '' })),
+    refreshNpcCities: vi.fn(async () => { throw new Error('当前测试不刷新 NPC') }),
+    attackNpc: vi.fn(async () => { throw new Error('当前测试不进攻 NPC') }),
+    scoutNpc: vi.fn(async () => { throw new Error('当前测试不侦查 NPC') }),
     scoutPvpTarget: vi.fn(async () => { throw new Error('当前测试不执行侦查') }),
     startPvpAttack: vi.fn(async () => { throw new Error('当前测试不执行 PVP 行军') }),
     sendReinforcement: vi.fn(async () => { throw new Error('当前测试不执行增援') }),
     pvpMarches: vi.fn(async () => ({ items: [] })),
+    acceleratePvpMarch: vi.fn(async () => { throw new Error('当前测试不执行 PVP 行军加速') }),
+    recallPvpMarch: vi.fn(async () => { throw new Error('当前测试不执行 PVP 行军召回') }),
     sentReinforcements: vi.fn(async () => ({ items: [] })),
+    receivedReinforcements: vi.fn(async () => ({ items: [] })),
+    accelerateReinforcement: vi.fn(async () => { throw new Error('当前测试不执行增援加速') }),
+    recallReinforcement: vi.fn(async () => { throw new Error('当前测试不执行增援召回') }),
+    listReports: vi.fn(async () => ({ reports: [], page: 1, pageSize: 8, total: 0 })),
+    report: vi.fn(async () => { throw new Error('当前测试不读取战报详情') }),
+    markReportRead: vi.fn(async () => { throw new Error('当前测试不标记军情') }),
+    deleteReport: vi.fn(async () => { throw new Error('当前测试不删除军情') }),
   }
 }
 
@@ -99,5 +112,15 @@ describe('会话服务', () => {
     expect(state.phase).toBe('login')
     expect(memory.session()).toBeNull()
     expect(memory.playerId()).toBeNull()
+  })
+
+  it('付费操作后使用后端权威账户金币余额更新页头', () => {
+    const state = initialState()
+    state.account = { accountId: 'a1', username: 'hero', gold: 250 }
+    const service = createSessionService(mockApi(), createMemorySession().storage, state)
+    service.updateAccountGold(150)
+    expect(state.account.gold).toBe(150)
+    service.updateAccountGold(-1)
+    expect(state.account.gold).toBe(150)
   })
 })

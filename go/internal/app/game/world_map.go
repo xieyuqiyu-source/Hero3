@@ -59,6 +59,7 @@ type WorldMapTarget struct {
 	Name            string `json:"name"`
 	Faction         string `json:"faction"`
 	Relation        string `json:"relation"`
+	SameAccount     bool   `json:"sameAccount"`
 	Level           int    `json:"level"`
 	Status          string `json:"status"`
 	X               int    `json:"x"`

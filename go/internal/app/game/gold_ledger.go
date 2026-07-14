@@ -45,6 +45,7 @@ const (
 	LedgerRefMailClaim               = "mail_claim"
 	LedgerRefServerBroadcast         = "server_broadcast"
 	LedgerRefReincarnationBonusReset = "reincarnation_bonus_reset"
+	LedgerRefNpcRefresh              = "npc_refresh"
 )
 
 // GoldLedgerEntry 一条货币流水记录

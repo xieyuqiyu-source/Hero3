@@ -2,7 +2,7 @@
   "baseProduction": 24500,
   "baseStorage": 320000,
   "refreshIntervalHours": 24,
-  "manualRefreshCostGold": 50,
+  "manualRefreshCostGold": 100,
   "goldenAppearRate": 0.2,
   "totalCities": 12,
   "tiers": {

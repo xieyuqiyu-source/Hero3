@@ -55,6 +55,65 @@ export interface RecruitQueueState {
   endsAt: string
 }
 
+export type NpcTier = 'small' | 'medium' | 'large' | 'golden'
+
+export interface NpcTraitState {
+  id: string
+  name: string
+  buffs: Record<string, number>
+}
+
+export interface NpcCityState {
+  id: string
+  name: string
+  faction: string
+  tier: NpcTier
+  resources: Record<string, number>
+  storageCapacity: Record<string, number>
+  productionPerHour: Record<string, number>
+  army: ArmyUnitState[]
+  maxArmy: ArmyUnitState[]
+  armyRecoveryRate: number
+  recoveryProfile: string
+  traits: NpcTraitState[]
+  resourceSettledAt: string
+  armySettledAt: string
+  generatedAt: string
+}
+
+export interface NpcStateResponse {
+  cities: NpcCityState[]
+  lastRefreshedAt: string
+  refreshCost?: number
+}
+
+export interface NpcRefreshResponse extends NpcStateResponse {
+  accountGold: number
+  cost: number
+}
+
+export interface NpcAttackResponse {
+  battleReport: BattleReportState
+  resources: ResourceState
+  army: ArmyUnitState[]
+  general?: GeneralState | null
+  generals?: GeneralState[]
+  cityGold: number
+  npcState?: NpcStateResponse
+  serverTime: string
+}
+
+export interface NpcScoutResponse {
+  success: boolean
+  battleReport: BattleReportState
+  npcCity: NpcCityState | null
+  army: ArmyUnitState[]
+  npcState?: NpcStateResponse
+  serverTime: string
+}
+
+export type NpcCommandAction = 'attack' | 'plunder' | 'scout'
+
 export interface GameStateResponse {
   player: GamePlayer
   resources: ResourceState
@@ -122,6 +181,8 @@ export interface PvpMarchState {
   durationSeconds: number
   startedAt: string
   arrivesAt: string
+  returnsAt?: string
+  acceleratedTimes?: number
 }
 
 export interface PvpDispatchResponse {
@@ -139,6 +200,8 @@ export interface ReinforcementState {
   marchSeconds: number
   sentAt: string
   arriveAt?: string
+  expectedReturnedAt?: string
+  metadata?: { acceleratedTimes?: number; [key: string]: unknown }
 }
 
 export interface ReinforcementDispatchResponse {
@@ -149,7 +212,23 @@ export interface ReinforcementDispatchResponse {
     generalAssignments?: GeneralAssignmentState[]
     serverTime: string
   }
+  cityGold?: number
+  cost?: number
+  serverTime?: string
 }
+
+/** PVP 行军加速或召回后返回的权威局部状态。 */
+export interface PvpMarchActionResponse {
+  march: PvpMarchState
+  army?: ArmyUnitState[]
+  generals?: GeneralState[]
+  cityGold?: number
+  cost?: number
+  serverTime: string
+}
+
+/** 增援加速后返回的城金、时间和军事局部状态。 */
+export type ReinforcementActionResponse = ReinforcementDispatchResponse
 
 export interface PvpMarchListItem extends PvpMarchState {
   attackerPlayerId: string
@@ -175,6 +254,147 @@ export interface OutgoingMarchViewModel {
   troops: Record<string, number>
   status: string
   endsAt: string
+  reinforcementRole?: 'sent' | 'received'
+  acceleratedTimes?: number
+}
+
+export type IntelligenceTabKey = 'all' | 'attack' | 'defense' | 'reinforcement' | 'scout'
+
+export interface BattleReportUnitState {
+  unitType: string
+  unitName?: string
+  faction?: string
+  amountBefore: number
+  dispatched: number
+  lost: number
+  survived: number
+}
+
+export interface BattleReportGeneralState {
+  id: string
+  name?: string
+  level?: number
+  role?: string
+  power?: number
+  traits?: Array<{ traitId: string; name?: string; traitName?: string; summary?: string }>
+}
+
+export interface BattleReportSideState {
+  role: string
+  playerId?: string
+  playerName?: string
+  cityId?: string
+  cityName?: string
+  faction?: string
+  factionLabel?: string
+  targetType?: string
+  targetId?: string
+  targetName?: string
+  level?: number
+  power: number
+  generals?: BattleReportGeneralState[]
+  units: BattleReportUnitState[]
+  resources?: Record<string, number>
+}
+
+export interface BattleReportDropState {
+  type: string
+  itemId?: string
+  name?: string
+  amount: number
+  quality?: string
+}
+
+export interface BattleReportDetailState {
+  id: string
+  eventId?: string
+  ownerPlayerId?: string
+  viewType: string
+  viewLabel?: string
+  sourceType: string
+  sourceLabel?: string
+  battleType: string
+  result: string
+  winnerSide?: string
+  ownerSide?: string
+  ownerOutcome?: string
+  title: string
+  summary?: string
+  occurredAt: string
+  primarySide: BattleReportSideState
+  secondarySide?: BattleReportSideState | null
+  rewards: { resources?: Record<string, number>; drops?: BattleReportDropState[]; cityGold?: number; generalExp?: number; generalLevelBefore?: number; generalLevelAfter?: number; overflow?: Record<string, number> }
+  traits?: Array<{ traitId: string; traitName?: string; ownerSide?: string; ownerRole?: string; generalId?: string; generalName?: string; summary?: string; detail?: Record<string, unknown> }>
+  visibility: { showEnemyRemainingUnits: boolean; showEnemyResources: boolean; showEnemyGenerals: boolean; showEnemyCityDefense: boolean; reason?: string; threshold?: number; actualLossRatio?: number }
+  extra?: Record<string, unknown>
+  read: boolean
+}
+
+export interface BattleReportReinforcementState {
+  reinforcementId: string
+  fromPlayerId: string
+  fromPlayerName?: string
+  faction: string
+  troops: Record<string, number>
+  generals?: Array<{ id: string; name?: string; level?: number }>
+}
+
+export interface BattleReportState {
+  id: string
+  playerId: string
+  viewType?: string
+  sourceType?: string
+  battleType?: string
+  ownerOutcome?: string
+  title?: string
+  summary?: string
+  detail?: BattleReportDetailState
+  playerFaction?: string
+  playerName?: string
+  targetName?: string
+  type: string
+  result: string
+  dispatchedUnits?: Record<string, number>
+  lostUnits?: Record<string, number>
+  defenderUnits?: Record<string, number>
+  defenderLostUnits?: Record<string, number>
+  defenderFaction?: string
+  defenderResources?: Record<string, number>
+  defenderRevealed?: boolean
+  rewards?: Record<string, number>
+  drops?: BattleReportDropState[]
+  generalExpGained?: number
+  generalLevelBefore?: number
+  generalLevelAfter?: number
+  traitTriggered?: string[]
+  traitOutcomes?: Record<string, { traitId: string; name?: string; ownerSide?: string; ownerGeneralId?: string; detail?: Record<string, unknown> }>
+  pvpReinforcements?: BattleReportReinforcementState[]
+  pvpReinforcementLosses?: Record<string, Record<string, number>>
+  pvpWall?: { faction: string; level: number; multiplier: number; totalDefenseBonus: number; hardness?: number }
+  read: boolean
+  createdAt: string
+}
+
+export interface BattleReportPageResponse {
+  reports: BattleReportState[]
+  page: number
+  pageSize: number
+  total: number
+}
+
+export interface ReportActionResponse {
+  unreadMessageCount: number
+  serverTime: string
+}
+
+export interface IntelligenceReportViewModel {
+  id: string
+  type: string
+  typeLabel: string
+  title: string
+  createdAt: string
+  read: boolean
+  source: BattleReportState
 }
 
 export interface ResourceViewModel {

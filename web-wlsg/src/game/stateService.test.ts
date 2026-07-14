@@ -17,7 +17,7 @@ function deferred<T>() {
 }
 
 /** 创建玩家状态服务初始状态。 */
-function store(): GameStateStore { return { phase: 'idle', playerId: null, data: null, receivedAt: null, error: '', upgradingBuildingId: null, actionMessage: '', completingBuildingId: null, completingAllBuildings: false, buildingInstantMessage: '', buildingInstantSucceeded: false, fillingResources: false, resourceActionMessage: '', resourceActionSucceeded: false, recruitingUnitId: null, completingRecruitQueueId: null, militaryRefreshing: false, recruitActionMessage: '', recruitResultVersion: 0, recruitActionSucceeded: false, recruitActionType: null, dispatchingMarch: false, marchActionMessage: '', marchActionSucceeded: false, marchResultVersion: 0, outgoingMarches: [], outgoingMarchesLoading: false, outgoingMarchesError: '' } }
+function store(): GameStateStore { return { phase: 'idle', playerId: null, data: null, receivedAt: null, error: '', upgradingBuildingId: null, actionMessage: '', completingBuildingId: null, completingAllBuildings: false, buildingInstantMessage: '', buildingInstantSucceeded: false, fillingResources: false, resourceActionMessage: '', resourceActionSucceeded: false, recruitingUnitId: null, completingRecruitQueueId: null, militaryRefreshing: false, recruitActionMessage: '', recruitResultVersion: 0, recruitActionSucceeded: false, recruitActionType: null, dispatchingMarch: false, marchActionMessage: '', marchActionSucceeded: false, marchResultVersion: 0, outgoingMarches: [], outgoingMarchesLoading: false, outgoingMarchesError: '', operatingMarchId: null, operatingMarchAction: null, marchOperationMessage: '', marchOperationSucceeded: false } }
 
 describe('玩家真实状态服务', () => {
   it('后发请求覆盖前一请求且旧结果不能回写', async () => {
@@ -281,17 +281,52 @@ describe('玩家真实状态服务', () => {
     Object.assign(state, { phase: 'ready', playerId: 'p1', data: stateFor('p1') })
     const pvpMarches = vi.fn(async () => ({ items: [{ id: 'm1', marchType: 'attack', status: 'marching', attackTroops: { huWei: 2 }, durationSeconds: 60, startedAt: '', arrivesAt: '2026-07-13T00:02:00Z', attackerPlayerId: 'p1', attackerName: '主公', defenderPlayerId: 'p2', defenderName: '目标' }] }))
     const sentReinforcements = vi.fn(async () => ({ items: [{ reinforcementId: 'r1', status: 'marching', troops: { huWei: 3 }, marchSeconds: 60, sentAt: '', arriveAt: '2026-07-13T00:01:00Z', fromPlayerId: 'p1', toPlayerId: 'p3', toPlayerName: '盟友' }] }))
-    await createGameStateService({ pvpMarches, sentReinforcements } as unknown as GameApi, state).refreshOutgoingMarches()
-    expect(state.outgoingMarches.map((item) => item.id)).toEqual(['r1', 'm1'])
+    const receivedReinforcements = vi.fn(async () => ({ items: [{ reinforcementId: 'rr1', status: 'marching', troops: { huWei: 4 }, marchSeconds: 60, sentAt: '', arriveAt: '2026-07-13T00:00:30Z', fromPlayerId: 'p4', fromPlayerName: '援军', toPlayerId: 'p1', toPlayerName: '主公' }] }))
+    await createGameStateService({ pvpMarches, sentReinforcements, receivedReinforcements } as unknown as GameApi, state).refreshOutgoingMarches()
+    expect(state.outgoingMarches.map((item) => item.id)).toEqual(['rr1', 'r1', 'm1'])
+    expect(state.outgoingMarches[0]).toMatchObject({ label: '被增援', reinforcementRole: 'received' })
     expect(state.outgoingMarchesLoading).toBe(false)
   })
 
   it('出征列表读取失败保留已有列表并公开错误', async () => {
     const state = store()
     Object.assign(state, { phase: 'ready', playerId: 'p1', data: stateFor('p1'), outgoingMarches: [{ id: 'old', kind: 'attack', label: '攻击', targetName: '旧目标', troops: {}, status: 'marching', endsAt: '' }] })
-    const service = createGameStateService({ pvpMarches: vi.fn(async () => { throw new Error('网络连接失败') }), sentReinforcements: vi.fn(async () => ({ items: [] })) } as unknown as GameApi, state)
+    const service = createGameStateService({ pvpMarches: vi.fn(async () => { throw new Error('网络连接失败') }), sentReinforcements: vi.fn(async () => ({ items: [] })), receivedReinforcements: vi.fn(async () => ({ items: [] })) } as unknown as GameApi, state)
     await service.refreshOutgoingMarches()
     expect(state.outgoingMarches[0].id).toBe('old')
     expect(state).toMatchObject({ outgoingMarchesLoading: false, outgoingMarchesError: '网络连接失败' })
+  })
+
+  it('PVP 行军加速调用真实接口、防止重复提交并回写城金后刷新队列', async () => {
+    const pending = deferred<{ march: { id: string; marchType: string; status: string; attackTroops: Record<string, number>; durationSeconds: number; startedAt: string; arrivesAt: string; acceleratedTimes: number }; cityGold: number; cost: number; serverTime: string }>()
+    const state = store()
+    const current = stateFor('p1')
+    current.cityGold = 100
+    Object.assign(state, { phase: 'ready', playerId: 'p1', data: current, outgoingMarches: [{ id: 'm1', kind: 'attack', label: '攻击', targetName: '目标', troops: { huWei: 2 }, status: 'marching', endsAt: '2026-07-13T00:02:00Z', acceleratedTimes: 0 }] })
+    const acceleratePvpMarch = vi.fn(() => pending.promise)
+    const pvpMarches = vi.fn(async () => ({ items: [{ id: 'm1', marchType: 'attack', status: 'marching', attackTroops: { huWei: 2 }, durationSeconds: 60, startedAt: '', arrivesAt: '2026-07-13T00:01:00Z', attackerPlayerId: 'p1', attackerName: '主公', defenderPlayerId: 'p2', defenderName: '目标', acceleratedTimes: 1 }] }))
+    const service = createGameStateService({ acceleratePvpMarch, pvpMarches, sentReinforcements: vi.fn(async () => ({ items: [] })), receivedReinforcements: vi.fn(async () => ({ items: [] })) } as unknown as GameApi, state)
+    const operating = service.accelerateOutgoingMarch('m1')
+    void service.accelerateOutgoingMarch('m1')
+    expect(acceleratePvpMarch).toHaveBeenCalledTimes(1)
+    pending.resolve({ march: { id: 'm1', marchType: 'attack', status: 'marching', attackTroops: { huWei: 2 }, durationSeconds: 60, startedAt: '', arrivesAt: '2026-07-13T00:01:00Z', acceleratedTimes: 1 }, cityGold: 90, cost: 10, serverTime: '2026-07-13T00:00:10Z' })
+    await operating
+    expect(acceleratePvpMarch).toHaveBeenCalledWith('p1', 'm1')
+    expect(state.data).toMatchObject({ cityGold: 90, serverTime: '2026-07-13T00:00:10Z' })
+    expect(state.outgoingMarches[0]).toMatchObject({ id: 'm1', acceleratedTimes: 1 })
+    expect(state).toMatchObject({ operatingMarchId: null, marchOperationSucceeded: true, marchOperationMessage: '行军已加速，消耗 10 城金' })
+  })
+
+  it('本人派出的增援召回后使用后端返程状态刷新右侧队列', async () => {
+    const state = store()
+    Object.assign(state, { phase: 'ready', playerId: 'p1', data: stateFor('p1'), outgoingMarches: [{ id: 'r1', kind: 'reinforce', label: '增援', targetName: '盟友', troops: { huWei: 3 }, status: 'marching', endsAt: '2026-07-13T00:02:00Z', reinforcementRole: 'sent', acceleratedTimes: 0 }] })
+    const recallReinforcement = vi.fn(async () => ({ reinforcement: { reinforcementId: 'r1', status: 'returning', troops: { huWei: 3 }, marchSeconds: 60, sentAt: '', arriveAt: '2026-07-13T00:02:00Z', expectedReturnedAt: '2026-07-13T00:03:00Z' }, patch: { serverTime: '2026-07-13T00:00:20Z' } }))
+    const sentReinforcements = vi.fn(async () => ({ items: [{ reinforcementId: 'r1', status: 'returning', troops: { huWei: 3 }, marchSeconds: 60, sentAt: '', arriveAt: '2026-07-13T00:02:00Z', expectedReturnedAt: '2026-07-13T00:03:00Z', fromPlayerId: 'p1', toPlayerId: 'p3', toPlayerName: '盟友' }] }))
+    const service = createGameStateService({ recallReinforcement, pvpMarches: vi.fn(async () => ({ items: [] })), sentReinforcements, receivedReinforcements: vi.fn(async () => ({ items: [] })) } as unknown as GameApi, state)
+    await service.recallOutgoingMarch('r1')
+    expect(recallReinforcement).toHaveBeenCalledWith('p1', 'r1')
+    expect(state.data?.serverTime).toBe('2026-07-13T00:00:20Z')
+    expect(state.outgoingMarches[0]).toMatchObject({ id: 'r1', status: 'returning', endsAt: '2026-07-13T00:03:00Z' })
+    expect(state.marchOperationMessage).toBe('增援已召回，正在返程')
   })
 })

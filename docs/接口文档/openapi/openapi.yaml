@@ -499,6 +499,8 @@ components:
       $ref: ./schemas/map.yaml#/NpcTraitConfig
     NpcCitiesRefreshRequest:
       $ref: ./schemas/map.yaml#/NpcCitiesRefreshRequest
+    NpcCitiesRefreshResponse:
+      $ref: ./schemas/map.yaml#/NpcCitiesRefreshResponse
     AttackNpcRequest:
       $ref: ./schemas/map.yaml#/AttackNpcRequest
     AttackNpcResponse:

@@ -6,6 +6,15 @@ import (
 	"time"
 )
 
+const NpcRefreshGoldCost = 100
+
+// RefreshNpcCitiesResult 返回刷新后的 NPC 状态和账户金币权威余额。
+type RefreshNpcCitiesResult struct {
+	NpcState
+	AccountGold int `json:"accountGold"`
+	Cost        int `json:"cost"`
+}
+
 // SetNpcConfigPath 加载 NPC 配置
 func (s *Service) SetNpcConfigPath(path string) error {
 	s.npcConfigPath = path
@@ -31,6 +40,7 @@ func (s *Service) GetNpcCities(playerID string) (NpcState, error) {
 		}
 
 		settleNpcCities(npcState, now)
+		npcState.RefreshCost = GetNpcConfig().ManualRefreshCost
 		return nil
 	})
 	if err != nil {
@@ -43,29 +53,44 @@ func (s *Service) GetNpcCities(playerID string) (NpcState, error) {
 	return *npcState, nil
 }
 
-// RefreshNpcCities 手动刷新 NPC 城池（消耗金币）
-// TODO: 接入金币系统后，在此处检查并扣除 manualRefreshCostGold
-func (s *Service) RefreshNpcCities(playerID string) (NpcState, error) {
+// RefreshNpcCities 原子扣除 100 账户金币并重新生成 NPC 城池。
+func (s *Service) RefreshNpcCities(playerID string) (RefreshNpcCitiesResult, error) {
 	playerID = strings.TrimSpace(playerID)
 	if playerID == "" {
-		return NpcState{}, ErrPlayerNotFound
+		return RefreshNpcCitiesResult{}, ErrPlayerNotFound
 	}
 
 	now := time.Now()
-	var npcState *NpcState
-	_, err := s.repo.UpdateNpcState(playerID, now, func(state *GameState) error {
-		npcState = generateNpcState(now)
-		state.NpcState = npcState
+	accountID, err := s.repo.GetAccountIDByPlayerID(playerID)
+	if err != nil {
+		return RefreshNpcCitiesResult{}, err
+	}
+	cost := GetNpcConfig().ManualRefreshCost
+	if cost <= 0 {
+		cost = NpcRefreshGoldCost
+	}
+	account, state, err := s.repo.UpdateAccountPlayerState(accountID, playerID, now, func(account *Account, state *GameState) error {
+		if account.Gold < cost {
+			return ErrInsufficientGold
+		}
+		account.Gold -= cost
+		state.NpcState = generateNpcState(now)
 		return nil
 	})
 	if err != nil {
-		return NpcState{}, err
+		return RefreshNpcCitiesResult{}, err
 	}
-	if npcState == nil {
-		return NpcState{}, ErrNpcNotFound
+	if state.NpcState == nil {
+		return RefreshNpcCitiesResult{}, ErrNpcNotFound
 	}
 
-	return *npcState, nil
+	s.recordLedger(GoldLedgerEntry{
+		AccountID: accountID, PlayerID: playerID, Currency: LedgerCurrencyGold,
+		Direction: LedgerDirectionDebit, Amount: cost, BalanceAfter: account.Gold,
+		RefType: LedgerRefNpcRefresh, RefID: state.NpcState.LastRefreshedAt, Reason: "刷新 NPC 城池",
+	})
+	s.publishCurrencyChanged(playerID, accountID, state.NpcState.LastRefreshedAt, LedgerRefNpcRefresh)
+	return RefreshNpcCitiesResult{NpcState: *state.NpcState, AccountGold: account.Gold, Cost: cost}, nil
 }
 
 // --- 内部逻辑 ---
@@ -93,6 +118,7 @@ func generateNpcState(now time.Time) *NpcState {
 	return &NpcState{
 		Cities:          cities,
 		LastRefreshedAt: now.UTC().Format(resourceDateLayout),
+		RefreshCost:     cfg.ManualRefreshCost,
 	}
 }
 

@@ -550,7 +550,9 @@ func convertReportTraits(report BattleReport) []BattleReportTrait {
 		traits = append(traits, BattleReportTrait{
 			TraitID:   traitID,
 			TraitName: outcome.Name,
-			OwnerSide: "primary",
+			OwnerSide: valueOrDefault(outcome.OwnerSide, "primary"),
+			OwnerRole: outcome.OwnerSide,
+			GeneralID: outcome.OwnerGeneralID,
 			Summary:   outcome.Name,
 			Detail:    outcome.Detail,
 		})

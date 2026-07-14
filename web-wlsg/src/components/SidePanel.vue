@@ -5,14 +5,14 @@ import type { PlayerSummary } from '../api/types'
 import type { CityGameViewModel, OutgoingMarchViewModel } from '../game/types'
 import { formatRemaining, useServerClock } from '../game/useServerClock'
 
-const props = withDefaults(defineProps<{ model: CityGameViewModel; receivedAt: number | null; players?: PlayerSummary[]; currentPlayerId?: string; cityGoldPerSecond?: number; completingBuildingId?: string | null; completingAllBuildings?: boolean; instantMessage?: string; outgoingMarches?: OutgoingMarchViewModel[]; outgoingMarchesLoading?: boolean; outgoingMarchesError?: string }>(), { players: () => [], currentPlayerId: '', cityGoldPerSecond: 120, completingBuildingId: null, completingAllBuildings: false, instantMessage: '', outgoingMarches: () => [], outgoingMarchesLoading: false, outgoingMarchesError: '' })
-const emit = defineEmits<{ selectPlayer: [playerId: string]; instantBuilding: [buildingId: string]; instantAllBuildings: []; refreshMarches: [] }>()
+const props = withDefaults(defineProps<{ model: CityGameViewModel; receivedAt: number | null; players?: PlayerSummary[]; currentPlayerId?: string; cityGoldPerSecond?: number; completingBuildingId?: string | null; completingAllBuildings?: boolean; instantMessage?: string; outgoingMarches?: OutgoingMarchViewModel[]; outgoingMarchesLoading?: boolean; outgoingMarchesError?: string; operatingMarchId?: string | null; operatingMarchAction?: 'accelerate' | 'recall' | null; marchOperationMessage?: string; marchOperationSucceeded?: boolean }>(), { players: () => [], currentPlayerId: '', cityGoldPerSecond: 120, completingBuildingId: null, completingAllBuildings: false, instantMessage: '', outgoingMarches: () => [], outgoingMarchesLoading: false, outgoingMarchesError: '', operatingMarchId: null, operatingMarchAction: null, marchOperationMessage: '', marchOperationSucceeded: false })
+const emit = defineEmits<{ selectPlayer: [playerId: string]; instantBuilding: [buildingId: string]; instantAllBuildings: []; refreshMarches: []; accelerateMarch: [marchId: string]; recallMarch: [marchId: string]; openIntelligence: [] }>()
 const citySelector = ref<HTMLElement | null>(null)
 const cityMenuOpen = ref(false)
-const marchPanelOpen = ref(false)
+const openMarchId = ref<string | null>(null)
 const refreshedMarchIds = new Set<string>()
 const topShortcuts = [
-  { image: 'url_jq1.gif', label: '军情', countKey: 'message' }, { image: 'url_xh1.gif', label: '信函', countKey: 'mail' },
+  { image: 'url_jq1.gif', label: '军情', countKey: 'message', action: 'intelligence' }, { image: 'url_xh1.gif', label: '信函', countKey: 'mail', action: '' },
   { image: 'url_cz.gif', label: '充值', countKey: '' }, { image: 'url_zh.gif', label: '账户', countKey: '' },
 ]
 const bottomShortcuts = [
@@ -21,16 +21,17 @@ const bottomShortcuts = [
 ]
 const { remainingSeconds } = useServerClock(toRef(props.model, 'serverTime'), toRef(props, 'receivedAt'))
 const instantBusy = computed(() => Boolean(props.completingBuildingId || props.completingAllBuildings))
-const nextMarch = computed(() => props.outgoingMarches[0] ?? null)
-const nextMarchSeconds = computed(() => nextMarch.value ? remainingSeconds(nextMarch.value.endsAt) : 0)
 
-/** 最近行军到期时只触发一次后端刷新结算。 */
-watch(nextMarchSeconds, (seconds) => {
-  const march = nextMarch.value
-  if (!march || seconds > 0 || refreshedMarchIds.has(march.id)) return
-  refreshedMarchIds.add(march.id)
+/** 任一出征或增援到期时只触发一次后端刷新结算。 */
+watch(() => props.outgoingMarches.map((march) => `${march.id}:${remainingSeconds(march.endsAt)}`).join('|'), () => {
+  const due = props.outgoingMarches.find((march) => remainingSeconds(march.endsAt) <= 0 && !refreshedMarchIds.has(march.id))
+  if (!due) return
+  refreshedMarchIds.add(due.id)
   emit('refreshMarches')
 })
+
+/** 展开指定行军队列并自动收起其它队列。 */
+function toggleMarch(marchId: string) { openMarchId.value = openMarchId.value === marchId ? null : marchId }
 
 /** 点击右侧城池栏时切换存档下拉菜单。 */
 function toggleCityMenu() { cityMenuOpen.value = !cityMenuOpen.value }
@@ -98,13 +99,47 @@ function marchCountdown(march: OutgoingMarchViewModel) {
 
 /** 汇总一支行军包含的真实兵力数量。 */
 function marchTroopCount(march: OutgoingMarchViewModel) { return Object.values(march.troops).reduce((total, amount) => total + amount, 0) }
+
+/** 返回单支行军的状态标题，不再按类型汇总。 */
+function marchStatusLabel(march: OutgoingMarchViewModel) {
+  if (march.status === 'returning') return '返回中'
+  if (march.reinforcementRole === 'received') return '被增援'
+  if (march.kind === 'reinforce') return '增援中'
+  return `${march.label}中`
+}
+
+/** 为单支行军选择右侧栏状态色。 */
+function marchStatusClass(march: OutgoingMarchViewModel) {
+  if (march.reinforcementRole === 'received') return 'received-reinforcement'
+  if (march.kind === 'reinforce') return 'reinforcement'
+  return 'expedition'
+}
+
+/** 返回单支行军的完整悬浮提示。 */
+function marchLineTitle(march: OutgoingMarchViewModel) { return `${marchStatusLabel(march)}：${march.targetName}，兵力 ${formatNumber(marchTroopCount(march))}` }
+
+/** 只有本人仍在去程的队列显示加速与召回操作。 */
+function marchCanOperate(march: OutgoingMarchViewModel) { return march.status === 'marching' && march.reinforcementRole !== 'received' }
+
+/** 返回加速图标的真实费用、次数和后端限制提示。 */
+function accelerateMarchTitle(march: OutgoingMarchViewModel) {
+  if (props.operatingMarchId === march.id && props.operatingMarchAction === 'accelerate') return '正在加速行军…'
+  const times = Math.max(0, march.acceleratedTimes ?? 0)
+  return times >= 2 ? '该队列已达到最多 2 次加速限制' : `加速行军：消耗 10 城金，剩余时间减半（已加速 ${times}/2 次）`
+}
+
+/** 返回召回图标的后端状态说明。 */
+function recallMarchTitle(march: OutgoingMarchViewModel) {
+  if (props.operatingMarchId === march.id && props.operatingMarchAction === 'recall') return '正在召回队伍…'
+  return march.kind === 'reinforce' ? '召回增援并进入返程' : '召回队伍并进入返程；PVP 行军仅出发后 2 分钟内允许召回'
+}
 </script>
 
 <template>
   <aside class="side-panel" aria-label="当前玩家真实状态">
     <div class="right-top">
       <nav class="side-shortcuts top-shortcuts" aria-label="右侧快捷菜单">
-        <button v-for="item in topShortcuts" :key="item.label" type="button"><img :src="`/assets/official/images/${item.image}`" :alt="item.label" /><b v-if="shortcutCount(item.countKey)">{{ shortcutCount(item.countKey) }}</b></button>
+        <button v-for="item in topShortcuts" :key="item.label" type="button" :title="item.label" @click="item.action === 'intelligence' && emit('openIntelligence')"><img :src="`/assets/official/images/${item.image}`" :alt="item.label" /><b v-if="shortcutCount(item.countKey)">{{ shortcutCount(item.countKey) }}</b></button>
       </nav>
     </div>
     <div ref="citySelector" class="city-name city-selector">
@@ -115,13 +150,23 @@ function marchTroopCount(march: OutgoingMarchViewModel) { return Object.values(m
       </div>
     </div>
     <section class="notice-box real-notice"><h2>当前状态</h2><p>账号金币：{{ formatNumber(model.accountGold) }}</p><p>城金：{{ formatNumber(model.cityGold) }}</p><p>坐标、VIP 与推广信息尚未接入</p></section>
-    <section v-if="outgoingMarches.length || outgoingMarchesLoading || outgoingMarchesError" class="march-status-section" aria-label="出征状态">
-      <div v-if="outgoingMarches.length" class="march-status-line"><strong>出征中</strong><span>×{{ outgoingMarches.length }}</span><b>{{ nextMarch ? marchCountdown(nextMarch) : '' }}</b><button type="button" @click="marchPanelOpen = !marchPanelOpen">{{ marchPanelOpen ? '收起' : '查看' }}</button></div>
-      <div v-else-if="outgoingMarchesLoading" class="march-status-line loading"><span>正在读取出征状态…</span></div>
-      <div v-else class="march-status-line error"><span>{{ outgoingMarchesError }}</span><button type="button" @click="emit('refreshMarches')">重试</button></div>
-      <div v-if="marchPanelOpen && outgoingMarches.length" class="march-status-list">
-        <article v-for="march in outgoingMarches" :key="march.id"><header><strong>{{ march.status === 'returning' ? '返回中' : '出征中' }} · {{ march.label }}</strong><b>{{ marchCountdown(march) }}</b></header><p>目标：{{ march.targetName }}</p><p>兵力：{{ formatNumber(marchTroopCount(march)) }}</p></article>
+    <section v-if="outgoingMarches.length || outgoingMarchesLoading || outgoingMarchesError || marchOperationMessage" class="march-status-section" aria-label="行军状态">
+      <div v-for="march in outgoingMarches" :key="march.id" class="march-status-block" :class="marchStatusClass(march)">
+        <div class="march-status-line" :title="marchLineTitle(march)">
+          <strong>{{ marchStatusLabel(march) }}</strong><span>{{ march.targetName }}</span><b>{{ marchCountdown(march) }}</b>
+          <div class="march-line-controls">
+            <button v-if="marchCanOperate(march)" type="button" class="march-action-icon accelerate" :disabled="Boolean(operatingMarchId) || (march.acceleratedTimes ?? 0) >= 2" :title="accelerateMarchTitle(march)" :aria-label="`加速${march.label}队列`" @click.stop="emit('accelerateMarch', march.id)"><img src="/assets/official/images/speed_up.gif" alt="" /></button>
+            <button v-if="marchCanOperate(march)" type="button" class="march-action-icon recall" :disabled="Boolean(operatingMarchId)" :title="recallMarchTitle(march)" :aria-label="`召回${march.label}队列`" @click.stop="emit('recallMarch', march.id)"><span aria-hidden="true">↩</span></button>
+            <button type="button" class="march-detail-toggle" @click="toggleMarch(march.id)">{{ openMarchId === march.id ? '收起' : '查看' }}</button>
+          </div>
+        </div>
+        <div v-if="openMarchId === march.id" class="march-status-list">
+          <article><header><strong>{{ march.status === 'returning' ? `返回中 · ${march.label}` : marchStatusLabel(march) }}</strong><b>{{ marchCountdown(march) }}</b></header><p>目标：{{ march.targetName }}</p><p>兵力：{{ formatNumber(marchTroopCount(march)) }}</p></article>
+        </div>
       </div>
+      <div v-if="!outgoingMarches.length && outgoingMarchesLoading" class="march-status-line loading"><span>正在读取行军状态…</span></div>
+      <div v-else-if="!outgoingMarches.length && outgoingMarchesError" class="march-status-line error"><span>{{ outgoingMarchesError }}</span><button type="button" @click="emit('refreshMarches')">重试</button></div>
+      <p v-if="marchOperationMessage" class="march-operation-message" :class="{ error: !marchOperationSucceeded }" role="status">{{ marchOperationMessage }}</p>
     </section>
     <section class="side-section resource-section">
       <h2>城池生产力</h2>

@@ -8,20 +8,34 @@ const actionLabels: Record<WorldMapMarchAction, string> = { attack: '攻击', pl
 export function mapPvpMarches(playerId: string, items: PvpMarchListItem[]): OutgoingMarchViewModel[] {
   return items.filter((item) => item.attackerPlayerId === playerId && activeStatuses.has(item.status)).map((item) => {
     const kind = (['attack', 'plunder', 'scout'].includes(item.marchType) ? item.marchType : 'attack') as Exclude<WorldMapMarchAction, 'reinforce'>
-    return { id: item.id, kind, label: actionLabels[kind], targetName: item.defenderName || item.defenderPlayerId, troops: item.attackTroops ?? {}, status: item.status, endsAt: item.status === 'returning' ? (item.returnsAt || item.arrivesAt) : item.arrivesAt }
+    return { id: item.id, kind, label: actionLabels[kind], targetName: item.defenderName || item.defenderPlayerId, troops: item.attackTroops ?? {}, status: item.status, endsAt: item.status === 'returning' ? (item.returnsAt || item.arrivesAt) : item.arrivesAt, acceleratedTimes: Math.max(0, item.acceleratedTimes ?? 0) }
   })
 }
 
 /** 将本人派出的活动增援批次转换为统一模型。 */
 export function mapReinforcements(items: ReinforcementListItem[]): OutgoingMarchViewModel[] {
-  return items.filter((item) => activeStatuses.has(item.status)).map((item) => ({ id: item.reinforcementId, kind: 'reinforce', label: actionLabels.reinforce, targetName: item.toPlayerName || item.toPlayerId, troops: item.troops ?? {}, status: item.status, endsAt: item.status === 'returning' ? (item.expectedReturnedAt || item.arriveAt || '') : (item.arriveAt || '') }))
+  return items.filter((item) => activeStatuses.has(item.status)).map((item) => ({ id: item.reinforcementId, kind: 'reinforce', label: actionLabels.reinforce, targetName: item.toPlayerName || item.toPlayerId, troops: item.troops ?? {}, status: item.status, endsAt: item.status === 'returning' ? (item.expectedReturnedAt || item.arriveAt || '') : (item.arriveAt || ''), reinforcementRole: 'sent', acceleratedTimes: Math.max(0, Number(item.metadata?.acceleratedTimes) || 0) }))
+}
+
+/** 将仍在赶往本城的外部增援转换为带到达倒计时的独立状态。 */
+export function mapReceivedReinforcements(items: ReinforcementListItem[]): OutgoingMarchViewModel[] {
+  return items.filter((item) => item.status === 'marching').map((item) => ({ id: item.reinforcementId, kind: 'reinforce', label: '被增援', targetName: item.fromPlayerName || item.fromPlayerId, troops: item.troops ?? {}, status: item.status, endsAt: item.arriveAt || '', reinforcementRole: 'received', acceleratedTimes: Math.max(0, Number(item.metadata?.acceleratedTimes) || 0) }))
 }
 
 /** 合并两套行军并按最近结束时间排序，未知时间稳定排在最后。 */
-export function toOutgoingMarches(playerId: string, pvp: PvpMarchListItem[], reinforcements: ReinforcementListItem[]): OutgoingMarchViewModel[] {
-  return [...mapPvpMarches(playerId, pvp), ...mapReinforcements(reinforcements)].sort((left, right) => {
+export function toOutgoingMarches(playerId: string, pvp: PvpMarchListItem[], reinforcements: ReinforcementListItem[], receivedReinforcements: ReinforcementListItem[] = []): OutgoingMarchViewModel[] {
+  return [...mapPvpMarches(playerId, pvp), ...mapReinforcements(reinforcements), ...mapReceivedReinforcements(receivedReinforcements)].sort((left, right) => {
     const leftTime = new Date(left.endsAt).getTime()
     const rightTime = new Date(right.endsAt).getTime()
     return (Number.isFinite(leftTime) ? leftTime : Number.MAX_SAFE_INTEGER) - (Number.isFinite(rightTime) ? rightTime : Number.MAX_SAFE_INTEGER) || left.id.localeCompare(right.id)
   })
+}
+
+/** 将增援与其他出征拆成两个展示组，避免右侧状态混杂。 */
+export function splitOutgoingMarches(items: OutgoingMarchViewModel[]) {
+  return {
+    expeditions: items.filter((item) => item.kind !== 'reinforce'),
+    reinforcements: items.filter((item) => item.kind === 'reinforce' && item.reinforcementRole !== 'received'),
+    receivedReinforcements: items.filter((item) => item.kind === 'reinforce' && item.reinforcementRole === 'received'),
+  }
 }

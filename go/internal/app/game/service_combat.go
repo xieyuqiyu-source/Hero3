@@ -1261,11 +1261,11 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 		dispatchedUnits[unit.ID] = unit.Count
 	}
 
-	// 记录防守方兵种（战斗前）
+	// 记录防守方兵种（战斗前）；以战斗结果携带的结算快照为权威，避免和战后 NPC 状态混用。
 	defenderUnits := map[string]int{}
-	for _, u := range npc.Army {
-		if u.Amount > 0 {
-			defenderUnits[u.UnitType] = u.Amount
+	for _, loss := range result.DefenderLosses {
+		if loss.Count > 0 {
+			defenderUnits[loss.ID] = loss.Count
 		}
 	}
 

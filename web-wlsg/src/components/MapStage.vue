@@ -2,14 +2,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { GeneralAssignmentState, GeneralState, WorldMapMarchAction } from '../game/types'
+import type { NpcCityState, NpcCommandAction } from '../game/types'
 import type { RecruitmentUnitViewModel } from '../game/recruitmentAdapter'
 import { createWorldMapGrid, type WorldMapCell } from '../worldMap/gridAdapter'
 import type { WorldMapPhase } from '../worldMap/stateService'
 import type { WorldMapTarget, WorldMapViewResponse } from '../worldMap/types'
+import type { NpcStateStore } from '../npc/stateService'
 import MarchCommandDialog from './MarchCommandDialog.vue'
+import NpcDirectory from './NpcDirectory.vue'
+import NpcCommandDialog from './NpcCommandDialog.vue'
 
-const props = defineProps<{ phase: WorldMapPhase; data: WorldMapViewResponse | null; error: string; overviewPhase: WorldMapPhase; overview: WorldMapViewResponse | null; overviewError: string; sourceName: string; units: RecruitmentUnitViewModel[]; generals: GeneralState[]; assignments: GeneralAssignmentState[]; dispatching: boolean; marchMessage: string; marchSucceeded: boolean; marchResultVersion: number }>()
-const emit = defineEmits<{ retry: []; navigate: [x: number, y: number]; home: []; dispatch: [action: WorldMapMarchAction, targetPlayerId: string, troops: Record<string, number>, generalIds: string[]] }>()
+const props = defineProps<{ phase: WorldMapPhase; data: WorldMapViewResponse | null; error: string; overviewPhase: WorldMapPhase; overview: WorldMapViewResponse | null; overviewError: string; sourceName: string; currentPlayerId: string; accountGold: number; units: RecruitmentUnitViewModel[]; generals: GeneralState[]; assignments: GeneralAssignmentState[]; dispatching: boolean; marchMessage: string; marchSucceeded: boolean; marchResultVersion: number; npc: NpcStateStore }>()
+const emit = defineEmits<{ retry: []; navigate: [x: number, y: number]; home: []; dispatch: [action: WorldMapMarchAction, targetPlayerId: string, troops: Record<string, number>, generalIds: string[]]; loadNpc: [playerId: string]; refreshNpc: []; dispatchNpc: [action: NpcCommandAction, npcId: string, troops: Record<string, number>, generalIds: string[]] }>()
 const selectedKey = ref('')
 const queryX = ref(0)
 const queryY = ref(0)
@@ -20,7 +24,9 @@ const miniMapOpen = ref(true)
 const commandTarget = ref<WorldMapTarget | null>(null)
 const commandAction = ref<WorldMapMarchAction>('attack')
 const commandStartVersion = ref(0)
-const mapTabs = ['地图', 'NPC据点', '副本', '万象幻境']
+const mapTabs = ['地图', 'NPC', '据点', '副本', '万象幻境'] as const
+const activeMapTab = ref<(typeof mapTabs)[number]>('地图')
+const selectedNpc = ref<NpcCityState | null>(null)
 const grid = computed(() => props.data ? createWorldMapGrid(props.data, zoom.value) : [])
 const targetByKey = computed(() => new Map((props.data?.targets ?? []).map((target) => [`${target.x}:${target.y}`, target])))
 const selectedTarget = computed(() => targetByKey.value.get(selectedKey.value) ?? null)
@@ -49,8 +55,24 @@ watch(() => props.data, (view) => {
   if (!targetByKey.value.has(selectedKey.value)) selectedKey.value = `${view.self.x}:${view.self.y}`
 }, { immediate: true })
 
+/** 进入 NPC 标签或切换存档时读取当前存档的真实 NPC 列表。 */
+watch(() => [activeMapTab.value, props.currentPlayerId] as const, ([tab, playerId]) => {
+  if (tab === 'NPC' && playerId) emit('loadNpc', playerId)
+}, { immediate: true })
+
+/** 刷新后关闭已经不属于新列表的旧 NPC 命令弹窗。 */
+watch(() => props.npc.data, (data) => {
+  if (selectedNpc.value && !data?.cities.some((city) => city.id === selectedNpc.value?.id)) selectedNpc.value = null
+})
+
 /** 选中地图地块并由右侧官方信息框展示目标。 */
 function selectCell(cell: WorldMapCell) { selectedKey.value = cell.key }
+
+/** 切换地图子页并阻止未开放标签产生伪交互。 */
+function selectMapTab(tab: (typeof mapTabs)[number]) {
+  if (tab === '副本' || tab === '万象幻境') return
+  activeMapTab.value = tab
+}
 
 /** 校验坐标后交给状态服务读取新的真实视野。 */
 function searchCoordinate() {
@@ -99,6 +121,12 @@ function miniTargetStyle(target: WorldMapTarget) {
   return { left: `${target.x / Math.max(1, props.overview.width - 1) * 100}%`, top: `${target.y / Math.max(1, props.overview.height - 1) * 100}%` }
 }
 
+/** 为主地图与小地图生成统一的存档归属悬浮文案。 */
+function targetTitle(target: WorldMapTarget) {
+  const ownerLabel = target.relation === 'self' ? '当前存档' : target.sameAccount ? '我的其他存档' : ''
+  return `${target.name}（${target.x}|${target.y}）${ownerLabel ? `·${ownerLabel}` : ''}`
+}
+
 /** 返回目标动作禁用原因，能力值完全以后端响应为准。 */
 function actionTitle(target: WorldMapTarget | null, action: 'attack' | 'plunder' | 'scout' | 'reinforce') {
   if (!target) return '请先选择玩家城池'
@@ -119,6 +147,9 @@ function openCommand(action: WorldMapMarchAction) {
 
 /** 将弹窗输入原样转交统一玩家状态服务。 */
 function dispatchCommand(action: WorldMapMarchAction, targetPlayerId: string, troops: Record<string, number>, generalIds: string[]) { emit('dispatch', action, targetPlayerId, troops, generalIds) }
+
+/** 将 NPC 弹窗输入转交即时结算状态服务。 */
+function dispatchNpcCommand(action: NpcCommandAction, npcId: string, troops: Record<string, number>, generalIds: string[]) { emit('dispatchNpc', action, npcId, troops, generalIds) }
 </script>
 
 <template>
@@ -126,14 +157,16 @@ function dispatchCommand(action: WorldMapMarchAction, targetPlayerId: string, tr
     <div class="panel-top"><i></i><span></span><b></b></div>
     <div class="panel-center map-panel-center">
       <nav class="secondary-navigation" aria-label="地图二级导航">
-        <button v-for="(tab, index) in mapTabs" :key="tab" type="button" :class="{ active: index === 0 }" :disabled="index !== 0">{{ tab }}</button>
+        <button v-for="tab in mapTabs" :key="tab" type="button" :class="{ active: activeMapTab === tab }" :disabled="tab === '副本' || tab === '万象幻境'" @click="selectMapTab(tab)">{{ tab }}</button>
       </nav>
-      <div v-if="phase === 'loading' && !data" class="map-state-message"><span class="loading-mark"></span><strong>正在读取真实世界地图…</strong></div>
-      <div v-else-if="phase === 'error' && !data" class="map-state-message error"><strong>世界地图加载失败</strong><p>{{ error }}</p><button type="button" @click="emit('retry')">重新读取</button></div>
-      <div v-else-if="data" class="official-map-list">
+      <NpcDirectory v-if="activeMapTab === 'NPC' || activeMapTab === '据点'" :mode="activeMapTab === 'NPC' ? 'npc' : 'stronghold'" :targets="data?.targets ?? []" :cities="npc.data?.cities ?? []" :phase="npc.phase" :error="npc.error" :refreshing="npc.refreshing" :action-message="npc.actionMessage" :action-succeeded="npc.actionSucceeded" :last-refreshed-at="npc.data?.lastRefreshedAt ?? ''" :refresh-cost="npc.data?.refreshCost ?? 100" :account-gold="accountGold" @retry="emit('loadNpc', currentPlayerId)" @refresh="emit('refreshNpc')" @select="selectedNpc = $event" />
+      <div v-else-if="activeMapTab === '地图' && phase === 'loading' && !data" class="map-state-message"><span class="loading-mark"></span><strong>正在读取真实世界地图…</strong></div>
+      <div v-else-if="activeMapTab === '地图' && phase === 'error' && !data" class="map-state-message error"><strong>世界地图加载失败</strong><p>{{ error }}</p><button type="button" @click="emit('retry')">重新读取</button></div>
+      <div v-else-if="activeMapTab === '地图' && data" class="official-map-list">
         <div class="official-map-left">
           <ul class="official-map-legend" aria-label="地图关系图例">
             <li><img src="/assets/official/map/map_a4.gif" alt="" />自 己</li>
+            <li class="same-account-legend"><i></i>同号存档</li>
             <li><img src="/assets/official/map/map_a2.gif" alt="" />本 盟</li>
             <li><img src="/assets/official/map/map_a9.gif" alt="" />同 盟</li>
             <li><img src="/assets/official/map/map_a3.gif" alt="" />敌 人</li>
@@ -143,17 +176,18 @@ function dispatchCommand(action: WorldMapMarchAction, targetPlayerId: string, tr
           <div class="official-map-box-left"></div>
           <div class="official-map-viewport" :class="{ refreshing: phase === 'loading' }" :style="mapZoomStyle" aria-label="真实世界地图格" @wheel.prevent="zoomWithWheel">
             <div v-for="(row, rowIndex) in grid" :key="rowIndex" class="official-map-row" :class="rowIndex % 2 === 0 ? 'second' : 'first'" :style="{ top: `${(-54 + rowIndex * 21) * zoom}px` }">
-              <button v-for="cell in row" :key="cell.key" type="button" class="official-map-cell" :class="{ selected: selectedKey === cell.key, target: cell.target, yellow: cell.target?.targetType === 'yellow_turban' }" :title="cell.target ? `${cell.target.name}（${cell.x}|${cell.y}）` : `荒野（${cell.x}|${cell.y}）`" @click="selectCell(cell)">
+              <button v-for="cell in row" :key="cell.key" type="button" class="official-map-cell" :class="{ selected: selectedKey === cell.key, target: cell.target, yellow: cell.target?.targetType === 'yellow_turban', 'same-account': cell.target?.sameAccount && cell.target.relation !== 'self' }" :title="cell.target ? targetTitle(cell.target) : `荒野（${cell.x}|${cell.y}）`" @click="selectCell(cell)">
                 <img :src="cell.image" :alt="cell.target?.name ?? `荒野 ${cell.x}|${cell.y}`" />
                 <i class="official-map-hitbox" aria-hidden="true"></i>
                 <span v-if="cell.target?.targetType === 'yellow_turban'">黄巾</span>
+                <span v-else-if="cell.target?.sameAccount && cell.target.relation !== 'self'">同号</span>
               </button>
             </div>
             <section v-if="miniMapOpen" class="world-mini-map" aria-label="世界小地图">
               <header><b>世界小地图</b><button type="button" title="收起小地图" @click="miniMapOpen = false">×</button></header>
               <button class="world-mini-map-canvas" type="button" title="点击移动主地图" @click="navigateFromMiniMap">
                 <i class="mini-map-viewport" :style="miniViewportStyle"></i>
-                <span v-for="target in miniTargets" :key="target.targetId" class="mini-map-target" :class="[target.relation, { yellow: target.targetType === 'yellow_turban' }]" :style="miniTargetStyle(target)" :title="`${target.name}（${target.x}|${target.y}）`" @click.stop="navigateToMiniTarget(target)"></span>
+                <span v-for="target in miniTargets" :key="target.targetId" class="mini-map-target" :class="[target.relation, { yellow: target.targetType === 'yellow_turban', 'same-account': target.sameAccount && target.relation !== 'self' }]" :style="miniTargetStyle(target)" :title="targetTitle(target)" @click.stop="navigateToMiniTarget(target)"></span>
                 <em v-if="overviewPhase === 'loading'">读取中…</em><em v-else-if="overviewPhase === 'error'" :title="overviewError">加载失败</em>
               </button>
             </section>
@@ -187,7 +221,7 @@ function dispatchCommand(action: WorldMapMarchAction, targetPlayerId: string, tr
               <li :title="selectedTarget?.name">{{ selectedTarget?.name ?? '荒野' }}</li>
               <li>{{ selectedTarget?.targetType === 'yellow_turban' ? '黄巾军' : (selectedTarget?.name ?? '-') }}</li>
               <li>{{ selectedTarget ? `城池等级 ${selectedTarget.level}` : '-' }}</li>
-              <li>{{ selectedTarget?.relation === 'self' ? '自己' : selectedTarget?.relation === 'ally' ? '本盟' : '-' }}</li>
+              <li>{{ selectedTarget?.relation === 'self' ? '当前存档' : selectedTarget?.sameAccount ? '我的其他存档' : selectedTarget?.relation === 'ally' ? '本盟' : '-' }}</li>
             </ul>
             <div class="official-map-city-actions"><button type="button" :disabled="!selectedTarget"><img src="/assets/official/map/map_ck.gif" alt="查看" /></button><button type="button" :disabled="!selectedTarget?.playerId"><img src="/assets/official/map/map_yj.gif" alt="邮件" /></button></div>
           </div>
@@ -206,5 +240,6 @@ function dispatchCommand(action: WorldMapMarchAction, targetPlayerId: string, tr
     <div class="panel-bottom"><i></i><span></span><b></b></div>
     <div class="left-footer">抵制不良游戏　拒绝盗版游戏　注意自我保护　谨防受骗上当　适度游戏益脑　沉迷游戏伤身</div>
     <MarchCommandDialog v-if="commandTarget" :target="commandTarget" :source-name="sourceName" :units="units" :generals="generals" :assignments="assignments" :initial-action="commandAction" :submitting="dispatching" :message="commandMessage" :succeeded="commandSucceeded" :result-version="marchResultVersion" @close="commandTarget = null" @submit="dispatchCommand" />
+    <NpcCommandDialog v-if="selectedNpc" :city="selectedNpc" :source-name="sourceName" :units="units" :generals="generals" :assignments="assignments" :submitting="npc.operating" :message="npc.actionMessage" :succeeded="npc.actionSucceeded" :result-version="npc.resultVersion" @close="selectedNpc = null" @submit="dispatchNpcCommand" />
   </section>
 </template>

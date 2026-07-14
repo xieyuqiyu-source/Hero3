@@ -60,6 +60,8 @@ func TestOpenAPIWorldMapStaticConsistency(t *testing.T) {
 	)
 	assertContainsAll(t, "地图目标 schema", worldMapTargetSchema(mapSchemas),
 		"enum: [self, ally, normal, protected, truce, attackable, unavailable]",
+		"sameAccount:",
+		"目标是否属于当前查看者账号",
 		"canScout:",
 		"canAttack:",
 		"canPlunder:",

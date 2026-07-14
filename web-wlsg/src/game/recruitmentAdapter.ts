@@ -41,6 +41,9 @@ const officialCodeByUnitType: Record<string, number> = {
   shadowGuard: 123, xiuLuo: 124, secretAgent: 125, divineWind: 126, zhuQueRider: 127, overlordRider: 128, chongChe: 129, juShiChe: 130, fengShuiMaster: 131, taiPingShi: 132,
 }
 
+/** 返回兵种在武林三国官方资源中的编号，未知扩展兵种不伪造图标。 */
+export function officialCodeForUnitType(unitType: string): number | null { return officialCodeByUnitType[unitType] ?? null }
+
 const categoryDefinitions: Array<Omit<RecruitmentCategoryViewModel, 'units'>> = [
   { id: 'infantry', label: '步兵营', unitLabel: '步兵', queueLimit: RECRUIT_QUEUE_LIMIT, batchLimit: 100000, description: '这里是城池的步兵中心，可以征募本国特色步兵来扩充军备。最终资源消耗、训练时间和队列结果以 Hero3 后端为准。' },
   { id: 'cavalry', label: '骑兵营', unitLabel: '骑兵', queueLimit: RECRUIT_QUEUE_LIMIT, batchLimit: 100000, description: '这里是城池的骑兵中心，可以征募当前阵营配置中的骑兵和侦察单位。' },

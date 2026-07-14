@@ -43,6 +43,42 @@ func TestNormalizeBattleReportBuildsAttackDetail(t *testing.T) {
 	}
 }
 
+// TestNormalizeBattleReportKeepsTraitOutcomeDetails 验证标准战报保留特性触发归属和详细数据。
+func TestNormalizeBattleReportKeepsTraitOutcomeDetails(t *testing.T) {
+	report := NormalizeBattleReport(BattleReport{
+		ID:               "br_trait_detail",
+		PlayerID:         "player_trait",
+		PlayerFaction:    "shu",
+		TargetID:         "npc_trait",
+		TargetName:       "樊城（NPC）",
+		Type:             "attack",
+		Result:           "attacker_victory",
+		DefenderRevealed: true,
+		TraitTriggered:   []string{"laodang_yizhuang"},
+		TraitOutcomes: map[string]TraitOutcomeReport{
+			"laodang_yizhuang": {
+				TraitID:        "laodang_yizhuang",
+				Name:           "老当益壮",
+				OwnerSide:      "attacker",
+				OwnerGeneralID: "huangzhong",
+				Detail: map[string]interface{}{
+					"effectRate":    0.1,
+					"extraLosses":   map[string]int{"greedyWolf": 193},
+					"triggerChance": 1.0,
+				},
+			},
+		},
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	})
+	if len(report.Detail.Traits) != 1 {
+		t.Fatalf("expected one trait outcome, got %+v", report.Detail.Traits)
+	}
+	trait := report.Detail.Traits[0]
+	if trait.OwnerSide != "attacker" || trait.GeneralID != "huangzhong" || trait.Detail["effectRate"] != 0.1 {
+		t.Fatalf("expected trait owner and detail snapshot, got %+v", trait)
+	}
+}
+
 func TestNormalizeBattleReportIncludesAllFactionUnits(t *testing.T) {
 	previous := GetFactionUnits("test_report")
 	if err := SaveFactionUnits("", "test_report", FactionUnits{

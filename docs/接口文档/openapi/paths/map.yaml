@@ -143,7 +143,7 @@
     tags:
     - Map
     summary: 手动刷新 NPC 城池
-    description: 重新生成该玩家的 NPC 城池列表。金币消耗暂未接入，当前用于开发和 GM 验证。
+    description: 原子扣除 100 账户金币并重新生成该玩家的 NPC 城池列表；余额不足时不扣费、不刷新。
     operationId: refreshNpcCities
     requestBody:
       required: true
@@ -157,9 +157,15 @@
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/NpcState'
+              $ref: '#/components/schemas/NpcCitiesRefreshResponse'
       '404':
         description: 玩家不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '422':
+        description: 账户金币不足
         content:
           application/json:
             schema:

@@ -21,6 +21,7 @@ export interface SessionService {
   initialize: () => Promise<void>
   login: (username: string, password: string) => Promise<void>
   selectPlayer: (playerId: string) => void
+  updateAccountGold: (gold: number) => void
   logout: () => void
   handleUnauthorized: () => void
 }
@@ -105,5 +106,11 @@ export function createSessionService(api: GameApi, storage: SessionStorage, stat
     state.phase = 'game'
   }
 
-  return { state, initialize, login, selectPlayer, logout, handleUnauthorized: logout }
+  /** 使用后端写操作返回的权威余额更新当前账号金币。 */
+  function updateAccountGold(gold: number) {
+    if (!state.account || !Number.isFinite(gold) || gold < 0) return
+    state.account.gold = Math.trunc(gold)
+  }
+
+  return { state, initialize, login, selectPlayer, updateAccountGold, logout, handleUnauthorized: logout }
 }

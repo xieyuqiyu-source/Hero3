@@ -17,7 +17,7 @@ const terrainImages = ['bg1.gif', 'bgA3.gif', 'bgA7.gif', 'bgA8.gif']
 export function targetTileImage(target: WorldMapTarget): string {
   const faction = ['wei', 'shu', 'wu'].includes(target.faction) ? target.faction : 'wei'
   if (target.targetType === 'yellow_turban') return `/assets/official/map/newmap/0/${faction}_4.gif`
-  const relationDirectory = target.relation === 'self' ? '3' : target.relation === 'ally' ? '1' : '0'
+  const relationDirectory = target.relation === 'self' || target.sameAccount ? '3' : target.relation === 'ally' ? '1' : '0'
   return `/assets/official/map/newmap/${relationDirectory}/${faction}_5.gif`
 }
 

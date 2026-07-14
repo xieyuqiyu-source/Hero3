@@ -5,7 +5,7 @@ import type { WorldMapTarget, WorldMapViewResponse } from './types'
 
 /** 创建满足接口契约的地图目标。 */
 function target(overrides: Partial<WorldMapTarget> = {}): WorldMapTarget {
-  return { targetType: 'player_city', targetId: 'p1', playerId: 'p1', name: '许昌', faction: 'wei', relation: 'other', level: 5, status: 'attackable', x: 50, y: 50, distance: 0, direction: 'center', canScout: true, canAttack: true, canPlunder: true, canReinforce: true, ...overrides }
+  return { targetType: 'player_city', targetId: 'p1', playerId: 'p1', name: '许昌', faction: 'wei', relation: 'other', sameAccount: false, level: 5, status: 'attackable', x: 50, y: 50, distance: 0, direction: 'center', canScout: true, canAttack: true, canPlunder: true, canReinforce: true, ...overrides }
 }
 
 /** 创建最小世界地图视野。 */
@@ -29,6 +29,10 @@ describe('世界地图网格适配', () => {
     expect(cells.find((cell) => cell.key === '49:49')?.target).toEqual(yellow)
     expect(targetTileImage(player)).toContain('/3/wei_5.gif')
     expect(targetTileImage(yellow)).toContain('/0/wei_4.gif')
+  })
+
+  it('同账号其他存档使用自己的官方城池资源', () => {
+    expect(targetTileImage(target({ sameAccount: true }))).toContain('/3/wei_5.gif')
   })
 
   it('贴近世界边界时所有格子仍保持合法坐标', () => {

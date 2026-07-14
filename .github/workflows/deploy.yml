@@ -164,11 +164,11 @@ jobs:
           corepack enable
           corepack prepare pnpm@10.24.0 --activate
 
-          cd "$SOURCE_DIR/web"
+          cd "$SOURCE_DIR/web-wlsg"
           pnpm install --frozen-lockfile
           pnpm build
           mkdir -p "$BUILD_DIR/web"
-          rsync -a "$SOURCE_DIR/web/dist/" "$BUILD_DIR/web/"
+          rsync -a "$SOURCE_DIR/web-wlsg/dist/" "$BUILD_DIR/web/"
 
           cd "$SOURCE_DIR/admin"
           pnpm install --frozen-lockfile

@@ -95,6 +95,7 @@ WorldMapTarget:
   - name
   - faction
   - relation
+  - sameAccount
   - level
   - status
   - x
@@ -121,6 +122,9 @@ WorldMapTarget:
     relation:
       type: string
       enum: [self, ally, other]
+    sameAccount:
+      type: boolean
+      description: 目标是否属于当前查看者账号；前端可用于标记当前存档和同账号其他存档。
     level:
       type: integer
     status:
@@ -229,6 +233,7 @@ NpcState:
   required:
   - cities
   - lastRefreshedAt
+  - refreshCost
   properties:
     cities:
       type: array
@@ -238,6 +243,11 @@ NpcState:
       type: string
       format: date-time
       description: 本轮 NPC 城池生成或刷新时间。
+    refreshCost:
+      type: integer
+      minimum: 0
+      description: 当前手动刷新一次需要的账户金币。
+      example: 100
 NpcCity:
   type: object
   required:
@@ -361,6 +371,23 @@ NpcCitiesRefreshRequest:
     playerId:
       type: string
       example: player_47f23e0eeb08ab50402fedfc
+NpcCitiesRefreshResponse:
+  allOf:
+  - $ref: '#/components/schemas/NpcState'
+  - type: object
+    required:
+    - accountGold
+    - cost
+    properties:
+      accountGold:
+        type: integer
+        minimum: 0
+        description: 刷新完成后的账户金币余额。
+        example: 900
+      cost:
+        type: integer
+        description: 本次刷新实际扣除的账户金币。
+        example: 100
 AttackNpcRequest:
   type: object
   required:

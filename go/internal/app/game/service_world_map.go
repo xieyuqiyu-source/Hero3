@@ -221,9 +221,10 @@ func (s *Service) buildWorldMapTargets(viewerID string, self WorldPosition, citi
 	for _, city := range cities {
 		position := city.Position
 		relation := WorldRelationOther
+		sameAccount := requestAccountID != "" && city.AccountID == requestAccountID
 		status := WorldTargetStatusNormal
 		canScout := true
-		canAttack := city.AccountID != requestAccountID
+		canAttack := !sameAccount
 		canPlunder := canAttack
 		canReinforce := true
 		scoutReason := ""
@@ -241,7 +242,7 @@ func (s *Service) buildWorldMapTargets(viewerID string, self WorldPosition, citi
 			attackReason = "自己的城池"
 			plunderReason = "自己的城池"
 			reinforceReason = "自己的城池"
-		} else if city.AccountID == requestAccountID {
+		} else if sameAccount {
 			canScout = false
 			canAttack = false
 			canPlunder = false
@@ -289,6 +290,7 @@ func (s *Service) buildWorldMapTargets(viewerID string, self WorldPosition, citi
 			Name:            city.Name,
 			Faction:         city.Faction,
 			Relation:        relation,
+			SameAccount:     sameAccount,
 			Level:           city.BuildingLevel,
 			Status:          status,
 			X:               position.X,

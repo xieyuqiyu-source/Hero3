@@ -19,6 +19,7 @@ export interface WorldMapTarget {
   name: string
   faction: string
   relation: WorldMapRelation
+  sameAccount: boolean
   level: number
   status: string
   x: number

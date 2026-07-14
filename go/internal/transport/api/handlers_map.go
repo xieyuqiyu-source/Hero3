@@ -45,6 +45,8 @@ func (h *Handlers) RefreshNpcCities(w http.ResponseWriter, r *http.Request) {
 		status := http.StatusBadRequest
 		if errors.Is(err, game.ErrPlayerNotFound) {
 			status = http.StatusNotFound
+		} else if errors.Is(err, game.ErrInsufficientGold) {
+			status = http.StatusUnprocessableEntity
 		}
 		writeError(w, status, err.Error())
 		return

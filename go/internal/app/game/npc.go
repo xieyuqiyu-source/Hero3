@@ -42,6 +42,7 @@ type NpcTrait struct {
 type NpcState struct {
 	Cities          []NpcCity `json:"cities"`
 	LastRefreshedAt string    `json:"lastRefreshedAt"`
+	RefreshCost     int       `json:"refreshCost"`
 }
 
 // --- NPC 配置 ---
@@ -309,7 +310,7 @@ func defaultNpcConfig() NpcConfig {
 		BaseProduction:       24500,
 		BaseStorage:          320000,
 		RefreshIntervalHours: 24,
-		ManualRefreshCost:    50,
+		ManualRefreshCost:    100,
 		GoldenAppearRate:     0.2,
 		TotalCities:          12,
 		Tiers: map[string]NpcTierConfig{
