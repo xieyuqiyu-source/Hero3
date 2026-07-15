@@ -9,6 +9,24 @@ import (
 	"time"
 )
 
+// TestValidateReinforcementSourceGeneralRejectsSecondGeneral 验证同玩家多批增援不能携带第二名武将。
+func TestValidateReinforcementSourceGeneralRejectsSecondGeneral(t *testing.T) {
+	records := []Reinforcement{{
+		ID:            "rein_existing_general",
+		FromPlayerID:  "player_same_source",
+		OwnerPlayerID: "player_same_source",
+		SourceType:    GarrisonSourceReinforcement,
+		Status:        ReinforcementStatusStationed,
+		Generals:      []ReinforcementGeneralSnapshot{{ID: "caocao", Name: "曹操"}},
+	}}
+	if err := validateReinforcementSourceGeneral("player_same_source", []string{"zhangliao"}, records); !errors.Is(err, ErrGeneralBusy) {
+		t.Fatalf("expected second reinforcement general rejected, got %v", err)
+	}
+	if err := validateReinforcementSourceGeneral("player_same_source", nil, records); err != nil {
+		t.Fatalf("expected general-free follow-up reinforcement allowed, got %v", err)
+	}
+}
+
 func TestSendReinforcementConsumesArmyAndReservesGeneral(t *testing.T) {
 	svc, repo, from, to := newReinforcementTestService(t)
 	from.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}

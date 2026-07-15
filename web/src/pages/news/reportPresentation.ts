@@ -1,5 +1,5 @@
 // 本文件归口军情战报页面的展示标签、颜色和纯展示判断。
-import type { BattleReport, BattleReportDetailData } from '@/types/game'
+import type { BattleReport, BattleReportDetailData, BattleReportTrait } from '@/types/game'
 
 export const REPORT_VIEW_TABS = [
   { key: 'all', label: '全部' },
@@ -95,4 +95,24 @@ export function hasTraitEntries(detail: Pick<BattleReportDetailData, 'traits'>):
 export function buildReportShareURL(origin: string, report: Pick<BattleReport, 'id' | 'share' | 'detail'>, token?: string): string {
   const shareToken = token || report.share?.token || report.detail?.share?.token
   return shareToken ? `${origin}/report/${shareToken}` : ''
+}
+
+// isReportShareToken 判断路由参数是否为公开分享 token，而不是内部战报 ID。
+export function isReportShareToken(value: string): boolean {
+  return /^br_[0-9a-f]{48}$/i.test(value.trim())
+}
+
+// resolveReportTraitDisplaySide 兼容旧黄巾防守战报把无归属守方特性误写成 primary。
+export function resolveReportTraitDisplaySide(
+  detail: Pick<BattleReportDetailData, 'sourceType' | 'viewType'>,
+  trait: Pick<BattleReportTrait, 'ownerSide' | 'ownerRole' | 'generalId'>,
+): string | undefined {
+  if (detail.sourceType === 'yellow_turban'
+    && detail.viewType === 'defense'
+    && trait.ownerSide === 'primary'
+    && !trait.ownerRole
+    && !trait.generalId) {
+    return 'secondary'
+  }
+  return trait.ownerSide
 }

@@ -66,6 +66,66 @@ func TestPvpReinforcementReportIncludesZeroLossParticipant(t *testing.T) {
 	if len(reports) != 1 || reports[0].GeneralExpGained != 12 {
 		t.Fatalf("expected zero-loss reinforcement report with exp, got %+v", reports)
 	}
+	if len(reports[0].PvpReinforcements) != 1 || reports[0].PvpReinforcements[0].GeneralExpGained != 12 {
+		t.Fatalf("expected reinforcement snapshot exp, got %+v", reports[0].PvpReinforcements)
+	}
+}
+
+// TestPvpReinforcementLossesPreserveBattleStartSnapshot 验证损耗结算不会污染主战报使用的战前兵力。
+func TestPvpReinforcementLossesPreserveBattleStartSnapshot(t *testing.T) {
+	now := time.Date(2026, 7, 10, 14, 0, 0, 0, time.UTC)
+	record := Reinforcement{
+		ID:                "rein_snapshot",
+		FromPlayerID:      "player_snapshot",
+		FromPlayerName:    "快照援军",
+		FromPlayerFaction: "wei",
+		Status:            ReinforcementStatusStationed,
+		RemainingTroops:   map[string]int{"weiInfantry": 100},
+		Losses:            map[string]int{"weiInfantry": 5},
+		Generals:          []ReinforcementGeneralSnapshot{{ID: "caocao", Name: "曹操"}},
+		Rules:             GarrisonRules{CanFight: true},
+	}
+
+	changed := applyPvpReinforcementLosses([]Reinforcement{record}, map[string]map[string]int{
+		record.ID: {"weiInfantry": 30},
+	}, now)
+	if len(changed) != 1 || changed[0].RemainingTroops["weiInfantry"] != 70 || changed[0].Losses["weiInfantry"] != 35 {
+		t.Fatalf("expected changed reinforcement to contain losses, got %+v", changed)
+	}
+	if record.RemainingTroops["weiInfantry"] != 100 || record.Losses["weiInfantry"] != 5 {
+		t.Fatalf("expected battle-start record to remain unchanged, got %+v", record)
+	}
+
+	snapshot := buildPvpReinforcementSnapshot([]Reinforcement{record}, map[string]int{record.ID: 12})
+	if len(snapshot) != 1 || snapshot[0].Troops["weiInfantry"] != 100 || snapshot[0].GeneralExpGained != 12 {
+		t.Fatalf("expected battle-start troops and general exp in snapshot, got %+v", snapshot)
+	}
+}
+
+// TestPvpReinforcementSnapshotExcludesNonParticipants 验证主战报只保存实际可参战驻防。
+func TestPvpReinforcementSnapshotExcludesNonParticipants(t *testing.T) {
+	base := Reinforcement{
+		ID:                "rein_active",
+		FromPlayerID:      "player_active",
+		FromPlayerFaction: "wei",
+		Status:            ReinforcementStatusStationed,
+		RemainingTroops:   map[string]int{"weiInfantry": 100},
+		Rules:             GarrisonRules{CanFight: true},
+	}
+	marching := base
+	marching.ID = "rein_marching"
+	marching.Status = ReinforcementStatusMarching
+	disabled := base
+	disabled.ID = "rein_disabled"
+	disabled.Rules = GarrisonRules{CanFight: false, CanRecall: true}
+	empty := base
+	empty.ID = "rein_empty"
+	empty.RemainingTroops = map[string]int{}
+
+	snapshot := buildPvpReinforcementSnapshot([]Reinforcement{base, marching, disabled, empty}, map[string]int{base.ID: 12})
+	if len(snapshot) != 1 || snapshot[0].ReinforcementID != base.ID || snapshot[0].GeneralExpGained != 12 {
+		t.Fatalf("expected only active reinforcement in report snapshot, got %+v", snapshot)
+	}
 }
 
 // TestPvpBattleProjectionCannotBypassReportVisibility 验证 PVP 战斗接口不能绕过战报可见性读取防守快照。
@@ -85,9 +145,9 @@ func TestPvpBattleProjectionCannotBypassReportVisibility(t *testing.T) {
 	battle := service.projectPvpBattleForPlayer(PvpBattle{
 		AttackerPlayerID: "player_pvp_hidden", AttackerReportID: report.ID,
 		DefenderSnapshot:      map[string]any{"troops": map[string]int{"shuInfantry": 100}},
-		ReinforcementSnapshot: []DefenseReinforcementUnit{{ReinforcementID: "rein_hidden", Troops: map[string]int{"shuInfantry": 20}, Generals: []ReinforcementGeneralSnapshot{{ID: "guanyu"}}}},
+		ReinforcementSnapshot: []DefenseReinforcementUnit{{ReinforcementID: "rein_hidden", Troops: map[string]int{"shuInfantry": 20}, Generals: []ReinforcementGeneralSnapshot{{ID: "guanyu"}}, GeneralExpGained: 88}},
 	}, report.PlayerID)
-	if battle.DefenderSnapshot != nil || len(battle.ReinforcementSnapshot[0].Troops) != 0 || len(battle.ReinforcementSnapshot[0].Generals) != 0 {
+	if battle.DefenderSnapshot != nil || len(battle.ReinforcementSnapshot[0].Troops) != 0 || len(battle.ReinforcementSnapshot[0].Generals) != 0 || battle.ReinforcementSnapshot[0].GeneralExpGained != 0 {
 		t.Fatalf("expected PVP enemy snapshots redacted, got %+v", battle)
 	}
 }

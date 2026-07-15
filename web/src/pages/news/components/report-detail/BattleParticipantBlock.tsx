@@ -15,6 +15,7 @@ interface BattleParticipantBlockProps {
   effectText?: string
   effectTone?: 'normal' | 'highlight'
   result?: 'victory' | 'defeat' | 'draw' | 'none'
+  generalExp?: number
   settlement?: 'attacker' | 'defender' | 'none'
   buildingDamage?: string
   showUnits?: boolean
@@ -107,6 +108,7 @@ const BattleParticipantBlock: FC<BattleParticipantBlockProps> = ({
   effectText,
   effectTone = 'normal',
   result = 'none',
+  generalExp = 0,
   settlement = 'none',
   buildingDamage = '无',
   showUnits = true,
@@ -140,6 +142,9 @@ const BattleParticipantBlock: FC<BattleParticipantBlockProps> = ({
             <div className="min-w-0">
               <span className="text-[var(--color-text-muted)]">将领名称：</span>
               <span className="font-bold text-[var(--color-text-primary)]">{showGenerals ? formatGenerals(side) : '情报未揭示'}</span>
+              {showGenerals && generalExp > 0 && (
+                <span className="ml-3 whitespace-nowrap font-bold text-emerald-500">武将经验 +{generalExp.toLocaleString()}</span>
+              )}
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-[var(--color-text-secondary)]">
               {officialTitle && <span>官职：<b className="text-[var(--color-text-primary)]">{officialTitle}</b></span>}

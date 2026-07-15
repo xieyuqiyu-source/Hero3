@@ -50,6 +50,9 @@ func (s *Service) SendReinforcement(req SendReinforcementRequest) (Reinforcement
 		}
 		EnsureGeneralRoster(from, now)
 		reinforcementID := "reinforcement_" + randomID(12)
+		if err := validateReinforcementSourceGeneral(fromPlayerID, req.GeneralIDs, targetRecords); err != nil {
+			return Reinforcement{}, err
+		}
 		generals, err := reserveReinforcementGenerals(from, req.GeneralIDs, reinforcementID, now)
 		if err != nil {
 			return Reinforcement{}, err
@@ -614,6 +617,30 @@ func ensureReinforcementSourceSlot(fromPlayerID string, records []Reinforcement)
 	}
 	if len(sources) >= defaultReinforcementMaxSources {
 		return ErrReinforcementSlotFull
+	}
+	return nil
+}
+
+// validateReinforcementSourceGeneral 保证同一玩家在同一驻防目标的多批增援最多携带一名武将。
+func validateReinforcementSourceGeneral(fromPlayerID string, generalIDs []string, records []Reinforcement) error {
+	hasRequestedGeneral := false
+	for _, generalID := range generalIDs {
+		if strings.TrimSpace(generalID) != "" {
+			hasRequestedGeneral = true
+			break
+		}
+	}
+	if !hasRequestedGeneral {
+		return nil
+	}
+	for _, record := range records {
+		normalizeGarrisonRecord(&record)
+		if record.SourceType != GarrisonSourceReinforcement || record.OwnerPlayerID != fromPlayerID || !reinforcementOccupiesSlot(record.Status) {
+			continue
+		}
+		if len(record.Generals) > 0 {
+			return ErrGeneralBusy
+		}
 	}
 	return nil
 }

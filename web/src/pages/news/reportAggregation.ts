@@ -12,6 +12,7 @@ export interface AggregatedReinforcementSnapshot {
   troops: Record<string, number>
   losses: Record<string, number>
   generals: ReinforcementGeneralSnapshot[]
+  generalExpGained: number
 }
 
 // reinforcementGroupIdentity 优先按玩家归并，没有玩家身份时按来源城市或来源实体归并。
@@ -57,6 +58,7 @@ export function aggregateReinforcementSnapshots(
         troops: {},
         losses: {},
         generals: item.generals?.[0] ? [item.generals[0]] : [],
+        generalExpGained: 0,
       })
     }
 
@@ -65,6 +67,12 @@ export function aggregateReinforcementSnapshots(
     if (!group.playerName && item.fromPlayerName) group.playerName = item.fromPlayerName
     if (!group.faction && item.faction) group.faction = item.faction
     if (group.generals.length === 0 && item.generals?.[0]) group.generals = [item.generals[0]]
+    const generalExpGained = item.generalExpGained ?? 0
+    const displayedGeneralId = group.generals[0]?.id
+    const itemGeneralId = item.generals?.[0]?.id
+    if (displayedGeneralId && itemGeneralId === displayedGeneralId && Number.isFinite(generalExpGained) && generalExpGained > 0) {
+      group.generalExpGained += generalExpGained
+    }
     mergeAmounts(group.troops, item.troops)
     mergeAmounts(group.losses, lossesByReinforcement[item.reinforcementId])
   })

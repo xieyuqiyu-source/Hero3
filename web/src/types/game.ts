@@ -873,6 +873,7 @@ export interface DefenseReinforcementUnit {
   faction: string
   troops: Record<string, number>
   generals?: ReinforcementGeneralSnapshot[]
+  generalExpGained?: number
   buffs?: ModifierBreakdownItem[]
   sourceTags?: Record<string, string>
 }

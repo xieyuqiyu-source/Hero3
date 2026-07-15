@@ -5,6 +5,7 @@ import { gameApi } from '@/api/game'
 import { useConfigStore } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
 import BattleReportDetail from '@/pages/news/components/BattleReportDetail'
+import { isReportShareToken } from '@/pages/news/reportPresentation'
 import type { BattleReport } from '@/types/game'
 
 const ReportSharePage: FC = () => {
@@ -24,9 +25,13 @@ const ReportSharePage: FC = () => {
   useEffect(() => {
     if (!reportId) return
     setLoading(true)
-    const loadReport = activePlayerId
-      ? gameApi.getReport(reportId, activePlayerId).catch(() => gameApi.getSharedReport(reportId))
-      : gameApi.getSharedReport(reportId)
+    setError('')
+    setReport(null)
+    const loadReport = isReportShareToken(reportId)
+      ? gameApi.getSharedReport(reportId)
+      : activePlayerId
+        ? gameApi.getReport(reportId, activePlayerId)
+        : gameApi.getSharedReport(reportId)
     loadReport
       .then(setReport)
       .catch(() => setError('战报不存在或已过期'))

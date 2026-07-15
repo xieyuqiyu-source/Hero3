@@ -74,7 +74,7 @@ func TestNormalizeBattleReportKeepsTraitOutcomeDetails(t *testing.T) {
 		t.Fatalf("expected one trait outcome, got %+v", report.Detail.Traits)
 	}
 	trait := report.Detail.Traits[0]
-	if trait.OwnerSide != "attacker" || trait.GeneralID != "huangzhong" || trait.Detail["effectRate"] != 0.1 {
+	if trait.OwnerSide != "primary" || trait.OwnerRole != "attacker" || trait.GeneralID != "huangzhong" || trait.Detail["effectRate"] != 0.1 {
 		t.Fatalf("expected trait owner and detail snapshot, got %+v", trait)
 	}
 }
@@ -498,10 +498,22 @@ func TestGetReportForPlayerRedactsHiddenEnemyTroops(t *testing.T) {
 		DefenderLostUnits:   map[string]int{"shuInfantry": 10},
 		DefenderResources:   map[string]int{"wood": 999},
 		PvpDefenderGenerals: []PvpGeneralSnapshot{{ID: "liubei", Name: "刘备"}},
-		PvpReinforcements:   []DefenseReinforcementUnit{{ReinforcementID: "rein_hidden", Troops: map[string]int{"shuInfantry": 50}, Generals: []ReinforcementGeneralSnapshot{{ID: "guanyu", Name: "关羽"}}}},
-		PvpWall:             &PvpWallSnapshot{Faction: "shu", Level: 10},
-		DefenderRevealed:    false,
-		CreatedAt:           time.Now().UTC().Format(time.RFC3339),
+		PvpReinforcements: []DefenseReinforcementUnit{{
+			ReinforcementID:  "rein_hidden",
+			Troops:           map[string]int{"shuInfantry": 50},
+			Generals:         []ReinforcementGeneralSnapshot{{ID: "guanyu", Name: "关羽"}},
+			GeneralExpGained: 88,
+			Buffs:            []ModifierBreakdownItem{{Source: "关羽", Key: StatAttackBonus, Value: 0.2, Mode: "percentAdd"}},
+		}},
+		PvpAttackerGenerals: []PvpGeneralSnapshot{{ID: "caocao", Name: "曹操"}},
+		TraitTriggered:      []string{"attacker_trait", "defender_trait"},
+		TraitOutcomes: map[string]TraitOutcomeReport{
+			"attacker_trait": {TraitID: "attacker_trait", Name: "攻击特性", OwnerSide: "attacker", OwnerGeneralID: "caocao"},
+			"defender_trait": {TraitID: "defender_trait", Name: "防守特性", OwnerSide: "defender", OwnerGeneralID: "liubei"},
+		},
+		PvpWall:          &PvpWallSnapshot{Faction: "shu", Level: 10},
+		DefenderRevealed: false,
+		CreatedAt:        time.Now().UTC().Format(time.RFC3339),
 	})
 	report.Detail.Visibility.ShowEnemyResources = false
 	report.Detail.Visibility.ShowEnemyGenerals = false
@@ -520,16 +532,74 @@ func TestGetReportForPlayerRedactsHiddenEnemyTroops(t *testing.T) {
 	if visible.Detail == nil || visible.Detail.SecondarySide == nil || len(visible.Detail.SecondarySide.Units) != 0 {
 		t.Fatalf("expected standard enemy troop matrix redacted, got %+v", visible.Detail)
 	}
-	if len(visible.DefenderResources) != 0 || len(visible.PvpDefenderGenerals) != 0 || len(visible.PvpReinforcements[0].Troops) != 0 || len(visible.PvpReinforcements[0].Generals) != 0 || visible.PvpWall != nil {
+	if len(visible.Detail.Traits) != 1 || visible.Detail.Traits[0].TraitID != "attacker_trait" {
+		t.Fatalf("expected enemy traits redacted with enemy generals, got %+v", visible.Detail.Traits)
+	}
+	if len(visible.TraitTriggered) != 1 || visible.TraitTriggered[0] != "attacker_trait" || len(visible.TraitOutcomes) != 1 {
+		t.Fatalf("expected legacy enemy trait payload redacted, got triggered=%+v outcomes=%+v", visible.TraitTriggered, visible.TraitOutcomes)
+	}
+	legacyOnly := report
+	legacyDetail := *report.Detail
+	legacyDetail.Traits = nil
+	legacyOnly.Detail = &legacyDetail
+	legacyVisible := projectBattleReportForViewer(legacyOnly)
+	if len(legacyVisible.TraitTriggered) != 1 || legacyVisible.TraitTriggered[0] != "attacker_trait" || len(legacyVisible.TraitOutcomes) != 1 {
+		t.Fatalf("expected legacy-only enemy traits redacted, got triggered=%+v outcomes=%+v", legacyVisible.TraitTriggered, legacyVisible.TraitOutcomes)
+	}
+	if len(visible.DefenderResources) != 0 || len(visible.PvpDefenderGenerals) != 0 || len(visible.PvpReinforcements[0].Troops) != 0 || len(visible.PvpReinforcements[0].Generals) != 0 || visible.PvpReinforcements[0].GeneralExpGained != 0 || len(visible.PvpReinforcements[0].Buffs) != 0 || visible.PvpWall != nil {
 		t.Fatalf("expected enemy resources, generals and reinforcement troops redacted, got %+v", visible)
 	}
 	if pvp, ok := visible.Detail.Extra["pvp"].(map[string]interface{}); ok {
 		if _, exists := pvp["wall"]; exists {
 			t.Fatalf("expected enemy wall snapshot redacted, got %+v", pvp)
 		}
+		if reinforcements, ok := pvp["reinforcements"].([]interface{}); ok && len(reinforcements) > 0 {
+			if snapshot, ok := reinforcements[0].(map[string]interface{}); ok {
+				if _, expExists := snapshot["generalExpGained"]; expExists {
+					t.Fatalf("expected enemy reinforcement general exp redacted, got %+v", snapshot)
+				}
+				if _, buffsExist := snapshot["buffs"]; buffsExist {
+					t.Fatalf("expected enemy reinforcement buffs redacted, got %+v", snapshot)
+				}
+			}
+		}
 	}
 	raw, err := repo.GetReportForPlayer(report.PlayerID, report.ID)
-	if err != nil || len(raw.DefenderUnits) == 0 || len(raw.PvpReinforcements[0].Troops) == 0 {
+	if err != nil || len(raw.DefenderUnits) == 0 || len(raw.PvpReinforcements[0].Troops) == 0 || raw.PvpReinforcements[0].GeneralExpGained != 88 || len(raw.PvpReinforcements[0].Buffs) != 1 {
 		t.Fatalf("expected repository raw snapshot unchanged, got report=%+v err=%v", raw, err)
+	}
+}
+
+// TestDefenseReportTraitsBelongToDefender 验证防守视角不会把守方武将特性显示到攻击方。
+func TestDefenseReportTraitsBelongToDefender(t *testing.T) {
+	report := BattleReport{
+		ID:                  "br_trait_defender",
+		PlayerID:            "player_trait_defender",
+		OwnerPlayerID:       "player_trait_defender",
+		ViewType:            ReportViewDefense,
+		OwnerSide:           ReportOwnerSideDefender,
+		SourceType:          ReportSourceYellowTurban,
+		BattleType:          BattleTypeYellowTurban,
+		Type:                "defense",
+		Result:              "defender_victory",
+		PlayerName:          "守城玩家",
+		PlayerFaction:       "shu",
+		TargetID:            "yellow_turban",
+		TargetName:          "黄巾军",
+		DefenderFaction:     "wei",
+		PvpDefenderGenerals: []PvpGeneralSnapshot{{ID: "zhugeliang", Name: "诸葛亮", Level: 61}},
+		TraitTriggered:      []string{"qimen"},
+		TraitOutcomes: map[string]TraitOutcomeReport{
+			"qimen": {TraitID: "qimen", Name: "奇门遁甲", OwnerGeneralID: "zhugeliang"},
+		},
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	detail := BuildBattleReportDetail(report)
+	if len(detail.Traits) != 1 {
+		t.Fatalf("expected one defender trait, got %+v", detail.Traits)
+	}
+	trait := detail.Traits[0]
+	if trait.OwnerSide != "secondary" || trait.OwnerRole != "defender" || trait.GeneralID != "zhugeliang" || trait.GeneralName != "诸葛亮" || trait.Summary != "" {
+		t.Fatalf("expected defender trait attribution without duplicated summary, got %+v", trait)
 	}
 }

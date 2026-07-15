@@ -547,17 +547,98 @@ func convertReportTraits(report BattleReport) []BattleReportTrait {
 	traits := make([]BattleReportTrait, 0, len(report.TraitTriggered))
 	for _, traitID := range report.TraitTriggered {
 		outcome := report.TraitOutcomes[traitID]
+		ownerSide := reportTraitDisplaySide(report, outcome)
 		traits = append(traits, BattleReportTrait{
-			TraitID:   traitID,
-			TraitName: outcome.Name,
-			OwnerSide: valueOrDefault(outcome.OwnerSide, "primary"),
-			OwnerRole: outcome.OwnerSide,
-			GeneralID: outcome.OwnerGeneralID,
-			Summary:   outcome.Name,
-			Detail:    outcome.Detail,
+			TraitID:     traitID,
+			TraitName:   outcome.Name,
+			OwnerSide:   ownerSide,
+			OwnerRole:   reportTraitOwnerRole(report, outcome, ownerSide),
+			GeneralID:   outcome.OwnerGeneralID,
+			GeneralName: reportTraitGeneralName(report, outcome.OwnerGeneralID),
+			Detail:      outcome.Detail,
 		})
 	}
 	return traits
+}
+
+// reportTraitDisplaySide 把战斗绝对阵营映射到标准详情的参战方位置。
+func reportTraitDisplaySide(report BattleReport, outcome TraitOutcomeReport) string {
+	switch strings.ToLower(strings.TrimSpace(outcome.OwnerSide)) {
+	case "attacker", "primary":
+		return "primary"
+	case "defender", "secondary":
+		return "secondary"
+	case "reinforcement":
+		if report.ViewType == ReportViewReinforcement {
+			return "primary"
+		}
+		return "reinforcement"
+	}
+	if generalID := strings.TrimSpace(outcome.OwnerGeneralID); generalID != "" {
+		for _, general := range report.PvpAttackerGenerals {
+			if general.ID == generalID {
+				return "primary"
+			}
+		}
+		for _, general := range report.PvpDefenderGenerals {
+			if general.ID == generalID {
+				return "secondary"
+			}
+		}
+		for _, reinforcement := range report.PvpReinforcements {
+			for _, general := range reinforcement.Generals {
+				if general.ID == generalID {
+					if report.ViewType == ReportViewReinforcement {
+						return "primary"
+					}
+					return "reinforcement"
+				}
+			}
+		}
+	}
+	switch valueOrDefault(report.OwnerSide, inferReportOwnerSide(report)) {
+	case ReportOwnerSideDefender:
+		return "secondary"
+	case ReportOwnerSideReinforcement:
+		return "primary"
+	default:
+		return "primary"
+	}
+}
+
+// reportTraitOwnerRole 返回前端参战方使用的绝对角色。
+func reportTraitOwnerRole(report BattleReport, outcome TraitOutcomeReport, displaySide string) string {
+	if role := strings.ToLower(strings.TrimSpace(outcome.OwnerSide)); role == "attacker" || role == "defender" || role == "reinforcement" {
+		return role
+	}
+	if displaySide == "secondary" {
+		return "defender"
+	}
+	if displaySide == "reinforcement" || report.ViewType == ReportViewReinforcement {
+		return "reinforcement"
+	}
+	return "attacker"
+}
+
+// reportTraitGeneralName 从参战快照读取触发特性的武将名称。
+func reportTraitGeneralName(report BattleReport, generalID string) string {
+	generalID = strings.TrimSpace(generalID)
+	if generalID == "" {
+		return ""
+	}
+	for _, general := range append(append([]PvpGeneralSnapshot(nil), report.PvpAttackerGenerals...), report.PvpDefenderGenerals...) {
+		if general.ID == generalID {
+			return general.Name
+		}
+	}
+	for _, reinforcement := range report.PvpReinforcements {
+		for _, general := range reinforcement.Generals {
+			if general.ID == generalID {
+				return general.Name
+			}
+		}
+	}
+	return ""
 }
 
 // convertPvpGenerals 将 PVP 武将快照转为标准战报武将。

@@ -354,6 +354,62 @@ BattleReportExtra:
       $ref: '#/components/schemas/BattleReportYellowTurbanExtra'
     dungeon:
       $ref: '#/components/schemas/BattleReportDungeonExtra'
+    pvp:
+      $ref: '#/components/schemas/BattleReportPvpExtra'
+BattleReportPvpExtra:
+  type: object
+  description: PVP、黄巾防守和协防共用的参战快照；兵力固定表示战斗开始时的出动数量。
+  properties:
+    reinforcements:
+      type: array
+      items:
+        $ref: '#/components/schemas/BattleReportReinforcementSnapshot'
+    reinforcementLosses:
+      type: object
+      additionalProperties:
+        type: object
+        additionalProperties:
+          type: integer
+    pointsDelta:
+      type: object
+      additionalProperties:
+        type: integer
+    wall:
+      type: object
+      additionalProperties: true
+BattleReportReinforcementSnapshot:
+  type: object
+  properties:
+    reinforcementId:
+      type: string
+    fromPlayerId:
+      type: string
+    fromPlayerName:
+      type: string
+    faction:
+      type: string
+    troops:
+      type: object
+      description: 本场战斗开始时实际出动的增援兵力。
+      additionalProperties:
+        type: integer
+    generals:
+      type: array
+      items:
+        type: object
+        additionalProperties: true
+    generalExpGained:
+      type: integer
+      description: 该批增援携带武将在本场实际获得的经验。
+    buffs:
+      type: array
+      items:
+        type: object
+        additionalProperties: true
+    sourceTags:
+      type: object
+      additionalProperties:
+        type: string
 BattleReportSweepExtra:
   type: object
   properties:

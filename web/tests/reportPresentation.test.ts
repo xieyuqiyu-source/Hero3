@@ -8,9 +8,11 @@ import {
   REPORT_VIEW_CONFIG,
   REPORT_VIEW_TABS,
   buildReportShareURL,
+  isReportShareToken,
   hasStandardUnitRows,
   hasTraitEntries,
   reportTotalPages,
+  resolveReportTraitDisplaySide,
   shouldRenderSecondarySide,
   shouldShowEmptyReports,
 } from '../src/pages/news/reportPresentation.ts'
@@ -62,6 +64,29 @@ test('分享链接优先使用 token，不直接暴露内部战报 ID', () => {
     'http://localhost:5173/report/token_detail',
   )
   assert.equal(buildReportShareURL('http://localhost:5173', { id: 'report_internal' }), '')
+  assert.equal(isReportShareToken('br_3f71a0e00843324f1977875f902085673c57c113f2f3eb83'), true)
+  assert.equal(isReportShareToken('br_pvp_atk_internal'), false)
+  const sharePageSource = readFileSync(new URL('../src/pages/report/ReportSharePage.tsx', import.meta.url), 'utf8')
+  assert.match(sharePageSource, /isReportShareToken\(reportId\)/)
+  assert.doesNotMatch(sharePageSource, /getReport\(reportId, activePlayerId\)\.catch/)
+})
+
+test('旧黄巾防守特性从错误主侧兼容映射到防守方', () => {
+  assert.equal(resolveReportTraitDisplaySide(
+    { sourceType: 'yellow_turban', viewType: 'defense' },
+    { ownerSide: 'primary' },
+  ), 'secondary')
+  assert.equal(resolveReportTraitDisplaySide(
+    { sourceType: 'player_city', viewType: 'attack' },
+    { ownerSide: 'primary' },
+  ), 'primary')
+})
+
+test('军情详情等待完整接口响应后再渲染', () => {
+  const source = readFileSync(new URL('../src/pages/news/NewsPage.tsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(source, /setSelectedReport\(report\)\s*\n\s*if \(!report\.read/)
+  assert.match(source, /setLoadingReportId\(report\.id\)/)
+  assert.match(source, /加载战报详情中/)
 })
 
 test('空列表和分页状态稳定', () => {
@@ -98,6 +123,11 @@ test('标准战报只展示出动和阵亡，不重复顶部胜负和协防贡�
 
 test('战报详情先聚合增援批次，且增援区块不显示结算行', () => {
   const detailSource = readFileSync(new URL('../src/pages/news/components/BattleReportDetail.tsx', import.meta.url), 'utf8')
+  const participantSource = readFileSync(new URL('../src/pages/news/components/report-detail/BattleParticipantBlock.tsx', import.meta.url), 'utf8')
   assert.match(detailSource, /aggregateReinforcementSnapshots/)
+  assert.match(detailSource, /generalExp=\{side\.generalExpGained\}/)
   assert.match(detailSource, /settlement="none"/)
+  assert.match(participantSource, /武将经验 \+\{generalExp\.toLocaleString\(\)\}/)
+  assert.match(detailSource, /trait\.summary\?\.trim\(\) === name\.trim\(\)/)
+  assert.match(detailSource, /resolveReportTraitDisplaySide/)
 })

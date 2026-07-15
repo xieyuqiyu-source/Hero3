@@ -21,6 +21,7 @@ const NewsPage: FC = () => {
   const [totalReports, setTotalReports] = useState(0)
   const [activeView, setActiveView] = useState('all')
   const [loading, setLoading] = useState(false)
+  const [loadingReportId, setLoadingReportId] = useState('')
   const [clearingReports, setClearingReports] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
@@ -68,7 +69,6 @@ const NewsPage: FC = () => {
 
   // 点击单条战报时标记为已读，并按需读取完整详情。
   const handleSelectReport = (report: BattleReport) => {
-    setSelectedReport(report)
     if (!report.read && activePlayerId) {
       setReports((items) => items.map((item) => item.id === report.id ? { ...item, read: true } : item))
       gameApi.markReportsRead(activePlayerId, report.id).then((res) => {
@@ -76,10 +76,13 @@ const NewsPage: FC = () => {
       }).catch(() => {})
     }
     if (activePlayerId) {
+      setLoadingReportId(report.id)
       gameApi.getReport(report.id, activePlayerId).then((fullReport) => {
         setSelectedReport(fullReport)
-      }).catch(() => {})
+      }).catch(() => {}).finally(() => setLoadingReportId(''))
+      return
     }
+    setSelectedReport(report)
   }
 
   if (selectedReport) {
@@ -157,11 +160,11 @@ const NewsPage: FC = () => {
       </div>
 
       <div className="relative space-y-2">
-        {(loading || clearingReports) && (
+        {(loading || clearingReports || loadingReportId) && (
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-[var(--color-bg)]/55 backdrop-blur-[1px]">
             <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-secondary)] shadow-sm">
               <Loader2 size={14} className="animate-spin text-[var(--color-accent)]" />
-              {clearingReports ? '清空军情中' : '加载军情中'}
+              {clearingReports ? '清空军情中' : loadingReportId ? '加载战报详情中' : '加载军情中'}
             </div>
           </div>
         )}
@@ -191,7 +194,7 @@ const NewsPage: FC = () => {
               key={report.id}
               type="button"
               onClick={() => handleSelectReport(report)}
-              disabled={loading}
+              disabled={loading || Boolean(loadingReportId)}
               className={`
                 w-full text-left px-4 py-3 rounded-2xl border bg-[var(--color-surface)]
                 hover:border-[var(--color-accent-border)] cursor-pointer transition-colors

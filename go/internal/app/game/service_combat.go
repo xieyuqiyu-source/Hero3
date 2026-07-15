@@ -1907,6 +1907,7 @@ func projectBattleReportForViewer(raw BattleReport) BattleReport {
 		if enemy != nil {
 			enemy.Generals = []BattleReportGeneral{}
 		}
+		redactBattleReportEnemyTraits(&report)
 		if report.OwnerSide == ReportOwnerSideDefender {
 			report.PvpAttackerGenerals = nil
 		} else {
@@ -1914,6 +1915,8 @@ func projectBattleReportForViewer(raw BattleReport) BattleReport {
 			report.Detail.Extra = cloneBattleReportExtraForRedaction(report.Detail.Extra)
 			for i := range report.PvpReinforcements {
 				report.PvpReinforcements[i].Generals = nil
+				report.PvpReinforcements[i].GeneralExpGained = 0
+				report.PvpReinforcements[i].Buffs = nil
 			}
 			redactReportExtraReinforcementGenerals(report.Detail.Extra)
 		}
@@ -1924,6 +1927,80 @@ func projectBattleReportForViewer(raw BattleReport) BattleReport {
 		redactReportExtraCityDefense(report.Detail.Extra)
 	}
 	return report
+}
+
+// redactBattleReportEnemyTraits 移除当前视角不可见的敌方特性，避免通过专属特性反推武将身份。
+func redactBattleReportEnemyTraits(report *BattleReport) {
+	if report == nil || report.Detail == nil {
+		return
+	}
+	detail := report.Detail
+	visible := make([]BattleReportTrait, 0, len(detail.Traits))
+	for _, trait := range detail.Traits {
+		role := battleReportTraitRole(*detail, trait)
+		if outcome, ok := report.TraitOutcomes[trait.TraitID]; ok && strings.TrimSpace(trait.OwnerRole) == "" {
+			displaySide := reportTraitDisplaySide(*report, outcome)
+			role = reportTraitOwnerRole(*report, outcome, displaySide)
+		}
+		if battleReportTraitRoleIsEnemy(detail.OwnerSide, role) {
+			continue
+		}
+		visible = append(visible, trait)
+	}
+	detail.Traits = visible
+	triggered := make([]string, 0, len(report.TraitTriggered))
+	for _, traitID := range report.TraitTriggered {
+		outcome := report.TraitOutcomes[traitID]
+		displaySide := reportTraitDisplaySide(*report, outcome)
+		role := reportTraitOwnerRole(*report, outcome, displaySide)
+		if !battleReportTraitRoleIsEnemy(detail.OwnerSide, role) {
+			triggered = append(triggered, traitID)
+		}
+	}
+	report.TraitTriggered = triggered
+	if len(report.TraitOutcomes) > 0 {
+		outcomes := make(map[string]TraitOutcomeReport, len(report.TraitOutcomes))
+		for traitID, outcome := range report.TraitOutcomes {
+			displaySide := reportTraitDisplaySide(*report, outcome)
+			role := reportTraitOwnerRole(*report, outcome, displaySide)
+			if !battleReportTraitRoleIsEnemy(detail.OwnerSide, role) {
+				outcomes[traitID] = outcome
+			}
+		}
+		report.TraitOutcomes = outcomes
+	}
+}
+
+// battleReportTraitRole 根据标准位置和显式角色判断特性归属。
+func battleReportTraitRole(detail BattleReportDetail, trait BattleReportTrait) string {
+	if role := strings.ToLower(strings.TrimSpace(trait.OwnerRole)); role != "" {
+		return role
+	}
+	switch strings.ToLower(strings.TrimSpace(trait.OwnerSide)) {
+	case "secondary", "defender":
+		return "defender"
+	case "reinforcement":
+		return "reinforcement"
+	case "primary", "attacker":
+		if detail.ViewType == ReportViewReinforcement {
+			return "reinforcement"
+		}
+		return "attacker"
+	default:
+		return ""
+	}
+}
+
+// battleReportTraitRoleIsEnemy 判断特性角色是否属于当前玩家的敌方。
+func battleReportTraitRoleIsEnemy(ownerSide string, role string) bool {
+	switch ownerSide {
+	case ReportOwnerSideAttacker, ReportOwnerSideScout:
+		return role == "defender" || role == "reinforcement"
+	case ReportOwnerSideDefender, ReportOwnerSideReinforcement:
+		return role == "attacker"
+	default:
+		return false
+	}
 }
 
 // cloneBattleReport 深拷贝战报，避免响应脱敏修改仓储中的原始快照。
@@ -2006,7 +2083,7 @@ func redactReportExtraReinforcementTroops(extra map[string]interface{}) {
 	}
 }
 
-// redactReportExtraReinforcementGenerals 清除动态援军快照里的敌方武将情报。
+// redactReportExtraReinforcementGenerals 清除动态援军快照里的敌方武将、经验和加成情报。
 func redactReportExtraReinforcementGenerals(extra map[string]interface{}) {
 	pvp, ok := extra["pvp"].(map[string]interface{})
 	if !ok {
@@ -2019,6 +2096,8 @@ func redactReportExtraReinforcementGenerals(extra map[string]interface{}) {
 	for _, item := range items {
 		if snapshot, ok := item.(map[string]interface{}); ok {
 			snapshot["generals"] = []interface{}{}
+			delete(snapshot, "generalExpGained")
+			delete(snapshot, "buffs")
 		}
 	}
 }

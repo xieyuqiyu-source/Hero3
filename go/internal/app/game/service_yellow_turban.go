@@ -248,7 +248,7 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 		}
 		report.EventID = eventID
 		report.PvpDefenderGenerals = buildPvpDefenseGeneralSnapshots(state)
-		report.PvpReinforcements = buildPvpReinforcementSnapshot(reinforcements)
+		report.PvpReinforcements = buildPvpReinforcementSnapshot(reinforcements, reinforcementGeneralExp)
 		report.PvpReinforcementLosses = cloneNestedStringIntMap(totalReinforcementLosses)
 		if len(defenderAfterBattleCtx.Revived) > 0 {
 			report.RevivedUnits = cloneStringIntMap(defenderAfterBattleCtx.Revived)

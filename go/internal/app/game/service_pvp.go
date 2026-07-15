@@ -671,6 +671,7 @@ func (s *Service) projectPvpBattleForPlayer(battle PvpBattle, playerID string) P
 			}
 			if !visibility.ShowEnemyGenerals {
 				battle.ReinforcementSnapshot[i].Generals = nil
+				battle.ReinforcementSnapshot[i].GeneralExpGained = 0
 				battle.ReinforcementSnapshot[i].Buffs = nil
 			}
 		}
@@ -2364,7 +2365,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		reportResult = "draw"
 	}
 	attackerPointsDelta, defenderPointsDelta := pvpPointDeltas(result.Winner)
-	reinforcementSnapshot := buildPvpReinforcementSnapshot(reinforcements)
+	reinforcementSnapshot := buildPvpReinforcementSnapshot(reinforcements, reinforcementGeneralExp)
 	attackerGenerals := buildPvpGeneralSnapshots(attacker, march.AttackGenerals)
 	defenderGenerals := buildPvpDefenseGeneralSnapshots(defender)
 	attackerReport := buildPvpBattleReport(attackerReportID, attacker, defender, march, reportResult, int(result.AttackPower), int(result.DefensePower), dispatchedTroops, attackerLosses, defenderOwnTroops, defenderLosses, plundered, nowText, march.MarchType)
@@ -2478,7 +2479,7 @@ func pvpReinforcementGeneralExpByID(records []Reinforcement, exp int) map[string
 	result := map[string]int{}
 	for _, record := range records {
 		normalizeGarrisonRecord(&record)
-		if record.Status != ReinforcementStatusStationed || totalTroops(record.RemainingTroops) <= 0 || len(record.Generals) == 0 {
+		if record.Status != ReinforcementStatusStationed || !record.Rules.CanFight || totalTroops(record.RemainingTroops) <= 0 || len(record.Generals) == 0 {
 			continue
 		}
 		result[record.ID] = exp
@@ -2807,6 +2808,9 @@ func applyPvpReinforcementLosses(records []Reinforcement, losses map[string]map[
 		if record.Status != ReinforcementStatusStationed || !record.Rules.CanFight || totalTroops(record.RemainingTroops) <= 0 {
 			continue
 		}
+		// record 是结构体副本，但内部 map 仍与战前快照共享；写损耗前必须深拷贝。
+		record.RemainingTroops = cloneStringIntMap(record.RemainingTroops)
+		record.Losses = cloneStringIntMap(record.Losses)
 		unitLosses := losses[record.ID]
 		if record.Losses == nil {
 			record.Losses = map[string]int{}
@@ -2877,7 +2881,7 @@ func buildPvpReinforcementReports(eventID string, attacker *GameState, defender 
 			CreatedAt:         nowText,
 			Title:             "增援" + defender.Player.Nickname + "参战",
 			Summary:           buildReinforcementReportSummary(record, unitLosses),
-			PvpReinforcements: []DefenseReinforcementUnit{reinforcementReportSnapshot(*record, before)},
+			PvpReinforcements: []DefenseReinforcementUnit{reinforcementReportSnapshot(*record, before, expByReinforcement[record.ID])},
 			PvpReinforcementLosses: map[string]map[string]int{
 				record.ID: unitLosses,
 			},
@@ -2908,15 +2912,16 @@ func buildReinforcementReportSummary(record *Reinforcement, losses map[string]in
 }
 
 // reinforcementReportSnapshot 生成增援战报中的本批队伍快照。
-func reinforcementReportSnapshot(record Reinforcement, before map[string]int) DefenseReinforcementUnit {
+func reinforcementReportSnapshot(record Reinforcement, before map[string]int, generalExp int) DefenseReinforcementUnit {
 	return DefenseReinforcementUnit{
-		ReinforcementID: record.ID,
-		FromPlayerID:    record.OwnerPlayerID,
-		FromPlayerName:  record.FromPlayerName,
-		Faction:         record.FromPlayerFaction,
-		Troops:          cloneStringIntMap(before),
-		Generals:        cloneReinforcementGenerals(record.Generals),
-		Buffs:           append([]ModifierBreakdownItem(nil), record.BuffSnapshot...),
+		ReinforcementID:  record.ID,
+		FromPlayerID:     record.OwnerPlayerID,
+		FromPlayerName:   record.FromPlayerName,
+		Faction:          record.FromPlayerFaction,
+		Troops:           cloneStringIntMap(before),
+		Generals:         cloneReinforcementGenerals(record.Generals),
+		GeneralExpGained: generalExp,
+		Buffs:            append([]ModifierBreakdownItem(nil), record.BuffSnapshot...),
 		SourceTags: map[string]string{
 			"source_type":      record.SourceType,
 			"source_player_id": record.OwnerPlayerID,
@@ -3078,19 +3083,24 @@ func invertPvpReportResult(result string) string {
 	}
 }
 
-func buildPvpReinforcementSnapshot(records []Reinforcement) []DefenseReinforcementUnit {
+// buildPvpReinforcementSnapshot 保存战前增援兵力，并附带本次战斗的逐队武将经验。
+func buildPvpReinforcementSnapshot(records []Reinforcement, generalExpByID map[string]int) []DefenseReinforcementUnit {
 	result := []DefenseReinforcementUnit{}
 	for _, record := range records {
 		normalizeGarrisonRecord(&record)
+		if record.Status != ReinforcementStatusStationed || !record.Rules.CanFight || totalTroops(record.RemainingTroops) <= 0 {
+			continue
+		}
 		result = append(result, DefenseReinforcementUnit{
-			ReinforcementID: record.ID,
-			FromPlayerID:    record.FromPlayerID,
-			FromPlayerName:  record.FromPlayerName,
-			Faction:         record.FromPlayerFaction,
-			Troops:          cloneStringIntMap(record.RemainingTroops),
-			Generals:        append([]ReinforcementGeneralSnapshot(nil), record.Generals...),
-			Buffs:           append([]ModifierBreakdownItem(nil), record.BuffSnapshot...),
-			SourceTags:      map[string]string{"source_type": record.SourceType, "source_id": record.SourceID},
+			ReinforcementID:  record.ID,
+			FromPlayerID:     record.FromPlayerID,
+			FromPlayerName:   record.FromPlayerName,
+			Faction:          record.FromPlayerFaction,
+			Troops:           cloneStringIntMap(record.RemainingTroops),
+			Generals:         append([]ReinforcementGeneralSnapshot(nil), record.Generals...),
+			GeneralExpGained: generalExpByID[record.ID],
+			Buffs:            append([]ModifierBreakdownItem(nil), record.BuffSnapshot...),
+			SourceTags:       map[string]string{"source_type": record.SourceType, "source_id": record.SourceID},
 		})
 	}
 	return result

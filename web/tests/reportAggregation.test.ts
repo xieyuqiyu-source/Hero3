@@ -13,6 +13,7 @@ test('同一玩家多次增援合并兵力战损且只保留一个武将', () =>
       faction: 'wei',
       troops: { weiInfantry: 100, weiCavalry: 20 },
       generals: [{ id: 'caocao', name: '曹操', level: 10 }],
+      generalExpGained: 120,
       sourceTags: { source_type: 'reinforcement', source_player_id: 'player_same', source_id: 'rein_a' },
     },
     {
@@ -21,7 +22,8 @@ test('同一玩家多次增援合并兵力战损且只保留一个武将', () =>
       fromPlayerName: '同一玩家',
       faction: 'wei',
       troops: { weiInfantry: 30 },
-      generals: [{ id: 'caocao', name: '曹操', level: 10 }],
+      generals: [{ id: 'zhangliao', name: '张辽', level: 10 }],
+      generalExpGained: 80,
       sourceTags: { source_type: 'reinforcement', source_player_id: 'player_same', source_id: 'rein_b' },
     },
   ], {
@@ -35,6 +37,7 @@ test('同一玩家多次增援合并兵力战损且只保留一个武将', () =>
   assert.deepEqual(groups[0].losses, { weiInfantry: 15 })
   assert.equal(groups[0].generals.length, 1)
   assert.equal(groups[0].generals[0].id, 'caocao')
+  assert.equal(groups[0].generalExpGained, 120)
   assert.deepEqual(groups[0].reinforcementIds, ['rein_a', 'rein_b'])
 })
 

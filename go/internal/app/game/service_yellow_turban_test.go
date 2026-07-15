@@ -289,6 +289,9 @@ func TestYellowTurbanDefenseUsesStationedReinforcements(t *testing.T) {
 	if len(report.PvpReinforcements) != 1 || report.PvpReinforcements[0].ReinforcementID != reinforcement.ID {
 		t.Fatalf("expected yellow turban defense report to include reinforcement, got %+v", report.PvpReinforcements)
 	}
+	if report.PvpReinforcements[0].Troops["shadowGuard"] != 400 {
+		t.Fatalf("expected yellow turban report to preserve dispatched reinforcement troops, got %+v", report.PvpReinforcements[0])
+	}
 	if len(report.PvpReinforcementLosses[reinforcement.ID]) == 0 {
 		t.Fatalf("expected reinforcement losses in yellow turban report, got %+v", report.PvpReinforcementLosses)
 	}
@@ -310,6 +313,9 @@ func TestYellowTurbanDefenseUsesStationedReinforcements(t *testing.T) {
 	}
 	if helperReports[0].GeneralExpGained <= 0 || helperReports[0].Detail == nil || helperReports[0].Detail.Rewards.GeneralExp != helperReports[0].GeneralExpGained {
 		t.Fatalf("expected reinforcement general exp in report detail, got %+v", helperReports[0])
+	}
+	if report.PvpReinforcements[0].GeneralExpGained != helperReports[0].GeneralExpGained {
+		t.Fatalf("expected defense report reinforcement exp %d, got %+v", helperReports[0].GeneralExpGained, report.PvpReinforcements[0])
 	}
 	if len(helperReports[0].Detail.PrimarySide.Generals) != 1 || helperReports[0].Detail.PrimarySide.Generals[0].ID != "sunquan" {
 		t.Fatalf("expected reinforcement report to show helper general, got %+v", helperReports[0].Detail.PrimarySide.Generals)
