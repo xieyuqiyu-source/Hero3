@@ -11,9 +11,14 @@ import type { NpcStateStore } from '../npc/stateService'
 import MarchCommandDialog from './MarchCommandDialog.vue'
 import NpcDirectory from './NpcDirectory.vue'
 import NpcCommandDialog from './NpcCommandDialog.vue'
+import DungeonStage from './DungeonStage.vue'
+import MirageStage from './MirageStage.vue'
+import type { DungeonStateStore } from '../dungeon/stateService'
+import type { MirageStateStore } from '../mirage/stateService'
+import type { MirageGameType } from '../mirage/types'
 
-const props = defineProps<{ phase: WorldMapPhase; data: WorldMapViewResponse | null; error: string; overviewPhase: WorldMapPhase; overview: WorldMapViewResponse | null; overviewError: string; sourceName: string; currentPlayerId: string; accountGold: number; units: RecruitmentUnitViewModel[]; generals: GeneralState[]; assignments: GeneralAssignmentState[]; dispatching: boolean; marchMessage: string; marchSucceeded: boolean; marchResultVersion: number; npc: NpcStateStore }>()
-const emit = defineEmits<{ retry: []; navigate: [x: number, y: number]; home: []; dispatch: [action: WorldMapMarchAction, targetPlayerId: string, troops: Record<string, number>, generalIds: string[]]; loadNpc: [playerId: string]; refreshNpc: []; dispatchNpc: [action: NpcCommandAction, npcId: string, troops: Record<string, number>, generalIds: string[]] }>()
+const props = defineProps<{ phase: WorldMapPhase; data: WorldMapViewResponse | null; error: string; overviewPhase: WorldMapPhase; overview: WorldMapViewResponse | null; overviewError: string; sourceName: string; currentPlayerId: string; accountGold: number; units: RecruitmentUnitViewModel[]; generals: GeneralState[]; assignments: GeneralAssignmentState[]; dispatching: boolean; marchMessage: string; marchSucceeded: boolean; marchResultVersion: number; npc: NpcStateStore; dungeon: DungeonStateStore; mirage: MirageStateStore; serverTime: string; receivedAt: number | null }>()
+const emit = defineEmits<{ retry: []; navigate: [x: number, y: number]; home: []; dispatch: [action: WorldMapMarchAction, targetPlayerId: string, troops: Record<string, number>, generalIds: string[]]; loadNpc: [playerId: string]; refreshNpc: []; dispatchNpc: [action: NpcCommandAction, npcId: string, troops: Record<string, number>, generalIds: string[]]; loadDungeon: [playerId: string]; startDungeon: [level: number]; fightDungeon: [waveId: string, troops: Record<string, number>, generalIds: string[]]; resetDungeonBonus: [waveId: string]; settleDungeon: []; loadMirage: [playerId: string]; gambleMirage: [unitType: string, amount: number, betId: string, exactNumber: number]; spinMirage: [unitType: string, amount: number]; redeemMirage: [recordId: string, amount: number]; redeemAllMirage: [gameType: MirageGameType] }>()
 const selectedKey = ref('')
 const queryX = ref(0)
 const queryY = ref(0)
@@ -58,6 +63,8 @@ watch(() => props.data, (view) => {
 /** 进入 NPC 标签或切换存档时读取当前存档的真实 NPC 列表。 */
 watch(() => [activeMapTab.value, props.currentPlayerId] as const, ([tab, playerId]) => {
   if (tab === 'NPC' && playerId) emit('loadNpc', playerId)
+  if (tab === '副本' && playerId) emit('loadDungeon', playerId)
+  if (tab === '万象幻境' && playerId) emit('loadMirage', playerId)
 }, { immediate: true })
 
 /** 刷新后关闭已经不属于新列表的旧 NPC 命令弹窗。 */
@@ -68,11 +75,8 @@ watch(() => props.npc.data, (data) => {
 /** 选中地图地块并由右侧官方信息框展示目标。 */
 function selectCell(cell: WorldMapCell) { selectedKey.value = cell.key }
 
-/** 切换地图子页并阻止未开放标签产生伪交互。 */
-function selectMapTab(tab: (typeof mapTabs)[number]) {
-  if (tab === '副本' || tab === '万象幻境') return
-  activeMapTab.value = tab
-}
+/** 切换地图、NPC、据点、副本和万象幻境子页。 */
+function selectMapTab(tab: (typeof mapTabs)[number]) { activeMapTab.value = tab }
 
 /** 校验坐标后交给状态服务读取新的真实视野。 */
 function searchCoordinate() {
@@ -157,9 +161,11 @@ function dispatchNpcCommand(action: NpcCommandAction, npcId: string, troops: Rec
     <div class="panel-top"><i></i><span></span><b></b></div>
     <div class="panel-center map-panel-center">
       <nav class="secondary-navigation" aria-label="地图二级导航">
-        <button v-for="tab in mapTabs" :key="tab" type="button" :class="{ active: activeMapTab === tab }" :disabled="tab === '副本' || tab === '万象幻境'" @click="selectMapTab(tab)">{{ tab }}</button>
+        <button v-for="tab in mapTabs" :key="tab" type="button" :class="{ active: activeMapTab === tab }" @click="selectMapTab(tab)">{{ tab }}</button>
       </nav>
       <NpcDirectory v-if="activeMapTab === 'NPC' || activeMapTab === '据点'" :mode="activeMapTab === 'NPC' ? 'npc' : 'stronghold'" :targets="data?.targets ?? []" :cities="npc.data?.cities ?? []" :phase="npc.phase" :error="npc.error" :refreshing="npc.refreshing" :action-message="npc.actionMessage" :action-succeeded="npc.actionSucceeded" :last-refreshed-at="npc.data?.lastRefreshedAt ?? ''" :refresh-cost="npc.data?.refreshCost ?? 100" :account-gold="accountGold" @retry="emit('loadNpc', currentPlayerId)" @refresh="emit('refreshNpc')" @select="selectedNpc = $event" />
+      <DungeonStage v-else-if="activeMapTab === '副本'" :dungeon="dungeon" :player-id="currentPlayerId" :account-gold="accountGold" :units="units" :generals="generals" :assignments="assignments" :server-time="serverTime" :received-at="receivedAt" @load="emit('loadDungeon', currentPlayerId)" @start="emit('startDungeon', $event)" @fight="(waveId, troops, generalIds) => emit('fightDungeon', waveId, troops, generalIds)" @reset-bonus="emit('resetDungeonBonus', $event)" @settle="emit('settleDungeon')" />
+      <MirageStage v-else-if="activeMapTab === '万象幻境'" :mirage="mirage" :units="units" @load="emit('loadMirage', currentPlayerId)" @gamble="(unitType, amount, betId, exactNumber) => emit('gambleMirage', unitType, amount, betId, exactNumber)" @spin="(unitType, amount) => emit('spinMirage', unitType, amount)" @redeem="(recordId, amount) => emit('redeemMirage', recordId, amount)" @redeem-all="emit('redeemAllMirage', $event)" />
       <div v-else-if="activeMapTab === '地图' && phase === 'loading' && !data" class="map-state-message"><span class="loading-mark"></span><strong>正在读取真实世界地图…</strong></div>
       <div v-else-if="activeMapTab === '地图' && phase === 'error' && !data" class="map-state-message error"><strong>世界地图加载失败</strong><p>{{ error }}</p><button type="button" @click="emit('retry')">重新读取</button></div>
       <div v-else-if="activeMapTab === '地图' && data" class="official-map-list">

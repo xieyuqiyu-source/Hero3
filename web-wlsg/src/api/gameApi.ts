@@ -3,6 +3,8 @@ import type { ApiClient } from './client'
 import type { AccountInfo, AccountSession, BootstrapResponse, PlayerSummary } from './types'
 import type { BattleReportPageResponse, BattleReportState, BoostPricesResponse, CityActionResponse, GameStateResponse, MilitaryActionResponse, MilitaryViewResponse, NpcAttackResponse, NpcCommandAction, NpcRefreshResponse, NpcScoutResponse, NpcStateResponse, PvpDispatchResponse, PvpMarchActionResponse, PvpMarchListItem, ReinforcementActionResponse, ReinforcementDispatchResponse, ReinforcementListItem, ReportActionResponse, ResourceActionResponse, WorldMapMarchAction } from '../game/types'
 import type { WorldMapViewResponse } from '../worldMap/types'
+import type { DungeonActionResult, DungeonConfig, DungeonRunResponse } from '../dungeon/types'
+import type { GamblingRoundResult, MirageGameType, MirageRedeemAllResult, MirageRedeemResult, MirageSummary, SlotRoundResult } from '../mirage/types'
 
 /** 基于统一客户端创建登录选档 API。 */
 export function createGameApi(client: ApiClient) {
@@ -50,6 +52,30 @@ export function createGameApi(client: ApiClient) {
     attackNpc: (playerId: string, npcId: string, action: Exclude<NpcCommandAction, 'scout'>, units: Record<string, number>, generalIds: string[]) => client.post<NpcAttackResponse>('/map/npc-cities/attack', { playerId, npcId, mode: action, units, generalIds }),
     /** 自动派出当前阵营侦察兵即时侦查 NPC。 */
     scoutNpc: (playerId: string, npcId: string) => client.post<NpcScoutResponse>('/map/npc-cities/scout', { playerId, npcId }),
+    /** 读取轮回绝境的层级、波次与金币重置配置。 */
+    dungeonConfig: (signal?: AbortSignal) => client.get<DungeonConfig>('/dungeons/reincarnation/config', { signal }),
+    /** 读取当前存档的活动轮回绝境和最新军队。 */
+    dungeonRun: (playerId: string, signal?: AbortSignal) => client.get<DungeonRunResponse>(`/dungeons/reincarnation/run?playerId=${encodeURIComponent(playerId)}`, { signal }),
+    /** 开启指定难度的轮回绝境。 */
+    startDungeon: (playerId: string, level: number) => client.post<DungeonActionResult>('/dungeons/reincarnation/start', { playerId, level }),
+    /** 结算轮回绝境当前进攻波。 */
+    attackDungeonWave: (playerId: string, waveId: string, troops: Record<string, number>, generalIds: string[], clientActionId: string) => client.post<DungeonActionResult>(`/dungeons/reincarnation/waves/${encodeURIComponent(waveId)}/attack`, { playerId, troops, generalIds, clientActionId }),
+    /** 结算轮回绝境当前防守波。 */
+    defendDungeonWave: (playerId: string, waveId: string, troops: Record<string, number>, generalIds: string[], clientActionId: string) => client.post<DungeonActionResult>(`/dungeons/reincarnation/waves/${encodeURIComponent(waveId)}/defense-ready`, { playerId, troops, generalIds, clientActionId }),
+    /** 使用账户金币重置当前波双方加成。 */
+    resetDungeonBonus: (playerId: string, waveId: string) => client.post<DungeonActionResult>(`/dungeons/reincarnation/waves/${encodeURIComponent(waveId)}/bonus-reset`, { playerId }),
+    /** 结算已经结束或到期的轮回绝境奖励。 */
+    settleDungeon: (playerId: string) => client.post<DungeonActionResult>('/dungeons/reincarnation/settle', { playerId }),
+    /** 读取万象幻境全部真实记录和待兑换库存。 */
+    mirageRecords: (playerId: string, signal?: AbortSignal) => client.get<MirageSummary>(`/minigame/records?playerId=${encodeURIComponent(playerId)}&limit=100&offset=0`, { signal }),
+    /** 由后端掷三枚骰子并结算六合博戏。 */
+    resolveMirageGambling: (playerId: string, betUnitType: string, betAmount: number, betId: string, exactNumber: number) => client.post<GamblingRoundResult>('/minigame/gambling/resolve', { playerId, betUnitType, betAmount, betId, exactNumber }),
+    /** 由后端生成 3×3 盘面并结算天机轮转。 */
+    resolveMirageSlot: (playerId: string, betUnitType: string, lineBet: number) => client.post<SlotRoundResult>('/minigame/slot/resolve', { playerId, betUnitType, lineBet }),
+    /** 兑换一条万象幻境记录中的指定库存。 */
+    redeemMirageRecord: (playerId: string, recordId: string, amount: number) => client.post<MirageRedeemResult>('/minigame/redeem', { playerId, recordId, amount }),
+    /** 一键兑换指定万象幻境玩法的全部库存。 */
+    redeemAllMirage: (playerId: string, gameType: MirageGameType) => client.post<MirageRedeemAllResult>('/minigame/redeem-all', { playerId, gameType }),
     /** 自动派出当前阵营全部侦察兵侦查玩家城池。 */
     scoutPvpTarget: (playerId: string, targetPlayerId: string) => client.post<PvpDispatchResponse>('/pvp/scout', { playerId, targetPlayerId }),
     /** 按 attack 或 plunder 模式派出玩家兵力。 */

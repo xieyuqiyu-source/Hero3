@@ -127,6 +127,52 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/minigame/gambling/resolve:
+  post:
+    tags: [MiniGame]
+    summary: 结算一局六合博戏
+    description: 后端扣除真实押注兵力，生成三枚骰子并按大小、单双或指定点数计算赔率；中奖结果进入小游戏库存。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [playerId, betUnitType, betAmount, betId]
+            properties:
+              playerId:
+                type: string
+              betUnitType:
+                type: string
+              betAmount:
+                type: integer
+                minimum: 1
+              betId:
+                type: string
+                enum: [big, small, odd, even, triple, exact]
+              exactNumber:
+                type: integer
+                minimum: 3
+                maximum: 18
+    responses:
+      '200':
+        description: 后端权威骰局结算结果
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GamblingRoundResult'
+      '404':
+        description: 存档不存在
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '422':
+        description: 押注参数、兵种或可用兵力不合法
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
 /api/v1/minigame/redeem:
   post:
     tags:

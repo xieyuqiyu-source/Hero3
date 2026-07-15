@@ -49,7 +49,9 @@ func TestReincarnationStartAndAttack(t *testing.T) {
 		t.Fatalf("expected first wave attack, got %s", wave.WaveType)
 	}
 
-	result, err := service.AttackReincarnationWave(state.Player.ID, wave.ID, map[string]int{"qingZhouArmy": 1000}, nil, "attack-once")
+	// 第一境旧配置上限为一万；投入两万用于验证副本已不再限制出战总兵力。
+	dispatched := wave.TroopCap + 10000
+	result, err := service.AttackReincarnationWave(state.Player.ID, wave.ID, map[string]int{"qingZhouArmy": dispatched}, nil, "attack-once")
 	if err != nil {
 		t.Fatalf("AttackReincarnationWave failed: %v", err)
 	}
@@ -77,7 +79,7 @@ func TestReincarnationStartAndAttack(t *testing.T) {
 		t.Fatalf("expected no exp when reincarnation attack carries no general, got %d", got)
 	}
 
-	repeated, err := service.AttackReincarnationWave(state.Player.ID, wave.ID, map[string]int{"qingZhouArmy": 1000}, nil, "attack-once")
+	repeated, err := service.AttackReincarnationWave(state.Player.ID, wave.ID, map[string]int{"qingZhouArmy": dispatched}, nil, "attack-once")
 	if err != nil {
 		t.Fatalf("repeated AttackReincarnationWave failed: %v", err)
 	}

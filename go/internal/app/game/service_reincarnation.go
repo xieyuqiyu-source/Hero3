@@ -152,9 +152,6 @@ func (s *Service) AttackReincarnationWave(playerID string, waveID string, troops
 			expireReincarnationRun(run, wave, now)
 			return nil, nil
 		}
-		if totalTroops(troops) > wave.TroopCap {
-			return nil, ErrInvalidAmount
-		}
 		battleGeneralIDs, err := normalizeBattleGeneralIDs(state, generalIDs)
 		if err != nil {
 			return nil, err
@@ -231,8 +228,8 @@ func (s *Service) ReadyReincarnationDefense(playerID string, waveID string, troo
 			expireReincarnationRun(run, wave, now)
 			return nil, nil
 		}
-		if totalTroops(troops) > wave.TroopCap {
-			return nil, ErrInvalidAmount
+		if err := validateArmyAvailability(state, troops); err != nil {
+			return nil, err
 		}
 		battleGeneralIDs, err := normalizeBattleGeneralIDs(state, generalIDs)
 		if err != nil {

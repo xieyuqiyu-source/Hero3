@@ -57,6 +57,8 @@ ReincarnationLevelConfig:
     playerTroopCap:
       type: integer
       format: int64
+      deprecated: true
+      description: 兼容旧客户端保留，轮回绝境不再限制玩家出战总兵力。
     enemyTroopBase:
       type: integer
       format: int64
@@ -151,6 +153,8 @@ ReincarnationWave:
         $ref: '#/components/schemas/Reward'
     troopCap:
       type: integer
+      deprecated: true
+      description: 兼容旧客户端保留，服务端不再按该值限制玩家出战总兵力。
     status:
       type: string
       enum: [locked, active, cleared, failed, expired]

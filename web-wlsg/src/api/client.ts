@@ -51,6 +51,14 @@ const errorMessages: Record<string, string> = {
   'reinforcement source slots are full': '目标的增援来源已满',
   'general is already assigned': '所选武将正在执行其他任务',
   'general not found': '所选武将不存在',
+  'minigame record not found': '幻境奖励记录不存在或已失效',
+  'invalid minigame record': '幻境奖励记录状态异常',
+  'minigame bet amount too low': '投入兵力低于本玩法最低要求',
+  'minigame bet amount exceeds limit': '投入兵力超过本玩法单局上限',
+  'insufficient minigame reward stock': '可兑换的幻境奖励库存不足',
+  'reincarnation run not found': '当前没有可继续的副本挑战',
+  'reincarnation run already active': '已有进行中的副本挑战',
+  'invalid reincarnation run': '副本挑战状态异常，请刷新后重试',
 }
 
 /** 从后端响应中提取适合展示的中文错误。 */

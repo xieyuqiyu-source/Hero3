@@ -82,6 +82,28 @@ func validateAndConsumeArmyWithModifiers(state *GameState, units map[string]int,
 	return combatUnits, nil
 }
 
+// validateArmyAvailability 校验模拟战斗的出兵数量不超过玩家各兵种真实库存。
+func validateArmyAvailability(state *GameState, units map[string]int) error {
+	if len(units) == 0 {
+		return ErrNoUnitsSelected
+	}
+	available := armySliceToMap(state.Army)
+	selected := false
+	for unitType, count := range units {
+		if count <= 0 {
+			continue
+		}
+		selected = true
+		if available[unitType] < count {
+			return ErrInsufficientArmy
+		}
+	}
+	if !selected {
+		return ErrNoUnitsSelected
+	}
+	return nil
+}
+
 // isNonCombatUnit 判断兵种是否禁止进入战斗。
 func isNonCombatUnit(unitCfg UnitConfig) bool {
 	if unitCfg.Role == "transport" {
