@@ -22,6 +22,7 @@ jobs:
 
     env:
       HERO3_HEALTH_URL: https://hero3.ccoos.cn/healthz
+      WLSG_HEALTH_URL: https://wlsg.ccoos.cn/healthz
 
     steps:
       - name: Configure SSH
@@ -80,6 +81,7 @@ jobs:
           BUILD_DIR="/tmp/hero3-build.${HERO3_SHA}"
           STAMP="$(date +%Y%m%d%H%M%S)"
           GIT_PROXY="http://127.0.0.1:7890"
+          NGINX_SITES=(hero3.ccoos.cn.conf wlsg.ccoos.cn.conf mobilewlsg.ccoos.cn.conf)
 
           log() {
             printf '\n[%s] %s\n' "$(date -Is)" "$*"
@@ -97,6 +99,45 @@ jobs:
           show_hero3_logs() {
             systemctl status hero3 --no-pager -l || true
             journalctl -u hero3 -n 120 --no-pager || true
+          }
+
+          restore_nginx_sites() {
+            local site backup
+            for site in "${NGINX_SITES[@]}"; do
+              backup="/opt/hero3/backups/$site.$STAMP"
+              if [ -f "$backup" ]; then
+                cp -a "$backup" "/etc/nginx/conf.d/$site"
+              else
+                rm -f "/etc/nginx/conf.d/$site"
+              fi
+            done
+          }
+
+          restore_static_sites() {
+            local site archive
+            for site in web web-wlsg admin; do
+              archive="/var/www/hero3/backups/$site.$STAMP.tar.gz"
+              if [ -f "$archive" ]; then
+                rm -rf "/var/www/hero3/$site"
+                tar -xzf "$archive" -C /var/www/hero3
+              fi
+            done
+          }
+
+          rollback_frontend_routing_and_exit() {
+            local reason="$1"
+            log "$reason; restoring previous frontend files and Nginx routes"
+            restore_static_sites || true
+            restore_nginx_sites || true
+            if ! systemctl is-active --quiet hero3; then
+              timeout --kill-after=10s 120s systemctl restart hero3 || show_hero3_logs
+            fi
+            if timeout --kill-after=10s 30s nginx -t; then
+              timeout --kill-after=10s 30s systemctl reload nginx || true
+            else
+              log "restored Nginx config validation failed; manual recovery required"
+            fi
+            exit 1
           }
 
           fetch_source() {
@@ -128,7 +169,7 @@ jobs:
           fi
 
           mkdir -p /opt/hero3/backups /var/www/hero3/backups
-          mkdir -p /opt/hero3/go/bin /opt/hero3/go/config /var/www/hero3/web /var/www/hero3/admin
+          mkdir -p /opt/hero3/go/bin /opt/hero3/go/config /var/www/hero3/web /var/www/hero3/web-wlsg /var/www/hero3/admin
 
           log "Preparing source checkout through local proxy"
           if [ -e "$SOURCE_DIR" ] && [ ! -d "$SOURCE_DIR/.git" ]; then
@@ -164,11 +205,17 @@ jobs:
           corepack enable
           corepack prepare pnpm@10.24.0 --activate
 
-          cd "$SOURCE_DIR/web-wlsg"
+          cd "$SOURCE_DIR/web"
           pnpm install --frozen-lockfile
           pnpm build
           mkdir -p "$BUILD_DIR/web"
-          rsync -a "$SOURCE_DIR/web-wlsg/dist/" "$BUILD_DIR/web/"
+          rsync -a "$SOURCE_DIR/web/dist/" "$BUILD_DIR/web/"
+
+          cd "$SOURCE_DIR/web-wlsg"
+          pnpm install --frozen-lockfile
+          pnpm build
+          mkdir -p "$BUILD_DIR/web-wlsg"
+          rsync -a "$SOURCE_DIR/web-wlsg/dist/" "$BUILD_DIR/web-wlsg/"
 
           cd "$SOURCE_DIR/admin"
           pnpm install --frozen-lockfile
@@ -184,6 +231,10 @@ jobs:
             mkdir -p "$BUILD_DIR/deploy/journald"
             rsync -a "$SOURCE_DIR/deploy/journald/" "$BUILD_DIR/deploy/journald/"
           fi
+          if [ -d "$SOURCE_DIR/deploy/nginx" ]; then
+            mkdir -p "$BUILD_DIR/deploy/nginx"
+            rsync -a "$SOURCE_DIR/deploy/nginx/" "$BUILD_DIR/deploy/nginx/"
+          fi
 
           log "Backing up current release"
           if [ -f /opt/hero3/go/bin/hero3-server ]; then
@@ -192,8 +243,18 @@ jobs:
           if [ -d /var/www/hero3/web ]; then
             tar -czf "/var/www/hero3/backups/web.$STAMP.tar.gz" -C /var/www/hero3 web
           fi
+          if [ -d /var/www/hero3/web-wlsg ]; then
+            tar -czf "/var/www/hero3/backups/web-wlsg.$STAMP.tar.gz" -C /var/www/hero3 web-wlsg
+          fi
           if [ -d /var/www/hero3/admin ]; then
             tar -czf "/var/www/hero3/backups/admin.$STAMP.tar.gz" -C /var/www/hero3 admin
+          fi
+          if [ -d "$BUILD_DIR/deploy/nginx" ]; then
+            for site in "${NGINX_SITES[@]}"; do
+              if [ -f "/etc/nginx/conf.d/$site" ]; then
+                cp -a "/etc/nginx/conf.d/$site" "/opt/hero3/backups/$site.$STAMP"
+              fi
+            done
           fi
 
           log "Installing release"
@@ -201,6 +262,7 @@ jobs:
           install -m 755 "$BUILD_DIR/go/bin/hero3-dbtool" /opt/hero3/go/bin/hero3-dbtool
           rsync -a --delete "$BUILD_DIR/go/config/" /opt/hero3/go/config/
           rsync -a --delete "$BUILD_DIR/web/" /var/www/hero3/web/
+          rsync -a --delete "$BUILD_DIR/web-wlsg/" /var/www/hero3/web-wlsg/
           rsync -a --delete "$BUILD_DIR/admin/" /var/www/hero3/admin/
           printf '%s %s\n' "${HERO3_SHA:0:7}" "deployed from ${HERO3_REF_NAME}" > /opt/hero3/RELEASE
 
@@ -240,7 +302,14 @@ jobs:
             exit 1
           fi
 
-          log "Restarting services"
+          log "Restarting Hero3 after database tasks"
+          if ! timeout --kill-after=10s 120s systemctl restart hero3; then
+            log "hero3 restart failed or timed out"
+            show_hero3_logs
+            exit 1
+          fi
+
+          log "Installing support services and routes"
           if [ -d "$BUILD_DIR/deploy/journald" ]; then
             mkdir -p /etc/systemd/journald.conf.d /var/log/journal
             install -m 644 "$BUILD_DIR/deploy/journald/hero3-retention.conf" /etc/systemd/journald.conf.d/hero3-retention.conf
@@ -259,17 +328,40 @@ jobs:
             timeout --kill-after=10s 60s systemctl enable --now hero3-maintenance-status.timer
             timeout --kill-after=10s 60s systemctl enable --now hero3-daily-update-announcement.timer
           fi
-          if ! timeout --kill-after=10s 120s systemctl restart hero3; then
-            log "hero3 restart failed or timed out"
-            show_hero3_logs
-            exit 1
+          if [ -d "$BUILD_DIR/deploy/nginx" ]; then
+            nginx_install_ok=1
+            for site in "${NGINX_SITES[@]}"; do
+              if ! install -m 644 "$BUILD_DIR/deploy/nginx/$site" "/etc/nginx/conf.d/$site"; then
+                nginx_install_ok=0
+                break
+              fi
+            done
+            if [ "$nginx_install_ok" != "1" ] || ! timeout --kill-after=10s 30s nginx -t; then
+              rollback_frontend_routing_and_exit "Nginx site installation failed"
+            fi
           fi
-          timeout --kill-after=10s 30s nginx -t
-          timeout --kill-after=10s 30s systemctl reload nginx
+          if ! timeout --kill-after=10s 30s nginx -t || ! timeout --kill-after=10s 30s systemctl reload nginx; then
+            rollback_frontend_routing_and_exit "Nginx reload failed"
+          fi
           if ! timeout --kill-after=10s 60s curl --fail --show-error --silent --retry 10 --retry-delay 2 --retry-connrefused http://127.0.0.1:8081/healthz; then
-            log "hero3 local health check failed"
             show_hero3_logs
-            exit 1
+            rollback_frontend_routing_and_exit "hero3 local health check failed"
+          fi
+          if ! timeout --kill-after=10s 60s curl --fail --show-error --silent --retry 10 --retry-delay 2 --retry-connrefused https://hero3.ccoos.cn/healthz >/dev/null; then
+            rollback_frontend_routing_and_exit "hero3 public health check failed"
+          fi
+          if ! timeout --kill-after=10s 60s curl --fail --show-error --silent --retry 10 --retry-delay 2 --retry-connrefused https://wlsg.ccoos.cn/healthz >/dev/null; then
+            rollback_frontend_routing_and_exit "wlsg public health check failed"
+          fi
+          if ! curl --fail --show-error --silent https://hero3.ccoos.cn/ | grep -Fq '<title>Hero3</title>'; then
+            rollback_frontend_routing_and_exit "hero3 web identity check failed"
+          fi
+          if ! curl --fail --show-error --silent https://wlsg.ccoos.cn/ | grep -Fq '<title>Hero3 · 武林三国</title>'; then
+            rollback_frontend_routing_and_exit "web-wlsg identity check failed"
+          fi
+          if systemctl list-unit-files wlsg-save-api.service --no-legend | grep -q '^wlsg-save-api.service'; then
+            log "Disabling retired WLSG save API"
+            timeout --kill-after=10s 60s systemctl disable --now wlsg-save-api.service
           fi
 
           rm -rf "$BUILD_DIR"
@@ -277,4 +369,8 @@ jobs:
 
       - name: Health check
         run: |
+          set -euo pipefail
           curl --fail --show-error --silent --retry 10 --retry-delay 2 --retry-connrefused "$HERO3_HEALTH_URL"
+          curl --fail --show-error --silent --retry 10 --retry-delay 2 --retry-connrefused "$WLSG_HEALTH_URL"
+          curl --fail --show-error --silent --retry 10 --retry-delay 2 --retry-connrefused https://hero3.ccoos.cn/ | grep -Fq '<title>Hero3</title>'
+          curl --fail --show-error --silent --retry 10 --retry-delay 2 --retry-connrefused https://wlsg.ccoos.cn/ | grep -Fq '<title>Hero3 · 武林三国</title>'

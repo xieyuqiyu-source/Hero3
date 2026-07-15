@@ -2,6 +2,8 @@
 
 `web-wlsg` 是与现有 `web/` 并存的新玩家前端，使用 Vue 3、TypeScript 和 Vite 开发。当前仅面向桌面浏览器，并适配 Hero3 现有后端接口。
 
+生产环境固定发布到 `https://wlsg.ccoos.cn/`，构建产物安装在服务器 `/var/www/hero3/web-wlsg/`；它与 `https://hero3.ccoos.cn/` 的 React `web` 并行部署并共用 Hero3 API。
+
 ## 本地运行
 
 ```bash

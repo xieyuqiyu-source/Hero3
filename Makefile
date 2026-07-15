@@ -1,7 +1,7 @@
 # Hero3 项目 Makefile
 # 统一开发环境启动、构建、部署命令
 
-.PHONY: dev dev-go dev-web dev-admin build build-go build-dbtool build-web build-admin clean install migrate migrate-test print-test-dsn clone-data cleanup-battle-reports-dry-run cleanup-battle-reports report-stats lock-snapshot ensure-report-cleanup-indexes-dry-run ensure-report-cleanup-indexes maintenance-status daily-update-announcement-dry-run backfill-resources verify-resources backfill-inventory verify-inventory backfill-buildings verify-buildings backfill-resource-slots verify-resource-slots backfill-army verify-army verify-recruit-queues backfill-recruit-queues backfill-generals verify-generals backfill-buffs verify-buffs backfill-currencies verify-currencies backfill-npc-states verify-npc-states backfill-world-positions healthcheck-authority openapi openapi-lint openapi-bundle
+.PHONY: dev dev-go dev-web dev-web-wlsg dev-admin build build-go build-dbtool build-web build-web-wlsg build-admin clean install migrate migrate-test print-test-dsn clone-data cleanup-battle-reports-dry-run cleanup-battle-reports report-stats lock-snapshot ensure-report-cleanup-indexes-dry-run ensure-report-cleanup-indexes maintenance-status daily-update-announcement-dry-run backfill-resources verify-resources backfill-inventory verify-inventory backfill-buildings verify-buildings backfill-resource-slots verify-resource-slots backfill-army verify-army verify-recruit-queues backfill-recruit-queues backfill-generals verify-generals backfill-buffs verify-buffs backfill-currencies verify-currencies backfill-npc-states verify-npc-states backfill-world-positions healthcheck-authority openapi openapi-lint openapi-bundle
 
 # ===== 开发 =====
 
@@ -17,6 +17,10 @@ dev-go:
 dev-web:
 	cd web && pnpm dev
 
+## 仅启动武林三国前端
+dev-web-wlsg:
+	cd web-wlsg && pnpm dev
+
 ## 仅启动 GM 后台
 dev-admin:
 	cd admin && pnpm dev
@@ -27,12 +31,13 @@ dev-admin:
 install:
 	cd go && go mod download
 	cd web && pnpm install
+	cd web-wlsg && pnpm install
 	cd admin && pnpm install
 
 # ===== 构建 =====
 
 ## 构建所有
-build: build-go build-web build-admin
+build: build-go build-web build-web-wlsg build-admin
 
 ## 构建 Go 后端
 build-go:
@@ -46,6 +51,10 @@ build-dbtool:
 build-web:
 	cd web && pnpm build
 
+## 构建武林三国前端
+build-web-wlsg:
+	cd web-wlsg && pnpm build
+
 ## 构建 GM 后台
 build-admin:
 	cd admin && pnpm build
@@ -56,6 +65,7 @@ build-admin:
 clean:
 	rm -rf go/bin
 	rm -rf web/dist
+	rm -rf web-wlsg/dist
 	rm -rf admin/dist
 
 # ===== 数据库 =====
@@ -217,6 +227,7 @@ help:
 	@echo "  make dev          启动所有服务"
 	@echo "  make dev-go       仅启动 Go 后端"
 	@echo "  make dev-web      仅启动 Web 前端"
+	@echo "  make dev-web-wlsg 仅启动武林三国前端"
 	@echo "  make dev-admin    仅启动 GM 后台"
 	@echo ""
 	@echo "  make install      安装所有依赖"

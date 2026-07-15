@@ -2,6 +2,8 @@
 
 `Hero3 Web` 是 Hero3 项目的前端工程，当前基于 `React + TypeScript + Vite` 搭建，用于承载三国题材策略网页游戏的浏览器端界面、交互与后续玩法原型。
 
+生产环境固定发布到 `https://hero3.ccoos.cn/`，构建产物安装在服务器 `/var/www/hero3/web/`；不得与 `web-wlsg` 共用或互换发布目录。
+
 ## 技术栈
 
 - React 19
