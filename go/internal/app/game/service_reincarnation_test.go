@@ -2,6 +2,7 @@
 package game
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -92,6 +93,36 @@ func TestReincarnationStartAndAttack(t *testing.T) {
 	}
 	if len(savedAfterRepeat.Battles) != 1 {
 		t.Fatalf("expected repeated action to keep one battle record, got %d", len(savedAfterRepeat.Battles))
+	}
+}
+
+// TestExitReincarnationRun 验证结束实例可幂等退出，进行中实例不能绕过战斗直接退出。
+func TestExitReincarnationRun(t *testing.T) {
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	now := time.Date(2026, 7, 16, 6, 0, 0, 0, time.UTC)
+	rewardedAt := now.Add(-time.Minute)
+	finished := ReincarnationRun{ID: "run_exit_finished", PlayerID: "player_exit", Status: ReincarnationRunRewarded, RewardGrantedAt: &rewardedAt, CreatedAt: now, UpdatedAt: now}
+	if err := repo.SaveReincarnationRun(finished); err != nil {
+		t.Fatalf("SaveReincarnationRun failed: %v", err)
+	}
+	result, err := service.ExitReincarnationRun("player_exit", finished.ID)
+	if err != nil || result.RunID != finished.ID || result.ExitedAt == "" {
+		t.Fatalf("ExitReincarnationRun failed: result=%+v err=%v", result, err)
+	}
+	stored, err := repo.GetReincarnationRun(finished.ID)
+	if err != nil || stored.ExitedAt == nil {
+		t.Fatalf("expected persisted exitedAt, run=%+v err=%v", stored, err)
+	}
+	if _, err := service.ExitReincarnationRun("player_exit", finished.ID); err != nil {
+		t.Fatalf("expected idempotent exit, got %v", err)
+	}
+	running := ReincarnationRun{ID: "run_exit_running", PlayerID: "player_exit", Status: ReincarnationRunRunning, CreatedAt: now, UpdatedAt: now}
+	if err := repo.SaveReincarnationRun(running); err != nil {
+		t.Fatalf("Save running run failed: %v", err)
+	}
+	if _, err := service.ExitReincarnationRun("player_exit", running.ID); !errors.Is(err, ErrInvalidReincarnation) {
+		t.Fatalf("expected ErrInvalidReincarnation, got %v", err)
 	}
 }
 

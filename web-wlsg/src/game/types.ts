@@ -31,6 +31,17 @@ export interface GeneralState {
   id: string
   name: string
   level: number
+  buffs?: Record<string, number>
+  traits?: GeneralTraitState[]
+}
+
+export interface GeneralTraitState {
+  traitId: string
+  traitType?: string
+  name?: string
+  scope?: string
+  targetUnitType?: string
+  params?: Record<string, number>
 }
 
 export interface GeneralAssignmentState {

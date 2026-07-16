@@ -3,7 +3,7 @@ import type { ApiClient } from './client'
 import type { AccountInfo, AccountSession, BootstrapResponse, PlayerSummary } from './types'
 import type { BattleReportPageResponse, BattleReportState, BoostPricesResponse, CityActionResponse, GameStateResponse, MilitaryActionResponse, MilitaryViewResponse, NpcAttackResponse, NpcCommandAction, NpcRefreshResponse, NpcScoutResponse, NpcStateResponse, PvpDispatchResponse, PvpMarchActionResponse, PvpMarchListItem, ReinforcementActionResponse, ReinforcementDispatchResponse, ReinforcementListItem, ReportActionResponse, ResourceActionResponse, WorldMapMarchAction } from '../game/types'
 import type { WorldMapViewResponse } from '../worldMap/types'
-import type { DungeonActionResult, DungeonConfig, DungeonRunResponse } from '../dungeon/types'
+import type { DungeonActionResult, DungeonConfig, DungeonExitResult, DungeonRunResponse } from '../dungeon/types'
 import type { GamblingRoundResult, MirageGameType, MirageRedeemAllResult, MirageRedeemResult, MirageSummary, SlotRoundResult } from '../mirage/types'
 
 /** 基于统一客户端创建登录选档 API。 */
@@ -66,6 +66,8 @@ export function createGameApi(client: ApiClient) {
     resetDungeonBonus: (playerId: string, waveId: string) => client.post<DungeonActionResult>(`/dungeons/reincarnation/waves/${encodeURIComponent(waveId)}/bonus-reset`, { playerId }),
     /** 结算已经结束或到期的轮回绝境奖励。 */
     settleDungeon: (playerId: string) => client.post<DungeonActionResult>('/dungeons/reincarnation/settle', { playerId }),
+    /** 退出已经结束且奖励已安全结算的轮回绝境实例。 */
+    exitDungeon: (playerId: string, runId: string) => client.post<DungeonExitResult>('/dungeons/reincarnation/exit', { playerId, runId }),
     /** 读取万象幻境全部真实记录和待兑换库存。 */
     mirageRecords: (playerId: string, signal?: AbortSignal) => client.get<MirageSummary>(`/minigame/records?playerId=${encodeURIComponent(playerId)}&limit=100&offset=0`, { signal }),
     /** 由后端掷三枚骰子并结算六合博戏。 */

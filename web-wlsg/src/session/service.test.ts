@@ -56,6 +56,7 @@ function mockApi(players: PlayerSummary[] = [player]): GameApi {
     defendDungeonWave: vi.fn(async () => { throw new Error('当前测试不防守副本') }),
     resetDungeonBonus: vi.fn(async () => { throw new Error('当前测试不重置副本加成') }),
     settleDungeon: vi.fn(async () => { throw new Error('当前测试不结算副本') }),
+    exitDungeon: vi.fn(async () => { throw new Error('当前测试不退出副本') }),
     mirageRecords: vi.fn(async () => ({ totalRecords: 0, limit: 100, offset: 0, hasMore: false, records: [], rewardTotals: {} })),
     resolveMirageGambling: vi.fn(async () => { throw new Error('当前测试不结算六合博戏') }),
     resolveMirageSlot: vi.fn(async () => { throw new Error('当前测试不结算天机轮转') }),

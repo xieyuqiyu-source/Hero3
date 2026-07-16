@@ -16,6 +16,10 @@ export interface DungeonStateStore {
   actionSucceeded: boolean
   resultVersion: number
   lastReportId: string
+  lastGeneralId: string
+  lastGeneralExpGained: number
+  lastGeneralLevelBefore: number | null
+  lastGeneralLevelAfter: number | null
 }
 
 export interface DungeonStateService {
@@ -25,6 +29,7 @@ export interface DungeonStateService {
   fight: (waveId: string, troops: Record<string, number>, generalIds: string[]) => Promise<void>
   resetBonus: (waveId: string) => Promise<number | null>
   settle: () => Promise<void>
+  exit: () => Promise<void>
   clear: () => void
 }
 
@@ -38,7 +43,7 @@ export function createDungeonStateService(api: GameApi, state: DungeonStateStore
     requestVersion += 1
     controller?.abort()
     controller = null
-    Object.assign(state, { phase: 'idle', playerId: null, config: null, run: null, error: '', operating: false, actionMessage: '', actionSucceeded: false, resultVersion: 0, lastReportId: '' })
+    Object.assign(state, { phase: 'idle', playerId: null, config: null, run: null, error: '', operating: false, actionMessage: '', actionSucceeded: false, resultVersion: 0, lastReportId: '', lastGeneralId: '', lastGeneralExpGained: 0, lastGeneralLevelBefore: null, lastGeneralLevelAfter: null })
   }
 
   /** 读取公共配置和当前玩家活动实例。 */
@@ -49,7 +54,14 @@ export function createDungeonStateService(api: GameApi, state: DungeonStateStore
     const currentVersion = requestVersion
     controller?.abort()
     controller = new AbortController()
-    Object.assign(state, { phase: 'loading', playerId, run: changed ? null : state.run, error: '', actionMessage: '' })
+    Object.assign(state, {
+      phase: 'loading',
+      playerId,
+      run: changed ? null : state.run,
+      error: '',
+      actionMessage: '',
+      ...(changed ? { lastGeneralId: '', lastGeneralExpGained: 0, lastGeneralLevelBefore: null, lastGeneralLevelAfter: null } : {}),
+    })
     try {
       const [config, response] = await Promise.all([api.dungeonConfig(controller.signal), api.dungeonRun(playerId, controller.signal)])
       if (currentVersion !== requestVersion || state.playerId !== playerId) return
@@ -93,6 +105,7 @@ export function createDungeonStateService(api: GameApi, state: DungeonStateStore
     try {
       const result = await api.startDungeon(playerId, level)
       if (currentVersion !== requestVersion || state.playerId !== playerId) return
+      Object.assign(state, { lastGeneralId: '', lastGeneralExpGained: 0, lastGeneralLevelBefore: null, lastGeneralLevelAfter: null })
       applyResult(result, `已进入${result.run.levelName}，请在时限内完成十八波攻防`)
     } catch (error) {
       if (currentVersion !== requestVersion || state.playerId !== playerId) return
@@ -127,7 +140,15 @@ export function createDungeonStateService(api: GameApi, state: DungeonStateStore
         ? await api.defendDungeonWave(playerId, wave.id, normalized, selectedGenerals, actionId)
         : await api.attackDungeonWave(playerId, wave.id, normalized, selectedGenerals, actionId)
       if (currentVersion !== requestVersion || state.playerId !== playerId) return
-      applyResult(result, result.run.status === 'running' ? `第 ${wave.waveIndex} 波结算完成，已进入下一波` : '本次轮回已经结束，累计奖励已按后端规则结算')
+      const expGained = Math.max(0, result.battleReport?.generalExpGained ?? 0)
+      Object.assign(state, {
+        lastGeneralId: selectedGenerals[0] ?? '',
+        lastGeneralExpGained: expGained,
+        lastGeneralLevelBefore: result.battleReport?.generalLevelBefore ?? null,
+        lastGeneralLevelAfter: result.battleReport?.generalLevelAfter ?? null,
+      })
+      const progressMessage = result.run.status === 'running' ? `第 ${wave.waveIndex} 波结算完成，已进入下一波` : '本次轮回已经结束，累计奖励已按后端规则结算'
+      applyResult(result, selectedGenerals.length ? `${progressMessage}；随军将领获得 ${expGained.toLocaleString('zh-CN')} 经验` : progressMessage)
     } catch (error) {
       if (currentVersion !== requestVersion || state.playerId !== playerId) return
       state.actionMessage = error instanceof Error ? error.message : '轮回波次结算失败'
@@ -180,6 +201,36 @@ export function createDungeonStateService(api: GameApi, state: DungeonStateStore
     }
   }
 
+  /** 调用退出接口并回到副本层级选择，不删除历史实例和战报。 */
+  async function exit() {
+    if (!state.playerId || state.operating || !state.run || state.run.status === 'running') return
+    const playerId = state.playerId
+    const runId = state.run.id
+    const currentVersion = requestVersion
+    state.operating = true
+    state.actionMessage = ''
+    try {
+      const result = await api.exitDungeon(playerId, runId)
+      if (currentVersion !== requestVersion || state.playerId !== playerId || result.runId !== runId) return
+      state.run = null
+      state.lastReportId = ''
+      state.lastGeneralId = ''
+      state.lastGeneralExpGained = 0
+      state.lastGeneralLevelBefore = null
+      state.lastGeneralLevelAfter = null
+      state.actionMessage = '已退出轮回绝境，可重新选择挑战层级'
+      state.actionSucceeded = true
+      if (game.data && result.serverTime) game.data.serverTime = result.serverTime
+      game.receivedAt = Date.now()
+    } catch (error) {
+      if (currentVersion !== requestVersion || state.playerId !== playerId) return
+      state.actionMessage = error instanceof Error ? error.message : '退出轮回绝境失败'
+      state.actionSucceeded = false
+    } finally {
+      finishOperation(currentVersion, playerId)
+    }
+  }
+
   /** 只结束仍属于当前存档的写操作。 */
   function finishOperation(version: number, playerId: string) {
     if (version !== requestVersion || state.playerId !== playerId) return
@@ -187,7 +238,7 @@ export function createDungeonStateService(api: GameApi, state: DungeonStateStore
     state.resultVersion += 1
   }
 
-  return { state, load, start, fight, resetBonus, settle, clear }
+  return { state, load, start, fight, resetBonus, settle, exit, clear }
 }
 
 /** 返回实例当前活动波次。 */

@@ -252,6 +252,11 @@ ReincarnationRun:
       type: string
       format: date-time
       nullable: true
+    exitedAt:
+      type: string
+      format: date-time
+      nullable: true
+      description: 玩家确认退出副本的时间；退出不会删除历史实例或战报。
     waves:
       type: array
       items:
@@ -347,6 +352,26 @@ ReincarnationSettleRequest:
   properties:
     playerId:
       type: string
+ReincarnationExitRequest:
+  type: object
+  required: [playerId, runId]
+  properties:
+    playerId:
+      type: string
+    runId:
+      type: string
+ReincarnationExitResult:
+  type: object
+  required: [runId, exitedAt, serverTime]
+  properties:
+    runId:
+      type: string
+    exitedAt:
+      type: string
+      format: date-time
+    serverTime:
+      type: string
+      format: date-time
 ReincarnationRunPage:
   type: object
   required: [items, total, limit, offset]

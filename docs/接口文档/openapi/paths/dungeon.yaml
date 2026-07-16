@@ -165,6 +165,36 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/dungeons/reincarnation/exit:
+  post:
+    tags: [Dungeon]
+    summary: 退出已经结束的轮回绝境
+    description: 仅允许退出非进行中实例；接口幂等，保留历史实例、战报和已发放奖励。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReincarnationExitRequest'
+    responses:
+      '200':
+        description: 已退出副本
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationExitResult'
+      '400':
+        description: 实例仍在进行或请求无效
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: 实例不存在或不属于当前玩家
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
 /api/v1/dungeons/reincarnation/reports:
   get:
     tags: [Dungeon]

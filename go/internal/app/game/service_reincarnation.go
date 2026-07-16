@@ -140,13 +140,13 @@ func (s *Service) AttackReincarnationWave(playerID string, waveID string, troops
 	duplicateReportID := ""
 	state, run, reports, err := s.repo.UpdateReincarnationRunWithState(playerID, runIDFromWaveID(waveID), now, func(state *GameState, run *ReincarnationRun) ([]BattleReport, error) {
 		EnsureGeneralRoster(state, now)
-		wave := activeReincarnationWave(run)
-		if wave == nil || wave.ID != waveID || wave.WaveType != ReincarnationWaveAttack || wave.Status != ReincarnationWaveActive {
-			return nil, ErrInvalidReincarnation
-		}
 		if existing := findReincarnationBattleByAction(*run, waveID, clientActionID); existing != nil {
 			duplicateReportID = existing.ReportID
 			return nil, nil
+		}
+		wave := activeReincarnationWave(run)
+		if wave == nil || wave.ID != waveID || wave.WaveType != ReincarnationWaveAttack || wave.Status != ReincarnationWaveActive {
+			return nil, ErrInvalidReincarnation
 		}
 		if now.After(run.ExpiresAt) {
 			expireReincarnationRun(run, wave, now)
@@ -216,13 +216,13 @@ func (s *Service) ReadyReincarnationDefense(playerID string, waveID string, troo
 	duplicateReportID := ""
 	state, run, reports, err := s.repo.UpdateReincarnationRunWithState(playerID, runIDFromWaveID(waveID), now, func(state *GameState, run *ReincarnationRun) ([]BattleReport, error) {
 		EnsureGeneralRoster(state, now)
-		wave := activeReincarnationWave(run)
-		if wave == nil || wave.ID != waveID || wave.WaveType != ReincarnationWaveDefense || wave.Status != ReincarnationWaveActive {
-			return nil, ErrInvalidReincarnation
-		}
 		if existing := findReincarnationBattleByAction(*run, waveID, clientActionID); existing != nil {
 			duplicateReportID = existing.ReportID
 			return nil, nil
+		}
+		wave := activeReincarnationWave(run)
+		if wave == nil || wave.ID != waveID || wave.WaveType != ReincarnationWaveDefense || wave.Status != ReincarnationWaveActive {
+			return nil, ErrInvalidReincarnation
 		}
 		if now.After(run.ExpiresAt) {
 			expireReincarnationRun(run, wave, now)
@@ -328,6 +328,32 @@ func (s *Service) SettleReincarnationRun(playerID string) (ReincarnationActionRe
 	}
 	hydrateStateForResponse(&state, now)
 	return buildReincarnationActionResult(run, nil, state, now), nil
+}
+
+// ExitReincarnationRun 退出已经结束的轮回实例，并保留实例、战报和已发放奖励。
+func (s *Service) ExitReincarnationRun(playerID string, runID string) (ReincarnationExitResult, error) {
+	now := time.Now().UTC()
+	run, err := s.repo.GetReincarnationRun(strings.TrimSpace(runID))
+	if err != nil || run.PlayerID != playerID {
+		return ReincarnationExitResult{}, ErrReincarnationRunNotFound
+	}
+	if run.Status == ReincarnationRunRunning {
+		return ReincarnationExitResult{}, ErrInvalidReincarnation
+	}
+	if shouldSettleReincarnation(run) {
+		run, _, err = s.grantReincarnationRewards(run, now)
+		if err != nil {
+			return ReincarnationExitResult{}, err
+		}
+	}
+	if run.ExitedAt == nil {
+		run.ExitedAt = &now
+		run.UpdatedAt = now
+		if err := s.repo.SaveReincarnationRun(run); err != nil {
+			return ReincarnationExitResult{}, err
+		}
+	}
+	return ReincarnationExitResult{RunID: run.ID, ExitedAt: run.ExitedAt.UTC().Format(resourceDateLayout), ServerTime: now.Format(resourceDateLayout)}, nil
 }
 
 // ListReincarnationReports 查询轮回绝境副本战报。

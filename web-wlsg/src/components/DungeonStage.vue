@@ -5,10 +5,11 @@ import type { GeneralAssignmentState, GeneralState } from '../game/types'
 import type { RecruitmentUnitViewModel } from '../game/recruitmentAdapter'
 import { formatRemaining, useServerClock } from '../game/useServerClock'
 import { activeWave, type DungeonStateStore } from '../dungeon/stateService'
+import { dungeonGeneralBonusText, preferredDungeonGeneralId } from '../dungeon/generalPresentation'
 import type { DungeonReward } from '../dungeon/types'
 
 const props = defineProps<{ dungeon: DungeonStateStore; playerId: string; accountGold: number; units: RecruitmentUnitViewModel[]; generals: GeneralState[]; assignments: GeneralAssignmentState[]; serverTime: string; receivedAt: number | null }>()
-const emit = defineEmits<{ load: []; start: [level: number]; fight: [waveId: string, troops: Record<string, number>, generalIds: string[]]; resetBonus: [waveId: string]; settle: [] }>()
+const emit = defineEmits<{ load: []; start: [level: number]; fight: [waveId: string, troops: Record<string, number>, generalIds: string[]]; resetBonus: [waveId: string]; settle: []; exit: [] }>()
 const selectedLevel = ref(1)
 const troopAmounts = ref<Record<string, number>>({})
 const selectedGeneralId = ref('')
@@ -17,6 +18,17 @@ const wave = computed(() => activeWave(props.dungeon.run))
 const availableGenerals = computed(() => {
   const busy = new Set(props.assignments.filter((assignment) => assignment.id !== 'main' && assignment.slot !== 'main').map((assignment) => assignment.generalId))
   return props.generals.filter((general) => !busy.has(general.id))
+})
+const selectedGeneral = computed(() => availableGenerals.value.find((general) => general.id === selectedGeneralId.value) ?? null)
+const selectedGeneralBonus = computed(() => dungeonGeneralBonusText(selectedGeneral.value))
+/** 返回最近一波随军将领名称，避免战斗结算后选择器切换到下一波主将。 */
+const lastExpGeneralName = computed(() => props.generals.find((general) => general.id === props.dungeon.lastGeneralId)?.name ?? '随军将领')
+/** 只在本波确实升级时展示升级前后的等级。 */
+const lastExpLevelText = computed(() => {
+  const before = props.dungeon.lastGeneralLevelBefore
+  const after = props.dungeon.lastGeneralLevelAfter
+  if (before === null || after === null || before === after) return ''
+  return ` · 等级 ${before} → ${after}`
 })
 const selectedTotal = computed(() => Object.values(troopAmounts.value).reduce((sum, amount) => sum + Math.max(0, Number(amount) || 0), 0))
 const { remainingSeconds } = useServerClock(toRef(props, 'serverTime'), toRef(props, 'receivedAt'))
@@ -29,8 +41,16 @@ watch(availableLevels, (levels) => {
   if (levels.length && !levels.some((level) => level.level === selectedLevel.value)) selectedLevel.value = levels[0].level
 }, { immediate: true })
 
-/** 波次变化时清除上波输入，避免误用旧兵力。 */
-watch(() => wave.value?.id, () => { troopAmounts.value = {}; selectedGeneralId.value = '' })
+/** 每波开始时清除上波兵力，并默认携带当前可用主将。 */
+watch(() => wave.value?.id, () => {
+  troopAmounts.value = {}
+  selectedGeneralId.value = preferredDungeonGeneralId(availableGenerals.value, props.assignments)
+}, { immediate: true })
+
+/** 武将占用变化后确保默认选择仍然真实可用。 */
+watch(availableGenerals, (generals) => {
+  if (!generals.some((general) => general.id === selectedGeneralId.value)) selectedGeneralId.value = preferredDungeonGeneralId(generals, props.assignments)
+}, { immediate: true })
 
 /** 把输入限制在当前真实可用兵力范围内。 */
 function normalizeAmount(unit: RecruitmentUnitViewModel) {
@@ -104,9 +124,10 @@ function statusLabel(status: string) { return ({ running: '进行中', completed
         </div>
         <table class="dungeon-troop-table"><thead><tr><th>兵种</th><th>可用</th><th>本波出战</th></tr></thead><tbody><tr v-for="unit in units.filter((item) => item.dispatchable)" :key="unit.id"><td><img v-if="unit.officialCode" :src="`/assets/official/images/${unit.officialCode}.gif`" :alt="unit.name" />{{ unit.name }}</td><td>{{ unit.owned.toLocaleString('zh-CN') }}</td><td><input v-model.number="troopAmounts[unit.id]" type="number" min="0" :max="unit.owned" :disabled="dungeon.operating || unit.owned <= 0" @change="normalizeAmount(unit)" /></td></tr></tbody></table>
         <div class="dungeon-command-row"><button type="button" :disabled="dungeon.operating" @click="fillTroops">全军出战</button><label>随军武将 <select v-model="selectedGeneralId" :disabled="dungeon.operating"><option value="">不出动</option><option v-for="general in availableGenerals" :key="general.id" :value="general.id">{{ general.name }}（等级{{ general.level }}）</option></select></label><b>已选 {{ selectedTotal.toLocaleString('zh-CN') }}</b><button class="primary" type="button" :disabled="dungeon.operating || selectedTotal <= 0" @click="submitWave">{{ dungeon.operating ? '结算中…' : wave.waveType === 'attack' ? '发起进攻' : '整军迎敌' }}</button></div>
+        <p class="dungeon-general-bonus" :class="{ inactive: !selectedGeneral }"><strong>{{ selectedGeneral ? `${selectedGeneral.name}随军加成` : '未携将' }}</strong><span>{{ selectedGeneralBonus }}</span></p>
       </section>
 
-      <section class="adventure-panel dungeon-reward-panel"><header><strong><i></i>本轮累计奖励</strong></header><p>{{ rewardText(dungeon.run.pendingRewards) }}</p><div v-if="dungeon.run.status !== 'running' && !dungeon.run.rewardGrantedAt" class="adventure-actions"><button type="button" :disabled="dungeon.operating" @click="emit('settle')">结算并领取</button></div><div v-else-if="dungeon.run.rewardGrantedAt" class="adventure-actions"><span class="success">奖励已发放</span><button type="button" :disabled="dungeon.operating" @click="emit('start', dungeon.run.level)">再次挑战本境</button></div></section>
+      <section class="adventure-panel dungeon-reward-panel"><header><strong><i></i>本轮累计奖励</strong></header><p>{{ rewardText(dungeon.run.pendingRewards) }}</p><p v-if="dungeon.lastGeneralId" class="dungeon-general-exp"><strong>本波将领经验</strong><span>{{ lastExpGeneralName }} <b>+{{ dungeon.lastGeneralExpGained.toLocaleString('zh-CN') }}</b>{{ lastExpLevelText }}</span></p><div v-if="dungeon.run.status !== 'running' && !dungeon.run.rewardGrantedAt" class="adventure-actions"><button type="button" :disabled="dungeon.operating" @click="emit('settle')">结算并领取</button></div><div v-else-if="dungeon.run.rewardGrantedAt" class="adventure-actions"><span class="success">奖励已发放</span><button type="button" :disabled="dungeon.operating" @click="emit('exit')">退出副本</button></div></section>
     </template>
     <p v-if="dungeon.actionMessage" class="adventure-feedback" :class="dungeon.actionSucceeded ? 'success' : 'error'">{{ dungeon.actionMessage }}<span v-if="dungeon.lastReportId"> · 战报 {{ dungeon.lastReportId.slice(-8) }}</span></p>
   </section>

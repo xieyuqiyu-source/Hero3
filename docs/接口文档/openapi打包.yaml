@@ -1595,6 +1595,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/dungeons/reincarnation/exit:
+    post:
+      tags:
+      - Dungeon
+      summary: 退出已经结束的轮回绝境
+      description: 仅允许退出非进行中实例；接口幂等，保留历史实例、战报和已发放奖励。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReincarnationExitRequest'
+      responses:
+        '200':
+          description: 已退出副本
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReincarnationExitResult'
+        '400':
+          description: 实例仍在进行或请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 实例不存在或不属于当前玩家
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/dungeons/reincarnation/reports:
     get:
       tags:
@@ -4660,6 +4691,34 @@ components:
           additionalProperties:
             type: number
         buffs:
+          type: object
+          additionalProperties:
+            type: number
+        traits:
+          type: array
+          description: 当前武将由后端配置激活的真实特性。
+          items:
+            $ref: '#/components/schemas/GeneralTraitInstance'
+    GeneralTraitInstance:
+      type: object
+      required:
+      - traitId
+      - params
+      properties:
+        traitId:
+          type: string
+        traitType:
+          type: string
+          enum:
+          - special
+          - bonus
+        name:
+          type: string
+        scope:
+          type: string
+        targetUnitType:
+          type: string
+        params:
           type: object
           additionalProperties:
             type: number
@@ -8075,6 +8134,11 @@ components:
           type: string
           format: date-time
           nullable: true
+        exitedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: 玩家确认退出副本的时间；退出不会删除历史实例或战报。
         waves:
           type: array
           items:
@@ -8172,6 +8236,31 @@ components:
       properties:
         playerId:
           type: string
+    ReincarnationExitRequest:
+      type: object
+      required:
+      - playerId
+      - runId
+      properties:
+        playerId:
+          type: string
+        runId:
+          type: string
+    ReincarnationExitResult:
+      type: object
+      required:
+      - runId
+      - exitedAt
+      - serverTime
+      properties:
+        runId:
+          type: string
+        exitedAt:
+          type: string
+          format: date-time
+        serverTime:
+          type: string
+          format: date-time
     ReincarnationRunPage:
       type: object
       required:

@@ -124,6 +124,24 @@ func (h *Handlers) SettleReincarnation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// ExitReincarnation 退出已经结束的轮回绝境实例。
+func (h *Handlers) ExitReincarnation(w http.ResponseWriter, r *http.Request) {
+	var req game.ReincarnationExitRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if !h.requireOwnership(w, r, req.PlayerID) {
+		return
+	}
+	result, err := h.gameService.ExitReincarnationRun(req.PlayerID, req.RunID)
+	if err != nil {
+		writeReincarnationError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 // ReincarnationReports 返回轮回绝境副本战报。
 func (h *Handlers) ReincarnationReports(w http.ResponseWriter, r *http.Request) {
 	playerID := r.URL.Query().Get("playerId")

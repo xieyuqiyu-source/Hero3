@@ -136,6 +136,8 @@ paths:
     $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1waves~1{waveId}~1bonus-reset
   /api/v1/dungeons/reincarnation/settle:
     $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1settle
+  /api/v1/dungeons/reincarnation/exit:
+    $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1exit
   /api/v1/dungeons/reincarnation/reports:
     $ref: ./paths/dungeon.yaml#/~1api~1v1~1dungeons~1reincarnation~1reports
   /api/v1/news/reports:
@@ -349,6 +351,8 @@ components:
       $ref: ./schemas/game-state.yaml#/RecruitQueue
     General:
       $ref: ./schemas/game-state.yaml#/General
+    GeneralTraitInstance:
+      $ref: ./schemas/game-state.yaml#/GeneralTraitInstance
     GeneralAssignment:
       $ref: ./schemas/game-state.yaml#/GeneralAssignment
     ModifierBreakdownItem:
@@ -565,6 +569,10 @@ components:
       $ref: ./schemas/reincarnation.yaml#/ReincarnationTroopRequest
     ReincarnationSettleRequest:
       $ref: ./schemas/reincarnation.yaml#/ReincarnationSettleRequest
+    ReincarnationExitRequest:
+      $ref: ./schemas/reincarnation.yaml#/ReincarnationExitRequest
+    ReincarnationExitResult:
+      $ref: ./schemas/reincarnation.yaml#/ReincarnationExitResult
     ReincarnationRunPage:
       $ref: ./schemas/reincarnation.yaml#/ReincarnationRunPage
     GeneralTraitConfig:

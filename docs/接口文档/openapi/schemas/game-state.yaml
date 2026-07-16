@@ -468,6 +468,32 @@ General:
       type: object
       additionalProperties:
         type: number
+    traits:
+      type: array
+      description: 当前武将由后端配置激活的真实特性。
+      items:
+        $ref: '#/components/schemas/GeneralTraitInstance'
+GeneralTraitInstance:
+  type: object
+  required:
+  - traitId
+  - params
+  properties:
+    traitId:
+      type: string
+    traitType:
+      type: string
+      enum: [special, bonus]
+    name:
+      type: string
+    scope:
+      type: string
+    targetUnitType:
+      type: string
+    params:
+      type: object
+      additionalProperties:
+        type: number
 GeneralAssignment:
   type: object
   required:

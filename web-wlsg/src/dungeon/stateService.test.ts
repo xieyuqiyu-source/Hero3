@@ -16,7 +16,7 @@ function run(id = 'run-1'): DungeonRun {
 function gameStore() { return { data: { army: [{ unitType: 'huWei', amount: 50 }], serverTime: '', general: null, generals: [] }, receivedAt: null } as unknown as GameStateStore }
 
 /** 创建独立副本状态。 */
-function store(): DungeonStateStore { return { phase: 'idle', playerId: null, config: null, run: null, error: '', operating: false, actionMessage: '', actionSucceeded: false, resultVersion: 0, lastReportId: '' } }
+function store(): DungeonStateStore { return { phase: 'idle', playerId: null, config: null, run: null, error: '', operating: false, actionMessage: '', actionSucceeded: false, resultVersion: 0, lastReportId: '', lastGeneralId: '', lastGeneralExpGained: 0, lastGeneralLevelBefore: null, lastGeneralLevelAfter: null } }
 
 describe('轮回绝境状态服务', () => {
   it('并行读取配置和当前实例并回写真实军队', async () => {
@@ -58,11 +58,32 @@ describe('轮回绝境状态服务', () => {
     expect(attackDungeonWave).toHaveBeenCalledOnce()
   })
 
+  it('展示随军将领本波真实经验和升级结果', async () => {
+    const state = { ...store(), phase: 'ready' as const, playerId: 'p1', config, run: run() }
+    const attackDungeonWave = vi.fn(async () => ({ run: run(), army: [{ unitType: 'huWei', amount: 30 }], generals: [{ id: 'caocao', name: '曹操', level: 12, experience: 5 }], serverTime: '', battleReport: { id: 'report-exp', generalExpGained: 125, generalLevelBefore: 11, generalLevelAfter: 12 } }))
+    await createDungeonStateService({ attackDungeonWave } as unknown as GameApi, state, gameStore()).fight('run-1-w1', { huWei: 20 }, ['caocao'])
+    expect(state.lastGeneralId).toBe('caocao')
+    expect(state.lastGeneralExpGained).toBe(125)
+    expect(state.lastGeneralLevelBefore).toBe(11)
+    expect(state.lastGeneralLevelAfter).toBe(12)
+    expect(state.actionMessage).toContain('随军将领获得 125 经验')
+  })
+
   it('重置加成返回后端账户金币余额', async () => {
     const state = { ...store(), phase: 'ready' as const, playerId: 'p1', config, run: run() }
     const resetDungeonBonus = vi.fn(async () => ({ run: run(), army: [], accountGold: 88, cost: 10, serverTime: '' }))
     const gold = await createDungeonStateService({ resetDungeonBonus } as unknown as GameApi, state, gameStore()).resetBonus('run-1-w1')
     expect(gold).toBe(88)
     expect(state.actionMessage).toContain('10 金币')
+  })
+
+  it('结束后调用退出接口并回到层级选择', async () => {
+    const finished = { ...run(), status: 'rewarded', rewardGrantedAt: '2026-07-16T00:00:00Z' }
+    const state = { ...store(), phase: 'ready' as const, playerId: 'p1', config, run: finished }
+    const exitDungeon = vi.fn(async () => ({ runId: finished.id, exitedAt: '2026-07-16T00:01:00Z', serverTime: '2026-07-16T00:01:00Z' }))
+    await createDungeonStateService({ exitDungeon } as unknown as GameApi, state, gameStore()).exit()
+    expect(exitDungeon).toHaveBeenCalledWith('p1', finished.id)
+    expect(state.run).toBeNull()
+    expect(state.actionMessage).toContain('已退出')
   })
 })

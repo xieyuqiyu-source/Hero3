@@ -37,6 +37,7 @@ type ReincarnationRun struct {
 	EndedReason     string                `json:"endedReason,omitempty"`
 	PendingRewards  []Reward              `json:"pendingRewards"`
 	RewardGrantedAt *time.Time            `json:"rewardGrantedAt,omitempty"`
+	ExitedAt        *time.Time            `json:"exitedAt,omitempty"`
 	Waves           []ReincarnationWave   `json:"waves"`
 	Battles         []ReincarnationBattle `json:"battles,omitempty"`
 	CreatedAt       time.Time             `json:"createdAt"`
@@ -122,4 +123,15 @@ type ReincarnationTroopRequest struct {
 
 type ReincarnationBonusResetRequest struct {
 	PlayerID string `json:"playerId"`
+}
+
+type ReincarnationExitRequest struct {
+	PlayerID string `json:"playerId"`
+	RunID    string `json:"runId"`
+}
+
+type ReincarnationExitResult struct {
+	RunID      string `json:"runId"`
+	ExitedAt   string `json:"exitedAt"`
+	ServerTime string `json:"serverTime"`
 }

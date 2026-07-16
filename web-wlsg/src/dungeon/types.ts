@@ -72,6 +72,7 @@ export interface DungeonRun {
   endedReason?: string
   pendingRewards: DungeonReward[]
   rewardGrantedAt?: string
+  exitedAt?: string
   waves: DungeonWave[]
   createdAt: string
   updatedAt: string
@@ -93,5 +94,11 @@ export interface DungeonActionResult {
   generals?: GeneralState[]
   accountGold?: number
   cost?: number
+  serverTime: string
+}
+
+export interface DungeonExitResult {
+  runId: string
+  exitedAt: string
   serverTime: string
 }
