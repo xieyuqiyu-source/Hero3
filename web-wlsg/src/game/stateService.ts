@@ -411,11 +411,11 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
       Object.assign(state.data, { resources: result.resources, resourceProduction: result.resourceProduction, resourceSettledAt: result.resourceSettledAt, capacityBoost: result.capacityBoost ?? multiplier, capacityBoostEnd: result.capacityBoostEnd ?? '', cityGold: result.cityGold, serverTime: result.serverTime })
       state.receivedAt = Date.now()
       const cost = result.cost ?? state.capacityBoostPrices[`${multiplier}x_${hours}h`] ?? 0
-      state.capacityBoostMessage = `爆仓扩容成功：容量 ×${multiplier}，持续 ${hours} 小时${cost ? `，消耗 ${cost} 城金` : ''}`
+      state.capacityBoostMessage = `扩容成功：容量 ×${multiplier}，持续 ${hours} 小时${cost ? `，消耗 ${cost} 城金` : ''}`
       state.capacityBoostSucceeded = true
     } catch (error) {
       if (currentVersion !== requestVersion || state.playerId !== playerId) return
-      state.capacityBoostMessage = error instanceof Error ? error.message : '爆仓扩容失败'
+      state.capacityBoostMessage = error instanceof Error ? error.message : '扩容失败'
       state.capacityBoostSucceeded = false
     } finally {
       if (currentVersion === requestVersion && state.playerId === playerId) state.capacityBoosting = false

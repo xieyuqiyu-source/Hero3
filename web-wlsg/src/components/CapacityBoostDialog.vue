@@ -1,4 +1,4 @@
-<!-- 仓库爆仓扩容弹窗：沿用原站深色铜边弹窗，并展示后端四倍率、四时长实时价格。 -->
+<!-- 仓库扩容弹窗：沿用原站深色铜边弹窗，并展示后端四倍率、四时长实时价格。 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
@@ -33,7 +33,7 @@ function submit() {
 <template>
   <div class="capacity-boost-mask" role="presentation" @click.self="emit('close')">
     <section class="capacity-boost-dialog" role="dialog" aria-modal="true" aria-labelledby="capacity-boost-title">
-      <header><strong id="capacity-boost-title">城池仓库爆仓扩容</strong><button type="button" aria-label="关闭扩容弹窗" @click="emit('close')">×</button></header>
+      <header><strong id="capacity-boost-title">城池仓库扩容</strong><button type="button" aria-label="关闭扩容弹窗" @click="emit('close')">×</button></header>
       <div class="capacity-boost-body">
         <p class="capacity-boost-current">{{ currentEndLabel }}</p>
         <p class="capacity-boost-tip">选择容量倍率与持续时间。购买后仓库容量立即生效，同倍率再次购买会续时，更换倍率则按本次选择重新计算。</p>
@@ -44,7 +44,7 @@ function submit() {
         <div v-else class="capacity-boost-price"><span>本次消耗</span><strong>{{ selectedCost.toLocaleString('zh-CN') }} 城金</strong><small>当前城金：{{ cityGold.toLocaleString('zh-CN') }}</small></div>
         <p v-if="message" class="capacity-boost-message" :class="{ success: succeeded, error: !succeeded }" role="status">{{ message }}</p>
       </div>
-      <footer><button v-if="!loading && selectedCost === null" type="button" @click="emit('retry')">重新读取</button><button type="button" :disabled="loading || submitting || selectedCost === null || cannotAfford" @click="submit">{{ submitting ? '扩容中…' : cannotAfford ? '城金不足' : '确认爆仓' }}</button><button type="button" @click="emit('close')">关闭</button></footer>
+      <footer><button v-if="!loading && selectedCost === null" type="button" @click="emit('retry')">重新读取</button><button type="button" :disabled="loading || submitting || selectedCost === null || cannotAfford" @click="submit">{{ submitting ? '扩容中…' : cannotAfford ? '城金不足' : '确认扩容' }}</button><button type="button" @click="emit('close')">关闭</button></footer>
     </section>
   </div>
 </template>

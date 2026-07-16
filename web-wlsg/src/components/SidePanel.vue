@@ -64,9 +64,9 @@ function shortcutCount(key: string) {
 /** 格式化资源和军队真实数值。 */
 function formatNumber(value: number) { return Number(value || 0).toLocaleString('zh-CN') }
 
-/** 返回右侧爆仓入口的当前容量倍率和到期说明。 */
+/** 返回右侧扩容入口的当前容量倍率和到期说明。 */
 function capacityBoostTitle() {
-  if (!props.model.capacityBoost || !props.model.capacityBoostEnd) return '打开仓库爆仓扩容：选择容量倍率与持续时间'
+  if (!props.model.capacityBoost || !props.model.capacityBoostEnd) return '打开仓库扩容：选择容量倍率与持续时间'
   const seconds = remainingSeconds(props.model.capacityBoostEnd)
   return seconds > 0 ? `当前容量 ×${props.model.capacityBoost}，剩余 ${formatRemaining(seconds)}；点击调整或续时` : '容量扩容已到期，点击重新选择'
 }
@@ -176,7 +176,7 @@ function recallMarchTitle(march: OutgoingMarchViewModel) {
       <p v-if="marchOperationMessage" class="march-operation-message" :class="{ error: !marchOperationSucceeded }" role="status">{{ marchOperationMessage }}</p>
     </section>
     <section class="side-section resource-section">
-      <h2>城池生产力 <button type="button" class="capacity-boost-entry" :class="{ active: model.capacityBoost > 1 && remainingSeconds(model.capacityBoostEnd) > 0 }" :title="capacityBoostTitle()" @click="emit('openCapacityBoost')">爆仓</button></h2>
+      <h2>城池生产力 <button type="button" class="capacity-boost-entry" :class="{ active: model.capacityBoost > 1 && remainingSeconds(model.capacityBoostEnd) > 0 }" :title="capacityBoostTitle()" @click="emit('openCapacityBoost')">扩容</button></h2>
       <div class="resource-row" v-for="resource in model.resources" :key="resource.key">
         <img :src="`/assets/official/images/${resource.icon}`" alt="" /><strong>{{ formatNumber(resource.productionPerHour) }} 每小时</strong>
         <button type="button" disabled title="V0.3 只读展示；购买加成需另行授权"><img src="/assets/official/images/g_cf_2_2.gif" alt="加成" /></button>

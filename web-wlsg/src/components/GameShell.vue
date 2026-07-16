@@ -80,7 +80,7 @@ watch(() => [activePrimaryIndex.value, activeMilitaryIndex.value, props.game.pha
   emit('refreshMarches')
 }, { immediate: true })
 
-/** 打开右侧爆仓弹窗并按需读取后端实时价格。 */
+/** 打开右侧扩容弹窗并按需读取后端实时价格。 */
 function openCapacityBoost() {
   capacityBoostOpen.value = true
   emit('loadCapacityBoostPrices')

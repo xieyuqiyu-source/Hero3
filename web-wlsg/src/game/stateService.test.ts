@@ -210,7 +210,7 @@ describe('玩家真实状态服务', () => {
     expect(state.capacityBoostPrices['16x_24h']).toBe(9600)
   })
 
-  it('购买容量爆仓后回写真实容量、倍率、到期时间与城金', async () => {
+  it('购买容量扩容后回写真实容量、倍率、到期时间与城金', async () => {
     const state = store()
     const current = stateFor('p1')
     current.cityGold = 1000
