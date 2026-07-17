@@ -136,6 +136,9 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 		return BattleReport{}, err
 	}
 	if march.Status != YellowTurbanMarchStatusMarching {
+		if march.Status == YellowTurbanMarchStatusResolved && strings.TrimSpace(march.DefenderReportID) != "" {
+			return s.retryResolvedYellowTurbanRewards(march, now)
+		}
 		return BattleReport{}, nil
 	}
 	arrivesAt, err := time.Parse(resourceDateLayout, march.ArrivesAt)
@@ -143,7 +146,7 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 		return BattleReport{}, ErrPvpMarchNotReady
 	}
 	eventID := "yt_battle_" + randomID(12)
-	_, resolvedMarch, report, reinforcementReports, err := s.repo.ResolveYellowTurbanBattleTransaction(march.ID, now, func(state *GameState, reinforcements []Reinforcement, lockedMarch *YellowTurbanMarch) (BattleReport, []BattleReport, []Reinforcement, error) {
+	_, _, report, reinforcementReports, err := s.repo.ResolveYellowTurbanBattleTransaction(march.ID, now, func(state *GameState, reinforcements []Reinforcement, lockedMarch *YellowTurbanMarch) (BattleReport, []BattleReport, []Reinforcement, error) {
 		if lockedMarch.Status != YellowTurbanMarchStatusMarching {
 			return BattleReport{}, nil, nil, ErrYellowTurbanMarchNotFound
 		}
@@ -265,7 +268,7 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 		report.Detail.Extra = mergeReportExtraMap(report.Detail.Extra, map[string]interface{}{
 			"yellowTurban": buildYellowTurbanReportExtra(lockedMarch),
 		})
-		reinforcementReports := buildPvpReinforcementReports(eventID, nil, state, changedReinforcements, totalReinforcementLosses, reinforcementGeneralExp, reportResult, nowText)
+		reinforcementReports := buildPvpReinforcementReports(report, nil, state, changedReinforcements, totalReinforcementLosses, reinforcementGeneralExp, nowText)
 		for i := range reinforcementReports {
 			reinforcementReports[i].SourceType = ReportSourceYellowTurban
 			reinforcementReports[i].BattleType = BattleTypeYellowTurban
@@ -286,36 +289,47 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 		lockedMarch.ResolvedAt = nowText
 		lockedMarch.DefenderReportID = report.ID
 		state.ServerTime = nowText
-		return report, reinforcementReports, changedReinforcements, nil
+		eventReports := append([]BattleReport{report}, reinforcementReports...)
+		eventReports = synchronizeBattleReportGeneralResults(eventReports)
+		return eventReports[0], eventReports[1:], changedReinforcements, nil
 	})
 	if err != nil {
 		if errors.Is(err, ErrYellowTurbanMarchNotFound) {
 			return BattleReport{}, err
 		}
-		_, _ = s.repo.UpdateYellowTurbanMarch(march.ID, now, func(m *YellowTurbanMarch) error {
-			m.Status = YellowTurbanMarchStatusFailed
-			m.Error = err.Error()
-			return nil
-		})
+		if current, lookupErr := s.repo.GetYellowTurbanMarch(march.ID); lookupErr == nil && current.Status == YellowTurbanMarchStatusResolved && strings.TrimSpace(current.DefenderReportID) != "" {
+			return s.retryResolvedYellowTurbanRewards(current, now)
+		}
 		return BattleReport{}, err
 	}
-	reports := append([]BattleReport{report}, reinforcementReports...)
-	if _, err := s.CreateBattleReports(BattleReportCreateInput{
-		EventID:    eventID,
-		SourceType: ReportSourceYellowTurban,
-		SourceID:   resolvedMarch.ID,
-		BattleType: BattleTypeYellowTurban,
-		Result:     report.Result,
-		Reports:    reports,
-		Extra: map[string]interface{}{
-			"yellowTurbanMarchId": resolvedMarch.ID,
-			"sourceCityId":        resolvedMarch.SourceCityID,
-			"riskLevelId":         resolvedMarch.RiskLevelID,
-		},
-	}); err != nil {
+	if err := s.applyReinforcementGeneralExpFromReports(reinforcementReports, now); err != nil {
 		return BattleReport{}, err
 	}
-	s.applyReinforcementGeneralExpFromReports(reinforcementReports, now)
+	return report, nil
+}
+
+// retryResolvedYellowTurbanRewards 读取既有事件并幂等补发此前失败的援军武将经验。
+func (s *Service) retryResolvedYellowTurbanRewards(march YellowTurbanMarch, now time.Time) (BattleReport, error) {
+	report, err := s.repo.GetReportByID(strings.TrimSpace(march.DefenderReportID))
+	if err != nil {
+		return BattleReport{}, err
+	}
+	if strings.TrimSpace(report.EventID) == "" {
+		return report, nil
+	}
+	eventReports, err := s.repo.ListReportsByEventForAdmin(report.EventID)
+	if err != nil {
+		return BattleReport{}, err
+	}
+	reinforcementReports := make([]BattleReport, 0, len(eventReports))
+	for _, eventReport := range eventReports {
+		if eventReport.ViewType == ReportViewReinforcement {
+			reinforcementReports = append(reinforcementReports, eventReport)
+		}
+	}
+	if err := s.applyReinforcementGeneralExpFromReports(reinforcementReports, now); err != nil {
+		return BattleReport{}, err
+	}
 	return report, nil
 }
 

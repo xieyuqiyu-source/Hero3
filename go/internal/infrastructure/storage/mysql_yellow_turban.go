@@ -91,6 +91,7 @@ func (r *MySQLRepository) ResolveYellowTurbanBattleTransaction(marchID string, u
 		return game.GameState{}, game.YellowTurbanMarch{}, game.BattleReport{}, nil, err
 	}
 	defenderArmy := armySnapshotsFromStorageState(defender.Army)
+	defenderGenerals := generalSnapshotsFromStorageState(defender.Generals)
 	defenderAssignments := generalAssignmentSnapshotsFromStorageState(defender.GeneralAssignments)
 	reinforcements, err := listReceivedReinforcementsTx(tx, defender.Player.ID, " FOR UPDATE")
 	if err != nil {
@@ -104,11 +105,23 @@ func (r *MySQLRepository) ResolveYellowTurbanBattleTransaction(marchID string, u
 		updatedAt = time.Now().UTC()
 	}
 	defender.ServerTime = updatedAt.UTC().Format(time.RFC3339)
-	if err := savePvpPlayerStateTx(tx, defender.Player.ID, defender, defenderJSON, updatedAt, defenderArmy, defenderAssignments); err != nil {
+	if err := savePvpPlayerStateTx(tx, defender.Player.ID, defender, defenderJSON, updatedAt, defenderArmy, defenderGenerals, defenderAssignments); err != nil {
 		return game.GameState{}, game.YellowTurbanMarch{}, game.BattleReport{}, nil, err
 	}
 	for _, record := range changedReinforcements {
 		if err := updateReinforcementTx(tx, record.ID, record); err != nil {
+			return game.GameState{}, game.YellowTurbanMarch{}, game.BattleReport{}, nil, err
+		}
+	}
+	reports := append([]game.BattleReport{report}, reinforcementReports...)
+	for _, battleReport := range reports {
+		if err := insertBattleReportTx(tx, battleReport); err != nil {
+			return game.GameState{}, game.YellowTurbanMarch{}, game.BattleReport{}, nil, err
+		}
+	}
+	event := game.BuildYellowTurbanBattleEvent(march, report)
+	if event.ID != "" {
+		if err := upsertBattleEventTx(tx, event); err != nil {
 			return game.GameState{}, game.YellowTurbanMarch{}, game.BattleReport{}, nil, err
 		}
 	}

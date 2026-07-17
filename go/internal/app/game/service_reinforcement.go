@@ -102,7 +102,7 @@ func (s *Service) SendReinforcement(req SendReinforcementRequest) (Reinforcement
 	if err != nil {
 		return ReinforcementResponse{}, err
 	}
-	return ReinforcementResponse{Reinforcement: record, Patch: BuildGarrisonActionResult(fromState)}, nil
+	return ReinforcementResponse{Reinforcement: publicReinforcementRecord(record), Patch: BuildGarrisonActionResult(fromState)}, nil
 }
 
 // CreateGarrisonDetachment 创建一批非增援来源的驻防队伍，不写入玩家常规军队。
@@ -157,7 +157,7 @@ func (s *Service) CreateGarrisonDetachment(req CreateGarrisonDetachmentRequest) 
 			if err != nil {
 				return ReinforcementResponse{}, err
 			}
-			return ReinforcementResponse{Reinforcement: record, Patch: BuildGarrisonActionResult(ownerState)}, nil
+			return ReinforcementResponse{Reinforcement: publicReinforcementRecord(record), Patch: BuildGarrisonActionResult(ownerState)}, nil
 		}
 	}
 	ownerState, _, record, err := s.repo.CreateReinforcementWithState(ownerPlayerID, hostPlayerID, now, func(owner *GameState, host *GameState, targetRecords []Reinforcement) (Reinforcement, error) {
@@ -212,7 +212,7 @@ func (s *Service) CreateGarrisonDetachment(req CreateGarrisonDetachmentRequest) 
 	if err != nil {
 		return ReinforcementResponse{}, err
 	}
-	return ReinforcementResponse{Reinforcement: record, Patch: BuildGarrisonActionResult(ownerState)}, nil
+	return ReinforcementResponse{Reinforcement: publicReinforcementRecord(record), Patch: BuildGarrisonActionResult(ownerState)}, nil
 }
 
 // ListSentReinforcements 返回玩家派出的增援，并请求触发到达/返程结算。
@@ -231,7 +231,7 @@ func (s *Service) ListSentReinforcements(playerID string) (ReinforcementListResp
 	normalizeGarrisonRecords(items)
 	items = filterTrueReinforcements(items)
 	sortReinforcements(items)
-	return ReinforcementListResponse{Items: items}, nil
+	return ReinforcementListResponse{Items: publicReinforcementRecords(items)}, nil
 }
 
 // ListReceivedReinforcements 返回玩家收到的增援，并请求触发到达/返程结算。
@@ -251,7 +251,7 @@ func (s *Service) ListReceivedReinforcements(playerID string) (ReinforcementList
 	items = filterReceivedGarrisonRecords(items)
 	items = aggregateObtainedGarrisons(playerID, items)
 	sortReinforcements(items)
-	return ReinforcementListResponse{Items: items}, nil
+	return ReinforcementListResponse{Items: publicReinforcementRecords(items)}, nil
 }
 
 // GetReinforcement 返回单个增援批次详情。
@@ -265,7 +265,7 @@ func (s *Service) GetReinforcement(playerID string, reinforcementID string) (Rei
 	if playerID != "" && playerID != record.FromPlayerID && playerID != record.ToPlayerID && playerID != record.OwnerPlayerID && playerID != record.HostPlayerID {
 		return Reinforcement{}, ErrReinforcementNotFound
 	}
-	return record, nil
+	return publicReinforcementRecord(record), nil
 }
 
 // RecallReinforcement 由派出方召回援军。
@@ -289,7 +289,7 @@ func (s *Service) RecallReinforcement(playerID string, reinforcementID string) (
 	if err != nil {
 		return ReinforcementResponse{}, err
 	}
-	return ReinforcementResponse{Reinforcement: record, Patch: BuildGarrisonActionResult(from)}, nil
+	return ReinforcementResponse{Reinforcement: publicReinforcementRecord(record), Patch: BuildGarrisonActionResult(from)}, nil
 }
 
 // ExpelReinforcement 由接收方遣返援军。
@@ -313,7 +313,7 @@ func (s *Service) ExpelReinforcement(playerID string, reinforcementID string) (R
 	if err != nil {
 		return ReinforcementResponse{}, err
 	}
-	return ReinforcementResponse{Reinforcement: record, Patch: BuildGarrisonActionResult(to)}, nil
+	return ReinforcementResponse{Reinforcement: publicReinforcementRecord(record), Patch: BuildGarrisonActionResult(to)}, nil
 }
 
 // AccelerateReinforcement 使用城金加速自己派出的行军中援军。
@@ -387,7 +387,7 @@ func (s *Service) AccelerateReinforcement(playerID string, reinforcementID strin
 		s.publishCurrencyChanged(playerID, "", record.ID, LedgerRefReinforcementAccelerate)
 	}
 	return ReinforcementActionResponse{
-		Reinforcement: record,
+		Reinforcement: publicReinforcementRecord(record),
 		Patch:         BuildGarrisonActionResult(from),
 		CityGold:      from.CityGold,
 		Cost:          cost,
@@ -402,7 +402,7 @@ func (s *Service) MarkReinforcementArrived(reinforcementID string) (Reinforcemen
 		normalizeGarrisonRecord(record)
 		return markReinforcementArrived(record, now)
 	})
-	return record, err
+	return publicReinforcementRecord(record), err
 }
 
 // CompleteReinforcementReturn 完成返程，返还剩余兵力并释放武将。
@@ -412,7 +412,29 @@ func (s *Service) CompleteReinforcementReturn(reinforcementID string) (Reinforce
 		normalizeGarrisonRecord(record)
 		return completeReinforcementReturn(from, record, now)
 	})
-	return record, err
+	return publicReinforcementRecord(record), err
+}
+
+// publicReinforcementRecord 移除只供服务端连续战斗与幂等发奖使用的内部状态。
+func publicReinforcementRecord(record Reinforcement) Reinforcement {
+	result := cloneReinforcement(record)
+	delete(result.RewardState, reinforcementGeneralExpAppliedBattlesKey)
+	for index := range result.Generals {
+		result.Generals[index].Exp = 0
+		result.Generals[index].GeneralExpGained = nil
+		result.Generals[index].GeneralLevelBefore = nil
+		result.Generals[index].GeneralLevelAfter = nil
+	}
+	return result
+}
+
+// publicReinforcementRecords 批量生成可返回玩家的增援记录。
+func publicReinforcementRecords(records []Reinforcement) []Reinforcement {
+	result := make([]Reinforcement, 0, len(records))
+	for _, record := range records {
+		result = append(result, publicReinforcementRecord(record))
+	}
+	return result
 }
 
 // SettleReinforcementsForPlayer 请求触发结算某个玩家相关的到达和返程。
@@ -915,6 +937,7 @@ func reserveReinforcementGenerals(state *GameState, generalIDs []string, reinfor
 			ID:         general.ID,
 			Name:       general.Name,
 			Level:      general.Level,
+			Exp:        general.Exp,
 			Stats:      cloneStringIntMap(general.Stats),
 			Attributes: cloneFloatMap(general.Attributes),
 			Buffs:      cloneFloatMap(general.Buffs),
@@ -1165,6 +1188,9 @@ func cloneReinforcementGenerals(src []ReinforcementGeneralSnapshot) []Reinforcem
 		dst[i].Attributes = cloneFloatMap(item.Attributes)
 		dst[i].Buffs = cloneFloatMap(item.Buffs)
 		dst[i].Traits = append([]GeneralTraitInstance(nil), item.Traits...)
+		dst[i].GeneralExpGained = cloneIntPointer(item.GeneralExpGained)
+		dst[i].GeneralLevelBefore = cloneIntPointer(item.GeneralLevelBefore)
+		dst[i].GeneralLevelAfter = cloneIntPointer(item.GeneralLevelAfter)
 	}
 	return dst
 }

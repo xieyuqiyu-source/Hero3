@@ -28,6 +28,11 @@ export interface SessionService {
 
 /** 创建可注入依赖、便于自动测试的会话服务。 */
 export function createSessionService(api: GameApi, storage: SessionStorage, state: SessionState): SessionService {
+  /** 确保进入玩家流程前已经加载公共玩法与兵种配置。 */
+  async function ensureBootstrap() {
+    if (!state.bootstrap) state.bootstrap = await api.bootstrap()
+  }
+
   /** 清空内存和本地状态并返回登录页。 */
   function logout() {
     storage.clearSession()
@@ -50,7 +55,7 @@ export function createSessionService(api: GameApi, storage: SessionStorage, stat
   async function initialize() {
     Object.assign(state, { phase: 'loading', error: '' })
     try {
-      state.bootstrap = await api.bootstrap()
+      await ensureBootstrap()
       const saved = storage.readSession()
       if (!saved) {
         storage.clearSession()
@@ -79,6 +84,7 @@ export function createSessionService(api: GameApi, storage: SessionStorage, stat
     state.submitting = true
     state.error = ''
     try {
+      await ensureBootstrap()
       const session = await api.login(username.trim(), password)
       storage.clearPlayerId()
       storage.writeSession({ accountId: session.accountId, username: session.username, token: session.token })

@@ -77,6 +77,7 @@ func NormalizeBattleReport(report BattleReport) BattleReport {
 		report.Detail.Share = report.Share
 	}
 	syncBattleReportDetailOutcome(&report)
+	syncBattleReportOwnerGeneralResult(&report)
 	syncBattleReportDetailGenerals(&report)
 	return report
 }
@@ -646,11 +647,14 @@ func convertPvpGenerals(generals []PvpGeneralSnapshot, role string) []BattleRepo
 	result := make([]BattleReportGeneral, 0, len(generals))
 	for _, general := range generals {
 		result = append(result, BattleReportGeneral{
-			ID:     general.ID,
-			Name:   general.Name,
-			Level:  general.Level,
-			Role:   role,
-			Traits: append([]GeneralTraitInstance(nil), general.Traits...),
+			ID:                 general.ID,
+			Name:               general.Name,
+			Level:              general.Level,
+			Role:               role,
+			GeneralExpGained:   cloneIntPointer(general.GeneralExpGained),
+			GeneralLevelBefore: cloneIntPointer(general.GeneralLevelBefore),
+			GeneralLevelAfter:  cloneIntPointer(general.GeneralLevelAfter),
+			Traits:             append([]GeneralTraitInstance(nil), general.Traits...),
 		})
 	}
 	return result
@@ -664,17 +668,178 @@ func reinforcementReportGenerals(report BattleReport, role string) []BattleRepor
 	result := []BattleReportGeneral{}
 	for _, reinforcement := range report.PvpReinforcements {
 		for _, general := range reinforcement.Generals {
+			generalExp := general.GeneralExpGained
+			if generalExp == nil {
+				legacyExp := reinforcement.GeneralExpGained
+				generalExp = &legacyExp
+			}
 			result = append(result, BattleReportGeneral{
-				ID:         general.ID,
-				Name:       general.Name,
-				Level:      general.Level,
-				Role:       role,
-				Attributes: cloneFloatMap(general.Attributes),
-				Traits:     append([]GeneralTraitInstance(nil), general.Traits...),
+				ID:                 general.ID,
+				Name:               general.Name,
+				Level:              general.Level,
+				Role:               role,
+				GeneralExpGained:   cloneIntPointer(generalExp),
+				GeneralLevelBefore: cloneIntPointer(general.GeneralLevelBefore),
+				GeneralLevelAfter:  cloneIntPointer(general.GeneralLevelAfter),
+				Attributes:         cloneFloatMap(general.Attributes),
+				Traits:             append([]GeneralTraitInstance(nil), general.Traits...),
 			})
 		}
 	}
 	return result
+}
+
+// cloneIntPointer 复制可选整数，避免不同视角的战报快照共享可变指针。
+func cloneIntPointer(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+// battleReportGeneralResult 保存一名参战武将在单场战斗中的经验与等级变化。
+type battleReportGeneralResult struct {
+	GeneralExpGained   *int
+	GeneralLevelBefore *int
+	GeneralLevelAfter  *int
+}
+
+// legacyOwnerGeneralResult 把旧顶层拥有者经验转换为可合并的将领结果。
+func legacyOwnerGeneralResult(report BattleReport) battleReportGeneralResult {
+	gained := report.GeneralExpGained
+	result := battleReportGeneralResult{GeneralExpGained: &gained}
+	if report.GeneralLevelBefore > 0 {
+		before := report.GeneralLevelBefore
+		result.GeneralLevelBefore = &before
+	}
+	if report.GeneralLevelAfter > 0 {
+		after := report.GeneralLevelAfter
+		result.GeneralLevelAfter = &after
+	}
+	return result
+}
+
+// applyGeneralResult 写入一名标准战报武将的战斗经验快照。
+func applyGeneralResult(general *BattleReportGeneral, result battleReportGeneralResult) {
+	if general == nil || result.GeneralExpGained == nil {
+		return
+	}
+	general.GeneralExpGained = cloneIntPointer(result.GeneralExpGained)
+	general.GeneralLevelBefore = cloneIntPointer(result.GeneralLevelBefore)
+	general.GeneralLevelAfter = cloneIntPointer(result.GeneralLevelAfter)
+}
+
+// applyPvpGeneralResult 写入一名兼容 PVP 武将快照的战斗经验结果。
+func applyPvpGeneralResult(general *PvpGeneralSnapshot, result battleReportGeneralResult) {
+	if general == nil || result.GeneralExpGained == nil {
+		return
+	}
+	general.GeneralExpGained = cloneIntPointer(result.GeneralExpGained)
+	general.GeneralLevelBefore = cloneIntPointer(result.GeneralLevelBefore)
+	general.GeneralLevelAfter = cloneIntPointer(result.GeneralLevelAfter)
+}
+
+// syncBattleReportOwnerGeneralResult 将旧顶层经验回填到当前战报拥有者的武将快照。
+func syncBattleReportOwnerGeneralResult(report *BattleReport) {
+	if report == nil {
+		return
+	}
+	ownerRole := strings.ToLower(strings.TrimSpace(report.OwnerSide))
+	if ownerRole != ReportOwnerSideAttacker && ownerRole != ReportOwnerSideDefender {
+		return
+	}
+	result := legacyOwnerGeneralResult(*report)
+	var snapshots []PvpGeneralSnapshot
+	if ownerRole == ReportOwnerSideAttacker {
+		snapshots = report.PvpAttackerGenerals
+	} else {
+		snapshots = report.PvpDefenderGenerals
+	}
+	for index := range snapshots {
+		applyPvpGeneralResult(&snapshots[index], result)
+	}
+	if report.Detail == nil {
+		return
+	}
+	for index := range report.Detail.PrimarySide.Generals {
+		if report.Detail.PrimarySide.Role == ownerRole {
+			applyGeneralResult(&report.Detail.PrimarySide.Generals[index], result)
+		}
+	}
+	if report.Detail.SecondarySide != nil && report.Detail.SecondarySide.Role == ownerRole {
+		for index := range report.Detail.SecondarySide.Generals {
+			applyGeneralResult(&report.Detail.SecondarySide.Generals[index], result)
+		}
+	}
+}
+
+// reportGeneralResultKey 使用绝对角色和武将 ID 区分敌我使用同一武将的情况。
+func reportGeneralResultKey(role string, generalID string) string {
+	return strings.ToLower(strings.TrimSpace(role)) + "\x00" + strings.TrimSpace(generalID)
+}
+
+// collectGeneralResults 收集一份战报中已经持久化的攻防武将经验结果。
+func collectGeneralResults(report BattleReport, results map[string]battleReportGeneralResult) {
+	collect := func(role string, generals []BattleReportGeneral) {
+		if role != ReportOwnerSideAttacker && role != ReportOwnerSideDefender {
+			return
+		}
+		for _, general := range generals {
+			if strings.TrimSpace(general.ID) == "" || general.GeneralExpGained == nil {
+				continue
+			}
+			results[reportGeneralResultKey(role, general.ID)] = battleReportGeneralResult{
+				GeneralExpGained: cloneIntPointer(general.GeneralExpGained), GeneralLevelBefore: cloneIntPointer(general.GeneralLevelBefore), GeneralLevelAfter: cloneIntPointer(general.GeneralLevelAfter),
+			}
+		}
+	}
+	if report.Detail != nil {
+		collect(report.Detail.PrimarySide.Role, report.Detail.PrimarySide.Generals)
+		if report.Detail.SecondarySide != nil {
+			collect(report.Detail.SecondarySide.Role, report.Detail.SecondarySide.Generals)
+		}
+	}
+}
+
+// synchronizeBattleReportGeneralResults 把同一事件的攻防经验结果复制到所有完整视角战报。
+func synchronizeBattleReportGeneralResults(reports []BattleReport) []BattleReport {
+	if len(reports) == 0 {
+		return reports
+	}
+	results := map[string]battleReportGeneralResult{}
+	for index := range reports {
+		reports[index] = NormalizeBattleReport(reports[index])
+		collectGeneralResults(reports[index], results)
+	}
+	for reportIndex := range reports {
+		report := &reports[reportIndex]
+		applySnapshots := func(role string, generals []PvpGeneralSnapshot) {
+			for index := range generals {
+				if result, ok := results[reportGeneralResultKey(role, generals[index].ID)]; ok {
+					applyPvpGeneralResult(&generals[index], result)
+				}
+			}
+		}
+		applySnapshots(ReportOwnerSideAttacker, report.PvpAttackerGenerals)
+		applySnapshots(ReportOwnerSideDefender, report.PvpDefenderGenerals)
+		syncBattleReportDetailGenerals(report)
+		if report.Detail != nil {
+			applySide := func(side *BattleReportSide) {
+				if side == nil {
+					return
+				}
+				for index := range side.Generals {
+					if result, ok := results[reportGeneralResultKey(side.Role, side.Generals[index].ID)]; ok {
+						applyGeneralResult(&side.Generals[index], result)
+					}
+				}
+			}
+			applySide(&report.Detail.PrimarySide)
+			applySide(report.Detail.SecondarySide)
+		}
+	}
+	return reports
 }
 
 // reportOwnerAndTargetGenerals 返回战报拥有者和目标两侧的武将快照。
@@ -697,7 +862,10 @@ func syncBattleReportDetailGenerals(report *BattleReport) {
 		return
 	}
 	if report.ViewType == ReportViewReinforcement {
-		report.Detail.PrimarySide.Generals = reinforcementReportGenerals(*report, "reinforcement")
+		// 历史增援简报没有完整对阵快照，只能继续把援军放在主栏；新战报保留复制来的攻防双方。
+		if report.Detail.SecondarySide == nil {
+			report.Detail.PrimarySide.Generals = reinforcementReportGenerals(*report, "reinforcement")
+		}
 		return
 	}
 	if len(report.PvpAttackerGenerals)+len(report.PvpDefenderGenerals) == 0 {

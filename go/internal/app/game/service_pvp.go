@@ -486,7 +486,37 @@ func (s *Service) ListPvpMarches(playerID string) (PvpMarchListResponse, error) 
 		return PvpMarchListResponse{}, err
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].UpdatedAt > items[j].UpdatedAt })
+	for index := range items {
+		items[index] = projectPvpMarchForViewer(items[index], playerID)
+	}
 	return PvpMarchListResponse{Items: items}, nil
+}
+
+// projectPvpMarchForViewer 按查看方生成安全行军视图，防守方只能预知来源、类型和到达时间。
+func projectPvpMarchForViewer(march PvpMarch, playerID string) PvpMarch {
+	projected := clonePvpMarch(march)
+	if projected.AttackerPlayerID == playerID {
+		projected.ViewerRole = PvpMarchViewerRoleSent
+		return projected
+	}
+	if projected.DefenderPlayerID == playerID {
+		projected.ViewerRole = PvpMarchViewerRoleIncoming
+		projected.AttackTroops = map[string]int{}
+		projected.AttackGenerals = nil
+		projected.SpeedMultiplier = 0
+		projected.DurationSeconds = 0
+		projected.StartedAt = ""
+		projected.ReturnStartedAt = ""
+		projected.ReturnsAt = ""
+		projected.ResolvedAt = ""
+		projected.AttackerReportID = ""
+		projected.DefenderReportID = ""
+		projected.BattleID = ""
+		projected.AcceleratedTimes = 0
+		projected.CreatedAt = ""
+		projected.UpdatedAt = ""
+	}
+	return projected
 }
 
 // RecallPvpMarch 召回玩家自己的 PVP 行军，进入返程状态。
@@ -1244,7 +1274,18 @@ func (s *Service) CompletePvpRecall(marchID string) (PvpMarchActionResponse, err
 // ResolvePvpMarch 结算一条已经到达的 PVP 行军。
 func (s *Service) ResolvePvpMarch(marchID string) (PvpBattle, error) {
 	now := time.Now().UTC()
-	_, _, _, battle, _, _, err := s.repo.ResolvePvpBattleTransaction(strings.TrimSpace(marchID), now, func(attacker *GameState, defender *GameState, reinforcements []Reinforcement, march *PvpMarch) (PvpBattle, BattleReport, BattleReport, []BattleReport, []Reinforcement, error) {
+	marchID = strings.TrimSpace(marchID)
+	if existingMarch, lookupErr := s.repo.GetPvpMarch(marchID); lookupErr == nil && strings.TrimSpace(existingMarch.BattleID) != "" && (existingMarch.Status == PvpMarchStatusReturning || existingMarch.Status == PvpMarchStatusResolved) {
+		battle, err := s.repo.GetPvpBattle(existingMarch.BattleID)
+		if err != nil {
+			return PvpBattle{}, err
+		}
+		if err := s.applyPvpReinforcementGeneralExp(battle, now); err != nil {
+			return battle, err
+		}
+		return battle, nil
+	}
+	_, _, _, battle, attackerReport, defenderReport, err := s.repo.ResolvePvpBattleTransaction(marchID, now, func(attacker *GameState, defender *GameState, reinforcements []Reinforcement, march *PvpMarch) (PvpBattle, BattleReport, BattleReport, []BattleReport, []Reinforcement, error) {
 		arrivesAt, err := time.Parse(resourceDateLayout, march.ArrivesAt)
 		if err == nil && arrivesAt.After(now) {
 			return PvpBattle{}, BattleReport{}, BattleReport{}, nil, nil, ErrPvpMarchNotReady
@@ -1302,8 +1343,12 @@ func (s *Service) ResolvePvpMarch(marchID string) (PvpBattle, error) {
 		return result, attackerReport, defenderReport, reinforcementReports, changedReinforcements, nil
 	})
 	if err == nil && battle.ID != "" {
-		s.applyPvpBattleStateEffects(battle, now)
-		s.applyPvpReinforcementGeneralExp(battle, now)
+		if attackerReport.ID != "" || defenderReport.ID != "" {
+			s.applyPvpBattleStateEffects(battle, now)
+		}
+		if rewardErr := s.applyPvpReinforcementGeneralExp(battle, now); rewardErr != nil {
+			return battle, rewardErr
+		}
 	}
 	return battle, err
 }
@@ -1490,25 +1535,30 @@ func (s *Service) applyPvpBattleStateEffects(battle PvpBattle, now time.Time) {
 	_ = s.repo.SavePvpPlayerState(defenderState, now)
 }
 
+const reinforcementGeneralExpAppliedBattlesKey = "generalExpAppliedBattles"
+
 // applyPvpReinforcementGeneralExp 给参战援军携带武将补发守城杀敌经验。
-func (s *Service) applyPvpReinforcementGeneralExp(battle PvpBattle, now time.Time) {
+func (s *Service) applyPvpReinforcementGeneralExp(battle PvpBattle, now time.Time) error {
 	expByReinforcement := pvpBattleReinforcementGeneralExp(battle)
 	if len(expByReinforcement) == 0 {
-		return
+		return nil
 	}
 	for _, record := range battle.ReinforcementSnapshot {
 		exp := expByReinforcement[record.ReinforcementID]
 		if exp <= 0 || strings.TrimSpace(record.FromPlayerID) == "" || len(record.Generals) == 0 {
 			continue
 		}
-		s.applyReinforcementGeneralExp(record.FromPlayerID, record.Generals, exp, now)
+		if err := s.applyReinforcementGeneralExp(record.ReinforcementID, record.FromPlayerID, battle.ID, record.Generals, exp, now); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-// applyReinforcementGeneralExp 给一批协防携带武将发放战斗经验。
-func (s *Service) applyReinforcementGeneralExp(playerID string, generals []ReinforcementGeneralSnapshot, exp int, now time.Time) {
-	if exp <= 0 || strings.TrimSpace(playerID) == "" || len(generals) == 0 {
-		return
+// applyReinforcementGeneralExp 原子发放协防经验并更新驻防记录的下一场等级计算基线。
+func (s *Service) applyReinforcementGeneralExp(reinforcementID string, playerID string, battleID string, generals []ReinforcementGeneralSnapshot, exp int, now time.Time) error {
+	if exp <= 0 || strings.TrimSpace(reinforcementID) == "" || strings.TrimSpace(playerID) == "" || strings.TrimSpace(battleID) == "" || len(generals) == 0 {
+		return nil
 	}
 	generalIDs := make([]string, 0, len(generals))
 	for _, general := range generals {
@@ -1517,26 +1567,119 @@ func (s *Service) applyReinforcementGeneralExp(playerID string, generals []Reinf
 		}
 	}
 	if len(generalIDs) == 0 {
-		return
+		return nil
 	}
-	_, _ = s.repo.UpdateGeneralState(playerID, now, func(state *GameState) error {
-		EnsureGeneralRoster(state, now)
-		applyGeneralBattleExpToRoster(state, generalIDs, exp)
-		refreshGeneralDerivedState(state, now)
+	_, _, _, err := s.repo.UpdateReinforcement(reinforcementID, now, func(from *GameState, _ *GameState, record *Reinforcement) error {
+		if strings.TrimSpace(record.FromPlayerID) != strings.TrimSpace(playerID) {
+			return ErrReinforcementNotFound
+		}
+		if reinforcementGeneralExpWasApplied(record.RewardState, battleID) {
+			return nil
+		}
+		EnsureGeneralRoster(from, now)
+		applyGeneralBattleExpToRoster(from, generalIDs, exp)
+		refreshGeneralDerivedState(from, now)
+		for index := range record.Generals {
+			if current, ok := findOwnedGeneral(from.Generals, record.Generals[index].ID); ok {
+				record.Generals[index].Level = current.Level
+				record.Generals[index].Exp = current.Exp
+				record.Generals[index].GeneralExpGained = nil
+				record.Generals[index].GeneralLevelBefore = nil
+				record.Generals[index].GeneralLevelAfter = nil
+			}
+		}
+		record.RewardState = markReinforcementGeneralExpApplied(record.RewardState, battleID)
+		record.UpdatedAt = now.UTC().Format(resourceDateLayout)
 		return nil
 	})
+	return err
 }
 
-// applyReinforcementGeneralExpFromReports 根据协防战报补发携带武将经验。
-func (s *Service) applyReinforcementGeneralExpFromReports(reports []BattleReport, now time.Time) {
+// reinforcementGeneralExpWasApplied 判断指定战斗的援军武将经验是否已原子发放。
+func reinforcementGeneralExpWasApplied(state map[string]any, battleID string) bool {
+	if strings.TrimSpace(battleID) == "" {
+		return false
+	}
+	raw, ok := state[reinforcementGeneralExpAppliedBattlesKey]
+	if !ok {
+		return false
+	}
+	switch applied := raw.(type) {
+	case map[string]any:
+		value, exists := applied[battleID]
+		flag, _ := value.(bool)
+		return exists && flag
+	case map[string]bool:
+		return applied[battleID]
+	default:
+		return false
+	}
+}
+
+// markReinforcementGeneralExpApplied 记录已发奖战斗，供并发重试在同一事务内去重。
+func markReinforcementGeneralExpApplied(state map[string]any, battleID string) map[string]any {
+	next := cloneAnyMap(state)
+	applied := map[string]any{}
+	switch current := next[reinforcementGeneralExpAppliedBattlesKey].(type) {
+	case map[string]any:
+		for id, value := range current {
+			applied[id] = value
+		}
+	case map[string]bool:
+		for id, value := range current {
+			applied[id] = value
+		}
+	}
+	applied[battleID] = true
+	next[reinforcementGeneralExpAppliedBattlesKey] = applied
+	return next
+}
+
+// reinforcementReportOwnerSnapshot 从完整参战列表中定位当前协防战报真正拥有的援军批次。
+func reinforcementReportOwnerSnapshot(report BattleReport) (DefenseReinforcementUnit, bool) {
+	ownerPlayerID := strings.TrimSpace(valueOrDefault(report.OwnerPlayerID, report.PlayerID))
+	reinforcementID := ""
+	if report.Detail != nil {
+		if context, ok := report.Detail.Extra["reinforcement"].(map[string]interface{}); ok {
+			reinforcementID, _ = context["reinforcementId"].(string)
+			reinforcementID = strings.TrimSpace(reinforcementID)
+		}
+	}
+	matches := []DefenseReinforcementUnit{}
+	for _, reinforcement := range report.PvpReinforcements {
+		if ownerPlayerID != "" && strings.TrimSpace(reinforcement.FromPlayerID) != ownerPlayerID {
+			continue
+		}
+		if reinforcementID != "" && strings.TrimSpace(reinforcement.ReinforcementID) != reinforcementID {
+			continue
+		}
+		matches = append(matches, reinforcement)
+	}
+	if len(matches) != 1 {
+		return DefenseReinforcementUnit{}, false
+	}
+	return matches[0], true
+}
+
+// applyReinforcementGeneralExpFromReports 根据每份协防战报的拥有者批次补发携带武将经验。
+func (s *Service) applyReinforcementGeneralExpFromReports(reports []BattleReport, now time.Time) error {
 	for _, report := range reports {
 		if report.ViewType != ReportViewReinforcement || report.GeneralExpGained <= 0 {
 			continue
 		}
-		for _, reinforcement := range report.PvpReinforcements {
-			s.applyReinforcementGeneralExp(reinforcement.FromPlayerID, reinforcement.Generals, report.GeneralExpGained, now)
+		reinforcement, ok := reinforcementReportOwnerSnapshot(report)
+		if !ok {
+			continue
+		}
+		battleID := strings.TrimSpace(report.EventID)
+		if battleID == "" {
+			battleID = strings.TrimSpace(report.ID)
+		}
+		if err := s.applyReinforcementGeneralExp(reinforcement.ReinforcementID, reinforcement.FromPlayerID, battleID, reinforcement.Generals, report.GeneralExpGained, now); err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 // pvpBattleReinforcementGeneralExp 从战斗结果中读取每支援军应获得的武将经验。
@@ -2425,15 +2568,21 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		defenderReport.GeneralLevelBefore = defenderExpResult.LevelBefore
 		defenderReport.GeneralLevelAfter = defenderExpResult.LevelAfter
 	}
-	reinforcementReports := buildPvpReinforcementReports(battleID, attacker, defender, changedReinforcements, totalReinforcementLosses, reinforcementGeneralExp, reportResult, nowText)
+	defenderReport = NormalizeBattleReport(defenderReport)
+	reinforcementReports := buildPvpReinforcementReports(defenderReport, attacker, defender, changedReinforcements, totalReinforcementLosses, reinforcementGeneralExp, nowText)
+	eventReports := append([]BattleReport{attackerReport, defenderReport}, reinforcementReports...)
+	eventReports = synchronizeBattleReportGeneralResults(eventReports)
+	attackerReport = eventReports[0]
+	defenderReport = eventReports[1]
+	reinforcementReports = eventReports[2:]
 	battle := PvpBattle{
 		ID:                    battleID,
 		MarchID:               march.ID,
 		AttackerPlayerID:      attacker.Player.ID,
 		DefenderPlayerID:      defender.Player.ID,
 		Status:                PvpBattleStatusResolved,
-		AttackerSnapshot:      map[string]any{"troops": cloneStringIntMap(dispatchedTroops), "faction": attacker.Player.Faction, "generals": attackerGenerals},
-		DefenderSnapshot:      map[string]any{"troops": cloneStringIntMap(defenderOwnTroops), "faction": defender.Player.Faction, "generals": defenderGenerals},
+		AttackerSnapshot:      map[string]any{"troops": cloneStringIntMap(dispatchedTroops), "faction": attacker.Player.Faction, "generals": attackerReport.PvpAttackerGenerals},
+		DefenderSnapshot:      map[string]any{"troops": cloneStringIntMap(defenderOwnTroops), "faction": defender.Player.Faction, "generals": defenderReport.PvpDefenderGenerals},
 		ReinforcementSnapshot: reinforcementSnapshot,
 		Result:                map[string]any{"winner": result.Winner, "attackerPower": result.AttackPower, "defensePower": result.DefensePower, "pointsDelta": map[string]int{"attacker": attackerPointsDelta, "defender": defenderPointsDelta}, "reinforcementGeneralExp": reinforcementGeneralExp},
 		Losses:                map[string]any{"attacker": attackerLosses, "defender": mergeTroopMaps(capturedDefenderLosses, defenderLosses), "reinforcements": totalReinforcementLosses},
@@ -2842,8 +2991,8 @@ func applyPvpReinforcementLosses(records []Reinforcement, losses map[string]map[
 	return changed
 }
 
-// buildPvpReinforcementReports 为每个参战援军派出方生成独立增援视角战报。
-func buildPvpReinforcementReports(eventID string, attacker *GameState, defender *GameState, changed []Reinforcement, losses map[string]map[string]int, expByReinforcement map[string]int, battleResult string, nowText string) []BattleReport {
+// buildPvpReinforcementReports 复制守城方完整快照，并为每个参战援军派出方生成独立增援视角战报。
+func buildPvpReinforcementReports(baseDefenseReport BattleReport, attacker *GameState, defender *GameState, changed []Reinforcement, losses map[string]map[string]int, expByReinforcement map[string]int, nowText string) []BattleReport {
 	reports := []BattleReport{}
 	for i := range changed {
 		record := &changed[i]
@@ -2857,43 +3006,54 @@ func buildPvpReinforcementReports(eventID string, attacker *GameState, defender 
 		}
 		reportID := "br_pvp_rein_" + randomID(8)
 		record.LastBattleReportID = reportID
-		report := BattleReport{
-			ID:                reportID,
-			EventID:           eventID,
-			PlayerID:          record.OwnerPlayerID,
-			OwnerPlayerID:     record.OwnerPlayerID,
-			PlayerFaction:     record.FromPlayerFaction,
-			PlayerName:        record.FromPlayerName,
-			TargetID:          defender.Player.ID,
-			TargetName:        defender.Player.Nickname + "（驻防城）",
-			Type:              "reinforce",
-			ViewType:          ReportViewReinforcement,
-			OwnerSide:         ReportOwnerSideReinforcement,
-			SourceType:        ReportSourcePlayerCity,
-			BattleType:        "reinforcement_battle",
-			Result:            battleResult,
-			DispatchedUnits:   before,
-			LostUnits:         unitLosses,
-			DefenderFaction:   defender.Player.Faction,
-			DefenderRevealed:  false,
-			Rewards:           map[string]int{},
-			Read:              false,
-			CreatedAt:         nowText,
-			Title:             "增援" + defender.Player.Nickname + "参战",
-			Summary:           buildReinforcementReportSummary(record, unitLosses),
-			PvpReinforcements: []DefenseReinforcementUnit{reinforcementReportSnapshot(*record, before, expByReinforcement[record.ID])},
-			PvpReinforcementLosses: map[string]map[string]int{
-				record.ID: unitLosses,
-			},
+		report := cloneBattleReport(baseDefenseReport)
+		report.ID = reportID
+		report.PlayerID = record.OwnerPlayerID
+		report.OwnerPlayerID = record.OwnerPlayerID
+		report.PlayerFaction = record.FromPlayerFaction
+		report.PlayerName = record.FromPlayerName
+		report.Type = "reinforce"
+		report.ViewType = ReportViewReinforcement
+		report.OwnerSide = ReportOwnerSideReinforcement
+		report.OwnerOutcome = inferReportOwnerOutcome(report)
+		report.DispatchedUnits = before
+		report.LostUnits = unitLosses
+		report.Rewards = map[string]int{}
+		report.GeneralExpGained = expByReinforcement[record.ID]
+		ownerGenerals := buildReinforcementGeneralBattleSnapshots(record.Generals, report.GeneralExpGained)
+		if len(ownerGenerals) > 0 {
+			if ownerGenerals[0].GeneralLevelBefore != nil {
+				report.GeneralLevelBefore = *ownerGenerals[0].GeneralLevelBefore
+			}
+			if ownerGenerals[0].GeneralLevelAfter != nil {
+				report.GeneralLevelAfter = *ownerGenerals[0].GeneralLevelAfter
+			}
 		}
+		report.Read = false
+		report.CreatedAt = nowText
+		report.Share = nil
 		if exp := expByReinforcement[record.ID]; exp > 0 {
 			report.GeneralExpGained = exp
 		}
-		detail := BuildBattleReportDetail(report)
-		detail.Extra = mergeReportExtraMap(detail.Extra, map[string]interface{}{
-			"reinforcement": buildReinforcementReportExtra(eventID, attacker, defender, record, before, unitLosses, expByReinforcement[record.ID], battleResult),
+		if report.Detail == nil {
+			detail := BuildBattleReportDetail(report)
+			report.Detail = &detail
+		}
+		report.Detail.ID = reportID
+		report.Detail.OwnerPlayerID = record.OwnerPlayerID
+		report.Detail.ViewType = ReportViewReinforcement
+		report.Detail.ViewLabel = reportViewLabel(ReportViewReinforcement)
+		report.Detail.OwnerSide = ReportOwnerSideReinforcement
+		report.Detail.OwnerOutcome = report.OwnerOutcome
+		report.Detail.Rewards.GeneralExp = report.GeneralExpGained
+		report.Detail.Rewards.GeneralLevelBefore = report.GeneralLevelBefore
+		report.Detail.Rewards.GeneralLevelAfter = report.GeneralLevelAfter
+		report.Detail.Visibility = buildReportVisibility(report)
+		report.Detail.Read = false
+		report.Detail.Share = nil
+		report.Detail.Extra = mergeReportExtraMap(report.Detail.Extra, map[string]interface{}{
+			"reinforcement": buildReinforcementReportExtra(report.EventID, attacker, defender, record, before, unitLosses, expByReinforcement[record.ID], report.Result),
 		})
-		report.Detail = &detail
 		reports = append(reports, NormalizeBattleReport(report))
 	}
 	return reports
@@ -2919,7 +3079,7 @@ func reinforcementReportSnapshot(record Reinforcement, before map[string]int, ge
 		FromPlayerName:   record.FromPlayerName,
 		Faction:          record.FromPlayerFaction,
 		Troops:           cloneStringIntMap(before),
-		Generals:         cloneReinforcementGenerals(record.Generals),
+		Generals:         buildReinforcementGeneralBattleSnapshots(record.Generals, generalExp),
 		GeneralExpGained: generalExp,
 		Buffs:            append([]ModifierBreakdownItem(nil), record.BuffSnapshot...),
 		SourceTags: map[string]string{
@@ -2979,7 +3139,7 @@ func buildReinforcementOwnerContribution(record *Reinforcement, before map[strin
 		"troopsLost":     cloneStringIntMap(losses),
 		"troopsSurvived": survived,
 		"generalExp":     generalExp,
-		"generals":       cloneReinforcementGenerals(record.Generals),
+		"generals":       buildReinforcementGeneralBattleSnapshots(record.Generals, generalExp),
 	}
 }
 
@@ -3091,17 +3251,52 @@ func buildPvpReinforcementSnapshot(records []Reinforcement, generalExpByID map[s
 		if record.Status != ReinforcementStatusStationed || !record.Rules.CanFight || totalTroops(record.RemainingTroops) <= 0 {
 			continue
 		}
+		generalExp := generalExpByID[record.ID]
 		result = append(result, DefenseReinforcementUnit{
 			ReinforcementID:  record.ID,
 			FromPlayerID:     record.FromPlayerID,
 			FromPlayerName:   record.FromPlayerName,
 			Faction:          record.FromPlayerFaction,
 			Troops:           cloneStringIntMap(record.RemainingTroops),
-			Generals:         append([]ReinforcementGeneralSnapshot(nil), record.Generals...),
-			GeneralExpGained: generalExpByID[record.ID],
+			Generals:         buildReinforcementGeneralBattleSnapshots(record.Generals, generalExp),
+			GeneralExpGained: generalExp,
 			Buffs:            append([]ModifierBreakdownItem(nil), record.BuffSnapshot...),
 			SourceTags:       map[string]string{"source_type": record.SourceType, "source_id": record.SourceID},
 		})
+	}
+	return result
+}
+
+// buildReinforcementGeneralBattleSnapshots 计算援军武将本场经验和等级变化，并移除仅供结算使用的累计经验。
+func buildReinforcementGeneralBattleSnapshots(generals []ReinforcementGeneralSnapshot, gained int) []ReinforcementGeneralSnapshot {
+	result := cloneReinforcementGenerals(generals)
+	if gained < 0 {
+		gained = 0
+	}
+	for index := range result {
+		before := result[index].Level
+		if before <= 0 {
+			before = 1
+		}
+		baseExp := result[index].Exp
+		if minimum := generalExpRequiredForLevel(before); baseExp < minimum {
+			baseExp = minimum
+		}
+		temporary := General{Level: before, Exp: baseExp}
+		after := before
+		if gained > 0 {
+			temporary.Exp += gained
+			promoteGeneralByExp(&temporary)
+			after = temporary.Level
+		}
+		gainedSnapshot := gained
+		beforeSnapshot := before
+		afterSnapshot := after
+		result[index].Level = after
+		result[index].Exp = 0
+		result[index].GeneralExpGained = &gainedSnapshot
+		result[index].GeneralLevelBefore = &beforeSnapshot
+		result[index].GeneralLevelAfter = &afterSnapshot
 	}
 	return result
 }

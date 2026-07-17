@@ -30,6 +30,14 @@ func TestValidateReinforcementSourceGeneralRejectsSecondGeneral(t *testing.T) {
 func TestSendReinforcementConsumesArmyAndReservesGeneral(t *testing.T) {
 	svc, repo, from, to := newReinforcementTestService(t)
 	from.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	for index := range from.Generals {
+		if from.Generals[index].ID == "caocao" {
+			from.Generals[index].Exp = 123
+		}
+	}
+	if from.General != nil && from.General.ID == "caocao" {
+		from.General.Exp = 123
+	}
 	repo.players[from.Player.ID] = from
 
 	result, err := svc.SendReinforcement(SendReinforcementRequest{
@@ -43,6 +51,22 @@ func TestSendReinforcementConsumesArmyAndReservesGeneral(t *testing.T) {
 	}
 	if result.Reinforcement.Status != ReinforcementStatusMarching {
 		t.Fatalf("expected marching, got %s", result.Reinforcement.Status)
+	}
+	if len(result.Reinforcement.Generals) != 1 || result.Reinforcement.Generals[0].Exp != 0 {
+		t.Fatalf("expected public send response to hide cumulative general exp, got %+v", result.Reinforcement.Generals)
+	}
+	raw, err := repo.GetReinforcement(result.Reinforcement.ID)
+	if err != nil || len(raw.Generals) != 1 || raw.Generals[0].Exp != 123 {
+		t.Fatalf("expected repository to retain internal general exp baseline, record=%+v err=%v", raw, err)
+	}
+	raw.RewardState = markReinforcementGeneralExpApplied(raw.RewardState, "battle_private_marker")
+	repo.reinforcements[raw.ID] = raw
+	received, err := svc.ListReceivedReinforcements(to.Player.ID)
+	if err != nil || len(received.Items) != 1 || received.Items[0].Generals[0].Exp != 0 {
+		t.Fatalf("expected receiver list to hide sender cumulative general exp, response=%+v err=%v", received, err)
+	}
+	if reinforcementGeneralExpWasApplied(received.Items[0].RewardState, "battle_private_marker") {
+		t.Fatalf("expected public reinforcement response to hide internal reward marker, got %+v", received.Items[0].RewardState)
 	}
 	if got := result.Patch.Army[0].Amount; got != 70 {
 		t.Fatalf("expected remaining army 70, got %d", got)

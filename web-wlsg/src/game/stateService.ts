@@ -172,7 +172,7 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
   async function operateOutgoingMarch(marchId: string, action: 'accelerate' | 'recall') {
     if (!state.playerId || !state.data || state.phase !== 'ready' || state.operatingMarchId || state.outgoingMarchesLoading) return
     const march = state.outgoingMarches.find((item) => item.id === marchId)
-    if (!march || march.status !== 'marching' || march.reinforcementRole === 'received') return
+    if (!march || march.status !== 'marching' || march.reinforcementRole === 'received' || march.pvpRole === 'incoming') return
     const playerId = state.playerId
     const currentVersion = requestVersion
     state.operatingMarchId = marchId

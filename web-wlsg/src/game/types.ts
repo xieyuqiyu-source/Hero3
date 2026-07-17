@@ -258,6 +258,7 @@ export interface PvpMarchListItem extends PvpMarchState {
   attackerName: string
   defenderPlayerId: string
   defenderName: string
+  viewerRole?: 'sent' | 'incoming'
   returnsAt?: string
 }
 
@@ -281,6 +282,7 @@ export interface OutgoingMarchViewModel {
   status: string
   endsAt: string
   reinforcementRole?: 'sent' | 'received'
+  pvpRole?: 'sent' | 'incoming'
   acceleratedTimes?: number
 }
 
@@ -296,13 +298,27 @@ export interface BattleReportUnitState {
   survived: number
 }
 
+export interface BattleReportGeneralTraitState {
+  traitId: string
+  traitType?: string
+  name?: string
+  traitName?: string
+  summary?: string
+  scope?: string
+  targetUnitType?: string
+  params?: Record<string, number>
+}
+
 export interface BattleReportGeneralState {
   id: string
   name?: string
   level?: number
   role?: string
   power?: number
-  traits?: Array<{ traitId: string; name?: string; traitName?: string; summary?: string }>
+  generalExpGained?: number
+  generalLevelBefore?: number
+  generalLevelAfter?: number
+  traits?: BattleReportGeneralTraitState[]
 }
 
 export interface BattleReportSideState {
@@ -362,7 +378,8 @@ export interface BattleReportReinforcementState {
   fromPlayerName?: string
   faction: string
   troops: Record<string, number>
-  generals?: Array<{ id: string; name?: string; level?: number }>
+  generalExpGained?: number
+  generals?: BattleReportGeneralState[]
 }
 
 export interface BattleReportState {
@@ -393,7 +410,7 @@ export interface BattleReportState {
   generalLevelBefore?: number
   generalLevelAfter?: number
   traitTriggered?: string[]
-  traitOutcomes?: Record<string, { traitId: string; name?: string; ownerSide?: string; ownerGeneralId?: string; detail?: Record<string, unknown> }>
+  traitOutcomes?: Record<string, { traitId: string; name?: string; traitType?: string; ownerSide?: string; ownerGeneralId?: string; ownerPlayerId?: string; scope?: string; detail?: Record<string, unknown> }>
   pvpReinforcements?: BattleReportReinforcementState[]
   pvpReinforcementLosses?: Record<string, Record<string, number>>
   pvpWall?: { faction: string; level: number; multiplier: number; totalDefenseBonus: number; hardness?: number }

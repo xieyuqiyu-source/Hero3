@@ -65,6 +65,26 @@ type YellowTurbanMarch struct {
 	UpdatedAt        string         `json:"updatedAt"`
 }
 
+// BuildYellowTurbanBattleEvent 生成与黄巾结算事务一同持久化的标准战斗事件。
+func BuildYellowTurbanBattleEvent(march YellowTurbanMarch, report BattleReport) BattleEvent {
+	event := BuildBattleEventFromReport(report)
+	event.ID = report.EventID
+	event.SourceType = ReportSourceYellowTurban
+	event.SourceID = march.ID
+	event.Scene = report.ViewType
+	event.BattleType = BattleTypeYellowTurban
+	event.Result = report.Result
+	event.RelatedMarchID = march.ID
+	event.Summary = map[string]interface{}{
+		"yellowTurbanMarchId": march.ID,
+		"sourceCityId":        march.SourceCityID,
+		"riskLevelId":         march.RiskLevelID,
+	}
+	event.OccurredAt = report.CreatedAt
+	event.CreatedAt = report.CreatedAt
+	return event
+}
+
 // YellowTurbanStatusResponse 返回玩家黄巾起义据点状态。
 type YellowTurbanStatusResponse struct {
 	Enabled              bool                `json:"enabled"`

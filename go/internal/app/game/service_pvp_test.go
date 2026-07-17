@@ -62,12 +62,82 @@ func TestPvpReinforcementReportIncludesZeroLossParticipant(t *testing.T) {
 	}
 	attacker := newPlayerState("player_rein_attacker", "进攻方", "shu", "liubei", now)
 	defender := newPlayerState("player_rein_defender", "防守方", "wei", "caocao", now)
-	reports := buildPvpReinforcementReports("event_zero_loss", &attacker, &defender, changed, map[string]map[string]int{}, map[string]int{record.ID: 12}, "defender_victory", now.Format(resourceDateLayout))
+	baseReport := buildPvpBattleReport("br_zero_loss_defense", &defender, &attacker, &PvpMarch{MarchType: PvpMarchTypeAttack}, "defender_victory", 120, 80, map[string]int{"weiInfantry": 10}, map[string]int{}, map[string]int{"shuInfantry": 10}, map[string]int{}, map[string]int{}, now.Format(resourceDateLayout), "defense")
+	baseReport.EventID = "event_zero_loss"
+	baseReport.ViewType = ReportViewDefense
+	baseReport.OwnerSide = ReportOwnerSideDefender
+	baseReport.PvpReinforcements = []DefenseReinforcementUnit{reinforcementReportSnapshot(record, record.RemainingTroops, 12)}
+	baseReport = NormalizeBattleReport(baseReport)
+	reports := buildPvpReinforcementReports(baseReport, &attacker, &defender, changed, map[string]map[string]int{}, map[string]int{record.ID: 12}, now.Format(resourceDateLayout))
 	if len(reports) != 1 || reports[0].GeneralExpGained != 12 {
 		t.Fatalf("expected zero-loss reinforcement report with exp, got %+v", reports)
 	}
 	if len(reports[0].PvpReinforcements) != 1 || reports[0].PvpReinforcements[0].GeneralExpGained != 12 {
 		t.Fatalf("expected reinforcement snapshot exp, got %+v", reports[0].PvpReinforcements)
+	}
+	if reports[0].Detail == nil || reports[0].Detail.SecondarySide == nil || reports[0].Detail.PrimarySide.Role != "attacker" || reports[0].Detail.SecondarySide.Role != "defender" {
+		t.Fatalf("expected reinforcement owner to receive complete attack and defense snapshot, got %+v", reports[0].Detail)
+	}
+}
+
+// TestApplyReinforcementGeneralExpFromReportsTargetsOwnerBatch 验证完整援军列表不会导致多份战报重复发放经验。
+func TestApplyReinforcementGeneralExpFromReportsTargetsOwnerBatch(t *testing.T) {
+	svc, repo, firstHelper, secondHelper := newPvpTestService(t)
+	now := time.Date(2026, 7, 17, 16, 0, 0, 0, time.UTC)
+	allReinforcements := []DefenseReinforcementUnit{
+		{ReinforcementID: "rein_first", FromPlayerID: firstHelper.Player.ID, Generals: []ReinforcementGeneralSnapshot{{ID: "caocao", Name: "曹操"}}},
+		{ReinforcementID: "rein_second", FromPlayerID: secondHelper.Player.ID, Generals: []ReinforcementGeneralSnapshot{{ID: "liubei", Name: "刘备"}}},
+	}
+	repo.reinforcements["rein_first"] = Reinforcement{ID: "rein_first", FromPlayerID: firstHelper.Player.ID, ToPlayerID: secondHelper.Player.ID, OwnerPlayerID: firstHelper.Player.ID, HostPlayerID: secondHelper.Player.ID, Generals: []ReinforcementGeneralSnapshot{{ID: "caocao", Name: "曹操", Level: 1}}}
+	repo.reinforcements["rein_second"] = Reinforcement{ID: "rein_second", FromPlayerID: secondHelper.Player.ID, ToPlayerID: firstHelper.Player.ID, OwnerPlayerID: secondHelper.Player.ID, HostPlayerID: firstHelper.Player.ID, Generals: []ReinforcementGeneralSnapshot{{ID: "liubei", Name: "刘备", Level: 1}}}
+	reports := []BattleReport{
+		{ID: "br_rein_first", EventID: "battle_reward_once", PlayerID: firstHelper.Player.ID, OwnerPlayerID: firstHelper.Player.ID, ViewType: ReportViewReinforcement, GeneralExpGained: 12, PvpReinforcements: allReinforcements, Detail: &BattleReportDetail{Extra: map[string]interface{}{"reinforcement": map[string]interface{}{"reinforcementId": "rein_first"}}}},
+		{ID: "br_rein_second", EventID: "battle_reward_once", PlayerID: secondHelper.Player.ID, OwnerPlayerID: secondHelper.Player.ID, ViewType: ReportViewReinforcement, GeneralExpGained: 20, PvpReinforcements: allReinforcements, Detail: &BattleReportDetail{Extra: map[string]interface{}{"reinforcement": map[string]interface{}{"reinforcementId": "rein_second"}}}},
+	}
+
+	if err := svc.applyReinforcementGeneralExpFromReports(reports, now); err != nil {
+		t.Fatalf("apply reinforcement general exp: %v", err)
+	}
+	if err := svc.applyReinforcementGeneralExpFromReports(reports, now.Add(time.Minute)); err != nil {
+		t.Fatalf("repeat reinforcement general exp: %v", err)
+	}
+	updatedFirst, _ := repo.GetState(firstHelper.Player.ID)
+	updatedSecond, _ := repo.GetState(secondHelper.Player.ID)
+	if got := pvpTestGeneralExp(updatedFirst, "caocao"); got != 12 {
+		t.Fatalf("expected first helper to gain 12 exp once, got %d", got)
+	}
+	if got := pvpTestGeneralExp(updatedSecond, "liubei"); got != 20 {
+		t.Fatalf("expected second helper to gain 20 exp once, got %d", got)
+	}
+	if stored := repo.reinforcements["rein_first"].Generals[0]; stored.Exp != 12 || stored.Level != updatedFirst.Generals[0].Level {
+		t.Fatalf("expected first reinforcement progress baseline updated, got %+v", stored)
+	}
+	if stored := repo.reinforcements["rein_second"].Generals[0]; stored.Exp != 20 || stored.Level != updatedSecond.Generals[0].Level {
+		t.Fatalf("expected second reinforcement progress baseline updated, got %+v", stored)
+	}
+	if !reinforcementGeneralExpWasApplied(repo.reinforcements["rein_first"].RewardState, "battle_reward_once") || !reinforcementGeneralExpWasApplied(repo.reinforcements["rein_second"].RewardState, "battle_reward_once") {
+		t.Fatalf("expected both reinforcement rewards to retain idempotency markers")
+	}
+}
+
+// TestApplyPvpReinforcementGeneralExpReturnsRepositoryError 验证援军发奖失败会返回结算调用方。
+func TestApplyPvpReinforcementGeneralExpReturnsRepositoryError(t *testing.T) {
+	svc, _, helper, _ := newPvpTestService(t)
+	now := time.Date(2026, 7, 17, 16, 30, 0, 0, time.UTC)
+	battle := PvpBattle{
+		ID: "battle_missing_reinforcement",
+		Result: map[string]any{
+			"reinforcementGeneralExp": map[string]int{"rein_missing": 15},
+		},
+		ReinforcementSnapshot: []DefenseReinforcementUnit{{
+			ReinforcementID: "rein_missing",
+			FromPlayerID:    helper.Player.ID,
+			Generals:        []ReinforcementGeneralSnapshot{{ID: "caocao", Name: "曹操"}},
+		}},
+	}
+
+	if err := svc.applyPvpReinforcementGeneralExp(battle, now); !errors.Is(err, ErrReinforcementNotFound) {
+		t.Fatalf("expected missing reinforcement error, got %v", err)
 	}
 }
 
@@ -82,8 +152,10 @@ func TestPvpReinforcementLossesPreserveBattleStartSnapshot(t *testing.T) {
 		Status:            ReinforcementStatusStationed,
 		RemainingTroops:   map[string]int{"weiInfantry": 100},
 		Losses:            map[string]int{"weiInfantry": 5},
-		Generals:          []ReinforcementGeneralSnapshot{{ID: "caocao", Name: "曹操"}},
-		Rules:             GarrisonRules{CanFight: true},
+		Generals: []ReinforcementGeneralSnapshot{{
+			ID: "caocao", Name: "曹操", Level: 1, Exp: generalExpRequiredForLevelForTest(2) - 5,
+		}},
+		Rules: GarrisonRules{CanFight: true},
 	}
 
 	changed := applyPvpReinforcementLosses([]Reinforcement{record}, map[string]map[string]int{
@@ -99,6 +171,10 @@ func TestPvpReinforcementLossesPreserveBattleStartSnapshot(t *testing.T) {
 	snapshot := buildPvpReinforcementSnapshot([]Reinforcement{record}, map[string]int{record.ID: 12})
 	if len(snapshot) != 1 || snapshot[0].Troops["weiInfantry"] != 100 || snapshot[0].GeneralExpGained != 12 {
 		t.Fatalf("expected battle-start troops and general exp in snapshot, got %+v", snapshot)
+	}
+	general := snapshot[0].Generals[0]
+	if general.Exp != 0 || general.Level != 2 || general.GeneralExpGained == nil || *general.GeneralExpGained != 12 || general.GeneralLevelBefore == nil || *general.GeneralLevelBefore != 1 || general.GeneralLevelAfter == nil || *general.GeneralLevelAfter != 2 {
+		t.Fatalf("expected reinforcement general level result without exposing cumulative exp, got %+v", general)
 	}
 }
 
@@ -586,6 +662,17 @@ func TestPvpMarchResolvesBattleAndReturnsSurvivors(t *testing.T) {
 	if defenderReports[0].GeneralExpGained != expectedDefenderExp {
 		t.Fatalf("expected defender report exp %d, got %d", expectedDefenderExp, defenderReports[0].GeneralExpGained)
 	}
+	if defenderReports[0].Detail == nil || len(defenderReports[0].Detail.PrimarySide.Generals) != 1 || defenderReports[0].Detail.SecondarySide == nil || len(defenderReports[0].Detail.SecondarySide.Generals) != 1 {
+		t.Fatalf("expected defense report to preserve both general snapshots, got %+v", defenderReports[0].Detail)
+	}
+	defenseViewAttacker := defenderReports[0].Detail.PrimarySide.Generals[0]
+	defenseViewDefender := defenderReports[0].Detail.SecondarySide.Generals[0]
+	if defenseViewAttacker.GeneralExpGained == nil || *defenseViewAttacker.GeneralExpGained != expectedAttackerExp {
+		t.Fatalf("expected defense report attacker exp %d, got %+v", expectedAttackerExp, defenseViewAttacker)
+	}
+	if defenseViewDefender.GeneralExpGained == nil || *defenseViewDefender.GeneralExpGained != expectedDefenderExp {
+		t.Fatalf("expected defense report defender exp %d, got %+v", expectedDefenderExp, defenseViewDefender)
+	}
 	detail, err := svc.GetPvpBattle(attacker.Player.ID, battle.ID)
 	if err != nil {
 		t.Fatalf("GetPvpBattle failed: %v", err)
@@ -763,12 +850,17 @@ func TestPvpBattleCreatesReinforcementOwnerReport(t *testing.T) {
 		Status:            ReinforcementStatusStationed,
 		Troops:            map[string]int{"weiInfantry": 20},
 		RemainingTroops:   map[string]int{"weiInfantry": 20},
-		Losses:            map[string]int{},
-		Rules:             defaultGarrisonRules(GarrisonSourceReinforcement),
-		SentAt:            now.Add(-4 * time.Hour).UTC().Format(resourceDateLayout),
-		ArrivedAt:         now.Add(-3 * time.Hour).UTC().Format(resourceDateLayout),
-		CreatedAt:         now.Add(-4 * time.Hour).UTC().Format(resourceDateLayout),
-		UpdatedAt:         now.Add(-3 * time.Hour).UTC().Format(resourceDateLayout),
+		Generals: []ReinforcementGeneralSnapshot{{
+			ID:    "sunquan",
+			Name:  "孙权",
+			Level: 1,
+		}},
+		Losses:    map[string]int{},
+		Rules:     defaultGarrisonRules(GarrisonSourceReinforcement),
+		SentAt:    now.Add(-4 * time.Hour).UTC().Format(resourceDateLayout),
+		ArrivedAt: now.Add(-3 * time.Hour).UTC().Format(resourceDateLayout),
+		CreatedAt: now.Add(-4 * time.Hour).UTC().Format(resourceDateLayout),
+		UpdatedAt: now.Add(-3 * time.Hour).UTC().Format(resourceDateLayout),
 	}
 	repo.reinforcements[reinforcement.ID] = reinforcement
 
@@ -793,8 +885,14 @@ func TestPvpBattleCreatesReinforcementOwnerReport(t *testing.T) {
 	if total != 1 || len(helperReports) != 1 {
 		t.Fatalf("expected one helper reinforcement report, total=%d reports=%+v battle=%+v", total, helperReports, battle)
 	}
-	if helperReports[0].EventID != battle.ID || helperReports[0].Detail == nil || helperReports[0].Detail.SecondarySide != nil {
+	if helperReports[0].EventID != battle.ID || helperReports[0].Detail == nil || helperReports[0].Detail.SecondarySide == nil {
 		t.Fatalf("unexpected helper report detail: %+v", helperReports[0])
+	}
+	if helperReports[0].Detail.PrimarySide.Role != "attacker" || helperReports[0].Detail.PrimarySide.TargetID != attacker.Player.ID || helperReports[0].Detail.SecondarySide.Role != "defender" || helperReports[0].Detail.SecondarySide.PlayerID != defender.Player.ID {
+		t.Fatalf("expected helper report to preserve the same attacker and defender snapshots, got %+v", helperReports[0].Detail)
+	}
+	if len(helperReports[0].PvpReinforcements) != 1 || helperReports[0].PvpReinforcements[0].ReinforcementID != reinforcement.ID {
+		t.Fatalf("expected helper report to preserve all reinforcement snapshots, got %+v", helperReports[0].PvpReinforcements)
 	}
 	reinforcementExtra, ok := helperReports[0].Detail.Extra["reinforcement"].(map[string]interface{})
 	if !ok || reinforcementExtra["hostPlayerId"] != defender.Player.ID || reinforcementExtra["attackerPlayerId"] != attacker.Player.ID {
@@ -810,6 +908,25 @@ func TestPvpBattleCreatesReinforcementOwnerReport(t *testing.T) {
 	}
 	if len(eventReports) != 3 {
 		t.Fatalf("expected attacker, defender and reinforcement reports for event, got %+v", eventReports)
+	}
+	updatedHelper, err := repo.GetState(helper.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState helper failed: %v", err)
+	}
+	expAfterFirstResolve := pvpTestGeneralExp(updatedHelper, "sunquan")
+	if expAfterFirstResolve <= 0 {
+		t.Fatalf("expected reinforcement general to gain exp, got %d", expAfterFirstResolve)
+	}
+	repeatedBattle, err := svc.ResolvePvpMarch(started.March.ID)
+	if err != nil || repeatedBattle.ID != battle.ID {
+		t.Fatalf("expected returning march retry to reuse battle %s, battle=%+v err=%v", battle.ID, repeatedBattle, err)
+	}
+	repeatedHelper, err := repo.GetState(helper.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState repeated helper failed: %v", err)
+	}
+	if got := pvpTestGeneralExp(repeatedHelper, "sunquan"); got != expAfterFirstResolve {
+		t.Fatalf("expected repeated PVP resolve to keep reinforcement exp %d, got %d", expAfterFirstResolve, got)
 	}
 }
 
@@ -1224,6 +1341,59 @@ func TestPvpMarchListFailsInvalidEmptyAttackTroopsWithoutBlocking(t *testing.T) 
 	}
 	if march.Status != PvpMarchStatusFailed {
 		t.Fatalf("expected invalid empty attack march failed, got %+v", march)
+	}
+}
+
+// TestPvpMarchListRedactsIncomingEnemyForce 验证防守方来袭队列不会提前泄露敌军兵力和武将。
+func TestPvpMarchListRedactsIncomingEnemyForce(t *testing.T) {
+	svc, repo, attacker, defender := newPvpTestService(t)
+	now := time.Now().UTC()
+	repo.pvpMarches["pvp_incoming_safe"] = PvpMarch{
+		ID:               "pvp_incoming_safe",
+		AttackerPlayerID: attacker.Player.ID,
+		AttackerName:     attacker.Player.Nickname,
+		AttackerFaction:  attacker.Player.Faction,
+		DefenderPlayerID: defender.Player.ID,
+		DefenderName:     defender.Player.Nickname,
+		DefenderFaction:  defender.Player.Faction,
+		MarchType:        PvpMarchTypeAttack,
+		Status:           PvpMarchStatusMarching,
+		AttackTroops:     map[string]int{"weiInfantry": 88},
+		AttackGenerals:   []string{"caocao"},
+		SpeedMultiplier:  2,
+		DurationSeconds:  600,
+		StartedAt:        now.Format(resourceDateLayout),
+		ArrivesAt:        now.Add(10 * time.Minute).Format(resourceDateLayout),
+		CreatedAt:        now.Format(resourceDateLayout),
+		UpdatedAt:        now.Format(resourceDateLayout),
+	}
+
+	defenderView, err := svc.ListPvpMarches(defender.Player.ID)
+	if err != nil || len(defenderView.Items) != 1 {
+		t.Fatalf("expected one incoming march, err=%v items=%+v", err, defenderView.Items)
+	}
+	if len(defenderView.Items[0].AttackTroops) != 0 || len(defenderView.Items[0].AttackGenerals) != 0 {
+		t.Fatalf("incoming march leaked enemy force: %+v", defenderView.Items[0])
+	}
+	if defenderView.Items[0].ViewerRole != PvpMarchViewerRoleIncoming || defenderView.Items[0].SpeedMultiplier != 0 || defenderView.Items[0].DurationSeconds != 0 {
+		t.Fatalf("expected a redacted incoming projection, got %+v", defenderView.Items[0])
+	}
+	if defenderView.Items[0].StartedAt != "" || defenderView.Items[0].CreatedAt != "" || defenderView.Items[0].UpdatedAt != "" {
+		t.Fatalf("incoming march leaked timestamps that reveal travel speed: %+v", defenderView.Items[0])
+	}
+	attackerView, err := svc.ListPvpMarches(attacker.Player.ID)
+	if err != nil || len(attackerView.Items) != 1 {
+		t.Fatalf("expected one sent march, err=%v items=%+v", err, attackerView.Items)
+	}
+	if attackerView.Items[0].ViewerRole != PvpMarchViewerRoleSent || attackerView.Items[0].AttackTroops["weiInfantry"] != 88 || len(attackerView.Items[0].AttackGenerals) != 1 {
+		t.Fatalf("expected attacker to keep full sent march, got %+v", attackerView.Items[0])
+	}
+	if attackerView.Items[0].StartedAt == "" || attackerView.Items[0].CreatedAt == "" || attackerView.Items[0].UpdatedAt == "" {
+		t.Fatalf("expected attacker to keep full march timestamps, got %+v", attackerView.Items[0])
+	}
+	adminView, err := svc.AdminPvpMarches(attacker.Player.ID, 10)
+	if err != nil || len(adminView.Items) != 1 || adminView.Items[0].AttackTroops["weiInfantry"] != 88 || adminView.Items[0].StartedAt == "" {
+		t.Fatalf("expected admin view to keep raw march details, err=%v items=%+v", err, adminView.Items)
 	}
 }
 

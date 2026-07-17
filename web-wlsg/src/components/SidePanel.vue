@@ -11,6 +11,7 @@ const citySelector = ref<HTMLElement | null>(null)
 const cityMenuOpen = ref(false)
 const openMarchId = ref<string | null>(null)
 const refreshedMarchIds = new Set<string>()
+let marchRefreshTimer: number | undefined
 const topShortcuts = [
   { image: 'url_jq1.gif', label: '军情', countKey: 'message', action: 'intelligence' }, { image: 'url_xh1.gif', label: '信函', countKey: 'mail', action: '' },
   { image: 'url_cz.gif', label: '充值', countKey: '' }, { image: 'url_zh.gif', label: '账户', countKey: '' },
@@ -51,8 +52,19 @@ function closeCityMenuOutside(event: MouseEvent) {
   if (!citySelector.value?.contains(event.target as Node)) cityMenuOpen.value = false
 }
 
-onMounted(() => document.addEventListener('click', closeCityMenuOutside))
-onBeforeUnmount(() => document.removeEventListener('click', closeCityMenuOutside))
+/** 在线期间低频刷新行军，让页面能够发现登录后新产生的敌方来袭。 */
+onMounted(() => {
+  document.addEventListener('click', closeCityMenuOutside)
+  marchRefreshTimer = window.setInterval(() => {
+    if (!props.outgoingMarchesLoading) emit('refreshMarches')
+  }, 15_000)
+})
+
+/** 卸载右侧栏时清理页面事件和来袭轮询。 */
+onBeforeUnmount(() => {
+  document.removeEventListener('click', closeCityMenuOutside)
+  if (marchRefreshTimer !== undefined) window.clearInterval(marchRefreshTimer)
+})
 
 /** 返回快捷入口对应的真实未读数量。 */
 function shortcutCount(key: string) {
@@ -107,8 +119,12 @@ function marchCountdown(march: OutgoingMarchViewModel) {
 /** 汇总一支行军包含的真实兵力数量。 */
 function marchTroopCount(march: OutgoingMarchViewModel) { return Object.values(march.troops).reduce((total, amount) => total + amount, 0) }
 
+/** 判断当前队列是否为后端脱敏后的敌方来袭。 */
+function marchIsIncoming(march: OutgoingMarchViewModel) { return march.pvpRole === 'incoming' }
+
 /** 返回单支行军的状态标题，不再按类型汇总。 */
 function marchStatusLabel(march: OutgoingMarchViewModel) {
+  if (marchIsIncoming(march)) return march.label
   if (march.status === 'returning') return '返回中'
   if (march.reinforcementRole === 'received') return '被增援'
   if (march.kind === 'reinforce') return '增援中'
@@ -117,16 +133,17 @@ function marchStatusLabel(march: OutgoingMarchViewModel) {
 
 /** 为单支行军选择右侧栏状态色。 */
 function marchStatusClass(march: OutgoingMarchViewModel) {
+  if (marchIsIncoming(march)) return 'incoming-attack'
   if (march.reinforcementRole === 'received') return 'received-reinforcement'
   if (march.kind === 'reinforce') return 'reinforcement'
   return 'expedition'
 }
 
 /** 返回单支行军的完整悬浮提示。 */
-function marchLineTitle(march: OutgoingMarchViewModel) { return `${marchStatusLabel(march)}：${march.targetName}，兵力 ${formatNumber(marchTroopCount(march))}` }
+function marchLineTitle(march: OutgoingMarchViewModel) { return marchIsIncoming(march) ? `${march.label}：${march.targetName}，敌军兵力未知` : `${marchStatusLabel(march)}：${march.targetName}，兵力 ${formatNumber(marchTroopCount(march))}` }
 
 /** 只有本人仍在去程的队列显示加速与召回操作。 */
-function marchCanOperate(march: OutgoingMarchViewModel) { return march.status === 'marching' && march.reinforcementRole !== 'received' }
+function marchCanOperate(march: OutgoingMarchViewModel) { return march.status === 'marching' && march.reinforcementRole !== 'received' && !marchIsIncoming(march) }
 
 /** 返回加速图标的真实费用、次数和后端限制提示。 */
 function accelerateMarchTitle(march: OutgoingMarchViewModel) {
@@ -168,7 +185,7 @@ function recallMarchTitle(march: OutgoingMarchViewModel) {
           </div>
         </div>
         <div v-if="openMarchId === march.id" class="march-status-list">
-          <article><header><strong>{{ march.status === 'returning' ? `返回中 · ${march.label}` : marchStatusLabel(march) }}</strong><b>{{ marchCountdown(march) }}</b></header><p>目标：{{ march.targetName }}</p><p>兵力：{{ formatNumber(marchTroopCount(march)) }}</p></article>
+          <article><header><strong>{{ march.status === 'returning' ? `返回中 · ${march.label}` : marchStatusLabel(march) }}</strong><b>{{ marchCountdown(march) }}</b></header><p>{{ marchIsIncoming(march) ? '来源' : '目标' }}：{{ march.targetName }}</p><p>{{ marchIsIncoming(march) ? '敌军兵力：未知' : `兵力：${formatNumber(marchTroopCount(march))}` }}</p></article>
         </div>
       </div>
       <div v-if="!outgoingMarches.length && outgoingMarchesLoading" class="march-status-line loading"><span>正在读取行军状态…</span></div>

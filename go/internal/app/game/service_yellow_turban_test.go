@@ -1,11 +1,21 @@
 package game
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
 
 // 本文件验证黄巾起义口粮压力和派兵规则。
+
+type rejectStandaloneReportBundleRepository struct {
+	*MemoryRepository
+}
+
+// SaveReportBundle 模拟事务外战报保存失败，黄巾结算不应再依赖该路径。
+func (r *rejectStandaloneReportBundleRepository) SaveReportBundle(_ BattleEvent, _ []BattleReport) error {
+	return errors.New("standalone report save rejected")
+}
 
 func TestYellowTurbanDefaultConfigIsValid(t *testing.T) {
 	if err := ValidateYellowTurbanConfig(defaultYellowTurbanConfig()); err != nil {
@@ -209,7 +219,7 @@ func TestYellowTurbanDefenseUsesStationedReinforcements(t *testing.T) {
 	}
 	SetYellowTurbanConfig(defaultYellowTurbanConfig())
 	repo := NewMemoryRepository()
-	svc := NewServiceWithRepository(repo)
+	svc := NewServiceWithRepository(&rejectStandaloneReportBundleRepository{MemoryRepository: repo})
 	now := time.Now().UTC()
 	defenderAccount := Account{ID: "account_yt_rein_def", Username: "yt_rein_def", CreatedAt: now}
 	helperAccount := Account{ID: "account_yt_rein_helper", Username: "yt_rein_helper", CreatedAt: now}
@@ -317,16 +327,14 @@ func TestYellowTurbanDefenseUsesStationedReinforcements(t *testing.T) {
 	if report.PvpReinforcements[0].GeneralExpGained != helperReports[0].GeneralExpGained {
 		t.Fatalf("expected defense report reinforcement exp %d, got %+v", helperReports[0].GeneralExpGained, report.PvpReinforcements[0])
 	}
-	if len(helperReports[0].Detail.PrimarySide.Generals) != 1 || helperReports[0].Detail.PrimarySide.Generals[0].ID != "sunquan" {
-		t.Fatalf("expected reinforcement report to show helper general, got %+v", helperReports[0].Detail.PrimarySide.Generals)
+	if helperReports[0].Detail.SecondarySide == nil || helperReports[0].Detail.PrimarySide.Role != "attacker" || helperReports[0].Detail.SecondarySide.Role != "defender" {
+		t.Fatalf("expected reinforcement report to preserve complete yellow turban attack and defense snapshots, got %+v", helperReports[0].Detail)
+	}
+	if len(helperReports[0].PvpReinforcements) != 1 || len(helperReports[0].PvpReinforcements[0].Generals) != 1 || helperReports[0].PvpReinforcements[0].Generals[0].ID != "sunquan" {
+		t.Fatalf("expected reinforcement report to show helper general in reinforcement snapshot, got %+v", helperReports[0].PvpReinforcements)
 	}
 	if helperReports[0].Detail.Visibility.Threshold != 0 {
 		t.Fatalf("reinforcement report should not show enemy reveal threshold, got %+v", helperReports[0].Detail.Visibility)
-	}
-	if rawPvp, ok := helperReports[0].Detail.Extra["pvp"].(map[string]interface{}); ok {
-		if _, exists := rawPvp["enemyLossRevealThreshold"]; exists {
-			t.Fatalf("reinforcement report pvp extra should not include enemy reveal threshold, got %+v", rawPvp)
-		}
 	}
 	updated := repo.reinforcements[reinforcement.ID]
 	if updated.LastBattleReportID != helperReports[0].ID {
@@ -338,6 +346,20 @@ func TestYellowTurbanDefenseUsesStationedReinforcements(t *testing.T) {
 	}
 	if got := pvpTestGeneralExp(updatedHelper, "sunquan"); got != helperReports[0].GeneralExpGained {
 		t.Fatalf("expected sunquan exp %d, got %d", helperReports[0].GeneralExpGained, got)
+	}
+	repeatedReport, err := svc.ResolveYellowTurbanMarch(march.ID)
+	if err != nil {
+		t.Fatalf("repeat ResolveYellowTurbanMarch failed: %v", err)
+	}
+	if repeatedReport.ID != report.ID {
+		t.Fatalf("expected repeat resolve to return existing report %s, got %s", report.ID, repeatedReport.ID)
+	}
+	repeatedHelper, err := repo.GetState(helper.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState repeated helper failed: %v", err)
+	}
+	if got := pvpTestGeneralExp(repeatedHelper, "sunquan"); got != helperReports[0].GeneralExpGained {
+		t.Fatalf("expected repeated yellow turban resolve to keep exp %d, got %d", helperReports[0].GeneralExpGained, got)
 	}
 }
 

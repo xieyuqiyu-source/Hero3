@@ -23,10 +23,12 @@ describe('军事战争页真实数据适配', () => {
   })
 
   it('同一目标的多个增援批次逐条展示并保留武将与剩余兵力', () => {
+    const catalog = [{ id: 'huWei', faction: 'wei', name: '虎卫', officialCode: 103, upkeep: 3 }]
     const base: ReinforcementListItem = { reinforcementId: 'r1', fromPlayerId: 'p1', fromPlayerName: '主公', toPlayerId: 'p2', toPlayerName: '盟友', status: 'marching', troops: { huWei: 10 }, remainingTroops: { huWei: 8 }, generals: [{ id: 'g1', name: '曹操', level: 56 }], marchSeconds: 60, sentAt: '', arriveAt: '2026-07-14T08:01:00Z' }
-    const rows = toMilitaryWarReinforcements([base, { ...base, reinforcementId: 'r2', arriveAt: '2026-07-14T08:02:00Z' }], 'outgoing')
+    const rows = toMilitaryWarReinforcements([base, { ...base, reinforcementId: 'r2', arriveAt: '2026-07-14T08:02:00Z' }], 'outgoing', catalog)
     expect(rows).toHaveLength(2)
-    expect(rows[0]).toMatchObject({ playerName: '盟友', generalNames: '曹操(Lv 56)', troops: 'huWei×8', status: '行军中' })
+    expect(rows[0]).toMatchObject({ playerName: '盟友', generalNames: '曹操(Lv 56)', troops: '虎卫×8', status: '行军中', foodPerHour: 24 })
+    expect(rows[0].units).toEqual([expect.objectContaining({ id: 'huWei', name: '虎卫', officialCode: 103, amount: 8 })])
   })
 
   it('每批来援按来源阵营补全独立守军结构和耗粮', () => {

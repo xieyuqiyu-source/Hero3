@@ -16,6 +16,9 @@ const (
 	PvpMarchStatusCancelled = "cancelled"
 	PvpMarchStatusFailed    = "failed"
 
+	PvpMarchViewerRoleSent     = "sent"
+	PvpMarchViewerRoleIncoming = "incoming"
+
 	PvpBattleStatusCreated  = "created"
 	PvpBattleStatusResolved = "resolved"
 
@@ -124,6 +127,7 @@ type PvpMarch struct {
 	DefenderFaction  string         `json:"defenderFaction"`
 	MarchType        string         `json:"marchType"`
 	Status           string         `json:"status"`
+	ViewerRole       string         `json:"viewerRole,omitempty"`
 	AttackTroops     map[string]int `json:"attackTroops"`
 	AttackGenerals   []string       `json:"attackGenerals,omitempty"`
 	SpeedMultiplier  float64        `json:"speedMultiplier"`
@@ -163,11 +167,14 @@ type PvpBattle struct {
 
 // PvpGeneralSnapshot 记录 PVP 战斗中实际参战的玩家武将快照。
 type PvpGeneralSnapshot struct {
-	ID     string                 `json:"id"`
-	Name   string                 `json:"name,omitempty"`
-	Level  int                    `json:"level,omitempty"`
-	Buffs  map[string]float64     `json:"buffs,omitempty"`
-	Traits []GeneralTraitInstance `json:"traits,omitempty"`
+	ID                 string                 `json:"id"`
+	Name               string                 `json:"name,omitempty"`
+	Level              int                    `json:"level,omitempty"`
+	GeneralExpGained   *int                   `json:"generalExpGained,omitempty"`
+	GeneralLevelBefore *int                   `json:"generalLevelBefore,omitempty"`
+	GeneralLevelAfter  *int                   `json:"generalLevelAfter,omitempty"`
+	Buffs              map[string]float64     `json:"buffs,omitempty"`
+	Traits             []GeneralTraitInstance `json:"traits,omitempty"`
 }
 
 // PvpRevengeRecord 记录一次玩家被攻击后生成的复仇机会。

@@ -40,14 +40,18 @@ type GarrisonRules struct {
 
 // ReinforcementGeneralSnapshot 保存增援携带武将的快照。
 type ReinforcementGeneralSnapshot struct {
-	ID         string                 `json:"id"`
-	Name       string                 `json:"name,omitempty"`
-	Level      int                    `json:"level,omitempty"`
-	Stats      map[string]int         `json:"stats,omitempty"`
-	Attributes map[string]float64     `json:"attributes,omitempty"`
-	Buffs      map[string]float64     `json:"buffs,omitempty"`
-	Traits     []GeneralTraitInstance `json:"traits,omitempty"`
-	Assignment string                 `json:"assignment,omitempty"`
+	ID                 string                 `json:"id"`
+	Name               string                 `json:"name,omitempty"`
+	Level              int                    `json:"level,omitempty"`
+	Exp                int                    `json:"exp,omitempty"`
+	GeneralExpGained   *int                   `json:"generalExpGained,omitempty"`
+	GeneralLevelBefore *int                   `json:"generalLevelBefore,omitempty"`
+	GeneralLevelAfter  *int                   `json:"generalLevelAfter,omitempty"`
+	Stats              map[string]int         `json:"stats,omitempty"`
+	Attributes         map[string]float64     `json:"attributes,omitempty"`
+	Buffs              map[string]float64     `json:"buffs,omitempty"`
+	Traits             []GeneralTraitInstance `json:"traits,omitempty"`
+	Assignment         string                 `json:"assignment,omitempty"`
 }
 
 // Reinforcement 记录一批增援的完整生命周期。

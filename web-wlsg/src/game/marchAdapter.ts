@@ -3,13 +3,19 @@ import type { OutgoingMarchViewModel, PvpMarchListItem, ReinforcementListItem, W
 
 const activeStatuses = new Set(['marching', 'returning'])
 const actionLabels: Record<WorldMapMarchAction, string> = { attack: '攻击', plunder: '掠夺', scout: '侦查', reinforce: '增援' }
+const incomingActionLabels: Record<Exclude<WorldMapMarchAction, 'reinforce'>, string> = { attack: '被攻击', plunder: '被掠夺', scout: '被侦查' }
 
-/** 将玩家本人派出的活动 PVP 行军转换为统一模型。 */
+/** 将玩家本人派出的行军与后端脱敏后的来袭行军转换为统一模型。 */
 export function mapPvpMarches(playerId: string, items: PvpMarchListItem[]): OutgoingMarchViewModel[] {
-  return items.filter((item) => item.attackerPlayerId === playerId && activeStatuses.has(item.status)).map((item) => {
+  const sent = items.filter((item) => item.attackerPlayerId === playerId && activeStatuses.has(item.status)).map((item) => {
     const kind = (['attack', 'plunder', 'scout'].includes(item.marchType) ? item.marchType : 'attack') as Exclude<WorldMapMarchAction, 'reinforce'>
-    return { id: item.id, kind, label: actionLabels[kind], targetName: item.defenderName || item.defenderPlayerId, troops: item.attackTroops ?? {}, status: item.status, endsAt: item.status === 'returning' ? (item.returnsAt || item.arrivesAt) : item.arrivesAt, acceleratedTimes: Math.max(0, item.acceleratedTimes ?? 0) }
+    return { id: item.id, kind, label: actionLabels[kind], targetName: item.defenderName || item.defenderPlayerId, troops: item.attackTroops ?? {}, status: item.status, endsAt: item.status === 'returning' ? (item.returnsAt || item.arrivesAt) : item.arrivesAt, pvpRole: 'sent' as const, acceleratedTimes: Math.max(0, item.acceleratedTimes ?? 0) }
   })
+  const incoming = items.filter((item) => item.viewerRole === 'incoming' && item.defenderPlayerId === playerId && item.status === 'marching').map((item) => {
+    const kind = (['attack', 'plunder', 'scout'].includes(item.marchType) ? item.marchType : 'attack') as Exclude<WorldMapMarchAction, 'reinforce'>
+    return { id: item.id, kind, label: incomingActionLabels[kind], targetName: item.attackerName || item.attackerPlayerId, troops: {}, status: item.status, endsAt: item.arrivesAt, pvpRole: 'incoming' as const, acceleratedTimes: 0 }
+  })
+  return [...sent, ...incoming]
 }
 
 /** 将本人派出的活动增援批次转换为统一模型。 */

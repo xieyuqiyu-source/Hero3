@@ -366,13 +366,16 @@ type BattleReportUnit struct {
 
 // BattleReportGeneral 保存参战武将快照，不读取当前玩家武将状态。
 type BattleReportGeneral struct {
-	ID         string                 `json:"id"`
-	Name       string                 `json:"name,omitempty"`
-	Level      int                    `json:"level,omitempty"`
-	Role       string                 `json:"role,omitempty"`
-	Power      int                    `json:"power,omitempty"`
-	Attributes map[string]float64     `json:"attributes,omitempty"`
-	Traits     []GeneralTraitInstance `json:"traits,omitempty"`
+	ID                 string                 `json:"id"`
+	Name               string                 `json:"name,omitempty"`
+	Level              int                    `json:"level,omitempty"`
+	Role               string                 `json:"role,omitempty"`
+	Power              int                    `json:"power,omitempty"`
+	GeneralExpGained   *int                   `json:"generalExpGained,omitempty"`
+	GeneralLevelBefore *int                   `json:"generalLevelBefore,omitempty"`
+	GeneralLevelAfter  *int                   `json:"generalLevelAfter,omitempty"`
+	Attributes         map[string]float64     `json:"attributes,omitempty"`
+	Traits             []GeneralTraitInstance `json:"traits,omitempty"`
 }
 
 // BattleReportTrait 保存战斗中特性触发的标准展示数据。

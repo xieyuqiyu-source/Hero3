@@ -39,6 +39,15 @@ ReinforcementGeneralSnapshot:
       type: string
     level:
       type: integer
+    generalExpGained:
+      type: integer
+      description: 该将领在本场战斗实际获得的经验。
+    generalLevelBefore:
+      type: integer
+      description: 本场战斗结算前等级。
+    generalLevelAfter:
+      type: integer
+      description: 本场战斗结算后等级。
     buffs:
       type: object
       additionalProperties:

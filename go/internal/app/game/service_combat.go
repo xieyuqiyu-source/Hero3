@@ -1571,7 +1571,37 @@ func (s *Service) GetReportByID(reportID string) (BattleReport, error) {
 	if err != nil {
 		return BattleReport{}, err
 	}
-	return NormalizeBattleReport(report), nil
+	return s.enrichReportGeneralResults(report), nil
+}
+
+// enrichReportGeneralResults 从同一事件的兄弟战报补齐历史攻防武将经验快照。
+func (s *Service) enrichReportGeneralResults(report BattleReport) BattleReport {
+	report = NormalizeBattleReport(report)
+	eventID := strings.TrimSpace(report.EventID)
+	if eventID == "" {
+		return report
+	}
+	eventReports, err := s.repo.ListReportsByEventForAdmin(eventID)
+	if err != nil || len(eventReports) == 0 {
+		return report
+	}
+	found := false
+	for _, item := range eventReports {
+		if item.ID == report.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		eventReports = append(eventReports, report)
+	}
+	eventReports = synchronizeBattleReportGeneralResults(eventReports)
+	for _, item := range eventReports {
+		if item.ID == report.ID {
+			return item
+		}
+	}
+	return report
 }
 
 // GetReportForPlayer 获取玩家自己的标准战报详情。
@@ -1585,7 +1615,7 @@ func (s *Service) GetReportForPlayer(playerID string, reportID string) (BattleRe
 	if err != nil {
 		return BattleReport{}, err
 	}
-	return projectBattleReportForViewer(report), nil
+	return projectBattleReportForViewer(s.enrichReportGeneralResults(report)), nil
 }
 
 // GetReportEventForPlayer 获取玩家可见的同事件战报上下文。
@@ -1643,7 +1673,7 @@ func (s *Service) GetSharedReportByToken(token string) (BattleReport, error) {
 	if err != nil {
 		return BattleReport{}, err
 	}
-	return projectBattleReportForViewer(report), nil
+	return projectBattleReportForViewer(s.enrichReportGeneralResults(report)), nil
 }
 
 // ListReports 分页获取玩家军情战报。
@@ -1666,6 +1696,9 @@ func (s *Service) ListReports(playerID string, page int, pageSize int) (BattleRe
 	reports, total, err := s.repo.ListReports(playerID, pageSize, offset)
 	if err != nil {
 		return BattleReportPage{}, err
+	}
+	for index := range reports {
+		reports[index] = projectBattleReportForViewer(reports[index])
 	}
 
 	return BattleReportPage{
@@ -1694,6 +1727,9 @@ func (s *Service) ListReportsByQuery(query BattleReportQuery) (BattleReportPage,
 	reports, total, err := s.repo.ListReportsByQuery(query)
 	if err != nil {
 		return BattleReportPage{}, err
+	}
+	for index := range reports {
+		reports[index] = projectBattleReportForViewer(reports[index])
 	}
 	return BattleReportPage{
 		Reports:  reports,
@@ -1743,6 +1779,7 @@ func (s *Service) CreateBattleReports(input BattleReportCreateInput) (BattleRepo
 		report = NormalizeBattleReport(report)
 		reports = append(reports, report)
 	}
+	reports = synchronizeBattleReportGeneralResults(reports)
 	event := buildBattleEventFromReports(input, eventID, occurredAt, reports)
 	if err := s.saveBattleReportsWithConfirmation(event, reports); err != nil {
 		return BattleReportCreateResult{}, err
@@ -2061,7 +2098,7 @@ func battleReportEnemySide(report *BattleReport) *BattleReportSide {
 		return &report.Detail.PrimarySide
 	}
 	if report.OwnerSide == ReportOwnerSideReinforcement {
-		return report.Detail.SecondarySide
+		return &report.Detail.PrimarySide
 	}
 	return report.Detail.SecondarySide
 }
@@ -2143,7 +2180,11 @@ func (s *Service) ListReportsByEventForAdmin(eventID string) ([]BattleReport, er
 	if eventID == "" {
 		return nil, errors.New("eventId is required")
 	}
-	return s.repo.ListReportsByEventForAdmin(eventID)
+	reports, err := s.repo.ListReportsByEventForAdmin(eventID)
+	if err != nil {
+		return nil, err
+	}
+	return synchronizeBattleReportGeneralResults(reports), nil
 }
 
 // ListParticipantsByEventForAdmin 返回同一事件下所有参与方快照。

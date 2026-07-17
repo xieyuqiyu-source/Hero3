@@ -112,10 +112,27 @@ describe('会话服务', () => {
   it('登录后保存会话但不保留旧玩家选择', async () => {
     const memory = createMemorySession(null, 'old-player')
     const state = initialState()
-    await createSessionService(mockApi(), memory.storage, state).login('hero', 'password-only-for-request')
+    const api = mockApi()
+    await createSessionService(api, memory.storage, state).login('hero', 'password-only-for-request')
     expect(memory.session()).toEqual({ accountId: 'a1', username: 'hero', token: 'jwt' })
     expect(memory.playerId()).toBeNull()
     expect(state.phase).toBe('players')
+    expect(state.bootstrap?.gameName).toBe('Hero3')
+    expect(api.bootstrap).toHaveBeenCalledTimes(1)
+  })
+
+  it('退出后重新登录会恢复兵种公共配置', async () => {
+    const memory = createMemorySession()
+    const state = initialState()
+    const api = mockApi()
+    const service = createSessionService(api, memory.storage, state)
+    await service.initialize()
+    expect(state.bootstrap?.gameName).toBe('Hero3')
+    service.logout()
+    expect(state.bootstrap).toBeNull()
+    await service.login('hero', 'password-only-for-request')
+    expect(state.bootstrap?.gameName).toBe('Hero3')
+    expect(api.bootstrap).toHaveBeenCalledTimes(2)
   })
 
   it('统一失效处理会清除账号和当前玩家', () => {

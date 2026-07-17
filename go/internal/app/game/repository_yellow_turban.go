@@ -78,6 +78,12 @@ func (r *MemoryRepository) ResolveYellowTurbanBattleTransaction(marchID string, 
 	for _, record := range changedReinforcements {
 		r.reinforcements[record.ID] = record
 	}
+	reports := append([]BattleReport{report}, reinforcementReports...)
+	r.saveReportsLocked(reports)
+	event := BuildYellowTurbanBattleEvent(march, report)
+	if event.ID != "" {
+		r.battleEvents[event.ID] = event
+	}
 	r.players[defender.Player.ID] = defender
 	if updatedAt.IsZero() {
 		updatedAt = time.Now().UTC()

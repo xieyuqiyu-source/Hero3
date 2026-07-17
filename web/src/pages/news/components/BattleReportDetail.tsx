@@ -204,6 +204,9 @@ function buildReinforcementSides(detail: BattleReportDetailData, unitsConfig: Un
         name: general.name,
         level: general.level,
         role: 'reinforcement',
+        generalExpGained: general.generalExpGained,
+        generalLevelBefore: general.generalLevelBefore,
+        generalLevelAfter: general.generalLevelAfter,
         attributes: general.attributes,
         traits: general.traits,
       })),
@@ -261,9 +264,11 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
   }, [accountPlayers, currentPlayer])
   const attackerSide = withExpandedUnits(detail.primarySide, unitsConfig)
   const defenderSide = detail.secondarySide ? withExpandedUnits(detail.secondarySide, unitsConfig) : null
-  const reinforcementSides = detail.viewType === 'reinforcement' ? [] : buildReinforcementSides(detail, unitsConfig, playerNameById)
+  const reinforcementSides = buildReinforcementSides(detail, unitsConfig, playerNameById)
   const attackerTraitText = sideTriggeredEffectText(detail, attackerSide, 'primary')
   const defenderTraitText = defenderSide ? sideTriggeredEffectText(detail, defenderSide, 'secondary') : '本场无触发效果'
+  const attackerGeneralExp = attackerSide.generals?.[0]?.generalExpGained ?? (detail.ownerSide === 'attacker' ? detail.rewards.generalExp : undefined)
+  const defenderGeneralExp = defenderSide?.generals?.[0]?.generalExpGained ?? (detail.ownerSide === 'defender' ? detail.rewards.generalExp : undefined)
   const showCombatSettlement = detail.viewType !== 'reinforcement' && detail.viewType !== 'scout' && detail.battleType !== 'scout'
 
   // handleShare 创建或复用分享 token 并复制公开链接。
@@ -292,14 +297,14 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
       {detail.viewType === 'reinforcement' && <ReportReinforcementContext reinforcement={detail.extra?.reinforcement} />}
 
       <BattleParticipantBlock
-        title={detail.viewType === 'reinforcement' ? '增援方' : '攻击方'}
+        title={attackerSide.role === 'reinforcement' ? '增援方' : '攻击方'}
         side={attackerSide}
         rewards={detail.ownerSide === 'defender' ? undefined : detail.rewards}
         feedback={sideLossFeedback(attackerSide)}
         effectText={attackerTraitText}
         effectTone={attackerTraitText === '本场无触发效果' ? 'normal' : 'highlight'}
         result={participantResult(detail, attackerSide)}
-        generalExp={detail.viewType === 'reinforcement' ? detail.rewards?.generalExp : undefined}
+        generalExp={attackerGeneralExp}
         settlement={showCombatSettlement ? 'attacker' : 'none'}
         showUnits={detail.ownerSide !== 'defender' || detail.visibility.showEnemyRemainingUnits}
         showResources={detail.ownerSide !== 'defender' || detail.visibility.showEnemyResources}
@@ -324,6 +329,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
           effectText={defenderTraitText}
           effectTone={defenderTraitText === '本场无触发效果' ? 'normal' : 'highlight'}
           result={participantResult(detail, defenderSide)}
+          generalExp={defenderGeneralExp}
           settlement={showCombatSettlement ? 'defender' : 'none'}
           showUnits={!['attacker', 'scout'].includes(detail.ownerSide || '') || detail.visibility.showEnemyRemainingUnits}
           showResources={!['attacker', 'scout'].includes(detail.ownerSide || '') || detail.visibility.showEnemyResources}

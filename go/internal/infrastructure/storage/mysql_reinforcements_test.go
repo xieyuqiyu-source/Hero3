@@ -2,10 +2,24 @@
 package storage
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	"hero3/internal/app/game"
 )
+
+// TestReinforcementTransactionsSyncAuthoritativeGenerals 防止增援发奖只写玩家 JSON 而遗漏权威武将表。
+func TestReinforcementTransactionsSyncAuthoritativeGenerals(t *testing.T) {
+	content, err := os.ReadFile("mysql_reinforcements.go")
+	if err != nil {
+		t.Fatalf("read mysql_reinforcements.go: %v", err)
+	}
+	source := string(content)
+	if !strings.Contains(source, "generalSnapshotChanged(previousGenerals, state.Generals)") || !strings.Contains(source, "syncPlayerGeneralsTx(tx, playerID, state.Generals") {
+		t.Fatal("reinforcement player transaction must sync changed generals to player_generals")
+	}
+}
 
 // TestApplyReinforcementPlayerLabels 验证增援记录能补齐玩家名且不覆盖已有快照名。
 func TestApplyReinforcementPlayerLabels(t *testing.T) {

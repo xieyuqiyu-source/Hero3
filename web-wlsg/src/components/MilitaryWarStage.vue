@@ -104,9 +104,21 @@ function reinforcementGeneralIcon(faction: string) { return ({ wei: 'general_tag
         <section v-else class="war-army-panel war-empty-army-panel">
           <header><strong><i></i>他城来增援本城的军队</strong></header><table><tbody><tr><td>{{ marchesLoading ? '正在读取真实增援…' : '暂无' }}</td></tr></tbody></table>
         </section>
-        <section class="war-army-panel war-reinforcement-panel">
-          <header><strong><i></i>本城去增援他城的军队</strong></header>
-          <table><thead><tr><th>目标城池</th><th>将领</th><th>兵力</th><th>状态</th></tr></thead><tbody><tr v-if="!outgoingRows.length"><td colspan="4">{{ marchesLoading ? '正在读取真实增援…' : '暂无' }}</td></tr><tr v-for="row in outgoingRows" :key="row.id"><td>{{ row.playerName }}</td><td>{{ row.generalNames }}</td><td :title="row.troops">{{ row.troops }}</td><td>{{ rowStatus(row.status, row.endsAt) }}</td></tr></tbody></table>
+        <template v-if="outgoingRows.length">
+          <section v-for="row in outgoingRows" :key="row.id" class="war-army-panel war-reinforcement-detachment war-outgoing-reinforcement">
+            <header><strong><i></i>本城去增援{{ row.playerName }}的军队</strong><span>{{ rowStatus(row.status, row.endsAt) }}</span></header>
+            <table class="war-guard-table">
+              <tbody>
+                <tr class="war-general-row"><th><img :src="`/assets/official/images/${reinforcementGeneralIcon(row.faction)}`" alt="将领" /></th><td :colspan="Math.max(1, row.units.length)">{{ row.generalNames }}</td></tr>
+                <tr class="war-unit-icons"><th></th><td v-for="unit in row.units" :key="unit.id" :title="unit.name"><img v-if="unit.officialCode" :src="`/assets/official/images/${unit.officialCode}.gif`" :alt="unit.name" /><span v-else class="war-unit-fallback">兵</span></td><td v-if="!row.units.length">暂无兵种配置</td></tr>
+                <tr class="war-unit-amounts"><th></th><td v-for="unit in row.units" :key="unit.id">{{ formatNumber(unit.amount) }}</td><td v-if="!row.units.length">0</td></tr>
+                <tr class="war-food-row"><th>总耗粮</th><td :colspan="Math.max(1, row.units.length)">{{ formatNumber(row.foodPerHour) }}/小时</td></tr>
+              </tbody>
+            </table>
+          </section>
+        </template>
+        <section v-else class="war-army-panel war-empty-army-panel">
+          <header><strong><i></i>本城去增援他城的军队</strong></header><table><tbody><tr><td>{{ marchesLoading ? '正在读取真实增援…' : '暂无' }}</td></tr></tbody></table>
         </section>
         <section v-for="section in militaryWarContent.unsupportedSections" :key="section.id" class="war-army-panel war-empty-army-panel">
           <header><strong><i></i>{{ section.title }}</strong></header><table><tbody><tr><td>{{ section.message }}</td></tr></tbody></table>

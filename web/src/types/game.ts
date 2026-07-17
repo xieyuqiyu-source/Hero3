@@ -546,6 +546,9 @@ export interface BattleReportGeneral {
   level?: number
   role?: string
   power?: number
+  generalExpGained?: number
+  generalLevelBefore?: number
+  generalLevelAfter?: number
   attributes?: Record<string, number>
   traits?: GeneralTraitInstance[]
 }
@@ -794,6 +797,9 @@ export interface ReinforcementGeneralSnapshot {
   id: string
   name?: string
   level?: number
+  generalExpGained?: number
+  generalLevelBefore?: number
+  generalLevelAfter?: number
   stats?: Record<string, number>
   attributes?: Record<string, number>
   buffs?: Record<string, number>

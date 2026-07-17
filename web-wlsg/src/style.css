@@ -165,6 +165,8 @@ button { font: inherit; }
 .march-status-line strong { color: #f00; font-size: 12px; font-weight: normal; white-space: nowrap; }
 .march-status-block.reinforcement .march-status-line strong, .march-status-block.received-reinforcement .march-status-line strong { color: #2de34a; }
 .march-status-block.received-reinforcement .march-status-line { background: rgba(20, 35, 20, .72); }
+.march-status-block.incoming-attack .march-status-line { background: rgba(55, 18, 13, .78); }
+.march-status-block.incoming-attack .march-status-line strong { color: #ff5c3d; font-weight: bold; }
 .march-status-line span { overflow: hidden; color: #e8d5a5; text-overflow: ellipsis; white-space: nowrap; }
 .march-status-line b { color: #ffe9a1; font-size: 11px; font-weight: normal; white-space: nowrap; }
 .march-status-line button { padding: 0; border: 0; color: #ffe9a1; background: none; font: inherit; white-space: nowrap; cursor: pointer; }
@@ -183,6 +185,7 @@ button { font: inherit; }
 .march-status-line.error span { overflow: hidden; max-width: 145px; margin: 0; color: #e88c76; text-overflow: ellipsis; white-space: nowrap; }
 .march-status-list { position: relative; z-index: 70; box-sizing: border-box; width: 207px; border: 1px solid #594b3b; background: #1b1714; box-shadow: inset 0 1px #493c31; }
 .march-status-block.reinforcement .march-status-list, .march-status-block.received-reinforcement .march-status-list { border-color: #426a43; }
+.march-status-block.incoming-attack .march-status-list { border-color: #7f3829; }
 .march-status-list article { padding: 5px 7px; border-bottom: 1px solid #0a0807; box-shadow: inset 0 1px #493c31; }
 .march-status-list article:last-child { border-bottom: 0; }
 .march-status-list header { display: flex; justify-content: space-between; color: #d58836; line-height: 18px; }
@@ -620,10 +623,6 @@ button { font: inherit; }
 .war-empty-army-panel { margin-top: 11px; }
 .war-empty-army-panel > header { height: 36px; }
 .war-empty-army-panel table td { height: 31px; color: #c9bd83; background: #11191a; }
-.war-reinforcement-panel table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.war-reinforcement-panel th, .war-reinforcement-panel td { box-sizing: border-box; height: 30px; padding: 3px 7px; border: 1px solid #363532; overflow: hidden; color: #d7caa5; background: #151818; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
-.war-reinforcement-panel th { color: #d9a55f; background: #202322; font-weight: normal; }
-.war-reinforcement-panel th:nth-child(1) { width: 18%; }.war-reinforcement-panel th:nth-child(2) { width: 22%; }.war-reinforcement-panel th:nth-child(3) { width: 38%; }.war-reinforcement-panel th:nth-child(4) { width: 22%; }
 .war-data-state { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 32px; margin-top: 10px; color: #d7caa5; border: 1px solid #554536; background: #191715; }
 .war-data-state.error { color: #ef8c75; }.war-data-state button { padding: 2px 10px; color: #ffd875; border: 1px solid #715332; background: #2e2018; cursor: pointer; }
 @media (max-height: 820px) {

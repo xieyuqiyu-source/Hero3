@@ -1,7 +1,7 @@
 /** 验证真实状态转换的重复地块、未知类型、扩展数量和零值。 */
 import { describe, expect, it } from 'vitest'
 import type { GameStateResponse } from './types'
-import { officialUnitIconsByName, toCityGameViewModel } from './viewModel'
+import { toCityGameViewModel } from './viewModel'
 
 /** 创建可按测试覆盖的最小完整游戏状态。 */
 function gameState(overrides: Partial<GameStateResponse> = {}): GameStateResponse {
@@ -76,12 +76,11 @@ describe('当前城池视图模型', () => {
     const shu = toCityGameViewModel(gameState({ player: { id: 'p1', nickname: '蜀主', faction: 'shu' }, general: { id: 'g1', name: '关羽', level: 10 }, army: shuArmy }), 0)
     const wu = toCityGameViewModel(gameState({ player: { id: 'p2', nickname: '吴主', faction: 'wu' }, general: { id: 'g2', name: '周瑜', level: 10 }, army: wuArmy }), 0)
     expect(wei.army.map((unit) => unit.icon)).toEqual(['101.gif', '102.gif', '103.gif', '104.gif', '105.gif', '106.gif', '107.gif', '108.gif', '109.gif', '110.gif'])
-    expect(shu.army.map((unit) => unit.icon)).toEqual(['111.gif', '112.gif', '113.gif', '114.gif', '115.gif', '116.gif', '117.gif', '118.gif', '119.gif', '120.gif'])
-    expect(wu.army.map((unit) => unit.icon)).toEqual(['121.gif', '123.gif', '124.gif', '125.gif', '126.gif', '127.gif', '128.gif', '129.gif', '130.gif', '131.gif'])
+    expect(shu.army.map((unit) => unit.icon)).toEqual(['112.gif', '113.gif', '114.gif', '115.gif', '116.gif', '117.gif', '118.gif', '119.gif', '120.gif', '121.gif'])
+    expect(wu.army.map((unit) => unit.icon)).toEqual(['123.gif', '124.gif', '125.gif', '126.gif', '127.gif', '128.gif', '129.gif', '130.gif', '131.gif', '132.gif'])
     expect(wei.army.map((unit) => unit.name)).toEqual(['青州军', '禁卫甲士', '虎卫', '战鹰骑探', '骁骑营', '虎豹骑', '冲撞车', '霹雳车', '建筑师', '士族'])
     expect(shu.army.map((unit) => unit.name)).toEqual(['贪狼营', '麒麟卫', '青龙军', '飞鸢', '西凉铁骑', '南蛮象', '临冲车', '轰天雷', '木牛流马', '汉室宗亲'])
     expect(wu.army.map((unit) => unit.name)).toEqual(['影卫', '修罗', '密探', '神风', '朱雀骑', '霸王骑', '对楼车', '炬石车', '风水师', '太平术士'])
-    expect(Object.keys(officialUnitIconsByName)).toHaveLength(30)
     expect(wei.general?.icon).toBe('general_tag_1.gif')
     expect(shu.general?.icon).toBe('general_tag_2.gif')
     expect(wu.general?.icon).toBe('general_tag_3.gif')

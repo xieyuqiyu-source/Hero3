@@ -39,17 +39,19 @@ func (r *MySQLRepository) CreatePvpMarchWithState(attackerPlayerID string, defen
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, err
 	}
 	attackerArmy := armySnapshotsFromStorageState(attacker.Army)
+	attackerGenerals := generalSnapshotsFromStorageState(attacker.Generals)
 	attackerAssignments := generalAssignmentSnapshotsFromStorageState(attacker.GeneralAssignments)
 	defenderArmy := armySnapshotsFromStorageState(defender.Army)
+	defenderGenerals := generalSnapshotsFromStorageState(defender.Generals)
 	defenderAssignments := generalAssignmentSnapshotsFromStorageState(defender.GeneralAssignments)
 	march, err := update(&attacker, &defender)
 	if err != nil {
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, err
 	}
-	if err := savePvpPlayerStateTx(tx, attacker.Player.ID, attacker, attackerJSON, updatedAt, attackerArmy, attackerAssignments); err != nil {
+	if err := savePvpPlayerStateTx(tx, attacker.Player.ID, attacker, attackerJSON, updatedAt, attackerArmy, attackerGenerals, attackerAssignments); err != nil {
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, err
 	}
-	if err := savePvpPlayerStateTx(tx, defender.Player.ID, defender, defenderJSON, updatedAt, defenderArmy, defenderAssignments); err != nil {
+	if err := savePvpPlayerStateTx(tx, defender.Player.ID, defender, defenderJSON, updatedAt, defenderArmy, defenderGenerals, defenderAssignments); err != nil {
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, err
 	}
 	if err := insertPvpMarchTx(tx, march); err != nil {
@@ -73,16 +75,18 @@ func (r *MySQLRepository) UpdatePvpScoutStates(scoutPlayerID string, targetPlaye
 		return game.GameState{}, game.GameState{}, err
 	}
 	scoutArmy := armySnapshotsFromStorageState(scout.Army)
+	scoutGenerals := generalSnapshotsFromStorageState(scout.Generals)
 	scoutAssignments := generalAssignmentSnapshotsFromStorageState(scout.GeneralAssignments)
 	targetArmy := armySnapshotsFromStorageState(target.Army)
+	targetGenerals := generalSnapshotsFromStorageState(target.Generals)
 	targetAssignments := generalAssignmentSnapshotsFromStorageState(target.GeneralAssignments)
 	if err := update(&scout, &target); err != nil {
 		return game.GameState{}, game.GameState{}, err
 	}
-	if err := savePvpPlayerStateTx(tx, scout.Player.ID, scout, scoutJSON, updatedAt, scoutArmy, scoutAssignments); err != nil {
+	if err := savePvpPlayerStateTx(tx, scout.Player.ID, scout, scoutJSON, updatedAt, scoutArmy, scoutGenerals, scoutAssignments); err != nil {
 		return game.GameState{}, game.GameState{}, err
 	}
-	if err := savePvpPlayerStateTx(tx, target.Player.ID, target, targetJSON, updatedAt, targetArmy, targetAssignments); err != nil {
+	if err := savePvpPlayerStateTx(tx, target.Player.ID, target, targetJSON, updatedAt, targetArmy, targetGenerals, targetAssignments); err != nil {
 		return game.GameState{}, game.GameState{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -136,13 +140,14 @@ func (r *MySQLRepository) UpdatePvpMarchWithAttackerState(marchID string, update
 		return game.GameState{}, game.PvpMarch{}, err
 	}
 	previousArmy := armySnapshotsFromStorageState(attacker.Army)
+	previousGenerals := generalSnapshotsFromStorageState(attacker.Generals)
 	previousAssignments := generalAssignmentSnapshotsFromStorageState(attacker.GeneralAssignments)
 	if err := update(&attacker, &march); err != nil {
 		return game.GameState{}, game.PvpMarch{}, err
 	}
 	attacker.ServerTime = updatedAt.UTC().Format(time.RFC3339)
 	march.UpdatedAt = updatedAt.UTC().Format(time.RFC3339)
-	if err := savePvpPlayerStateTx(tx, attacker.Player.ID, attacker, attackerJSON, updatedAt, previousArmy, previousAssignments); err != nil {
+	if err := savePvpPlayerStateTx(tx, attacker.Player.ID, attacker, attackerJSON, updatedAt, previousArmy, previousGenerals, previousAssignments); err != nil {
 		return game.GameState{}, game.PvpMarch{}, err
 	}
 	if err := updatePvpMarchTx(tx, march); err != nil {
@@ -213,8 +218,10 @@ func (r *MySQLRepository) ResolvePvpBattleTransaction(marchID string, updatedAt 
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
 	}
 	attackerArmy := armySnapshotsFromStorageState(attacker.Army)
+	attackerGenerals := generalSnapshotsFromStorageState(attacker.Generals)
 	attackerAssignments := generalAssignmentSnapshotsFromStorageState(attacker.GeneralAssignments)
 	defenderArmy := armySnapshotsFromStorageState(defender.Army)
+	defenderGenerals := generalSnapshotsFromStorageState(defender.Generals)
 	defenderAssignments := generalAssignmentSnapshotsFromStorageState(defender.GeneralAssignments)
 	reinforcements, err := listReceivedReinforcementsTx(tx, defender.Player.ID, " FOR UPDATE")
 	if err != nil {
@@ -224,10 +231,10 @@ func (r *MySQLRepository) ResolvePvpBattleTransaction(marchID string, updatedAt 
 	if err != nil {
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
 	}
-	if err := savePvpPlayerStateTx(tx, attacker.Player.ID, attacker, attackerJSON, updatedAt, attackerArmy, attackerAssignments); err != nil {
+	if err := savePvpPlayerStateTx(tx, attacker.Player.ID, attacker, attackerJSON, updatedAt, attackerArmy, attackerGenerals, attackerAssignments); err != nil {
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
 	}
-	if err := savePvpPlayerStateTx(tx, defender.Player.ID, defender, defenderJSON, updatedAt, defenderArmy, defenderAssignments); err != nil {
+	if err := savePvpPlayerStateTx(tx, defender.Player.ID, defender, defenderJSON, updatedAt, defenderArmy, defenderGenerals, defenderAssignments); err != nil {
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
 	}
 	for _, record := range changedReinforcements {
@@ -552,14 +559,14 @@ func loadPvpPlayerStateTx(tx *sql.Tx, playerID string) (game.GameState, []byte, 
 	return state, previousJSON, nil
 }
 
-func savePvpPlayerStateTx(tx *sql.Tx, playerID string, state game.GameState, previousJSON []byte, updatedAt time.Time, previousArmy map[string]storageArmySnapshot, previousAssignments map[string]storageGeneralAssignmentSnapshot) error {
+func savePvpPlayerStateTx(tx *sql.Tx, playerID string, state game.GameState, previousJSON []byte, updatedAt time.Time, previousArmy map[string]storageArmySnapshot, previousGenerals map[string]storageGeneralSnapshot, previousAssignments map[string]storageGeneralAssignmentSnapshot) error {
 	if err := syncPlayerResourcesTx(tx, playerID, state.Resources, updatedAt.UTC()); err != nil {
 		return err
 	}
 	if err := syncPlayerCurrencyTx(tx, playerID, &state, updatedAt.UTC()); err != nil {
 		return err
 	}
-	if err := saveReinforcementPlayerStateTx(tx, playerID, state, previousJSON, updatedAt, previousArmy, previousAssignments, currencySnapshotFromState(state)); err != nil {
+	if err := saveReinforcementPlayerStateTx(tx, playerID, state, previousJSON, updatedAt, previousArmy, previousGenerals, previousAssignments, currencySnapshotFromState(state)); err != nil {
 		return err
 	}
 	return nil

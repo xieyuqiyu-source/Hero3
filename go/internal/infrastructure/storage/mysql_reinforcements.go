@@ -30,9 +30,11 @@ func (r *MySQLRepository) CreateReinforcementWithState(fromPlayerID string, toPl
 	}
 
 	previousFromArmy := armySnapshotsFromStorageState(from.Army)
+	previousFromGenerals := generalSnapshotsFromStorageState(from.Generals)
 	previousFromAssignments := generalAssignmentSnapshotsFromStorageState(from.GeneralAssignments)
 	previousFromCurrency := currencySnapshotFromState(from)
 	previousToArmy := armySnapshotsFromStorageState(to.Army)
+	previousToGenerals := generalSnapshotsFromStorageState(to.Generals)
 	previousToAssignments := generalAssignmentSnapshotsFromStorageState(to.GeneralAssignments)
 	previousToCurrency := currencySnapshotFromState(to)
 	record, err := update(&from, &to, targetRecords)
@@ -42,10 +44,10 @@ func (r *MySQLRepository) CreateReinforcementWithState(fromPlayerID string, toPl
 	if err := insertReinforcementTx(tx, record); err != nil {
 		return game.GameState{}, game.GameState{}, game.Reinforcement{}, err
 	}
-	if err := saveReinforcementPlayerStateTx(tx, fromPlayerID, from, fromJSON, updatedAt, previousFromArmy, previousFromAssignments, previousFromCurrency); err != nil {
+	if err := saveReinforcementPlayerStateTx(tx, fromPlayerID, from, fromJSON, updatedAt, previousFromArmy, previousFromGenerals, previousFromAssignments, previousFromCurrency); err != nil {
 		return game.GameState{}, game.GameState{}, game.Reinforcement{}, err
 	}
-	if err := saveReinforcementPlayerStateTx(tx, toPlayerID, to, toJSON, updatedAt, previousToArmy, previousToAssignments, previousToCurrency); err != nil {
+	if err := saveReinforcementPlayerStateTx(tx, toPlayerID, to, toJSON, updatedAt, previousToArmy, previousToGenerals, previousToAssignments, previousToCurrency); err != nil {
 		return game.GameState{}, game.GameState{}, game.Reinforcement{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -71,9 +73,11 @@ func (r *MySQLRepository) UpdateReinforcement(reinforcementID string, updatedAt 
 		return game.GameState{}, game.GameState{}, game.Reinforcement{}, err
 	}
 	previousFromArmy := armySnapshotsFromStorageState(from.Army)
+	previousFromGenerals := generalSnapshotsFromStorageState(from.Generals)
 	previousFromAssignments := generalAssignmentSnapshotsFromStorageState(from.GeneralAssignments)
 	previousFromCurrency := currencySnapshotFromState(from)
 	previousToArmy := armySnapshotsFromStorageState(to.Army)
+	previousToGenerals := generalSnapshotsFromStorageState(to.Generals)
 	previousToAssignments := generalAssignmentSnapshotsFromStorageState(to.GeneralAssignments)
 	previousToCurrency := currencySnapshotFromState(to)
 	previousReinforcementID := record.ID
@@ -85,10 +89,10 @@ func (r *MySQLRepository) UpdateReinforcement(reinforcementID string, updatedAt 
 	if err := updateReinforcementTx(tx, previousReinforcementID, record); err != nil {
 		return game.GameState{}, game.GameState{}, game.Reinforcement{}, err
 	}
-	if err := saveReinforcementPlayerStateTx(tx, record.FromPlayerID, from, fromJSON, updatedAt, previousFromArmy, previousFromAssignments, previousFromCurrency); err != nil {
+	if err := saveReinforcementPlayerStateTx(tx, record.FromPlayerID, from, fromJSON, updatedAt, previousFromArmy, previousFromGenerals, previousFromAssignments, previousFromCurrency); err != nil {
 		return game.GameState{}, game.GameState{}, game.Reinforcement{}, err
 	}
-	if err := saveReinforcementPlayerStateTx(tx, record.ToPlayerID, to, toJSON, updatedAt, previousToArmy, previousToAssignments, previousToCurrency); err != nil {
+	if err := saveReinforcementPlayerStateTx(tx, record.ToPlayerID, to, toJSON, updatedAt, previousToArmy, previousToGenerals, previousToAssignments, previousToCurrency); err != nil {
 		return game.GameState{}, game.GameState{}, game.Reinforcement{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -159,9 +163,14 @@ func loadReinforcementPlayerStateTx(tx *sql.Tx, playerID string) (game.GameState
 	return state, stateJSON, nil
 }
 
-func saveReinforcementPlayerStateTx(tx *sql.Tx, playerID string, state game.GameState, previousJSON []byte, updatedAt time.Time, previousArmy map[string]storageArmySnapshot, previousAssignments map[string]storageGeneralAssignmentSnapshot, previousCurrency playerCurrencySnapshot) error {
+func saveReinforcementPlayerStateTx(tx *sql.Tx, playerID string, state game.GameState, previousJSON []byte, updatedAt time.Time, previousArmy map[string]storageArmySnapshot, previousGenerals map[string]storageGeneralSnapshot, previousAssignments map[string]storageGeneralAssignmentSnapshot, previousCurrency playerCurrencySnapshot) error {
 	if armySnapshotChanged(previousArmy, state.Army) {
 		if err := syncPlayerArmyTx(tx, playerID, state.Army, updatedAt.UTC()); err != nil {
+			return err
+		}
+	}
+	if generalSnapshotChanged(previousGenerals, state.Generals) {
+		if err := syncPlayerGeneralsTx(tx, playerID, state.Generals, updatedAt.UTC()); err != nil {
 			return err
 		}
 	}

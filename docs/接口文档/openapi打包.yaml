@@ -5123,6 +5123,15 @@ components:
           type: string
         power:
           type: integer
+        generalExpGained:
+          type: integer
+          description: 该参战将领在本场战斗实际获得的经验；与查看战报的玩家视角无关。
+        generalLevelBefore:
+          type: integer
+          description: 该参战将领结算经验前的等级。
+        generalLevelAfter:
+          type: integer
+          description: 该参战将领结算经验后的等级。
     BattleReportTrait:
       type: object
       properties:
@@ -6761,6 +6770,15 @@ components:
           type: string
         level:
           type: integer
+        generalExpGained:
+          type: integer
+          description: 该将领在本场战斗实际获得的经验。
+        generalLevelBefore:
+          type: integer
+          description: 本场战斗结算前等级。
+        generalLevelAfter:
+          type: integer
+          description: 本场战斗结算后等级。
         buffs:
           type: object
           additionalProperties:

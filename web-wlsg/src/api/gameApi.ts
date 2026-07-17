@@ -84,7 +84,7 @@ export function createGameApi(client: ApiClient) {
     startPvpAttack: (playerId: string, targetPlayerId: string, troops: Record<string, number>, generalIds: string[], marchMode: Extract<WorldMapMarchAction, 'attack' | 'plunder'>) => client.post<PvpDispatchResponse>('/pvp/attacks', { playerId, targetPlayerId, troops, generalIds, marchMode }),
     /** 派出真实兵力和可用武将增援玩家城池。 */
     sendReinforcement: (playerId: string, targetPlayerId: string, troops: Record<string, number>, generalIds: string[]) => client.post<ReinforcementDispatchResponse>('/reinforcements', { playerId, targetPlayerId, troops, generalIds }),
-    /** 读取当前玩家相关 PVP 行军，前端再筛选本人派出的活动项。 */
+    /** 读取当前玩家相关 PVP 行军，包含本人出征和后端脱敏后的本城来袭。 */
     pvpMarches: (playerId: string, signal?: AbortSignal) => client.get<{ items: PvpMarchListItem[] }>(`/pvp/marches?playerId=${encodeURIComponent(playerId)}`, { signal }),
     /** 使用 10 城金把本人尚在去程的 PVP 行军剩余时间减半。 */
     acceleratePvpMarch: (playerId: string, marchId: string) => client.post<PvpMarchActionResponse>(`/pvp/marches/${encodeURIComponent(marchId)}/accelerate`, { playerId }),

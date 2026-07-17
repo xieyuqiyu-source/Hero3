@@ -267,7 +267,8 @@ func TestNormalizeBattleReportHidesMerchantUnits(t *testing.T) {
 	}
 }
 
-func TestNormalizeBattleReportBuildsReinforcementDetailWithoutSecondarySide(t *testing.T) {
+// TestNormalizeLegacyReinforcementReportKeepsCompactFallback 验证历史简报缺少完整快照时仍可兼容展示。
+func TestNormalizeLegacyReinforcementReportKeepsCompactFallback(t *testing.T) {
 	report := NormalizeBattleReport(BattleReport{
 		ID:              "br_reinforcement",
 		PlayerID:        "player_r",
@@ -286,7 +287,7 @@ func TestNormalizeBattleReportBuildsReinforcementDetailWithoutSecondarySide(t *t
 		t.Fatalf("expected reinforcement detail, got %+v", report.Detail)
 	}
 	if report.Detail.SecondarySide != nil {
-		t.Fatalf("reinforcement report should not expose secondary side: %+v", report.Detail.SecondarySide)
+		t.Fatalf("legacy reinforcement fallback should keep its compact single-side detail: %+v", report.Detail.SecondarySide)
 	}
 }
 
@@ -314,6 +315,75 @@ func TestMemoryReportsQueryByViewAndShareToken(t *testing.T) {
 	}
 	if shared.ID != "br_defense" {
 		t.Fatalf("unexpected shared report: %+v", shared)
+	}
+}
+
+// TestGetHistoricalDefenseReportMergesGeneralExpFromEvent 验证旧防守战报可从同事件进攻战报补齐双方武将经验。
+func TestGetHistoricalDefenseReportMergesGeneralExpFromEvent(t *testing.T) {
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	now := time.Now().UTC().Format(time.RFC3339)
+	eventID := "event_historical_general_exp"
+	attackerGenerals := []PvpGeneralSnapshot{{ID: "liubei", Name: "刘备", Level: 3}}
+	defenderGenerals := []PvpGeneralSnapshot{{ID: "caocao", Name: "曹操", Level: 11}}
+	attackerReport := BattleReport{
+		ID: "br_historical_exp_attack", EventID: eventID, PlayerID: "player_attack_exp", OwnerPlayerID: "player_attack_exp",
+		ViewType: ReportViewAttack, OwnerSide: ReportOwnerSideAttacker, SourceType: ReportSourcePlayerCity, BattleType: "attack", Type: "attack",
+		Result: "defender_victory", GeneralExpGained: 380, GeneralLevelBefore: 1, GeneralLevelAfter: 3,
+		PlayerFaction: "shu", PlayerName: "机器战测·蜀", TargetID: "player_defense_exp", TargetName: "神武", DefenderFaction: "wei", DefenderRevealed: true,
+		PvpAttackerGenerals: attackerGenerals, PvpDefenderGenerals: defenderGenerals, CreatedAt: now,
+	}
+	defenderReport := BattleReport{
+		ID: "br_historical_exp_defense", EventID: eventID, PlayerID: "player_defense_exp", OwnerPlayerID: "player_defense_exp",
+		ViewType: ReportViewDefense, OwnerSide: ReportOwnerSideDefender, SourceType: ReportSourcePlayerCity, BattleType: "attack", Type: "defense",
+		Result: "defender_victory", GeneralExpGained: 800, GeneralLevelBefore: 11, GeneralLevelAfter: 11,
+		PlayerFaction: "wei", PlayerName: "神武", TargetID: "player_attack_exp", TargetName: "机器战测·蜀", DefenderFaction: "shu", DefenderRevealed: true,
+		PvpAttackerGenerals: attackerGenerals, PvpDefenderGenerals: defenderGenerals, CreatedAt: now,
+	}
+	if err := repo.SaveReport(NormalizeBattleReport(attackerReport)); err != nil {
+		t.Fatalf("SaveReport attacker failed: %v", err)
+	}
+	if err := repo.SaveReport(NormalizeBattleReport(defenderReport)); err != nil {
+		t.Fatalf("SaveReport defender failed: %v", err)
+	}
+
+	visible, err := service.GetReportForPlayer(defenderReport.PlayerID, defenderReport.ID)
+	if err != nil {
+		t.Fatalf("GetReportForPlayer failed: %v", err)
+	}
+	if visible.Detail == nil || visible.Detail.SecondarySide == nil {
+		t.Fatalf("expected complete defense detail, got %+v", visible.Detail)
+	}
+	attackerGeneral := visible.Detail.PrimarySide.Generals[0]
+	defenderGeneral := visible.Detail.SecondarySide.Generals[0]
+	if attackerGeneral.GeneralExpGained == nil || *attackerGeneral.GeneralExpGained != 380 || attackerGeneral.GeneralLevelBefore == nil || *attackerGeneral.GeneralLevelBefore != 1 || attackerGeneral.GeneralLevelAfter == nil || *attackerGeneral.GeneralLevelAfter != 3 {
+		t.Fatalf("expected historical attacker result 380 and Lv1->3, got %+v", attackerGeneral)
+	}
+	if defenderGeneral.GeneralExpGained == nil || *defenderGeneral.GeneralExpGained != 800 {
+		t.Fatalf("expected historical defender result 800, got %+v", defenderGeneral)
+	}
+}
+
+// TestSynchronizeBattleReportGeneralResultsSeparatesMirrorGenerals 验证敌我同武将 ID 时经验按绝对角色隔离。
+func TestSynchronizeBattleReportGeneralResultsSeparatesMirrorGenerals(t *testing.T) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	sharedAttacker := []PvpGeneralSnapshot{{ID: "caocao", Name: "进攻曹操", Level: 2}}
+	sharedDefender := []PvpGeneralSnapshot{{ID: "caocao", Name: "防守曹操", Level: 5}}
+	reports := synchronizeBattleReportGeneralResults([]BattleReport{
+		{ID: "br_mirror_attack", EventID: "event_mirror_exp", PlayerID: "mirror_a", OwnerPlayerID: "mirror_a", ViewType: ReportViewAttack, OwnerSide: ReportOwnerSideAttacker, SourceType: ReportSourcePlayerCity, Type: "attack", Result: "draw", GeneralExpGained: 100, GeneralLevelBefore: 1, GeneralLevelAfter: 2, PvpAttackerGenerals: sharedAttacker, PvpDefenderGenerals: sharedDefender, DefenderRevealed: true, CreatedAt: now},
+		{ID: "br_mirror_defense", EventID: "event_mirror_exp", PlayerID: "mirror_d", OwnerPlayerID: "mirror_d", ViewType: ReportViewDefense, OwnerSide: ReportOwnerSideDefender, SourceType: ReportSourcePlayerCity, Type: "defense", Result: "draw", GeneralExpGained: 250, GeneralLevelBefore: 4, GeneralLevelAfter: 5, PvpAttackerGenerals: sharedAttacker, PvpDefenderGenerals: sharedDefender, DefenderRevealed: true, CreatedAt: now},
+	})
+	defense := reports[1]
+	if defense.Detail == nil || defense.Detail.SecondarySide == nil {
+		t.Fatalf("expected mirror defense detail, got %+v", defense.Detail)
+	}
+	attacker := defense.Detail.PrimarySide.Generals[0]
+	defender := defense.Detail.SecondarySide.Generals[0]
+	if attacker.GeneralExpGained == nil || *attacker.GeneralExpGained != 100 {
+		t.Fatalf("expected mirror attacker exp 100, got %+v", attacker)
+	}
+	if defender.GeneralExpGained == nil || *defender.GeneralExpGained != 250 {
+		t.Fatalf("expected mirror defender exp 250, got %+v", defender)
 	}
 }
 
@@ -481,6 +551,7 @@ func TestReportVisibilityUsesLossThresholdSnapshot(t *testing.T) {
 
 // TestGetReportForPlayerRedactsHiddenEnemyTroops 验证玩家详情响应不会携带不可见的敌方剩余兵力。
 func TestGetReportForPlayerRedactsHiddenEnemyTroops(t *testing.T) {
+	enemyGeneralExp := 999
 	repo := NewMemoryRepository()
 	service := NewServiceWithRepository(repo)
 	report := NormalizeBattleReport(BattleReport{
@@ -497,7 +568,7 @@ func TestGetReportForPlayerRedactsHiddenEnemyTroops(t *testing.T) {
 		DefenderUnits:       map[string]int{"shuInfantry": 100},
 		DefenderLostUnits:   map[string]int{"shuInfantry": 10},
 		DefenderResources:   map[string]int{"wood": 999},
-		PvpDefenderGenerals: []PvpGeneralSnapshot{{ID: "liubei", Name: "刘备"}},
+		PvpDefenderGenerals: []PvpGeneralSnapshot{{ID: "liubei", Name: "刘备", GeneralExpGained: &enemyGeneralExp}},
 		PvpReinforcements: []DefenseReinforcementUnit{{
 			ReinforcementID:  "rein_hidden",
 			Troops:           map[string]int{"shuInfantry": 50},
@@ -548,6 +619,17 @@ func TestGetReportForPlayerRedactsHiddenEnemyTroops(t *testing.T) {
 	}
 	if len(visible.DefenderResources) != 0 || len(visible.PvpDefenderGenerals) != 0 || len(visible.PvpReinforcements[0].Troops) != 0 || len(visible.PvpReinforcements[0].Generals) != 0 || visible.PvpReinforcements[0].GeneralExpGained != 0 || len(visible.PvpReinforcements[0].Buffs) != 0 || visible.PvpWall != nil {
 		t.Fatalf("expected enemy resources, generals and reinforcement troops redacted, got %+v", visible)
+	}
+	if len(visible.Detail.SecondarySide.Generals) != 0 {
+		t.Fatalf("expected enemy general exp redacted together with enemy generals, got %+v", visible.Detail.SecondarySide.Generals)
+	}
+	listed, err := service.ListReports(report.PlayerID, 1, 10)
+	if err != nil || len(listed.Reports) != 1 || len(listed.Reports[0].PvpDefenderGenerals) != 0 {
+		t.Fatalf("expected unfiltered report list to redact enemy general exp, page=%+v err=%v", listed, err)
+	}
+	queried, err := service.ListReportsByQuery(BattleReportQuery{PlayerID: report.PlayerID, ViewType: ReportViewAttack, Page: 1, PageSize: 10})
+	if err != nil || len(queried.Reports) != 1 || len(queried.Reports[0].PvpDefenderGenerals) != 0 {
+		t.Fatalf("expected filtered report list to redact enemy general exp, page=%+v err=%v", queried, err)
 	}
 	if pvp, ok := visible.Detail.Extra["pvp"].(map[string]interface{}); ok {
 		if _, exists := pvp["wall"]; exists {
