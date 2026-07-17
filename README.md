@@ -6,11 +6,18 @@
 
 ```text
 Hero3/
-├── web/    # React + TypeScript + Vite 玩家前端
-├── admin/  # React + TypeScript + Vite GM 后台
-├── go/     # Go 后端 API 服务
-└── helpdocs/ # 玩家端帮助文档站内容
+├── go/             # Go 模块化单体后端与数据库工具
+├── web/            # React + TypeScript + Vite 现代玩家前端
+├── web-wlsg/       # Vue + TypeScript + Vite 武林三国风格玩家前端
+├── admin/          # React + TypeScript + Vite GM 后台
+├── docs/           # 架构、系统、接口、数据库、测试和运维文档
+├── helpdocs/       # 玩家端帮助文档内容源
+├── deploy/         # Nginx、systemd、journald 部署配置
+├── memory/         # 按日期维护的开发记忆
+└── PROJECT_INDEX.md # 面向 AI 与新协作者的项目导航索引
 ```
+
+AI 或新协作者应先阅读 [AI 项目索引](./PROJECT_INDEX.md)，再按索引进入相关代码、OpenAPI 和专题文档。索引只负责导航，长期判断仍以 `PROJECT_RULES.md` 为最高项目规则。
 
 Go 后端当前采用模块化单体目录：
 
@@ -121,7 +128,7 @@ http://localhost:5173/help
 
 帮助页入口位于玩家端侧栏顶部快捷入口。内容来自 `helpdocs/content/*.md`，可以直接手动新增、修改和删除 Markdown 文件；后端通过 `/api/v1/help/docs` 提供文档列表和正文读取。
 
-当前旧版帮助正文已归档到 `过时文档/helpdocs/content/`，`helpdocs/content/` 仅保留空目录占位，后续应按当前实现重新编写玩家端帮助内容。
+旧版帮助正文已于 2026-07-17 清理，`helpdocs/content/` 仅保留空目录占位；后续玩家帮助必须按当前代码、README、OpenAPI 和有效设计文档重新编写。
 
 基础接口：
 
@@ -163,6 +170,7 @@ http://localhost:5174
 
 ## 设计文档
 
+- [AI 项目索引](./PROJECT_INDEX.md)：面向 AI 与新协作者的架构地图、代码入口、任务定位和验证矩阵。
 - [文档目录](./docs/文档目录.md)：按产品、系统、运维、流程、素材和接口文档分类。
 - [项目最终目的](./docs/产品/项目最终目的.md)：记录长期项目目标、核心边界、模块化方向和生产级要求。
 - [未来开发规划](./docs/产品/未来开发规划.md)：记录后续功能点和玩法模块规划。
