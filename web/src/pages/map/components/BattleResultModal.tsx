@@ -311,8 +311,9 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
               <h3 className="text-[11px] font-semibold text-[var(--color-text-primary)] mb-1.5">将领特性触发</h3>
               <div className="space-y-1.5">
                 {report.traitTriggered.map((traitId) => {
-                  const meta = getTraitMeta(traitId)
                   const outcome = report.traitOutcomes?.[traitId]
+                  const displayTraitId = outcome?.traitId || traitId
+                  const meta = getTraitMeta(displayTraitId)
                   return (
                     <div key={traitId} className="flex items-start gap-2 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30">
                       <span className="text-base">{meta.icon}</span>
@@ -366,10 +367,10 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
             </div>
           )}
 
-          {/* 仁德：复活 */}
+          {/* 战后复活或最终减损返还 */}
           {!isSweepReport && report.revivedUnits && Object.keys(report.revivedUnits).length > 0 && (
             <div>
-              <h3 className="text-[11px] font-semibold text-emerald-500 mb-1.5">🕊️ 仁德·复活归队</h3>
+              <h3 className="text-[11px] font-semibold text-emerald-500 mb-1.5">战后归队兵力</h3>
               <div className="flex flex-wrap gap-1.5">
                 {sortUnitEntries(report.revivedUnits, faction, units ?? undefined).filter(([, v]) => v > 0).map(([unitType, count]) => (
                   <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 font-medium">

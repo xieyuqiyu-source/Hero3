@@ -104,6 +104,10 @@ paths:
     $ref: ./paths/reinforcement.yaml#/~1api~1v1~1reinforcements~1{reinforcementId}~1expel
   /api/v1/reinforcements/{reinforcementId}/accelerate:
     $ref: ./paths/reinforcement.yaml#/~1api~1v1~1reinforcements~1{reinforcementId}~1accelerate
+  /api/v1/pvp/scout:
+    $ref: ./paths/pvp.yaml#/~1api~1v1~1pvp~1scout
+  /api/v1/pvp/attacks:
+    $ref: ./paths/pvp.yaml#/~1api~1v1~1pvp~1attacks
   /api/v1/world-map/view:
     $ref: ./paths/map.yaml#/~1api~1v1~1world-map~1view
   /api/v1/world-map/targets/player_city/{playerId}:
@@ -389,6 +393,10 @@ components:
       $ref: ./schemas/report.yaml#/BattleReportShareLink
     BattleReportParticipant:
       $ref: ./schemas/report.yaml#/BattleReportParticipant
+    BattleReportReinforcementSnapshot:
+      $ref: ./schemas/report.yaml#/BattleReportReinforcementSnapshot
+    TraitOutcomeReport:
+      $ref: ./schemas/report.yaml#/TraitOutcomeReport
     Mail:
       $ref: ./schemas/mail.yaml#/Mail
     MailAttachment:
@@ -477,6 +485,16 @@ components:
       $ref: ./schemas/military.yaml#/MilitaryActionResult
     GeneralViewActionResult:
       $ref: ./schemas/military.yaml#/GeneralViewActionResult
+    PvpScoutRequest:
+      $ref: ./schemas/pvp.yaml#/PvpScoutRequest
+    PvpAttackRequest:
+      $ref: ./schemas/pvp.yaml#/PvpAttackRequest
+    PvpMarch:
+      $ref: ./schemas/pvp.yaml#/PvpMarch
+    PvpAttackResponse:
+      $ref: ./schemas/pvp.yaml#/PvpAttackResponse
+    PvpScoutResponse:
+      $ref: ./schemas/pvp.yaml#/PvpScoutResponse
     GeneralActionResult:
       $ref: ./schemas/military.yaml#/GeneralActionResult
     SendReinforcementRequest:

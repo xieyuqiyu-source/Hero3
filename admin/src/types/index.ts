@@ -82,6 +82,7 @@ export interface GameState {
   inventorySlots?: ItemStack[]
   resourceProduction: Record<string, number>
   resourceSettledAt: string
+  generalTraitProgress?: Record<string, number>
   buildings: Array<{
     id: string
     type: string
@@ -349,6 +350,9 @@ export interface GeneralTraitConfig {
   enabled: boolean
   scope?: string
   targetUnitType?: string
+  allowedSides?: Array<'attacker' | 'defender' | 'reinforcement'>
+  allowedScenes?: string[]
+  requiredOutcome?: 'win' | 'loss'
   params: Record<string, number>
 }
 

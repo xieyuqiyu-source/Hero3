@@ -2,6 +2,7 @@
 package game
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -79,6 +80,104 @@ func TestNormalizeBattleReportKeepsTraitOutcomeDetails(t *testing.T) {
 	}
 }
 
+// TestNormalizeBattleReportKeepsReinforcementTraitPlayerOwners 验证同将领援军结果仍保留不同玩家归属。
+func TestNormalizeBattleReportKeepsReinforcementTraitPlayerOwners(t *testing.T) {
+	report := NormalizeBattleReport(BattleReport{
+		ID: "br_reinforcement_trait_owners", PlayerID: "attacker", PlayerFaction: "wei", Type: "attack", Result: "defender_victory",
+		TraitTriggered: []string{"longdan_jiuyuan", "longdan_jiuyuan::reinforcement::zhaoyun"},
+		TraitOutcomes: map[string]TraitOutcomeReport{
+			"longdan_jiuyuan": {
+				TraitID: "longdan_jiuyuan", Name: "龙胆救援", OwnerSide: "reinforcement", OwnerPlayerID: "helper_a", OwnerGeneralID: "zhaoyun",
+				Detail: map[string]interface{}{"reducedLosses": map[string]int{"greedyWolf": 10}},
+			},
+			"longdan_jiuyuan::reinforcement::zhaoyun": {
+				TraitID: "longdan_jiuyuan", Name: "龙胆救援", OwnerSide: "reinforcement", OwnerPlayerID: "helper_b", OwnerGeneralID: "zhaoyun",
+				Detail: map[string]interface{}{"reducedLosses": map[string]int{"greedyWolf": 20}},
+			},
+		},
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	})
+	if report.Detail == nil || len(report.Detail.Traits) != 2 {
+		t.Fatalf("expected two reinforcement trait entries, detail=%+v", report.Detail)
+	}
+	for index, playerID := range []string{"helper_a", "helper_b"} {
+		trait := report.Detail.Traits[index]
+		if trait.TraitID != "longdan_jiuyuan" || trait.OwnerRole != "reinforcement" || trait.OwnerPlayerID != playerID || trait.GeneralID != "zhaoyun" {
+			t.Fatalf("expected reinforcement trait owner %s at index %d, trait=%+v", playerID, index, trait)
+		}
+	}
+}
+
+// TestBattleReportJSONKeepsLegacyAndStandardTraitOwners 验证接口 JSON 同时保留旧结果和标准时间线的援军玩家归属。
+func TestBattleReportJSONKeepsLegacyAndStandardTraitOwners(t *testing.T) {
+	report := NormalizeBattleReport(BattleReport{
+		ID: "br_trait_owner_json", PlayerID: "attacker", PlayerFaction: "wei", Type: "attack", Result: "defender_victory",
+		TraitTriggered: []string{"longdan_jiuyuan"},
+		TraitOutcomes: map[string]TraitOutcomeReport{
+			"longdan_jiuyuan": {
+				TraitID: "longdan_jiuyuan", Name: "龙胆救援", TraitType: "special", OwnerSide: "reinforcement",
+				OwnerPlayerID: "helper_json", OwnerGeneralID: "zhaoyun", Scope: "reinforcement_self",
+				Detail: map[string]interface{}{"reducedLosses": map[string]int{"shuInfantry": 20}},
+			},
+		},
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	})
+	payload, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("Marshal report failed: %v", err)
+	}
+	var decoded BattleReport
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("Unmarshal report failed: %v", err)
+	}
+	legacy := decoded.TraitOutcomes["longdan_jiuyuan"]
+	if legacy.OwnerPlayerID != "helper_json" || legacy.OwnerGeneralID != "zhaoyun" || legacy.Scope != "reinforcement_self" {
+		t.Fatalf("expected legacy trait ownership after JSON round trip, got %+v", legacy)
+	}
+	if decoded.Detail == nil || len(decoded.Detail.Traits) != 1 || decoded.Detail.Traits[0].OwnerPlayerID != "helper_json" || decoded.Detail.Traits[0].GeneralID != "zhaoyun" {
+		t.Fatalf("expected standard trait ownership after JSON round trip, got %+v", decoded.Detail)
+	}
+}
+
+// TestSharedReinforcementReportKeepsOwnTraitPlayerOwner 验证公开分享援军战报时仍保留自身特性的玩家归属。
+func TestSharedReinforcementReportKeepsOwnTraitPlayerOwner(t *testing.T) {
+	repo := NewMemoryRepository()
+	report := NormalizeBattleReport(BattleReport{
+		ID: "br_shared_reinforcement_trait", PlayerID: "helper_share", OwnerPlayerID: "helper_share",
+		ViewType: ReportViewReinforcement, OwnerSide: ReportOwnerSideReinforcement, PlayerFaction: "shu",
+		Type: "reinforce", BattleType: "reinforcement_battle", Result: "defender_victory",
+		DispatchedUnits: map[string]int{"shuInfantry": 100}, LostUnits: map[string]int{"shuInfantry": 80}, SurvivedUnits: map[string]int{"shuInfantry": 20},
+		TraitTriggered: []string{"longdan_jiuyuan"},
+		TraitOutcomes: map[string]TraitOutcomeReport{
+			"longdan_jiuyuan": {
+				TraitID: "longdan_jiuyuan", Name: "龙胆救援", TraitType: "special", OwnerSide: "reinforcement",
+				OwnerPlayerID: "helper_share", OwnerGeneralID: "zhaoyun", Scope: "reinforcement_self",
+				Detail: map[string]interface{}{"lossReductionRate": 0.2, "reducedLosses": map[string]int{"shuInfantry": 20}},
+			},
+		},
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	})
+	if err := repo.SaveReport(report); err != nil {
+		t.Fatalf("SaveReport failed: %v", err)
+	}
+	svc := NewServiceWithRepository(repo)
+	link, err := svc.ShareBattleReport("helper_share", report.ID)
+	if err != nil {
+		t.Fatalf("ShareBattleReport failed: %v", err)
+	}
+	shared, err := svc.GetSharedReportByToken(link.Token)
+	if err != nil {
+		t.Fatalf("GetSharedReportByToken failed: %v", err)
+	}
+	legacy := shared.TraitOutcomes["longdan_jiuyuan"]
+	if legacy.OwnerPlayerID != "helper_share" || legacy.OwnerGeneralID != "zhaoyun" {
+		t.Fatalf("expected shared legacy trait ownership, got %+v", legacy)
+	}
+	if shared.Detail == nil || len(shared.Detail.Traits) != 1 || shared.Detail.Traits[0].OwnerPlayerID != "helper_share" || shared.Detail.Traits[0].OwnerRole != "reinforcement" {
+		t.Fatalf("expected shared standard trait ownership, got %+v", shared.Detail)
+	}
+}
+
 func TestNormalizeBattleReportIncludesAllFactionUnits(t *testing.T) {
 	previous := GetFactionUnits("test_report")
 	if err := SaveFactionUnits("", "test_report", FactionUnits{
@@ -142,7 +241,7 @@ func TestNormalizeBattleReportBuildsDefenseDetail(t *testing.T) {
 		DefenderLostUnits: map[string]int{"weiInfantry": 9},
 		DefenderRevealed:  true,
 		PvpAttackerGenerals: []PvpGeneralSnapshot{
-			{ID: "caocao", Name: "曹操", Level: 3},
+			{ID: "caocao", Name: "曹操", Level: 3, Stats: map[string]int{"force": 70}, EffectiveStats: map[string]int{"force": 90}, Attributes: map[string]float64{"attack": 9}, Buffs: map[string]float64{StatAttackBonus: 0.2}},
 		},
 		PvpDefenderGenerals: []PvpGeneralSnapshot{
 			{ID: "liubei", Name: "刘备", Level: 4},
@@ -158,7 +257,7 @@ func TestNormalizeBattleReportBuildsDefenseDetail(t *testing.T) {
 	if report.Title != "许昌（玩家） 攻击 成都" {
 		t.Fatalf("defense report title should swap attacker and defender, got %q", report.Title)
 	}
-	if len(report.Detail.PrimarySide.Generals) != 1 || report.Detail.PrimarySide.Generals[0].ID != "caocao" {
+	if len(report.Detail.PrimarySide.Generals) != 1 || report.Detail.PrimarySide.Generals[0].ID != "caocao" || report.Detail.PrimarySide.Generals[0].Stats["force"] != 70 || report.Detail.PrimarySide.Generals[0].EffectiveStats["force"] != 90 || report.Detail.PrimarySide.Generals[0].Attributes["attack"] != 9 || report.Detail.PrimarySide.Generals[0].Buffs[StatAttackBonus] != 0.2 {
 		t.Fatalf("defense report attacker side should show attacker general, got %+v", report.Detail.PrimarySide.Generals)
 	}
 	if len(report.Detail.SecondarySide.Generals) != 1 || report.Detail.SecondarySide.Generals[0].ID != "liubei" {
@@ -570,11 +669,13 @@ func TestGetReportForPlayerRedactsHiddenEnemyTroops(t *testing.T) {
 		DefenderResources:   map[string]int{"wood": 999},
 		PvpDefenderGenerals: []PvpGeneralSnapshot{{ID: "liubei", Name: "刘备", GeneralExpGained: &enemyGeneralExp}},
 		PvpReinforcements: []DefenseReinforcementUnit{{
-			ReinforcementID:  "rein_hidden",
-			Troops:           map[string]int{"shuInfantry": 50},
-			Generals:         []ReinforcementGeneralSnapshot{{ID: "guanyu", Name: "关羽"}},
-			GeneralExpGained: 88,
-			Buffs:            []ModifierBreakdownItem{{Source: "关羽", Key: StatAttackBonus, Value: 0.2, Mode: "percentAdd"}},
+			ReinforcementID:    "rein_hidden",
+			Troops:             map[string]int{"shuInfantry": 50},
+			Generals:           []ReinforcementGeneralSnapshot{{ID: "guanyu", Name: "关羽"}},
+			GeneralExpGained:   88,
+			GeneralLevelBefore: 10,
+			GeneralLevelAfter:  11,
+			Buffs:              []ModifierBreakdownItem{{Source: "关羽", Key: StatAttackBonus, Value: 0.2, Mode: "percentAdd"}},
 		}},
 		PvpAttackerGenerals: []PvpGeneralSnapshot{{ID: "caocao", Name: "曹操"}},
 		TraitTriggered:      []string{"attacker_trait", "defender_trait"},
@@ -617,7 +718,7 @@ func TestGetReportForPlayerRedactsHiddenEnemyTroops(t *testing.T) {
 	if len(legacyVisible.TraitTriggered) != 1 || legacyVisible.TraitTriggered[0] != "attacker_trait" || len(legacyVisible.TraitOutcomes) != 1 {
 		t.Fatalf("expected legacy-only enemy traits redacted, got triggered=%+v outcomes=%+v", legacyVisible.TraitTriggered, legacyVisible.TraitOutcomes)
 	}
-	if len(visible.DefenderResources) != 0 || len(visible.PvpDefenderGenerals) != 0 || len(visible.PvpReinforcements[0].Troops) != 0 || len(visible.PvpReinforcements[0].Generals) != 0 || visible.PvpReinforcements[0].GeneralExpGained != 0 || len(visible.PvpReinforcements[0].Buffs) != 0 || visible.PvpWall != nil {
+	if len(visible.DefenderResources) != 0 || len(visible.PvpDefenderGenerals) != 0 || len(visible.PvpReinforcements[0].Troops) != 0 || len(visible.PvpReinforcements[0].Generals) != 0 || visible.PvpReinforcements[0].GeneralExpGained != 0 || visible.PvpReinforcements[0].GeneralLevelBefore != 0 || visible.PvpReinforcements[0].GeneralLevelAfter != 0 || len(visible.PvpReinforcements[0].Buffs) != 0 || visible.PvpWall != nil {
 		t.Fatalf("expected enemy resources, generals and reinforcement troops redacted, got %+v", visible)
 	}
 	if len(visible.Detail.SecondarySide.Generals) != 0 {
@@ -640,6 +741,12 @@ func TestGetReportForPlayerRedactsHiddenEnemyTroops(t *testing.T) {
 				if _, expExists := snapshot["generalExpGained"]; expExists {
 					t.Fatalf("expected enemy reinforcement general exp redacted, got %+v", snapshot)
 				}
+				if _, beforeExists := snapshot["generalLevelBefore"]; beforeExists {
+					t.Fatalf("expected enemy reinforcement pre-battle level redacted, got %+v", snapshot)
+				}
+				if _, afterExists := snapshot["generalLevelAfter"]; afterExists {
+					t.Fatalf("expected enemy reinforcement post-battle level redacted, got %+v", snapshot)
+				}
 				if _, buffsExist := snapshot["buffs"]; buffsExist {
 					t.Fatalf("expected enemy reinforcement buffs redacted, got %+v", snapshot)
 				}
@@ -647,8 +754,154 @@ func TestGetReportForPlayerRedactsHiddenEnemyTroops(t *testing.T) {
 		}
 	}
 	raw, err := repo.GetReportForPlayer(report.PlayerID, report.ID)
-	if err != nil || len(raw.DefenderUnits) == 0 || len(raw.PvpReinforcements[0].Troops) == 0 || raw.PvpReinforcements[0].GeneralExpGained != 88 || len(raw.PvpReinforcements[0].Buffs) != 1 {
+	if err != nil || len(raw.DefenderUnits) == 0 || len(raw.PvpReinforcements[0].Troops) == 0 || raw.PvpReinforcements[0].GeneralExpGained != 88 || raw.PvpReinforcements[0].GeneralLevelBefore != 10 || raw.PvpReinforcements[0].GeneralLevelAfter != 11 || len(raw.PvpReinforcements[0].Buffs) != 1 {
 		t.Fatalf("expected repository raw snapshot unchanged, got report=%+v err=%v", raw, err)
+	}
+}
+
+// TestCloneBattleReportDeepCopiesNestedSnapshots 验证玩家响应副本的嵌套修改不会污染仓储中的历史战报。
+func TestCloneBattleReportDeepCopiesNestedSnapshots(t *testing.T) {
+	trait := GeneralTraitInstance{
+		TraitID:       "weiwu_tongyu",
+		Params:        map[string]float64{"attackBonusRate": 0.1},
+		AllowedSides:  []string{"attacker"},
+		AllowedScenes: []string{"attack"},
+	}
+	original := BattleReport{
+		CapturedUnits:          map[string]int{"weiInfantry": 1},
+		PvpReinforcementLosses: map[string]map[string]int{"rein_1": {"shuInfantry": 2}},
+		GrantedRewards:         []Reward{{Type: "item", ID: "token", Amount: 1, Metadata: map[string]any{"source": "battle"}}},
+		TraitTriggered:         []string{"weiwu_tongyu"},
+		TraitOutcomes: map[string]TraitOutcomeReport{
+			"weiwu_tongyu": {TraitID: "weiwu_tongyu", Detail: map[string]interface{}{"attackModifiedUnits": map[string]int{"weiInfantry": 1}}},
+		},
+		PvpReinforcements: []DefenseReinforcementUnit{{
+			ReinforcementID: "rein_1",
+			Troops:          map[string]int{"shuInfantry": 10},
+			Generals: []ReinforcementGeneralSnapshot{{
+				ID: "guanyu", Buffs: map[string]float64{StatAttackBonus: 0.2}, Traits: []GeneralTraitInstance{trait},
+			}},
+			SourceTags: map[string]string{"scene": "pvp"},
+		}},
+		Detail: &BattleReportDetail{
+			PrimarySide: BattleReportSide{Generals: []BattleReportGeneral{{
+				ID: "caocao", Stats: map[string]int{"force": 70}, EffectiveStats: map[string]int{"force": 90}, Attributes: map[string]float64{"attack": 9}, Buffs: map[string]float64{StatAttackBonus: 0.1}, Traits: []GeneralTraitInstance{trait},
+			}}},
+			Rewards: BattleReportRewards{
+				Resources: map[string]int{"wood": 100},
+				Granted:   []Reward{{Type: "general_exp", ID: "caocao", Amount: 10, Metadata: map[string]any{"source": "battle"}}},
+			},
+			Traits: []BattleReportTrait{{
+				TraitID: "weiwu_tongyu", Detail: map[string]interface{}{"attackModifiedUnits": map[string]int{"weiInfantry": 1}},
+			}},
+			Extra: map[string]interface{}{
+				"pvp": map[string]interface{}{
+					"reinforcements": []DefenseReinforcementUnit{{
+						ReinforcementID: "rein_extra", Troops: map[string]int{"shuInfantry": 10},
+					}},
+					"reinforcementLosses": map[string]map[string]int{"rein_extra": {"shuInfantry": 2}},
+					"wall":                &PvpWallSnapshot{Level: 10},
+				},
+				"sweep": map[string]interface{}{
+					"defenders": []BattleReportSweepDefender{{
+						TargetID: "npc_1", Units: []BattleReportUnit{{UnitType: "shuInfantry", Dispatched: 10}},
+						Resources: map[string]int{"wood": 5},
+					}},
+				},
+			},
+		},
+	}
+
+	cloned := cloneBattleReport(original)
+	cloned.CapturedUnits["weiInfantry"] = 9
+	cloned.PvpReinforcementLosses["rein_1"]["shuInfantry"] = 9
+	cloned.GrantedRewards[0].Metadata["source"] = "response"
+	cloned.TraitTriggered[0] = "changed"
+	cloned.TraitOutcomes["weiwu_tongyu"].Detail["attackModifiedUnits"].(map[string]int)["weiInfantry"] = 9
+	cloned.PvpReinforcements[0].Generals[0].Buffs[StatAttackBonus] = 9
+	cloned.PvpReinforcements[0].Generals[0].Traits[0].Params["attackBonusRate"] = 9
+	cloned.PvpReinforcements[0].SourceTags["scene"] = "changed"
+	cloned.Detail.PrimarySide.Generals[0].Stats["force"] = 7
+	cloned.Detail.PrimarySide.Generals[0].EffectiveStats["force"] = 9
+	cloned.Detail.PrimarySide.Generals[0].Attributes["attack"] = 1
+	cloned.Detail.PrimarySide.Generals[0].Buffs[StatAttackBonus] = 9
+	cloned.Detail.PrimarySide.Generals[0].Traits[0].AllowedSides[0] = "defender"
+	cloned.Detail.Rewards.Resources["wood"] = 9
+	cloned.Detail.Rewards.Granted[0].Metadata["source"] = "response"
+	cloned.Detail.Traits[0].Detail["attackModifiedUnits"].(map[string]int)["weiInfantry"] = 9
+	clonedExtraPvp := cloned.Detail.Extra["pvp"].(map[string]interface{})
+	clonedExtraPvp["reinforcements"].([]DefenseReinforcementUnit)[0].Troops["shuInfantry"] = 9
+	clonedExtraPvp["reinforcementLosses"].(map[string]map[string]int)["rein_extra"]["shuInfantry"] = 9
+	clonedExtraPvp["wall"].(*PvpWallSnapshot).Level = 99
+	clonedSweep := cloned.Detail.Extra["sweep"].(map[string]interface{})["defenders"].([]BattleReportSweepDefender)
+	clonedSweep[0].Units[0].Dispatched = 99
+	clonedSweep[0].Resources["wood"] = 99
+
+	if original.CapturedUnits["weiInfantry"] != 1 || original.PvpReinforcementLosses["rein_1"]["shuInfantry"] != 2 || original.GrantedRewards[0].Metadata["source"] != "battle" || original.TraitTriggered[0] != "weiwu_tongyu" {
+		t.Fatalf("expected top-level report snapshots to remain isolated, original=%+v", original)
+	}
+	if original.TraitOutcomes["weiwu_tongyu"].Detail["attackModifiedUnits"].(map[string]int)["weiInfantry"] != 1 || original.PvpReinforcements[0].Generals[0].Buffs[StatAttackBonus] != 0.2 || original.PvpReinforcements[0].Generals[0].Traits[0].Params["attackBonusRate"] != 0.1 || original.PvpReinforcements[0].SourceTags["scene"] != "pvp" {
+		t.Fatalf("expected trait and reinforcement snapshots to remain isolated, original=%+v", original)
+	}
+	if original.Detail.PrimarySide.Generals[0].Stats["force"] != 70 || original.Detail.PrimarySide.Generals[0].EffectiveStats["force"] != 90 || original.Detail.PrimarySide.Generals[0].Attributes["attack"] != 9 || original.Detail.PrimarySide.Generals[0].Buffs[StatAttackBonus] != 0.1 || original.Detail.PrimarySide.Generals[0].Traits[0].AllowedSides[0] != "attacker" || original.Detail.Rewards.Resources["wood"] != 100 || original.Detail.Rewards.Granted[0].Metadata["source"] != "battle" || original.Detail.Traits[0].Detail["attackModifiedUnits"].(map[string]int)["weiInfantry"] != 1 {
+		t.Fatalf("expected standard detail snapshots to remain isolated, detail=%+v", original.Detail)
+	}
+	originalExtraPvp := original.Detail.Extra["pvp"].(map[string]interface{})
+	originalSweep := original.Detail.Extra["sweep"].(map[string]interface{})["defenders"].([]BattleReportSweepDefender)
+	if originalExtraPvp["reinforcements"].([]DefenseReinforcementUnit)[0].Troops["shuInfantry"] != 10 || originalExtraPvp["reinforcementLosses"].(map[string]map[string]int)["rein_extra"]["shuInfantry"] != 2 || originalExtraPvp["wall"].(*PvpWallSnapshot).Level != 10 || originalSweep[0].Units[0].Dispatched != 10 || originalSweep[0].Resources["wood"] != 5 {
+		t.Fatalf("expected standard extra snapshots to remain isolated, extra=%+v", original.Detail.Extra)
+	}
+}
+
+// TestReportViewerAndShareResponsesDoNotMutateStoredExtra 验证本人查询和公开分享的扩展字段修改不会污染库存战报。
+func TestReportViewerAndShareResponsesDoNotMutateStoredExtra(t *testing.T) {
+	repo := NewMemoryRepository()
+	report := NormalizeBattleReport(BattleReport{
+		ID: "br_extra_response_isolation", PlayerID: "player_extra", OwnerPlayerID: "player_extra",
+		ViewType: ReportViewAttack, OwnerSide: ReportOwnerSideAttacker, SourceType: ReportSourceDungeon,
+		BattleType: "dungeon_reincarnation_attack", Type: "attack", Result: "attacker_victory",
+		DefenderRevealed: true, CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	})
+	report.Detail.Extra = map[string]interface{}{
+		"dungeon": map[string]interface{}{"rewardMode": "preview"},
+		"sweep": map[string]interface{}{
+			"defenders": []BattleReportSweepDefender{{
+				TargetID: "npc_extra", Resources: map[string]int{"wood": 5},
+			}},
+		},
+	}
+	if err := repo.SaveReport(report); err != nil {
+		t.Fatalf("SaveReport failed: %v", err)
+	}
+	svc := NewServiceWithRepository(repo)
+
+	visible, err := svc.GetReportForPlayer(report.PlayerID, report.ID)
+	if err != nil {
+		t.Fatalf("GetReportForPlayer failed: %v", err)
+	}
+	visible.Detail.Extra["dungeon"].(map[string]interface{})["rewardMode"] = "response"
+	rawAfterViewer, err := repo.GetReportForPlayer(report.PlayerID, report.ID)
+	if err != nil || rawAfterViewer.Detail.Extra["dungeon"].(map[string]interface{})["rewardMode"] != "preview" {
+		t.Fatalf("expected viewer response isolated from stored extra, report=%+v err=%v", rawAfterViewer.Detail, err)
+	}
+
+	link, err := svc.ShareBattleReport(report.PlayerID, report.ID)
+	if err != nil {
+		t.Fatalf("ShareBattleReport failed: %v", err)
+	}
+	shared, err := svc.GetSharedReportByToken(link.Token)
+	if err != nil {
+		t.Fatalf("GetSharedReportByToken failed: %v", err)
+	}
+	sharedDefenders := shared.Detail.Extra["sweep"].(map[string]interface{})["defenders"].([]BattleReportSweepDefender)
+	sharedDefenders[0].Resources["wood"] = 99
+	rawAfterShare, err := repo.GetReportForPlayer(report.PlayerID, report.ID)
+	if err != nil {
+		t.Fatalf("GetReportForPlayer after share failed: %v", err)
+	}
+	rawDefenders := rawAfterShare.Detail.Extra["sweep"].(map[string]interface{})["defenders"].([]BattleReportSweepDefender)
+	if rawDefenders[0].Resources["wood"] != 5 {
+		t.Fatalf("expected shared response isolated from stored extra, defenders=%+v", rawDefenders)
 	}
 }
 

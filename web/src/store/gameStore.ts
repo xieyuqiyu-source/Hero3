@@ -1,6 +1,9 @@
+// 本文件维护玩家权威状态，并防止并发视图请求用旧响应覆盖较新的军事资产。
 import { create } from 'zustand'
 import { gameApi } from '@/api/game'
 import type { CityActionResult, GameState, GeneralViewActionResult, MilitaryActionResult, ResourceActionResult } from '@/types/game'
+
+let militaryRequestVersion = 0
 
 interface GameStore {
   /** 当前活跃玩家 ID */
@@ -102,6 +105,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       army: result.army,
       recruitQueues: result.recruitQueues,
       resources: result.resources,
+      resourceProduction: result.resourceProduction,
+      resourceSettledAt: result.resourceSettledAt,
+      generalTraitProgress: result.generalTraitProgress,
       cityGold: result.cityGold,
       serverTime: result.serverTime,
     }),
@@ -117,10 +123,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
   setActivePlayer: (playerId) => {
+    militaryRequestVersion += 1
     localStorage.setItem('hero3_active_player_id', playerId)
     set({ activePlayerId: playerId })
   },
   clearActivePlayer: () => {
+    militaryRequestVersion += 1
     localStorage.removeItem('hero3_active_player_id')
     set({ activePlayerId: null, state: null, stateReceivedAt: null })
   },
@@ -172,10 +180,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   loadMilitaryView: async (playerId?: string) => {
     const id = playerId ?? get().activePlayerId
     if (!id) return
+    const requestVersion = ++militaryRequestVersion
     try {
       const view = await gameApi.getMilitaryView(id)
+      const activePlayerId = get().activePlayerId
+      if (requestVersion !== militaryRequestVersion || (activePlayerId !== null && activePlayerId !== id)) return
       get().patchState(view)
     } catch (error) {
+      if (requestVersion !== militaryRequestVersion) return
       const message = error instanceof Error ? error.message : '加载军事视图失败'
       set({ error: message })
     }

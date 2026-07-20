@@ -36,10 +36,8 @@ func validateAndConsumeArmyWithModifiers(state *GameState, units map[string]int,
 	var combatUnits []combat.Unit
 	now := time.Now()
 
-	for unitType, count := range units {
-		if count <= 0 {
-			continue
-		}
+	for _, selected := range armyMapToSlice(units) {
+		unitType, count := selected.UnitType, selected.Amount
 
 		unitCfg, exists := GetUnitConfig(faction, unitType)
 		if !exists {
@@ -89,10 +87,8 @@ func validateArmyAvailability(state *GameState, units map[string]int) error {
 	}
 	available := armySliceToMap(state.Army)
 	selected := false
-	for unitType, count := range units {
-		if count <= 0 {
-			continue
-		}
+	for _, item := range armyMapToSlice(units) {
+		unitType, count := item.UnitType, item.Amount
 		selected = true
 		if available[unitType] < count {
 			return ErrInsufficientArmy
@@ -119,10 +115,8 @@ func buildSimulatedCombatUnits(faction string, units map[string]int, now time.Ti
 	}
 
 	var combatUnits []combat.Unit
-	for unitType, count := range units {
-		if count <= 0 {
-			continue
-		}
+	for _, selected := range armyMapToSlice(units) {
+		unitType, count := selected.UnitType, selected.Amount
 
 		unitCfg, exists := GetUnitConfig(faction, unitType)
 		if !exists {

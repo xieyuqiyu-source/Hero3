@@ -1,0 +1,63 @@
+# 本文件定义玩家侦查、攻击和掠夺行军的 OpenAPI 路径。
+/api/v1/pvp/scout:
+  post:
+    tags:
+    - Map
+    summary: 派出玩家侦查行军
+    operationId: scoutPvpTarget
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PvpScoutRequest'
+    responses:
+      '200':
+        description: 侦查行军已创建，并返回留城结算后的权威玩家状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PvpScoutResponse'
+      '400':
+        description: 参数错误或没有可派出的侦察兵
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '409':
+        description: 目标状态或行军条件不允许
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/pvp/attacks:
+  post:
+    tags:
+    - Map
+    summary: 派出玩家攻击或掠夺行军
+    operationId: startPvpAttack
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PvpAttackRequest'
+    responses:
+      '200':
+        description: 攻击或掠夺行军已创建，并返回留城结算后的权威玩家状态
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PvpAttackResponse'
+      '400':
+        description: 参数、兵力或武将选择错误
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '409':
+        description: 目标保护、冷却或行军条件不允许
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

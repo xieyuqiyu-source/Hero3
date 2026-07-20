@@ -1199,10 +1199,75 @@ test('世界地图主组件不再沿用旧 PVP 地图文案', () => {
 
 test('世界地图操作成功后静默刷新目标缓存', () => {
   const source = readFileSync(new URL('../src/pages/map/components/WorldMapTab.tsx', import.meta.url), 'utf8')
-  assert.match(source, /const result = await gameApi\.scoutPvpTarget[\s\S]*patchState\(\{ army: result\.army, serverTime: result\.serverTime \}\)[\s\S]*setMarches\(\(prev\) => \[result\.march, \.\.\.prev\]\)[\s\S]*侦查队已出发/)
+  assert.match(source, /const result = await gameApi\.scoutPvpTarget[\s\S]*patchState\(\{[\s\S]*army: result\.army[\s\S]*serverTime: result\.serverTime[\s\S]*\}\)[\s\S]*setMarches\(\(prev\) => \[result\.march, \.\.\.prev\]\)[\s\S]*侦查队已出发/)
   assert.doesNotMatch(source, /setScoutReport/)
   assert.match(source, /const result = await gameApi\.startPvpAttack[\s\S]*setMarches\(\(prev\) => \[result\.march, \.\.\.prev\]\)[\s\S]*void useGameStore\.getState\(\)\.loadMilitaryView\(\)[\s\S]*void load\(true\)[\s\S]*toast\.success\(`已向 \$\{target\.nickname\} 发起/)
   assert.match(source, /const result = await gameApi\.sendReinforcement[\s\S]*setReinforcements\(\(prev\) => mergeWorldMapReinforcements\(prev, \[result\.reinforcement\]\)\)[\s\S]*setSelectedReinforceTarget\(null\)[\s\S]*void useGameStore\.getState\(\)\.loadMilitaryView\(\)[\s\S]*void load\(true\)[\s\S]*toast\.success\(`已向 \$\{target\.nickname\} 派出增援。`\)/)
+})
+
+test('世界地图行军命令使用同步请求锁阻止快速重复提交', () => {
+  const source = readFileSync(new URL('../src/pages/map/components/WorldMapTab.tsx', import.meta.url), 'utf8')
+  assert.match(source, /const commandInFlightRef = useRef\(false\)/)
+  assert.equal((source.match(/commandInFlightRef\.current = true/g) ?? []).length, 3)
+  assert.equal((source.match(/commandInFlightRef\.current = false/g) ?? []).length, 3)
+  assert.equal((source.match(/busyTarget \|\| commandInFlightRef\.current/g) ?? []).length, 3)
+})
+
+test('世界地图攻击与增援共享命令锁且失败请求不回写权威状态', () => {
+  const source = readFileSync(new URL('../src/pages/map/components/WorldMapTab.tsx', import.meta.url), 'utf8')
+  const march = source.match(/const handleMarch = async \(\) => \{[\s\S]*?\n {2}\}\n\n {2}\/\/ handleReinforce/)
+  const reinforce = source.match(/const handleReinforce = async \(\) => \{[\s\S]*?\n {2}\}\n\n {2}\/\/ panViewport/)
+  assert.ok(march)
+  assert.ok(reinforce)
+  for (const handler of [march[0], reinforce[0]]) {
+    assert.match(handler, /busyTarget \|\| commandInFlightRef\.current/)
+    assert.match(handler, /commandInFlightRef\.current = true/)
+    assert.match(handler, /commandInFlightRef\.current = false/)
+    const failurePath = handler.match(/\} catch \(err\) \{[\s\S]*?\} finally/)
+    assert.ok(failurePath)
+    assert.match(failurePath[0], /toast\.error/)
+    assert.doesNotMatch(failurePath[0], /patchState|setMarches|setReinforcements/)
+  }
+})
+
+test('世界地图增援使用同步请求锁并采用后端权威兵力和到达时间', () => {
+  const source = readFileSync(new URL('../src/pages/map/components/WorldMapTab.tsx', import.meta.url), 'utf8')
+  const handler = source.match(/const handleReinforce = async \(\) => \{[\s\S]*?\n {2}\}\n\n {2}\/\/ panViewport/)
+  assert.ok(handler)
+  assert.match(handler[0], /busyTarget \|\| commandInFlightRef\.current/)
+  assert.match(handler[0], /commandInFlightRef\.current = true[\s\S]*gameApi\.sendReinforcement/)
+  assert.match(handler[0], /useGameStore\.getState\(\)\.patchState\(result\.patch\)/)
+  assert.match(handler[0], /mergeWorldMapReinforcements\(prev, \[result\.reinforcement\]\)/)
+  assert.match(handler[0], /commandInFlightRef\.current = false/)
+  assert.doesNotMatch(handler[0], /estimateWorldMarchSeconds/)
+})
+
+test('世界地图侦查失败不会提前回写兵力或创建本地行军', () => {
+  const source = readFileSync(new URL('../src/pages/map/components/WorldMapTab.tsx', import.meta.url), 'utf8')
+  const handler = source.match(/const handleScout = useCallback\(async \(target: PvpTargetSummary\) => \{[\s\S]*?\n {2}\}, \[activePlayerId, busyTarget\]\)/)
+  assert.ok(handler)
+  assert.match(handler[0], /const result = await gameApi\.scoutPvpTarget[\s\S]*patchState\(\{[\s\S]*army: result\.army[\s\S]*serverTime: result\.serverTime[\s\S]*\}\)[\s\S]*setMarches/)
+  const failurePath = handler[0].match(/\} catch \(err\) \{[\s\S]*?\} finally/)
+  assert.ok(failurePath)
+  assert.match(failurePath[0], /toast\.error/)
+  assert.doesNotMatch(failurePath[0], /patchState|setMarches/)
+})
+
+test('世界地图三类派兵成功都同步留城特性的权威结算状态', () => {
+  const source = readFileSync(new URL('../src/pages/map/components/WorldMapTab.tsx', import.meta.url), 'utf8')
+  const types = readFileSync(new URL('../src/types/game.ts', import.meta.url), 'utf8')
+  for (const handlerPattern of [
+    /const handleScout = useCallback[\s\S]*?\n {2}\}, \[activePlayerId, busyTarget\]\)/,
+    /const handleMarch = async \(\) => \{[\s\S]*?\n {2}\}/,
+  ]) {
+    const handler = source.match(handlerPattern)
+    assert.ok(handler)
+    for (const field of ['resources', 'resourceProduction', 'resourceSettledAt', 'generalTraitProgress']) {
+      assert.match(handler[0], new RegExp(`${field}: result\\.${field}`))
+    }
+  }
+  assert.match(source, /gameApi\.sendReinforcement[\s\S]*patchState\(result\.patch\)/)
+  assert.match(types, /interface GarrisonActionResult[\s\S]*resources\?: ResourceState[\s\S]*resourceProduction\?: ResourceProduction[\s\S]*resourceSettledAt\?: string[\s\S]*generalTraitProgress\?: Record<string, number>/)
 })
 
 test('世界地图空地面板显示方位和距离', () => {

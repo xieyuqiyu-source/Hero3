@@ -46,7 +46,7 @@ func (r *MySQLRepository) SaveReportBundle(event game.BattleEvent, reports []gam
 		}
 	}
 	for _, report := range reports {
-		if err := insertBattleReportTx(tx, report); err != nil {
+		if err := insertBattleReportTx(tx, report); err != nil && !isDuplicateEntry(err) {
 			return err
 		}
 	}

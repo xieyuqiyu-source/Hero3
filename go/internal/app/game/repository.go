@@ -65,6 +65,7 @@ type ItemAssetRepository interface {
 type GeneralAssetRepository interface {
 	UpdateGeneralState(playerID string, updatedAt time.Time, update func(state *GameState) error) (GameState, error)
 	UpdateAccountGeneralState(accountID string, playerID string, updatedAt time.Time, update func(account *Account, state *GameState) error) (Account, GameState, error)
+	ApplyGeneralExpEvent(playerID string, eventKey string, updatedAt time.Time, update func(state *GameState) error) (bool, error)
 }
 
 // CombatAssetScope 描述一次战斗事务已知需要锁定的资产范围。
@@ -780,6 +781,38 @@ func (r *MemoryRepository) UpdateAccountGeneralState(accountID string, playerID 
 	return r.UpdateAccountPlayerState(accountID, playerID, updatedAt, update)
 }
 
+// ApplyGeneralExpEvent 在同一内存事务内写入武将经验和幂等标记。
+func (r *MemoryRepository) ApplyGeneralExpEvent(playerID string, eventKey string, updatedAt time.Time, update func(state *GameState) error) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	playerID = strings.TrimSpace(playerID)
+	eventKey = strings.TrimSpace(eventKey)
+	if playerID == "" || eventKey == "" {
+		return false, nil
+	}
+	claimKey := "general|reinforcement_exp|" + eventKey
+	if _, exists := r.eventClaims[claimKey]; exists {
+		return false, nil
+	}
+	state, exists := r.players[playerID]
+	if !exists {
+		return false, ErrPlayerNotFound
+	}
+	state, err := cloneGameState(state)
+	if err != nil {
+		return false, err
+	}
+	if update != nil {
+		if err := update(&state); err != nil {
+			return false, err
+		}
+	}
+	r.players[playerID] = state
+	r.playerUpdatedAt[playerID] = updatedAt.UTC()
+	r.eventClaims[claimKey] = struct{}{}
+	return true, nil
+}
+
 func (r *MemoryRepository) UpdateCombatState(playerID string, scope CombatAssetScope, updatedAt time.Time, update func(state *GameState) error) (GameState, error) {
 	return r.UpdatePlayerState(playerID, updatedAt, update)
 }
@@ -880,6 +913,16 @@ func (r *MemoryRepository) SaveReportBundle(event BattleEvent, reports []BattleR
 func (r *MemoryRepository) saveReportsLocked(reports []BattleReport) {
 	for _, report := range reports {
 		report = NormalizeBattleReport(report)
+		alreadySaved := false
+		for _, existing := range r.reports[report.PlayerID] {
+			if existing.ID == report.ID {
+				alreadySaved = true
+				break
+			}
+		}
+		if alreadySaved {
+			continue
+		}
 		r.reports[report.PlayerID] = append([]BattleReport{report}, r.reports[report.PlayerID]...)
 		enforceMemoryBattleReportVisibleCap(r.reports[report.PlayerID], report.ViewType)
 	}
@@ -1713,6 +1756,14 @@ func (r *MemoryRepository) CreatePvpMarchWithState(attackerPlayerID string, defe
 	if !ok {
 		return GameState{}, GameState{}, PvpMarch{}, ErrPlayerNotFound
 	}
+	attacker, err := cloneGameState(attacker)
+	if err != nil {
+		return GameState{}, GameState{}, PvpMarch{}, err
+	}
+	defender, err = cloneGameState(defender)
+	if err != nil {
+		return GameState{}, GameState{}, PvpMarch{}, err
+	}
 	march, err := update(&attacker, &defender)
 	if err != nil {
 		return GameState{}, GameState{}, PvpMarch{}, err
@@ -1843,7 +1894,7 @@ func (r *MemoryRepository) ResolvePvpBattleTransaction(marchID string, updatedAt
 	if !ok {
 		return GameState{}, GameState{}, PvpMarch{}, PvpBattle{}, BattleReport{}, BattleReport{}, ErrPlayerNotFound
 	}
-	if march.Status == PvpMarchStatusResolved {
+	if march.Status == PvpMarchStatusResolved || strings.TrimSpace(march.BattleID) != "" {
 		battle, _ := r.pvpBattles[march.BattleID]
 		return r.players[march.AttackerPlayerID], r.players[march.DefenderPlayerID], clonePvpMarch(march), battle, BattleReport{}, BattleReport{}, nil
 	}
@@ -1863,6 +1914,13 @@ func (r *MemoryRepository) ResolvePvpBattleTransaction(marchID string, updatedAt
 	battle, attackerReport, defenderReport, reinforcementReports, changedReinforcements, err := update(&attacker, &defender, targetRecords, &march)
 	if err != nil {
 		return GameState{}, GameState{}, PvpMarch{}, PvpBattle{}, BattleReport{}, BattleReport{}, err
+	}
+	if len(attackerReport.CapturedToGarrison) > 0 {
+		garrisonID := ObtainedGarrisonID(attacker.Player.ID)
+		r.reinforcements[garrisonID] = MergeCapturedGarrisonRecord(
+			r.reinforcements[garrisonID], attacker, defender.Player.Faction,
+			attackerReport.CapturedToGarrison, battle.ID, updatedAt,
+		)
 	}
 	for _, record := range changedReinforcements {
 		r.reinforcements[record.ID] = record

@@ -73,6 +73,9 @@ MilitaryActionResult:
   - army
   - recruitQueues
   - resources
+  - resourceProduction
+  - resourceSettledAt
+  - generalTraitProgress
   - cityGold
   - serverTime
   properties:
@@ -86,6 +89,18 @@ MilitaryActionResult:
         $ref: '#/components/schemas/RecruitQueue'
     resources:
       $ref: '#/components/schemas/ResourceState'
+    resourceProduction:
+      $ref: '#/components/schemas/ResourceProduction'
+    resourceSettledAt:
+      type: string
+      format: date-time
+      description: 本次军事动作完成后的权威资源结算时间。
+    generalTraitProgress:
+      type: object
+      description: 本次军事动作完成后的非战斗将领特性累计进度，空进度返回空对象。
+      additionalProperties:
+        type: number
+        format: double
     cityGold:
       type: integer
       example: 120

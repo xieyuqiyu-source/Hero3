@@ -4,6 +4,7 @@ package game
 import (
 	"errors"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -84,17 +85,24 @@ func TestSendReinforcementConsumesArmyAndReservesGeneral(t *testing.T) {
 	}
 }
 
-// TestSendReinforcementRejectsMultipleGenerals 确保单批增援只能携带一名武将。
-func TestSendReinforcementRejectsMultipleGenerals(t *testing.T) {
+// TestSendReinforcementRejectsMultipleGeneralsAtomically 确保武将校验失败不会遗留任何玩家资产或业务记录副作用。
+func TestSendReinforcementRejectsMultipleGeneralsAtomically(t *testing.T) {
 	svc, repo, from, to := newReinforcementTestService(t)
-	from.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
+	setRealCaoCaoGuardConfig(t)
+	from.Army = []ArmyUnit{{UnitType: "huWei", Amount: 100}}
 	from.Generals = append(from.Generals, *newGeneral("wei", "xiahoudun"))
+	from.ResourceSettledAt = time.Now().UTC().Add(-3 * time.Second).Format(resourceDateLayout)
+	from.GeneralTraitProgress = map[string]float64{guardProductionProgressKey("caocao", "weiwu_haoling", "huWei"): 0.5}
 	repo.players[from.Player.ID] = from
+	before, err := repo.GetState(from.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState before failed: %v", err)
+	}
 
-	if _, err := svc.SendReinforcement(SendReinforcementRequest{
+	if _, err = svc.SendReinforcement(SendReinforcementRequest{
 		FromPlayerID:   from.Player.ID,
 		TargetPlayerID: to.Player.ID,
-		Troops:         map[string]int{"weiInfantry": 10},
+		Troops:         map[string]int{"huWei": 10},
 		GeneralIDs:     []string{"caocao", "xiahoudun"},
 	}); !errors.Is(err, ErrInvalidGeneral) {
 		t.Fatalf("expected multiple generals to be rejected, got %v", err)
@@ -102,10 +110,16 @@ func TestSendReinforcementRejectsMultipleGenerals(t *testing.T) {
 
 	stored, err := repo.GetState(from.Player.ID)
 	if err != nil {
-		t.Fatalf("GetState failed: %v", err)
+		t.Fatalf("GetState after failed: %v", err)
 	}
-	if got := armySliceToMap(stored.Army)["weiInfantry"]; got != 100 {
-		t.Fatalf("failed reinforcement must not consume troops, got %d", got)
+	if !reflect.DeepEqual(stored, before) {
+		t.Fatalf("failed reinforcement request must leave player state unchanged\nbefore=%+v\nafter=%+v", before, stored)
+	}
+	if records, listErr := repo.ListSentReinforcements(from.Player.ID); listErr != nil || len(records) != 0 {
+		t.Fatalf("failed reinforcement request must create no record, records=%+v err=%v", records, listErr)
+	}
+	if reports, total, listErr := repo.ListReports(from.Player.ID, 10, 0); listErr != nil || total != 0 || len(reports) != 0 {
+		t.Fatalf("failed reinforcement request must create no report, reports=%+v total=%d err=%v", reports, total, listErr)
 	}
 }
 

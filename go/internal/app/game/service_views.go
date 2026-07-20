@@ -94,11 +94,14 @@ type ResourceActionResult struct {
 }
 
 type MilitaryActionResult struct {
-	Army          []ArmyUnit     `json:"army"`
-	RecruitQueues []RecruitQueue `json:"recruitQueues"`
-	Resources     ResourceState  `json:"resources"`
-	CityGold      FlexInt        `json:"cityGold"`
-	ServerTime    string         `json:"serverTime"`
+	Army                 []ArmyUnit         `json:"army"`
+	RecruitQueues        []RecruitQueue     `json:"recruitQueues"`
+	Resources            ResourceState      `json:"resources"`
+	ResourceProduction   ResourceProduction `json:"resourceProduction"`
+	ResourceSettledAt    string             `json:"resourceSettledAt"`
+	GeneralTraitProgress map[string]float64 `json:"generalTraitProgress"`
+	CityGold             FlexInt            `json:"cityGold"`
+	ServerTime           string             `json:"serverTime"`
 }
 
 type GeneralViewActionResult struct {
@@ -138,10 +141,14 @@ type ItemActionResult struct {
 }
 
 type GarrisonActionResult struct {
-	Army               []ArmyUnit          `json:"army,omitempty"`
-	Generals           []General           `json:"generals,omitempty"`
-	GeneralAssignments []GeneralAssignment `json:"generalAssignments,omitempty"`
-	ServerTime         string              `json:"serverTime"`
+	Army                 []ArmyUnit          `json:"army,omitempty"`
+	Resources            *ResourceState      `json:"resources,omitempty"`
+	ResourceProduction   *ResourceProduction `json:"resourceProduction,omitempty"`
+	ResourceSettledAt    string              `json:"resourceSettledAt,omitempty"`
+	GeneralTraitProgress *map[string]float64 `json:"generalTraitProgress,omitempty"`
+	Generals             []General           `json:"generals,omitempty"`
+	GeneralAssignments   []GeneralAssignment `json:"generalAssignments,omitempty"`
+	ServerTime           string              `json:"serverTime"`
 }
 
 // GetPlayerSummaryView 返回玩家摘要视图。
@@ -202,7 +209,7 @@ func (s *Service) settlePlayerProduction(playerID string, now time.Time) (GameSt
 
 // hasPendingGuardProduction 判断主将产兵特性是否已经累积到至少 1 个兵。
 func hasPendingGuardProduction(state *GameState, now time.Time) bool {
-	if state == nil || state.General == nil {
+	if state == nil || state.General == nil || !generalAvailableAtHome(state.GeneralAssignments, state.General.ID) {
 		return false
 	}
 	settledAtText := strings.TrimSpace(state.ResourceSettledAt)
@@ -224,10 +231,15 @@ func hasPendingGuardProduction(state *GameState, now time.Time) bool {
 		if perMinute <= 0 {
 			continue
 		}
-		amount := int(perMinute * elapsedSeconds / 60)
-		if maxPerSettle := int(trait.Params["maxGuardPerDay"]); maxPerSettle > 0 && amount > maxPerSettle {
-			amount = maxPerSettle
+		unitType := strings.TrimSpace(trait.TargetUnitType)
+		if unitType == "" {
+			unitType = firstCombatUnitByCategory(state.Player.Faction, "special")
 		}
+		if unitType == "" {
+			continue
+		}
+		progressKey := guardProductionProgressKey(generalCopy.ID, trait.TraitID, unitType)
+		amount, _ := calculateGuardProduction(state.GeneralTraitProgress[progressKey], perMinute, elapsedSeconds, guardProductionLimit(trait.Params))
 		if amount > 0 {
 			return true
 		}
@@ -301,11 +313,14 @@ func BuildResourceActionResult(state GameState, cost int) ResourceActionResult {
 // BuildMilitaryActionResult 从业务结果中裁剪军事相关字段。
 func BuildMilitaryActionResult(state GameState) MilitaryActionResult {
 	return MilitaryActionResult{
-		Army:          state.Army,
-		RecruitQueues: state.RecruitQueues,
-		Resources:     state.Resources,
-		CityGold:      state.CityGold,
-		ServerTime:    state.ServerTime,
+		Army:                 state.Army,
+		RecruitQueues:        state.RecruitQueues,
+		Resources:            state.Resources,
+		ResourceProduction:   state.ResourceProduction,
+		ResourceSettledAt:    state.ResourceSettledAt,
+		GeneralTraitProgress: cloneGeneralTraitProgress(state.GeneralTraitProgress),
+		CityGold:             state.CityGold,
+		ServerTime:           state.ServerTime,
 	}
 }
 
@@ -377,4 +392,17 @@ func BuildGarrisonActionResult(state GameState) GarrisonActionResult {
 		GeneralAssignments: state.GeneralAssignments,
 		ServerTime:         state.ServerTime,
 	}
+}
+
+// BuildGarrisonDispatchActionResult 为派出增援补充本次事务内已结算的资源和非战斗特性状态。
+func BuildGarrisonDispatchActionResult(state GameState) GarrisonActionResult {
+	result := BuildGarrisonActionResult(state)
+	resources := state.Resources
+	production := state.ResourceProduction
+	progress := cloneGeneralTraitProgress(state.GeneralTraitProgress)
+	result.Resources = &resources
+	result.ResourceProduction = &production
+	result.ResourceSettledAt = state.ResourceSettledAt
+	result.GeneralTraitProgress = &progress
+	return result
 }

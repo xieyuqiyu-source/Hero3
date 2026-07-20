@@ -21,6 +21,7 @@ func applyHeroConfigToGeneral(g *General) {
 	g.CurrentLevelExp = generalExpRequiredForLevel(g.Level)
 	g.NextLevelExp = nextGeneralLevelExp(g.Level)
 	g.Stats = normalizeGeneralStats(g.Stats)
+	g.EffectiveStats = normalizeGeneralStats(g.Stats)
 	g.AvailableStatPoints = availableGeneralStatPoints(g.Level, g.Stats)
 	g.Attributes = map[string]float64{}
 	g.AttributeBreakdown = map[string][]GeneralAttributeBreakdownItem{}
@@ -42,10 +43,6 @@ func applyHeroConfigToGeneral(g *General) {
 	for k, v := range hero.Buffs {
 		addGeneralAttributeWithSource(g, k, v, "将领固定")
 	}
-	for k, v := range g.Attributes {
-		g.Buffs[k] = v
-	}
-
 	for _, tc := range activeHeroTraitConfigs(hero) {
 		if !tc.Enabled {
 			continue
@@ -53,18 +50,29 @@ func applyHeroConfigToGeneral(g *General) {
 		if value := tc.Params["productionBonusRate"]; value > 0 {
 			addGeneralAttributeWithSource(g, StatProductionBonus, value, "将领特性")
 		}
+		if value := tc.Params["forceBonus"]; value > 0 {
+			bonus := int(value)
+			g.EffectiveStats["force"] += bonus
+			addGeneralAttributeWithSource(g, StatAttackBonus, float64(bonus)*GeneralStatPercentPerPoint, "将领特性·武力")
+		}
 		params := make(map[string]float64, len(tc.Params))
 		for k, v := range tc.Params {
 			params[k] = v
 		}
 		g.Traits = append(g.Traits, GeneralTraitInstance{
-			TraitID:        tc.TraitID,
-			TraitType:      tc.TraitType,
-			Name:           tc.TraitID,
-			Scope:          tc.Scope,
-			TargetUnitType: tc.TargetUnitType,
-			Params:         params,
+			TraitID:         tc.TraitID,
+			TraitType:       tc.TraitType,
+			Name:            tc.TraitID,
+			Scope:           tc.Scope,
+			TargetUnitType:  tc.TargetUnitType,
+			AllowedSides:    append([]string(nil), tc.AllowedSides...),
+			AllowedScenes:   append([]string(nil), tc.AllowedScenes...),
+			RequiredOutcome: tc.RequiredOutcome,
+			Params:          params,
 		})
+	}
+	for k, v := range g.Attributes {
+		g.Buffs[k] = v
 	}
 }
 

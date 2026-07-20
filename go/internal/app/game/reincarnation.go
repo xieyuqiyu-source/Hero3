@@ -75,19 +75,24 @@ type ReincarnationBonus struct {
 }
 
 type ReincarnationBattle struct {
-	ID             string         `json:"id"`
-	RunID          string         `json:"runId"`
-	WaveID         string         `json:"waveId"`
-	PlayerID       string         `json:"playerId"`
-	ClientActionID string         `json:"clientActionId,omitempty"`
-	WaveIndex      int            `json:"waveIndex"`
-	WaveType       string         `json:"waveType"`
-	AttackTroops   map[string]int `json:"attackTroops"`
-	Losses         map[string]int `json:"losses"`
-	EnemyLosses    map[string]int `json:"enemyLosses"`
-	Passed         bool           `json:"passed"`
-	ReportID       string         `json:"reportId"`
-	CreatedAt      time.Time      `json:"createdAt"`
+	ID             string                        `json:"id"`
+	RunID          string                        `json:"runId"`
+	WaveID         string                        `json:"waveId"`
+	PlayerID       string                        `json:"playerId"`
+	ClientActionID string                        `json:"clientActionId,omitempty"`
+	WaveIndex      int                           `json:"waveIndex"`
+	WaveType       string                        `json:"waveType"`
+	AttackTroops   map[string]int                `json:"attackTroops"`
+	Losses         map[string]int                `json:"losses"`
+	RevivedUnits   map[string]int                `json:"revivedUnits,omitempty"`
+	SurvivedTroops map[string]int                `json:"survivedTroops,omitempty"`
+	EnemyLosses    map[string]int                `json:"enemyLosses"`
+	EnemyCaptured  map[string]int                `json:"enemyCaptured,omitempty"`
+	EnemyRemaining map[string]int                `json:"enemyRemaining,omitempty"`
+	TraitOutcomes  map[string]TraitOutcomeReport `json:"traitOutcomes,omitempty"`
+	Passed         bool                          `json:"passed"`
+	ReportID       string                        `json:"reportId"`
+	CreatedAt      time.Time                     `json:"createdAt"`
 }
 
 type ReincarnationRunResponse struct {

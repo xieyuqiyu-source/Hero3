@@ -1,3 +1,4 @@
+// 本文件负责将领配置的加载、归一化、复制和安全校验。
 package game
 
 import (
@@ -49,12 +50,15 @@ type GeneralHeroConfig struct {
 
 // GeneralTraitConfig 单将领的某个特性的配置
 type GeneralTraitConfig struct {
-	TraitID        string             `json:"traitId"`                  // 对应 general.traits 注册的 id（如 "meiren"）
-	TraitType      string             `json:"traitType,omitempty"`      // special / bonus
-	Enabled        bool               `json:"enabled"`                  // 该特性是否启用
-	Scope          string             `json:"scope,omitempty"`          // 作用范围
-	TargetUnitType string             `json:"targetUnitType,omitempty"` // 目标兵种或兵种分类
-	Params         map[string]float64 `json:"params"`                   // 当前参数（覆盖默认值）
+	TraitID         string             `json:"traitId"`                   // 对应 general.traits 注册的 id（如 "meiren"）
+	TraitType       string             `json:"traitType,omitempty"`       // special / bonus
+	Enabled         bool               `json:"enabled"`                   // 该特性是否启用
+	Scope           string             `json:"scope,omitempty"`           // 作用范围
+	TargetUnitType  string             `json:"targetUnitType,omitempty"`  // 目标兵种或兵种分类
+	AllowedSides    []string           `json:"allowedSides,omitempty"`    // 允许触发方：attacker / defender / reinforcement
+	AllowedScenes   []string           `json:"allowedScenes,omitempty"`   // 允许玩法场景：attack / plunder 等
+	RequiredOutcome string             `json:"requiredOutcome,omitempty"` // 胜负条件：win / loss
+	Params          map[string]float64 `json:"params"`                    // 当前参数（覆盖默认值）
 }
 
 // --- 全局管理 ---
@@ -122,6 +126,8 @@ func SaveGeneralsConfig(path string, cfg GeneralsConfig) error {
 func NormalizeGeneralsConfig(cfg GeneralsConfig) GeneralsConfig {
 	for id, hero := range cfg.Heroes {
 		normalizeHeroDualTraits(&hero)
+		normalizeTraitConfigParams(&hero.SpecialTrait)
+		normalizeTraitConfigParams(&hero.BonusTrait)
 		if strings.TrimSpace(hero.SpecialTrait.TraitID) != "" {
 			if trait, ok := general.Get(hero.SpecialTrait.TraitID); ok {
 				hero.SpecialTrait.TraitType = trait.Type()
@@ -135,6 +141,19 @@ func NormalizeGeneralsConfig(cfg GeneralsConfig) GeneralsConfig {
 		cfg.Heroes[id] = hero
 	}
 	return cfg
+}
+
+// normalizeTraitConfigParams 迁移已经明确替代的旧参数名，避免配置语义继续产生歧义。
+func normalizeTraitConfigParams(traitCfg *GeneralTraitConfig) {
+	if traitCfg == nil || traitCfg.TraitID != "weiwu_haoling" || traitCfg.Params == nil {
+		return
+	}
+	if _, exists := traitCfg.Params["maxGuardPerSettle"]; !exists {
+		if legacy, ok := traitCfg.Params["maxGuardPerDay"]; ok {
+			traitCfg.Params["maxGuardPerSettle"] = legacy
+		}
+	}
+	delete(traitCfg.Params, "maxGuardPerDay")
 }
 
 // --- 默认配置 ---
@@ -231,6 +250,8 @@ func cloneTraitConfig(t GeneralTraitConfig) GeneralTraitConfig {
 		clonedParams[k] = v
 	}
 	t.Params = clonedParams
+	t.AllowedSides = append([]string(nil), t.AllowedSides...)
+	t.AllowedScenes = append([]string(nil), t.AllowedScenes...)
 	return t
 }
 
@@ -380,6 +401,12 @@ func validateSingleGeneralTrait(generalID string, traitCfg GeneralTraitConfig, e
 	if traitCfg.TraitType != "" && traitCfg.TraitType != trait.Type() {
 		return fmt.Errorf("general %s trait %s config type %s does not match registered type %s", generalID, traitCfg.TraitID, traitCfg.TraitType, trait.Type())
 	}
+	if err := validateTraitActivation(generalID, traitCfg); err != nil {
+		return err
+	}
+	if err := validateTraitTargetUnitType(generalID, traitCfg); err != nil {
+		return err
+	}
 	schemaByKey := map[string]general.ParamField{}
 	for _, field := range trait.ParamSchema() {
 		schemaByKey[field.Key] = field
@@ -397,8 +424,51 @@ func validateSingleGeneralTrait(generalID string, traitCfg GeneralTraitConfig, e
 			return fmt.Errorf("general %s trait %s contains unknown param %s", generalID, traitCfg.TraitID, key)
 		}
 	}
-	if err := validateTraitParamConsistency(generalID, traitCfg.TraitID, traitCfg.Params, schemaByKey); err != nil {
-		return err
+	return nil
+}
+
+// validateTraitTargetUnitType 校验特性目标必须是已注册兵种 ID 或已存在的兵种分类。
+func validateTraitTargetUnitType(generalID string, traitCfg GeneralTraitConfig) error {
+	target := strings.TrimSpace(traitCfg.TargetUnitType)
+	if target == "" {
+		return nil
+	}
+	units := GetUnitsConfig()
+	hasRegisteredUnits := false
+	for _, factionUnits := range units {
+		for unitID, unit := range factionUnits {
+			hasRegisteredUnits = true
+			if unitID == target || strings.EqualFold(strings.TrimSpace(unit.Category), target) {
+				return nil
+			}
+		}
+	}
+	if !hasRegisteredUnits {
+		return nil
+	}
+	return fmt.Errorf("general %s trait %s targets unknown unit or category %s", generalID, traitCfg.TraitID, target)
+}
+
+// validateTraitActivation 校验特性触发阵营、场景和胜负条件。
+func validateTraitActivation(generalID string, traitCfg GeneralTraitConfig) error {
+	validSides := map[string]bool{"attacker": true, "defender": true, "reinforcement": true}
+	for _, side := range traitCfg.AllowedSides {
+		if !validSides[strings.ToLower(strings.TrimSpace(side))] {
+			return fmt.Errorf("general %s trait %s contains invalid allowed side %s", generalID, traitCfg.TraitID, side)
+		}
+	}
+	validScenes := map[string]bool{
+		"attack": true, "plunder": true, "sweep": true, "yellow_turban": true,
+		"reinforcement": true, "reinforcement_defense": true, "recruit": true,
+	}
+	for _, scene := range traitCfg.AllowedScenes {
+		if !validScenes[strings.ToLower(strings.TrimSpace(scene))] {
+			return fmt.Errorf("general %s trait %s contains invalid allowed scene %s", generalID, traitCfg.TraitID, scene)
+		}
+	}
+	outcome := strings.ToLower(strings.TrimSpace(traitCfg.RequiredOutcome))
+	if outcome != "" && outcome != "win" && outcome != "loss" {
+		return fmt.Errorf("general %s trait %s contains invalid required outcome %s", generalID, traitCfg.TraitID, traitCfg.RequiredOutcome)
 	}
 	return nil
 }
@@ -435,23 +505,4 @@ func activeHeroTraitConfigs(hero GeneralHeroConfig) []GeneralTraitConfig {
 	}
 	traits = append(traits, hero.Traits...)
 	return traits
-}
-
-func validateTraitParamConsistency(generalID string, traitID string, params map[string]float64, fields map[string]general.ParamField) error {
-	valueOrDefault := func(key string) float64 {
-		if value, ok := params[key]; ok {
-			return value
-		}
-		return fields[key].Default
-	}
-	switch traitID {
-	case "weizhenxiaoyao":
-		if valueOrDefault("maxChance") < valueOrDefault("baseChance") {
-			return fmt.Errorf("general %s trait %s: maxChance must be >= baseChance", generalID, traitID)
-		}
-		if valueOrDefault("maxSuppressRate") < valueOrDefault("baseSuppressRate") {
-			return fmt.Errorf("general %s trait %s: maxSuppressRate must be >= baseSuppressRate", generalID, traitID)
-		}
-	}
-	return nil
 }

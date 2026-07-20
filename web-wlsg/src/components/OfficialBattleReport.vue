@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { BattleReportState } from '../game/types'
-import { toOfficialBattleReport } from '../intelligence/reportAdapter'
+import { formatGeneralProgress, toOfficialBattleReport } from '../intelligence/reportAdapter'
 
 const props = defineProps<{ report: BattleReportState }>()
 const emit = defineEmits<{ close: [] }>()
@@ -27,7 +27,7 @@ function formatNumber(value: number) { return Math.max(0, value || 0).toLocaleSt
               <div><b>官职: -</b></div>
               <div><b>军衔: -</b></div>
             </div>
-            <p class="official-report-general-exp">获得经验：<b>{{ side.general && side.generalExp !== null ? `+${formatNumber(side.generalExp)}` : '-' }}</b></p>
+            <p class="official-report-general-exp">获得经验：<b>{{ side.general ? formatGeneralProgress(side.generalExp, side.generalLevelBefore, side.generalLevelAfter) : '-' }}</b></p>
           </div>
           <div class="official-report-result" :class="side.result"><img v-if="side.result === 'defeat'" src="/assets/official/report/zz_sb.gif" alt="败" /><b v-else>{{ side.resultLabel }}</b></div>
         </div>

@@ -1,6 +1,7 @@
 /** 验证 PVP 与增援活动行军统一映射、过滤和排序。 */
 import { describe, expect, it } from 'vitest'
 import { splitOutgoingMarches, toOutgoingMarches } from './marchAdapter'
+import { traitLabel } from './traitLabels'
 import type { PvpMarchListItem, ReinforcementListItem } from './types'
 
 /** 创建最小 PVP 行军。 */
@@ -47,6 +48,50 @@ describe('出征状态适配', () => {
       pvp({ id: 'sent-role', attackerPlayerId: 'p8', defenderPlayerId: 'p1', viewerRole: 'sent' }),
     ], [])
     expect(items).toEqual([])
+  })
+
+  it('五项正式行军特性都直接使用后端最终到达时间和最低时长结果', () => {
+    const cases = [
+      { traitId: 'jixing_benxi', name: '疾行奔袭', duration: 2475, speed: 1.2, arrivesAt: '2026-07-13T00:41:15Z' },
+      { traitId: 'qijin_qichu', name: '七进七出', duration: 60, speed: 2, arrivesAt: '2026-07-13T00:01:00Z' },
+      { traitId: 'baiyi_dujiang', name: '白衣渡江', duration: 2475, speed: 1.2, arrivesAt: '2026-07-13T00:41:15Z' },
+      { traitId: 'baiyi_jixing', name: '白衣急行', duration: 2063, speed: 1.44, arrivesAt: '2026-07-13T00:34:23Z' },
+      { traitId: 'kuairu_shandian', name: '快如闪电', duration: 30, speed: 5, arrivesAt: '2026-07-13T00:00:30Z' },
+    ]
+    for (const tc of cases) {
+      expect(traitLabel(tc.traitId)).toBe(tc.name)
+      const items = toOutgoingMarches('p1', [
+        pvp({ durationSeconds: tc.duration, speedMultiplier: tc.speed, arrivesAt: tc.arrivesAt }),
+      ], [
+        reinforcement({ marchSeconds: tc.duration, speedMultiplier: tc.speed, arriveAt: tc.arrivesAt }),
+      ])
+      expect(items).toHaveLength(2)
+      expect(items.every((item) => item.endsAt === tc.arrivesAt)).toBe(true)
+    }
+  })
+
+  it('白衣渡江未命中时直接采用白衣急行后的后端到达时间', () => {
+    const arrivesAt = '2026-07-20T00:41:15Z'
+    const items = toOutgoingMarches('p1', [
+      pvp({ durationSeconds: 2475, speedMultiplier: 3000 / 2475, startedAt: '2026-07-20T00:00:00Z', arrivesAt }),
+    ], [
+      reinforcement({ marchSeconds: 2475, speedMultiplier: 3000 / 2475, sentAt: '2026-07-20T00:00:00Z', arriveAt: arrivesAt }),
+    ])
+    expect(items).toHaveLength(2)
+    expect(items.map((item) => item.endsAt)).toEqual([arrivesAt, arrivesAt])
+    expect(items.map((item) => item.kind).sort()).toEqual(['attack', 'reinforce'])
+  })
+
+  it('快如闪电未命中时直接采用后端基线到达时间', () => {
+    const arrivesAt = '2026-07-20T00:49:30Z'
+    const items = toOutgoingMarches('p1', [
+      pvp({ durationSeconds: 2970, speedMultiplier: 3000 / 2970, startedAt: '2026-07-20T00:00:00Z', arrivesAt }),
+    ], [
+      reinforcement({ marchSeconds: 2970, speedMultiplier: 3000 / 2970, sentAt: '2026-07-20T00:00:00Z', arriveAt: arrivesAt }),
+    ])
+    expect(items).toHaveLength(2)
+    expect(items.map((item) => item.endsAt)).toEqual([arrivesAt, arrivesAt])
+    expect(items.map((item) => item.kind).sort()).toEqual(['attack', 'reinforce'])
   })
 
   it('将增援与攻击、掠夺和侦查拆成独立状态组', () => {

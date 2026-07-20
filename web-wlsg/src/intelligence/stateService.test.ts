@@ -49,6 +49,19 @@ describe('军情状态服务', () => {
     expect(store.reports.map((item) => item.id)).toEqual(['unread-2'])
   })
 
+  it('并发结算异常返回同一掠夺战报时列表只保留一份权威记录', async () => {
+    const listReports = vi.fn(async () => ({
+      reports: [report({ id: 'plunder-r1', title: '首次权威掠夺战报' }), report({ id: 'plunder-r1', title: '重复掠夺战报' })],
+      page: 1, pageSize: 50, total: 2,
+    }))
+    const store = state()
+    const service = createIntelligenceService({ listReports } as unknown as GameApi, store)
+    await service.load('p1')
+    expect(store).toMatchObject({ phase: 'ready', total: 1 })
+    expect(store.reports).toHaveLength(1)
+    expect(store.reports[0]).toMatchObject({ id: 'plunder-r1', title: '首次权威掠夺战报' })
+  })
+
   it('空响应和网络失败分别进入空态与错误态', async () => {
     const store = state()
     const listReports = vi.fn<() => Promise<BattleReportPageResponse>>().mockResolvedValueOnce({ reports: [], page: 1, pageSize: 8, total: 0 }).mockRejectedValueOnce(new Error('网络失败'))

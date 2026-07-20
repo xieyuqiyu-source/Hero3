@@ -1,0 +1,198 @@
+# 本文件定义玩家侦查、攻击和掠夺行军的请求与成功响应结构。
+PvpScoutRequest:
+  type: object
+  required:
+  - playerId
+  - targetPlayerId
+  properties:
+    playerId:
+      type: string
+    targetPlayerId:
+      type: string
+PvpAttackRequest:
+  type: object
+  required:
+  - playerId
+  - targetPlayerId
+  - troops
+  properties:
+    playerId:
+      type: string
+    targetPlayerId:
+      type: string
+    troops:
+      type: object
+      additionalProperties:
+        type: integer
+        minimum: 1
+    generalIds:
+      type: array
+      maxItems: 1
+      items:
+        type: string
+    marchMode:
+      type: string
+      enum:
+      - attack
+      - plunder
+      default: attack
+PvpMarch:
+  type: object
+  required:
+  - id
+  - attackerPlayerId
+  - attackerName
+  - attackerFaction
+  - defenderPlayerId
+  - defenderName
+  - defenderFaction
+  - marchType
+  - status
+  - attackTroops
+  - speedMultiplier
+  - durationSeconds
+  - startedAt
+  - arrivesAt
+  - acceleratedTimes
+  - createdAt
+  - updatedAt
+  properties:
+    id:
+      type: string
+    attackerPlayerId:
+      type: string
+    attackerName:
+      type: string
+    attackerFaction:
+      type: string
+    defenderPlayerId:
+      type: string
+    defenderName:
+      type: string
+    defenderFaction:
+      type: string
+    marchType:
+      type: string
+      enum:
+      - attack
+      - plunder
+      - scout
+    status:
+      type: string
+    attackTroops:
+      type: object
+      additionalProperties:
+        type: integer
+        minimum: 0
+    attackGenerals:
+      type: array
+      items:
+        type: string
+    speedMultiplier:
+      type: number
+      format: double
+    durationSeconds:
+      type: integer
+      minimum: 1
+    startedAt:
+      type: string
+      format: date-time
+    arrivesAt:
+      type: string
+      format: date-time
+    returnStartedAt:
+      type: string
+      format: date-time
+    returnsAt:
+      type: string
+      format: date-time
+    resolvedAt:
+      type: string
+      format: date-time
+    attackerReportId:
+      type: string
+    defenderReportId:
+      type: string
+    battleId:
+      type: string
+    acceleratedTimes:
+      type: integer
+      minimum: 0
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+PvpAttackResponse:
+  type: object
+  required:
+  - march
+  - army
+  - resources
+  - resourceProduction
+  - resourceSettledAt
+  - generalTraitProgress
+  - serverTime
+  properties:
+    march:
+      $ref: '#/components/schemas/PvpMarch'
+    army:
+      type: array
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    resources:
+      $ref: '#/components/schemas/ResourceState'
+    resourceProduction:
+      $ref: '#/components/schemas/ResourceProduction'
+    resourceSettledAt:
+      type: string
+      format: date-time
+    generalTraitProgress:
+      type: object
+      additionalProperties:
+        type: number
+        format: double
+    generals:
+      type: array
+      items:
+        $ref: '#/components/schemas/General'
+    generalAssignments:
+      type: array
+      items:
+        $ref: '#/components/schemas/GeneralAssignment'
+    serverTime:
+      type: string
+      format: date-time
+PvpScoutResponse:
+  type: object
+  required:
+  - march
+  - army
+  - resources
+  - resourceProduction
+  - resourceSettledAt
+  - generalTraitProgress
+  - serverTime
+  properties:
+    march:
+      $ref: '#/components/schemas/PvpMarch'
+    army:
+      type: array
+      items:
+        $ref: '#/components/schemas/ArmyUnit'
+    resources:
+      $ref: '#/components/schemas/ResourceState'
+    resourceProduction:
+      $ref: '#/components/schemas/ResourceProduction'
+    resourceSettledAt:
+      type: string
+      format: date-time
+    generalTraitProgress:
+      type: object
+      additionalProperties:
+        type: number
+        format: double
+    serverTime:
+      type: string
+      format: date-time

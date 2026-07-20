@@ -2,7 +2,6 @@ package traits
 
 import (
 	"math"
-	"math/rand"
 
 	"hero3/internal/core/general"
 )
@@ -59,9 +58,7 @@ func (h *Huogong) afterCombat(ctx general.EventContext, p general.Params) {
 		return
 	}
 
-	// 触发概率（限制在 0-1 之间）
-	chance := p.FloatWithBounds("triggerChance", 0.6, 0, 1)
-	if rand.Float64() > chance {
+	if !triggeredWithDefault(p, 0.6) {
 		return
 	}
 
@@ -73,6 +70,7 @@ func (h *Huogong) afterCombat(ctx general.EventContext, p general.Params) {
 
 	// 给敌方各兵种增加额外损失（按 Count × damagePct，向下取整，至少 1）
 	totalExtra := 0
+	targetExtraLosses := map[string]int{}
 	for i := range c.Result.DefenderLosses {
 		loss := &c.Result.DefenderLosses[i]
 		extra := int(math.Floor(float64(loss.Count) * damagePct))
@@ -86,6 +84,7 @@ func (h *Huogong) afterCombat(ctx general.EventContext, p general.Params) {
 		}
 		if extra > 0 {
 			totalExtra += extra
+			targetExtraLosses[loss.ID] += extra
 		}
 	}
 
@@ -113,8 +112,10 @@ func (h *Huogong) afterCombat(ctx general.EventContext, p general.Params) {
 			OwnerPlayerID:  c.Actor.PlayerID,
 			Scope:          c.Actor.Scope,
 			Detail: map[string]interface{}{
-				"extraDamage":   totalExtra,
-				"damagePercent": damagePct,
+				"extraDamage":       totalExtra,
+				"damagePercent":     damagePct,
+				"targetExtraLosses": targetExtraLosses,
+				"triggerChance":     p.FloatWithBounds("triggerChance", 0.6, 0, 1),
 			},
 		}
 	}

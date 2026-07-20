@@ -86,11 +86,14 @@ export function createNpcStateService(api: GameApi, state: NpcStateStore, game: 
   }
 
   /** 合并 NPC 战斗接口返回的真实玩家局部状态。 */
-  function patchGame(result: { army: NonNullable<GameStateStore['data']>['army']; npcState?: NpcStateResponse; serverTime: string; resources?: NonNullable<GameStateStore['data']>['resources']; cityGold?: number; general?: NonNullable<GameStateStore['data']>['general']; generals?: NonNullable<GameStateStore['data']>['generals'] }) {
+  function patchGame(result: { army: NonNullable<GameStateStore['data']>['army']; npcState?: NpcStateResponse; serverTime: string; resources: NonNullable<GameStateStore['data']>['resources']; resourceProduction: NonNullable<GameStateStore['data']>['resourceProduction']; resourceSettledAt: string; generalTraitProgress: Record<string, number>; cityGold?: number; general?: NonNullable<GameStateStore['data']>['general']; generals?: NonNullable<GameStateStore['data']>['generals'] }) {
     if (!game.data) return
     Object.assign(game.data, {
       army: result.army ?? game.data.army,
-      resources: result.resources ?? game.data.resources,
+      resources: result.resources,
+      resourceProduction: result.resourceProduction,
+      resourceSettledAt: result.resourceSettledAt,
+      generalTraitProgress: result.generalTraitProgress,
       cityGold: result.cityGold ?? game.data.cityGold,
       general: result.general === undefined ? game.data.general : result.general,
       generals: result.generals ?? game.data.generals,

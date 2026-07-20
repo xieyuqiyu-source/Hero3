@@ -37,23 +37,24 @@ func TestCompactPlayerStateSnapshotDropsAuthoritativeAssets(t *testing.T) {
 			Items:    map[string]int{"wood": 100},
 			Capacity: map[string]int{"wood": 1000},
 		},
-		Inventory:          map[string]game.ItemStack{"item_1": {ItemID: "item_1", Amount: 2}},
-		Buildings:          []game.Building{{ID: "wood_camp-1", Type: "wood_camp", Level: 3}},
-		ResourceSlots:      []game.ResourceSlot{{ID: "wood_slot-1", ResourceType: "wood"}},
-		Generals:           []game.General{{ID: "caocao", Level: 1}},
-		GeneralAssignments: []game.GeneralAssignment{{ID: "main", GeneralID: "caocao", Slot: "main"}},
-		Army:               []game.ArmyUnit{{UnitType: "weiInfantry", Amount: 10}},
-		RecruitQueues:      []game.RecruitQueue{{ID: "queue_1", UnitType: "weiInfantry", Amount: 5}},
-		Buffs:              []game.Buff{{ID: "buff_1", Key: "woodProductionBonus", Mode: "add", Value: 10}},
-		NpcState:           &game.NpcState{Cities: []game.NpcCity{{ID: "npc_1", Name: "NPC 1"}}},
-		ResourceSettledAt:  "2026-06-26T00:00:00Z",
-		CityGold:           12,
-		LastExchangeAt:     "2026-06-26T01:00:00Z",
-		ProductionBoost:    2,
-		ProductionBoostEnd: "2026-06-27T00:00:00Z",
-		ServerTime:         "2026-06-26T00:00:00Z",
-		DeleteRequestedAt:  "2026-07-02T03:11:44Z",
-		DeleteScheduledAt:  "2026-07-02T04:11:44Z",
+		Inventory:            map[string]game.ItemStack{"item_1": {ItemID: "item_1", Amount: 2}},
+		Buildings:            []game.Building{{ID: "wood_camp-1", Type: "wood_camp", Level: 3}},
+		ResourceSlots:        []game.ResourceSlot{{ID: "wood_slot-1", ResourceType: "wood"}},
+		Generals:             []game.General{{ID: "caocao", Level: 1}},
+		GeneralAssignments:   []game.GeneralAssignment{{ID: "main", GeneralID: "caocao", Slot: "main"}},
+		Army:                 []game.ArmyUnit{{UnitType: "weiInfantry", Amount: 10}},
+		RecruitQueues:        []game.RecruitQueue{{ID: "queue_1", UnitType: "weiInfantry", Amount: 5}},
+		Buffs:                []game.Buff{{ID: "buff_1", Key: "woodProductionBonus", Mode: "add", Value: 10}},
+		NpcState:             &game.NpcState{Cities: []game.NpcCity{{ID: "npc_1", Name: "NPC 1"}}},
+		ResourceSettledAt:    "2026-06-26T00:00:00Z",
+		GeneralTraitProgress: map[string]float64{"caocao:weiwu_haoling:huWei": 0.5},
+		CityGold:             12,
+		LastExchangeAt:       "2026-06-26T01:00:00Z",
+		ProductionBoost:      2,
+		ProductionBoostEnd:   "2026-06-27T00:00:00Z",
+		ServerTime:           "2026-06-26T00:00:00Z",
+		DeleteRequestedAt:    "2026-07-02T03:11:44Z",
+		DeleteScheduledAt:    "2026-07-02T04:11:44Z",
 	}
 
 	snapshotJSON, err := marshalPlayerStateSnapshot(state)
@@ -73,6 +74,10 @@ func TestCompactPlayerStateSnapshotDropsAuthoritativeAssets(t *testing.T) {
 	}
 	if snapshot["resourceSettledAt"] != state.ResourceSettledAt {
 		t.Fatalf("expected resourceSettledAt to be preserved")
+	}
+	progress, ok := snapshot["generalTraitProgress"].(map[string]any)
+	if !ok || progress["caocao:weiwu_haoling:huWei"] != 0.5 {
+		t.Fatalf("expected generalTraitProgress to be preserved, got %+v", snapshot["generalTraitProgress"])
 	}
 	if snapshot["deleteRequestedAt"] != state.DeleteRequestedAt {
 		t.Fatalf("expected deleteRequestedAt to be preserved")

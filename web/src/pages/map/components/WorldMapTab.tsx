@@ -55,6 +55,7 @@ const WorldMapTab: FC = () => {
   const targetDetailRequestRef = useRef(0)
   const hasLoadedMapRef = useRef(false)
   const loadedPlayerRef = useRef<string | null>(null)
+  const commandInFlightRef = useRef(false)
 
   // applyWorldMapResult 将世界地图接口结果写入目标缓存，视野半径仍由本地近中远控件控制。
   const applyWorldMapResult = useCallback((targetResult: WorldMapViewResponse, shouldSyncInitialCoordinate: boolean) => {
@@ -372,16 +373,25 @@ const WorldMapTab: FC = () => {
 
   // handleScout 派出玩家侦查行军。
   const handleScout = useCallback(async (target: PvpTargetSummary) => {
-    if (!activePlayerId || busyTarget) return
+    if (!activePlayerId || busyTarget || commandInFlightRef.current) return
+    commandInFlightRef.current = true
     setBusyTarget(`${target.playerId}:scout`)
     try {
       const result = await gameApi.scoutPvpTarget(activePlayerId, target.playerId)
-      useGameStore.getState().patchState({ army: result.army, serverTime: result.serverTime })
+      useGameStore.getState().patchState({
+        army: result.army,
+        resources: result.resources,
+        resourceProduction: result.resourceProduction,
+        resourceSettledAt: result.resourceSettledAt,
+        generalTraitProgress: result.generalTraitProgress,
+        serverTime: result.serverTime,
+      })
       setMarches((prev) => [result.march, ...prev])
       toast.success(`侦查队已出发，预计 ${formatDuration(result.march.durationSeconds)} 后抵达。`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '侦查失败')
     } finally {
+      commandInFlightRef.current = false
       setBusyTarget(null)
     }
   }, [activePlayerId, busyTarget])
@@ -390,18 +400,23 @@ const WorldMapTab: FC = () => {
   const handleMarch = async () => {
     const target = selectedMarchTarget
     const mode = selectedMarchMode
-    if (!activePlayerId || busyTarget) return
+    if (!activePlayerId || busyTarget || commandInFlightRef.current) return
     if (!target) return
     const troops = Object.fromEntries(Object.entries(selections).filter(([, amount]) => amount > 0))
     if (Object.keys(troops).length === 0) {
       toast.info('请先选择出征兵力')
       return
     }
+    commandInFlightRef.current = true
     setBusyTarget(`${target.playerId}:${mode}`)
     try {
       const result = await gameApi.startPvpAttack(activePlayerId, target.playerId, mode, troops, selectedGeneralIds)
       useGameStore.getState().patchState({
         army: result.army,
+        resources: result.resources,
+        resourceProduction: result.resourceProduction,
+        resourceSettledAt: result.resourceSettledAt,
+        generalTraitProgress: result.generalTraitProgress,
         generals: result.generals,
         generalAssignments: result.generalAssignments,
         serverTime: result.serverTime,
@@ -416,6 +431,7 @@ const WorldMapTab: FC = () => {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '发起世界地图行军失败')
     } finally {
+      commandInFlightRef.current = false
       setBusyTarget(null)
     }
   }
@@ -423,13 +439,14 @@ const WorldMapTab: FC = () => {
   // handleReinforce 执行地图内增援派兵。
   const handleReinforce = async () => {
     const target = selectedReinforceTarget
-    if (!activePlayerId || busyTarget) return
+    if (!activePlayerId || busyTarget || commandInFlightRef.current) return
     if (!target) return
     const troops = Object.fromEntries(Object.entries(selections).filter(([, amount]) => amount > 0))
     if (Object.keys(troops).length === 0) {
       toast.info('请先选择增援兵力')
       return
     }
+    commandInFlightRef.current = true
     setBusyTarget(`${target.playerId}:reinforce`)
     try {
       const result = await gameApi.sendReinforcement(activePlayerId, target.playerId, troops, selectedGeneralIds)
@@ -448,6 +465,7 @@ const WorldMapTab: FC = () => {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '发起增援失败')
     } finally {
+      commandInFlightRef.current = false
       setBusyTarget(null)
     }
   }

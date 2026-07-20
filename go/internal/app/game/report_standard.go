@@ -91,6 +91,7 @@ func BuildBattleReportDetail(report BattleReport) BattleReportDetail {
 	report.OwnerSide = valueOrDefault(report.OwnerSide, inferReportOwnerSide(report))
 	report.OwnerOutcome = valueOrDefault(report.OwnerOutcome, inferReportOwnerOutcome(report))
 	ownerGenerals, targetGenerals := reportOwnerAndTargetGenerals(report)
+	targetSurvivedUnits := reportTargetSurvivedUnits(report)
 
 	primary := BattleReportSide{
 		Role:         primaryRoleForReport(report),
@@ -104,7 +105,7 @@ func BuildBattleReportDetail(report BattleReport) BattleReportDetail {
 		TargetName:   report.PlayerName,
 		Power:        report.PlayerPower,
 		Generals:     convertPvpGenerals(ownerGenerals, primaryRoleForReport(report)),
-		Units:        buildReportUnits(report.PlayerFaction, report.DispatchedUnits, report.LostUnits, nil),
+		Units:        buildReportUnits(report.PlayerFaction, report.DispatchedUnits, report.LostUnits, report.SurvivedUnits),
 	}
 	secondary := &BattleReportSide{
 		Role:         secondaryRoleForReport(report),
@@ -118,7 +119,7 @@ func BuildBattleReportDetail(report BattleReport) BattleReportDetail {
 		TargetName:   report.TargetName,
 		Power:        report.EnemyPower,
 		Generals:     convertPvpGenerals(targetGenerals, secondaryRoleForReport(report)),
-		Units:        buildReportUnits(report.DefenderFaction, report.DefenderUnits, report.DefenderLostUnits, nil),
+		Units:        buildReportUnits(report.DefenderFaction, report.DefenderUnits, report.DefenderLostUnits, targetSurvivedUnits),
 		Resources:    cloneReportIntMap(report.DefenderResources),
 	}
 
@@ -168,6 +169,22 @@ func BuildBattleReportDetail(report BattleReport) BattleReportDetail {
 		Read:       report.Read,
 		Share:      report.Share,
 	}
+}
+
+// reportTargetSurvivedUnits 让进攻视角的目标存活数同时扣除阵亡和被俘兵力。
+func reportTargetSurvivedUnits(report BattleReport) map[string]int {
+	if report.ViewType == ReportViewDefense || report.ViewType == ReportViewReinforcement || len(report.DefenderUnits) == 0 {
+		return nil
+	}
+	captured := mergeTroopMaps(report.CapturedUnits, report.CapturedToGarrison)
+	if len(captured) == 0 {
+		return nil
+	}
+	survived := make(map[string]int, len(report.DefenderUnits))
+	for unitType, amount := range report.DefenderUnits {
+		survived[unitType] = maxInt(0, amount-report.DefenderLostUnits[unitType]-captured[unitType])
+	}
+	return survived
 }
 
 // inferReportViewType 根据旧字段推导玩家视角。
@@ -548,15 +565,20 @@ func convertReportTraits(report BattleReport) []BattleReportTrait {
 	traits := make([]BattleReportTrait, 0, len(report.TraitTriggered))
 	for _, traitID := range report.TraitTriggered {
 		outcome := report.TraitOutcomes[traitID]
+		displayTraitID := strings.TrimSpace(outcome.TraitID)
+		if displayTraitID == "" {
+			displayTraitID = traitID
+		}
 		ownerSide := reportTraitDisplaySide(report, outcome)
 		traits = append(traits, BattleReportTrait{
-			TraitID:     traitID,
-			TraitName:   outcome.Name,
-			OwnerSide:   ownerSide,
-			OwnerRole:   reportTraitOwnerRole(report, outcome, ownerSide),
-			GeneralID:   outcome.OwnerGeneralID,
-			GeneralName: reportTraitGeneralName(report, outcome.OwnerGeneralID),
-			Detail:      outcome.Detail,
+			TraitID:       displayTraitID,
+			TraitName:     outcome.Name,
+			OwnerSide:     ownerSide,
+			OwnerRole:     reportTraitOwnerRole(report, outcome, ownerSide),
+			OwnerPlayerID: outcome.OwnerPlayerID,
+			GeneralID:     outcome.OwnerGeneralID,
+			GeneralName:   reportTraitGeneralName(report, outcome.OwnerGeneralID),
+			Detail:        outcome.Detail,
 		})
 	}
 	return traits
@@ -654,7 +676,11 @@ func convertPvpGenerals(generals []PvpGeneralSnapshot, role string) []BattleRepo
 			GeneralExpGained:   cloneIntPointer(general.GeneralExpGained),
 			GeneralLevelBefore: cloneIntPointer(general.GeneralLevelBefore),
 			GeneralLevelAfter:  cloneIntPointer(general.GeneralLevelAfter),
-			Traits:             append([]GeneralTraitInstance(nil), general.Traits...),
+			Stats:              cloneStringIntMap(general.Stats),
+			EffectiveStats:     cloneStringIntMap(general.EffectiveStats),
+			Attributes:         cloneFloatMap(general.Attributes),
+			Buffs:              cloneFloatMap(general.Buffs),
+			Traits:             cloneGeneralTraitInstances(general.Traits),
 		})
 	}
 	return result
@@ -681,8 +707,11 @@ func reinforcementReportGenerals(report BattleReport, role string) []BattleRepor
 				GeneralExpGained:   cloneIntPointer(generalExp),
 				GeneralLevelBefore: cloneIntPointer(general.GeneralLevelBefore),
 				GeneralLevelAfter:  cloneIntPointer(general.GeneralLevelAfter),
+				Stats:              cloneStringIntMap(general.Stats),
+				EffectiveStats:     cloneStringIntMap(general.EffectiveStats),
 				Attributes:         cloneFloatMap(general.Attributes),
-				Traits:             append([]GeneralTraitInstance(nil), general.Traits...),
+				Buffs:              cloneFloatMap(general.Buffs),
+				Traits:             cloneGeneralTraitInstances(general.Traits),
 			})
 		}
 	}

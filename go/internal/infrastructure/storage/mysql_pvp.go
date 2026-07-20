@@ -205,7 +205,7 @@ func (r *MySQLRepository) ResolvePvpBattleTransaction(marchID string, updatedAt 
 	if err != nil {
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
 	}
-	if march.Status == game.PvpMarchStatusResolved {
+	if march.Status == game.PvpMarchStatusResolved || strings.TrimSpace(march.BattleID) != "" {
 		battle, _ := getPvpBattleByMarchTx(tx, march.ID)
 		attacker, _, defender, _, _ := loadPvpPlayerPairOrderedTx(tx, march.AttackerPlayerID, march.DefenderPlayerID)
 		return attacker, defender, march, battle, game.BattleReport{}, game.BattleReport{}, nil
@@ -229,6 +229,9 @@ func (r *MySQLRepository) ResolvePvpBattleTransaction(marchID string, updatedAt 
 	}
 	battle, attackerReport, defenderReport, reinforcementReports, changedReinforcements, err := update(&attacker, &defender, reinforcements, &march)
 	if err != nil {
+		return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
+	}
+	if err := upsertCapturedGarrisonTx(tx, attacker, defender.Player.Faction, attackerReport.CapturedToGarrison, battle.ID, updatedAt); err != nil {
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
 	}
 	if err := savePvpPlayerStateTx(tx, attacker.Player.ID, attacker, attackerJSON, updatedAt, attackerArmy, attackerGenerals, attackerAssignments); err != nil {
@@ -294,6 +297,23 @@ func (r *MySQLRepository) ResolvePvpBattleTransaction(marchID string, updatedAt 
 		return game.GameState{}, game.GameState{}, game.PvpMarch{}, game.PvpBattle{}, game.BattleReport{}, game.BattleReport{}, err
 	}
 	return attacker, defender, march, battle, attackerReport, defenderReport, nil
+}
+
+// upsertCapturedGarrisonTx 在玩法主事务内保存美人计获得的跨阵营驻防兵力。
+func upsertCapturedGarrisonTx(tx *sql.Tx, owner game.GameState, sourceFaction string, troops map[string]int, sourceID string, updatedAt time.Time) error {
+	if len(troops) == 0 {
+		return nil
+	}
+	garrisonID := game.ObtainedGarrisonID(owner.Player.ID)
+	existing, err := getReinforcementTx(tx, garrisonID, " FOR UPDATE")
+	if err != nil && !errors.Is(err, game.ErrReinforcementNotFound) {
+		return err
+	}
+	record := game.MergeCapturedGarrisonRecord(existing, owner, sourceFaction, troops, sourceID, updatedAt)
+	if existing.ID == "" {
+		return insertReinforcementTx(tx, record)
+	}
+	return updateReinforcementTx(tx, existing.ID, record)
 }
 
 // GetPvpBattle 读取单条 PVP 战斗。

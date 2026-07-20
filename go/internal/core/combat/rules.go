@@ -55,7 +55,26 @@ var (
 func GetCombatConfig() CombatConfig {
 	combatMu.RLock()
 	defer combatMu.RUnlock()
-	return activeCombat
+	return cloneCombatConfig(activeCombat)
+}
+
+// cloneCombatConfig 深拷贝战斗规则、场景映射和城墙配置，隔离全局配置与调用方修改。
+func cloneCombatConfig(config CombatConfig) CombatConfig {
+	cloned := CombatConfig{
+		ActiveRules: make(map[string]string, len(config.ActiveRules)),
+		Rules:       make(map[string]RuleConfig, len(config.Rules)),
+		WallConfig:  make(map[string]WallEntry, len(config.WallConfig)),
+	}
+	for scene, ruleID := range config.ActiveRules {
+		cloned.ActiveRules[scene] = ruleID
+	}
+	for ruleID, rule := range config.Rules {
+		cloned.Rules[ruleID] = rule
+	}
+	for faction, wall := range config.WallConfig {
+		cloned.WallConfig[faction] = wall
+	}
+	return cloned
 }
 
 func GetRule(ruleID string) (RuleConfig, bool) {
@@ -184,6 +203,7 @@ func LoadCombatConfig(path string) error {
 }
 
 func SaveCombatConfig(path string, config CombatConfig) error {
+	config = cloneCombatConfig(config)
 	normalizeCombatConfig(&config)
 
 	if path == "" {

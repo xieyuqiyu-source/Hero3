@@ -62,8 +62,29 @@ func TestReincarnationStartAndAttack(t *testing.T) {
 	if result.BattleReport.Detail == nil || result.BattleReport.Detail.Extra["dungeon"] == nil {
 		t.Fatalf("expected dungeon reward mode extra, got %+v", result.BattleReport.Detail)
 	}
+	attackUnit := BattleReportUnit{}
+	for _, unit := range result.BattleReport.Detail.PrimarySide.Units {
+		if unit.UnitType == "qingZhouArmy" {
+			attackUnit = unit
+			break
+		}
+	}
+	if result.BattleReport.Detail.PrimarySide.Role != "attacker" || attackUnit.AmountBefore != dispatched || attackUnit.Lost != result.BattleReport.LostUnits["qingZhouArmy"] || attackUnit.Survived != dispatched-attackUnit.Lost {
+		t.Fatalf("expected dungeon attacker standard units to match legacy result, side=%+v report=%+v", result.BattleReport.Detail.PrimarySide, result.BattleReport)
+	}
 	if len(result.Army) == 0 {
 		t.Fatalf("expected army patch after battle")
+	}
+	if got, want := armySliceToMap(result.Army)["qingZhouArmy"], 50000-result.BattleReport.LostUnits["qingZhouArmy"]; got != want {
+		t.Fatalf("expected dungeon attack real army %d to match report loss, got %d", want, got)
+	}
+	if result.BattleReport.Detail.SecondarySide == nil || result.BattleReport.Detail.SecondarySide.Role != "defender" {
+		t.Fatalf("expected dungeon enemy on standard defender side, detail=%+v", result.BattleReport.Detail)
+	}
+	for _, unit := range result.BattleReport.Detail.SecondarySide.Units {
+		if unit.AmountBefore != result.BattleReport.DefenderUnits[unit.UnitType] || unit.Lost != result.BattleReport.DefenderLostUnits[unit.UnitType] || unit.Survived != unit.AmountBefore-unit.Lost {
+			t.Fatalf("expected dungeon defender unit to reconcile, unit=%+v report=%+v", unit, result.BattleReport)
+		}
 	}
 	saved, found, err := repo.GetActiveReincarnationRun(state.Player.ID, time.Now())
 	if err != nil || !found {
@@ -182,6 +203,99 @@ func TestReincarnationSelectedGeneralGainsExp(t *testing.T) {
 	}
 	if got := pvpTestGeneralExp(stored, "caocao"); got != result.BattleReport.GeneralExpGained {
 		t.Fatalf("expected stored general exp %d, got %d", result.BattleReport.GeneralExpGained, got)
+	}
+}
+
+// TestReincarnationRealDefenseReportReconcilesPlayerAndEnemyState 验证真实防守波的双方兵力、将领和经验归属不串位。
+func TestReincarnationRealDefenseReportReconcilesPlayerAndEnemyState(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "config")
+	if err := LoadUnitsConfig(filepath.Join(root, "units")); err != nil {
+		t.Fatalf("LoadUnitsConfig failed: %v", err)
+	}
+	if err := LoadItemsConfig(filepath.Join(root, "items.json")); err != nil {
+		t.Fatalf("LoadItemsConfig failed: %v", err)
+	}
+	if err := LoadDropPoolsConfig(filepath.Join(root, "drop_pools.json")); err != nil {
+		t.Fatalf("LoadDropPoolsConfig failed: %v", err)
+	}
+	if err := LoadReincarnationConfig(filepath.Join(root, "reincarnation.json")); err != nil {
+		t.Fatalf("LoadReincarnationConfig failed: %v", err)
+	}
+
+	now := time.Date(2026, 7, 19, 9, 0, 0, 0, time.UTC)
+	repo := NewMemoryRepository()
+	service := NewServiceWithRepository(repo)
+	account := Account{ID: "account_reincarnation_real_defense", Username: "reincarnation_real_defense", CreatedAt: now}
+	if err := repo.CreateAccount(account); err != nil {
+		t.Fatalf("CreateAccount failed: %v", err)
+	}
+	state := newPlayerState("player_reincarnation_real_defense", "轮回真实防守", "wei", "caocao", now)
+	state.Army = []ArmyUnit{{UnitType: "qingZhouArmy", Amount: 1000}}
+	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
+		t.Fatalf("CreatePlayer failed: %v", err)
+	}
+	started, err := service.StartReincarnationRun(state.Player.ID, 1)
+	if err != nil {
+		t.Fatalf("StartReincarnationRun failed: %v", err)
+	}
+	run := started.Run
+	run.CurrentWave = 2
+	run.Waves[0].Status = ReincarnationWaveCleared
+	wave := &run.Waves[1]
+	wave.Status = ReincarnationWaveActive
+	wave.AllyBonus = ReincarnationBonus{Label: "无加成"}
+	wave.EnemyBonus = ReincarnationBonus{Label: "无加成"}
+	enemyUnit := combatUnitIDsForFaction(wave.EnemyFaction)[0]
+	wave.EnemyTroops = map[string]int{enemyUnit: 100}
+	wave.EnemyRemaining = map[string]int{enemyUnit: 100}
+	if err := repo.SaveReincarnationRun(run); err != nil {
+		t.Fatalf("SaveReincarnationRun failed: %v", err)
+	}
+
+	result, err := service.ReadyReincarnationDefense(state.Player.ID, wave.ID, map[string]int{"qingZhouArmy": 500}, []string{"caocao"}, "real-defense")
+	if err != nil {
+		t.Fatalf("ReadyReincarnationDefense failed: %v", err)
+	}
+	report := result.BattleReport
+	if report == nil || report.Detail == nil || report.Detail.SecondarySide == nil {
+		t.Fatalf("expected complete real dungeon defense report, report=%+v", report)
+	}
+	if report.Detail.OwnerSide != ReportOwnerSideDefender || report.Detail.PrimarySide.Role != "attacker" || report.Detail.SecondarySide.Role != "defender" {
+		t.Fatalf("expected dungeon defense owner and roles, detail=%+v", report.Detail)
+	}
+	if len(report.Detail.PrimarySide.Generals) != 0 || len(report.Detail.SecondarySide.Generals) != 1 || report.Detail.SecondarySide.Generals[0].ID != "caocao" {
+		t.Fatalf("expected Cao Cao only on player defender side, detail=%+v", report.Detail)
+	}
+	playerLoss := report.LostUnits["qingZhouArmy"]
+	stored, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState failed: %v", err)
+	}
+	if got, want := armySliceToMap(stored.Army)["qingZhouArmy"], 1000-playerLoss; got != want {
+		t.Fatalf("expected real defender army %d to match report, got %d", want, got)
+	}
+	defenderUnit := BattleReportUnit{}
+	for _, unit := range report.Detail.SecondarySide.Units {
+		if unit.UnitType == "qingZhouArmy" {
+			defenderUnit = unit
+			break
+		}
+	}
+	if defenderUnit.AmountBefore != 500 || defenderUnit.Lost != playerLoss || defenderUnit.Survived != 500-playerLoss {
+		t.Fatalf("expected standard player defender unit to reconcile, unit=%+v report=%+v", defenderUnit, report)
+	}
+	attackerUnit := BattleReportUnit{}
+	for _, unit := range report.Detail.PrimarySide.Units {
+		if unit.UnitType == enemyUnit {
+			attackerUnit = unit
+			break
+		}
+	}
+	if attackerUnit.AmountBefore != 100 || attackerUnit.Lost != report.DefenderLostUnits[enemyUnit] || attackerUnit.Survived != 100-attackerUnit.Lost {
+		t.Fatalf("expected standard dungeon attacker unit to reconcile, unit=%+v report=%+v", attackerUnit, report)
+	}
+	if report.Detail.Rewards.GeneralExp != report.GeneralExpGained || report.Detail.Rewards.GeneralLevelBefore != report.GeneralLevelBefore || report.Detail.Rewards.GeneralLevelAfter != report.GeneralLevelAfter {
+		t.Fatalf("expected dungeon defense general progress to stay on standard rewards, detail=%+v report=%+v", report.Detail.Rewards, report)
 	}
 }
 

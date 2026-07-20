@@ -1,7 +1,8 @@
 /** 将 Hero3 标准战报详情映射为武林三国官方战报版式。 */
-import type { BattleReportDetailState, BattleReportDropState, BattleReportGeneralState, BattleReportGeneralTraitState, BattleReportSideState, BattleReportState, BattleReportUnitState } from '../game/types'
+import type { BattleReportDetailState, BattleReportDropState, BattleReportGeneralState, BattleReportSideState, BattleReportState, BattleReportUnitState } from '../game/types'
 import { officialCodeForUnitType } from '../game/recruitmentAdapter'
 import { traitLabel } from '../game/traitLabels'
+import { unitNameForType } from '../game/viewModel'
 import { formatIntelligenceTime } from './adapter'
 
 export interface OfficialReportUnitViewModel {
@@ -42,6 +43,8 @@ export interface OfficialReportSideViewModel {
   traitText: string
   traits: OfficialReportTraitViewModel[]
   generalExp: number | null
+  generalLevelBefore: number | null
+  generalLevelAfter: number | null
 }
 
 export interface OfficialBattleReportViewModel {
@@ -71,19 +74,20 @@ const unitLabels: Record<string, string> = {
 }
 const resourceLabels: Record<string, string> = { wood: '木材', clay: '泥土', stone: '泥土', iron: '铁矿', food: '粮食', cityGold: '城金' }
 const traitDetailLabels: Record<string, string> = {
-  effectRate: '效果比例', triggerChance: '触发概率', damagePercent: '伤害比例', suppressRate: '压制比例', foodRatio: '口粮比例',
-  attackBonusRate: '攻击加成', defenseBonusRate: '防御加成', enemyDefenseReductionRate: '降低敌方防御', lossReductionRate: '战损减免',
-  speedBonusRate: '行军速度加成', productionBonusRate: '产量加成', resourceCostReduction: '资源消耗降低', plunderBonusRate: '掠夺收益修正',
+  triggerCount: '触发场次', effectRate: '设计效果比例', triggerChance: '触发概率', damagePercent: '设计伤害比例', suppressRate: '压制比例', foodRatio: '口粮比例',
+  attackBonusRate: '设计攻击加成', defenseBonusRate: '设计防御加成', attackReductionRate: '设计攻击降低', enemyDefenseReductionRate: '设计敌方防御降低', lossReductionRate: '设计减损比例',
+  speedBonusRate: '行军速度加成', productionBonusRate: '产量加成', resourceCostReduction: '资源消耗降低', plunderBonusRate: '设计掠夺修正',
   fireDamageBonusRate: '火攻伤害加成', warningDelayRate: '预警延迟', selfCostRate: '自身损失比例', reviveRate: '复活比例', captureRate: '俘虏比例',
-  disableTraitRate: '禁用特性概率', maxAffectedRate: '最大影响比例', baseChance: '基础触发概率', chancePerRatio: '每倍差距概率', maxChance: '最高触发概率',
+  disableTraitRate: '禁用特性概率', maxAffectedRate: '设计最大影响比例', baseChance: '基础触发概率', chancePerRatio: '每倍差距概率', maxChance: '最高触发概率',
   baseSuppressRate: '基础震慑比例', suppressPerRatio: '每倍差距震慑', maxSuppressRate: '最高震慑比例',
-  guardPerMinute: '每分钟产兵', maxGuardPerDay: '每日产兵上限', captureMax: '单兵种俘虏上限', maxReturnCount: '单场返还上限',
-  maxReviveCount: '单场复活上限', maxAffectedCount: '最大影响数量', minMarchSeconds: '最低行军时间', disableTraitCount: '禁用特性数量',
-  generalAttackFlat: '将领攻击固定加成', generalDefenseFlat: '将领防御固定加成', unitAttackFlat: '兵种攻击固定加成',
-  preBattleAffected: '战前损失', suppressedUnits: '压制兵力', capturedUnits: '俘虏兵力', modifiedUnits: '攻防修正',
-  extraLosses: '追加损失', targetExtraLosses: '追加损失', reducedLosses: '减少损失', disabledTraits: '禁用特性',
+  guardPerMinute: '每分钟产兵', maxGuardPerDay: '每日产兵上限', captureMax: '设计单兵种俘虏上限', maxReturnCount: '设计返还上限',
+  maxReviveCount: '设计复活上限', maxAffectedCount: '最大影响数量', minMarchSeconds: '最低行军时间', disableTraitCount: '设计压制特性数',
+  generalAttackFlat: '将领攻击固定加成', generalDefenseFlat: '设计全军防御增加', unitAttackFlat: '设计单位攻击增加',
+  preBattleAffected: '战前真实伤亡', suppressedUnits: '本场压制兵力', capturedUnits: '俘虏归队', capturedToGarrison: '俘虏驻防', modifiedUnits: '实际攻防修正',
+  attackModifiedUnits: '实际攻击修正', infantryDefenseModifiedUnits: '实际步防修正', cavalryDefenseModifiedUnits: '实际骑防修正',
+  extraLosses: '追加损失', targetExtraLosses: '目标兵种追加损失', reducedLosses: '减少损失', disabledTraits: '压制特性',
   revivedUnits: '复活兵力', returnedUnits: '返还兵力', extraDamage: '额外伤害', totalRevived: '复活总数',
-  totalSuppressed: '压制总数', totalCaptured: '俘虏总数', disabledTraitCount: '禁用特性数量',
+  totalSuppressed: '压制总数', totalCaptured: '俘虏总数', disabledTraitCount: '实际压制特性数',
   plunderDelta: '掠夺资源修正',
 }
 const traitPercentageKeys = new Set([
@@ -92,6 +96,35 @@ const traitPercentageKeys = new Set([
   'selfCostRate', 'reviveRate', 'captureRate', 'disableTraitRate', 'maxAffectedRate', 'baseChance', 'chancePerRatio', 'maxChance', 'baseSuppressRate',
   'suppressPerRatio', 'maxSuppressRate',
 ])
+
+// 特殊场景特性使用比通用事件阶段更精确的玩家文案。
+const traitPhaseOverrides: Record<string, string> = {
+  huogong: '主动进攻战斗结算后',
+  meiren: '主动进攻战斗前',
+  xiaobawang_zhuiji: '掠夺战结算后',
+  jinfan_qixi: '掠夺战战斗前',
+  qibing_raohou: '主动进攻战斗前',
+  mouding_houfa: '防守战斗前',
+  meihuo_raozhen: '主动进攻战斗前',
+  huchi_chongzhen: '主动进攻战斗前',
+  pojun_pofang: '主动进攻战斗前',
+  baibu_chuanyang: '主动进攻战斗前',
+  sizhandaodi: '主动进攻战斗前',
+  weizhen_xiaoyao: '主动进攻战斗前',
+  wusheng_pojun: '主动进攻战斗前',
+  wanren_nuhou: '主动进攻战斗前',
+  xiaobawang_tieqi: '主动进攻战斗前',
+  meizhoulang_junlue: '主动进攻战斗前',
+  xinyi_yonglie: '援军战斗前',
+  dunzhen_fangyu: '防守/增援战斗前',
+  gushou_hanzhong: '防守/增援战斗前',
+  jiangdong_gushou: '防守/增援战斗前',
+  longdan_jiuyuan: '防守/增援战斗结算后',
+  rende: '进攻/防守/增援战斗结束后',
+  renzhu_shouhu: '进攻/防守/增援战斗结束后',
+  huzhu_sizhan: '进攻/防守/增援战败后',
+  guicai_yice: '进攻/防守/增援战败后',
+}
 
 /** 把资源键值表转换为官方横排行文。 */
 function amountLine(values?: Record<string, number>) {
@@ -154,8 +187,8 @@ function reportUnitNames(detail: BattleReportDetailState) {
 /** 根据特性实际结果字段判断它发生在哪个战斗阶段。 */
 function traitPhase(detail: Record<string, unknown>) {
   const keys = new Set(Object.keys(detail))
-  if (['preBattleAffected', 'suppressedUnits', 'capturedUnits', 'modifiedUnits', 'totalSuppressed', 'totalCaptured'].some((key) => keys.has(key))) return '战斗前'
-  if (['extraLosses', 'targetExtraLosses', 'reducedLosses', 'disabledTraits', 'extraDamage'].some((key) => keys.has(key))) return '战斗结算后'
+  if (['preBattleAffected', 'suppressedUnits', 'capturedUnits', 'capturedToGarrison', 'modifiedUnits', 'attackModifiedUnits', 'infantryDefenseModifiedUnits', 'cavalryDefenseModifiedUnits', 'totalSuppressed', 'totalCaptured'].some((key) => keys.has(key))) return '战斗前'
+  if (['extraLosses', 'targetExtraLosses', 'reducedLosses', 'disabledTraits', 'disableTraitCount', 'disabledTraitCount', 'extraDamage'].some((key) => keys.has(key))) return '战斗结算后'
   if (['revivedUnits', 'returnedUnits', 'totalRevived'].some((key) => keys.has(key))) return '战斗结束后'
   if (keys.has('plunderDelta')) return '掠夺结算'
   return '战斗触发'
@@ -164,7 +197,7 @@ function traitPhase(detail: Record<string, unknown>) {
 /** 把比例、数量和逐兵种变化完整格式化为官方战报的一行说明。 */
 function formatTraitDetail(detail: Record<string, unknown>, unitNames: Map<string, string>) {
   const orderedKeys = Object.keys(detail).sort((left, right) => {
-    const rank = (key: string) => key === 'effectRate' ? 0 : isRecord(detail[key]) ? 1 : key === 'triggerChance' ? 3 : 2
+		const rank = (key: string) => ['effectRate', 'maxAffectedRate', 'captureRate', 'captureMax', 'disableTraitCount', 'attackBonusRate', 'unitAttackFlat', 'attackReductionRate', 'enemyDefenseReductionRate', 'defenseBonusRate', 'generalDefenseFlat', 'lossReductionRate', 'maxReviveCount', 'maxReturnCount', 'plunderBonusRate'].includes(key) ? 0 : isRecord(detail[key]) ? 1 : key === 'triggerChance' ? 3 : 2
     return rank(left) - rank(right)
   })
   return orderedKeys.flatMap((key) => {
@@ -178,7 +211,7 @@ function formatTraitDetail(detail: Record<string, unknown>, unitNames: Map<strin
     if (typeof value === 'string' && value) return [`${label}：${value}`]
     if (isRecord(value)) {
       const entries = Object.entries(value).flatMap(([itemKey, amount]) => typeof amount === 'number' && Number.isFinite(amount)
-        ? [`${unitNames.get(itemKey) || resourceLabels[itemKey] || traitDetailLabels[itemKey] || itemKey} ${amount > 0 ? '+' : ''}${amount.toLocaleString('zh-CN')}`]
+        ? [`${unitNames.get(itemKey) || resourceLabels[itemKey] || traitDetailLabels[itemKey] || unitNameForType(itemKey)} ${amount > 0 ? '+' : ''}${amount.toLocaleString('zh-CN')}`]
         : [])
       return entries.length ? [`${label}：${entries.join('、')}`] : []
     }
@@ -205,116 +238,172 @@ function sideResult(role: OfficialReportSideViewModel['role'], winnerSide?: stri
 }
 
 /** 把标准战报一方转换为官方参战卡片。 */
-function mapSide(side: BattleReportSideState, index: number, winnerSide: string | undefined, traits: OfficialReportTraitViewModel[], generalExp: number | null, forcedRole?: OfficialReportSideViewModel['role'], forceGeneralPlaceholder = false): OfficialReportSideViewModel {
+function mapSide(side: BattleReportSideState, index: number, winnerSide: string | undefined, traits: OfficialReportTraitViewModel[], generalExp: number | null, generalLevelBefore: number | null = null, generalLevelAfter: number | null = null, forcedRole?: OfficialReportSideViewModel['role'], forceGeneralPlaceholder = false): OfficialReportSideViewModel {
   const role = forcedRole ?? (side.role === 'attacker' ? 'attacker' : side.role === 'reinforcement' ? 'reinforcement' : 'defender')
   const result = sideResult(role, winnerSide)
   const general = side.generals?.[0] ?? null
-  const generalTraitText = (general?.traits ?? []).map((trait) => traitLabel(trait.traitId, trait.traitName || trait.name)).filter(Boolean).join('；')
   const showGeneralPlaceholder = !general || forceGeneralPlaceholder || side.targetType === 'npc_city'
-  const displayTraits = traits.length ? traits : (general?.traits ?? []).map((trait) => ({ key: trait.traitId, name: traitLabel(trait.traitId, trait.traitName || trait.name), phase: '', detailText: '' }))
-  return { key: `${role}-${side.playerId || side.targetId || index}`, role, roleLabel: role === 'attacker' ? '进攻方' : role === 'reinforcement' ? '增援方' : '防守方', name: side.cityName || side.playerName || side.targetName || '未知城池', faction: side.faction || 'wei', factionIcon: `/assets/official/report/country_${factionIndex[side.faction || ''] ?? 1}.gif`, general, showGeneralPlaceholder, units: mapUnits(side), power: Math.max(0, side.power || 0), result: result.result, resultLabel: result.resultLabel, traitText: displayTraits.map((trait) => [trait.name, trait.phase, trait.detailText].filter(Boolean).join(' ')).join('；') || generalTraitText, traits: displayTraits, generalExp: general?.generalExpGained ?? generalExp }
+  return { key: `${role}-${side.playerId || side.targetId || index}`, role, roleLabel: role === 'attacker' ? '进攻方' : role === 'reinforcement' ? '增援方' : '防守方', name: side.cityName || side.playerName || side.targetName || '未知城池', faction: side.faction || 'wei', factionIcon: `/assets/official/report/country_${factionIndex[side.faction || ''] ?? 1}.gif`, general, showGeneralPlaceholder, units: mapUnits(side), power: Math.max(0, side.power || 0), result: result.result, resultLabel: result.resultLabel, traitText: traits.map((trait) => [trait.name, trait.phase, trait.detailText].filter(Boolean).join(' ')).join('；'), traits, generalExp: general?.generalExpGained ?? generalExp, generalLevelBefore: general?.generalLevelBefore ?? generalLevelBefore, generalLevelAfter: general?.generalLevelAfter ?? generalLevelAfter }
 }
 
 /** 判断一条触发结果的玩家、绝对角色或标准位置是否属于当前参战方。 */
 function traitOwnerMatchesSide(trait: NonNullable<BattleReportDetailState['traits']>[number], outcome: NonNullable<BattleReportState['traitOutcomes']>[string] | undefined, side: BattleReportSideState, primary: boolean) {
-  if (outcome?.ownerPlayerId && side.playerId && outcome.ownerPlayerId !== side.playerId) return false
+  const ownerPlayerId = trait.ownerPlayerId || outcome?.ownerPlayerId
+  if (ownerPlayerId && side.playerId && ownerPlayerId !== side.playerId) return false
   const outcomeSide = (outcome?.ownerSide || '').toLowerCase()
   const ownerRole = (['attacker', 'defender', 'reinforcement'].includes(outcomeSide) ? outcomeSide : trait.ownerRole || '').toLowerCase()
   if (ownerRole === 'attacker' || ownerRole === 'defender' || ownerRole === 'reinforcement') return ownerRole === side.role
   const ownerPosition = (trait.ownerSide || outcomeSide).toLowerCase()
   if (ownerPosition === 'primary') return primary
-  if (ownerPosition === 'secondary') return !primary
+  if (ownerPosition === 'secondary') return !primary && side.role !== 'reinforcement'
   if (ownerPosition === 'reinforcement') return side.role === 'reinforcement'
   return true
 }
 
-/** 按玩家、参战方和武将联合归属筛选本场实际触发的特性。 */
-function sideTriggeredTraits(detail: BattleReportDetailState, side: BattleReportSideState, primary: boolean, outcomes: BattleReportState['traitOutcomes']) {
+/** 按特性 ID 和拥有者身份定位结果，兼容同一特性在双方同时触发时生成的唯一存储键。 */
+function traitOutcomeForEntry(trait: NonNullable<BattleReportDetailState['traits']>[number], outcomes: BattleReportState['traitOutcomes']) {
+  const candidates = Object.values(outcomes ?? {}).filter((outcome) => outcome.traitId === trait.traitId)
+  return candidates.find((outcome) => {
+    if (trait.ownerPlayerId && outcome.ownerPlayerId && trait.ownerPlayerId !== outcome.ownerPlayerId) return false
+    if (trait.generalId && outcome.ownerGeneralId && trait.generalId !== outcome.ownerGeneralId) return false
+    if (trait.ownerRole && outcome.ownerSide && trait.ownerRole !== outcome.ownerSide) return false
+    return true
+  }) ?? outcomes?.[trait.traitId]
+}
+
+/** 根据战报所有者判断全局武将经验应展示在哪一方。 */
+function generalProgressForSide(detail: BattleReportDetailState, side: BattleReportSideState) {
   const general = side.generals?.[0]
+  if (general?.generalExpGained !== undefined || general?.generalLevelBefore !== undefined || general?.generalLevelAfter !== undefined) {
+    return {
+      exp: Math.max(0, general.generalExpGained ?? 0),
+      levelBefore: general.generalLevelBefore ?? null,
+      levelAfter: general.generalLevelAfter ?? null,
+    }
+  }
+  const ownerRole = detail.ownerSide || (detail.viewType === 'defense' ? 'defender' : detail.viewType === 'reinforcement' ? 'reinforcement' : detail.viewType === 'scout' ? 'scout' : 'attacker')
+  const sideRole = side.role === 'reinforcement' ? 'reinforcement' : side.role === 'defender' ? 'defender' : 'attacker'
+  if (ownerRole !== sideRole) return { exp: null, levelBefore: null, levelAfter: null }
+  return {
+    exp: Math.max(0, detail.rewards.generalExp ?? 0),
+    levelBefore: detail.rewards.generalLevelBefore ?? null,
+    levelAfter: detail.rewards.generalLevelAfter ?? null,
+  }
+}
+
+/** 按武将 ID、名称和参战方归属筛选本场实际触发的特性。 */
+function sideTriggeredTraitMatches(detail: BattleReportDetailState, side: BattleReportSideState, primary: boolean, outcomes: BattleReportState['traitOutcomes']) {
+  const generals = side.generals ?? []
   return (detail.traits ?? []).filter((trait) => {
-    const outcome = outcomes?.[trait.traitId]
+    const outcome = traitOutcomeForEntry(trait, outcomes)
     if (!traitOwnerMatchesSide(trait, outcome, side, primary)) return false
     const generalId = trait.generalId || outcome?.ownerGeneralId
-    if (generalId) return generalId === general?.id
-    if (trait.generalName) return trait.generalName === general?.name
-    if (general?.traits?.some((item) => item.traitId === trait.traitId)) return true
-    if (general) return false
+    if (generalId && generals.length) return generals.some((general) => general.id === generalId)
+    if (trait.generalName) return generals.some((general) => trait.generalName === general.name)
+    if (generals.length) return false
     return true
   }).map((trait) => {
-    const outcome = outcomes?.[trait.traitId]
-    const detailData = isRecord(outcome?.detail) ? outcome.detail : isRecord(trait.detail) ? trait.detail : {}
+    const outcome = traitOutcomeForEntry(trait, outcomes)
+    const detailData = isRecord(trait.detail) ? trait.detail : isRecord(outcome?.detail) ? outcome.detail : {}
     return { trait, outcome, detailData }
   })
 }
 
-/** 合并将领完整特性参数与本场触发结果，既保留常驻数值也展示实际作用数量。 */
-function sideReportTraits(detail: BattleReportDetailState, side: BattleReportSideState, primary: boolean, outcomes: BattleReportState['traitOutcomes'], enemyDetailsVisible: boolean): OfficialReportTraitViewModel[] {
-  const general = side.generals?.[0]
+/** 把当前参战方真实触发的特性转换为战报时间线，拥有但未触发的特性不进入结果。 */
+function sideTriggeredTraits(detail: BattleReportDetailState, side: BattleReportSideState, primary: boolean, outcomes: BattleReportState['traitOutcomes'], enemyDetailsVisible: boolean): OfficialReportTraitViewModel[] {
   const unitNames = reportUnitNames(detail)
-  for (const unit of side.units ?? []) unitNames.set(unit.unitType, unit.unitName || unitLabels[unit.unitType] || unit.unitType)
-  const triggered = sideTriggeredTraits(detail, side, primary, outcomes)
-  const triggeredById = new Map(triggered.map((item) => [item.trait.traitId, item]))
-  const result = (general?.traits ?? []).map((trait: BattleReportGeneralTraitState, index) => {
-    const actual = triggeredById.get(trait.traitId)
-    if (actual) triggeredById.delete(trait.traitId)
-    const configured = isRecord(trait.params) ? trait.params : {}
-    const actualDetail = actual ? visibleTraitActualDetail(actual.detailData, enemyDetailsVisible, actual.outcome?.scope || trait.scope) : {}
-    const detailData = actual ? { ...configured, ...actualDetail } : configured
+  return sideTriggeredTraitMatches(detail, side, primary, outcomes).map(({ trait, outcome, detailData }, index) => {
+    const ownerPlayerId = trait.ownerPlayerId || outcome?.ownerPlayerId
+    const configuredTrait = (side.generals ?? []).flatMap((general) => general.traits ?? []).find((item) => item.traitId === trait.traitId)
+    const configured = isRecord(configuredTrait?.params) ? configuredTrait.params : {}
+    const actual = visibleTraitActualDetail(detailData, enemyDetailsVisible, outcome?.scope || configuredTrait?.scope)
+    const visibleDetail = { ...configured, ...actual }
     return {
-      key: `${trait.traitId}-${index}`,
-      name: traitLabel(trait.traitId, actual?.outcome?.name || actual?.trait.traitName || trait.traitName || trait.name || trait.summary),
-      phase: Object.keys(actualDetail).length ? traitPhase(actualDetail) : '',
-      detailText: formatTraitDetail(detailData, unitNames),
+      key: ownerPlayerId ? `${trait.traitId}-${ownerPlayerId}-${index}` : `${trait.traitId}-${index}`,
+      name: traitLabel(trait.traitId, trait.traitName || outcome?.name || trait.summary),
+      phase: traitPhaseOverrides[trait.traitId] ?? traitPhase(actual),
+      detailText: formatTraitDetail(visibleDetail, unitNames),
     }
   })
-  for (const [traitId, actual] of triggeredById) {
-    const actualDetail = visibleTraitActualDetail(actual.detailData, enemyDetailsVisible, actual.outcome?.scope)
-    result.push({
-      key: `${traitId}-${result.length}`,
-      name: traitLabel(traitId, actual.outcome?.name || actual.trait.traitName || actual.trait.summary),
-      phase: Object.keys(actualDetail).length ? traitPhase(actualDetail) : '',
-      detailText: formatTraitDetail(actualDetail, unitNames),
-    })
-  }
-  return result
 }
 
 /** 从兼容旧字段构造最小标准详情，保证历史战报仍可展示。 */
 function legacyDetail(report: BattleReportState): BattleReportDetailState {
-  const units = (values?: Record<string, number>, losses?: Record<string, number>) => Object.keys({ ...(values ?? {}), ...(losses ?? {}) }).map((unitType) => ({ unitType, amountBefore: values?.[unitType] ?? 0, dispatched: values?.[unitType] ?? 0, lost: losses?.[unitType] ?? 0, survived: Math.max(0, (values?.[unitType] ?? 0) - (losses?.[unitType] ?? 0)) }))
+  const units = (values?: Record<string, number>, losses?: Record<string, number>, survived?: Record<string, number>) => Object.keys({ ...(values ?? {}), ...(losses ?? {}), ...(survived ?? {}) }).map((unitType) => ({ unitType, amountBefore: values?.[unitType] ?? 0, dispatched: values?.[unitType] ?? 0, lost: losses?.[unitType] ?? 0, survived: survived?.[unitType] ?? Math.max(0, (values?.[unitType] ?? 0) - (losses?.[unitType] ?? 0)) }))
   const viewType = report.viewType || (report.type === 'defense' ? 'defense' : report.type === 'reinforce' || report.type === 'reinforcement' ? 'reinforcement' : 'attack')
   const ownerRole = viewType === 'defense' ? 'defender' : viewType === 'reinforcement' ? 'reinforcement' : 'attacker'
-  const ownerSide: BattleReportSideState = { role: ownerRole, playerId: report.playerId, playerName: report.playerName, cityName: report.playerName, faction: report.playerFaction, power: 0, units: units(report.dispatchedUnits, report.lostUnits) }
-  const targetSide: BattleReportSideState = { role: viewType === 'defense' ? 'attacker' : 'defender', playerName: report.targetName, cityName: report.targetName, faction: report.defenderFaction, power: 0, units: units(report.defenderUnits, report.defenderLostUnits), resources: report.defenderResources }
+  const reinforcementGenerals = (report.pvpReinforcements ?? []).find((item) => item.fromPlayerId === report.playerId)?.generals ?? report.pvpReinforcements?.[0]?.generals
+  const ownerGenerals = viewType === 'defense' ? report.pvpDefenderGenerals : viewType === 'reinforcement' ? reinforcementGenerals : report.pvpAttackerGenerals
+  const targetGenerals = viewType === 'defense' ? report.pvpAttackerGenerals : report.pvpDefenderGenerals
+  const ownerSide: BattleReportSideState = { role: ownerRole, playerId: report.playerId, playerName: report.playerName, cityName: report.playerName, faction: report.playerFaction, power: report.playerPower ?? 0, generals: ownerGenerals, units: units(report.dispatchedUnits, report.lostUnits, report.survivedUnits) }
+  const targetSide: BattleReportSideState = { role: viewType === 'defense' ? 'attacker' : 'defender', playerName: report.targetName, cityName: report.targetName, faction: report.defenderFaction, power: report.enemyPower ?? 0, generals: targetGenerals, units: units(report.defenderUnits, report.defenderLostUnits), resources: report.defenderResources }
   const primarySide = viewType === 'defense' ? targetSide : ownerSide
-  const secondarySide = viewType === 'defense' ? ownerSide : viewType === 'reinforcement' ? null : report.defenderRevealed ? targetSide : null
+  const secondarySide = viewType === 'reinforcement' ? null : viewType === 'defense' || report.defenderRevealed ? (viewType === 'defense' ? ownerSide : targetSide) : null
   const fullyVisible = viewType === 'defense' || viewType === 'reinforcement' || Boolean(report.defenderRevealed)
-  const traits = (report.traitTriggered ?? []).map((name) => {
-    const outcome = report.traitOutcomes?.[name]
+  const traits = (report.traitTriggered ?? []).map((key) => {
+    const outcome = report.traitOutcomes?.[key]
     const absoluteRole = ['attacker', 'defender', 'reinforcement'].includes((outcome?.ownerSide || '').toLowerCase()) ? outcome!.ownerSide!.toLowerCase() : ownerRole
     const displaySide = absoluteRole === 'attacker' ? 'primary' : absoluteRole === 'defender' ? 'secondary' : viewType === 'reinforcement' ? 'primary' : 'reinforcement'
-    return { traitId: name, traitName: outcome?.name || name, ownerSide: displaySide, ownerRole: absoluteRole, generalId: outcome?.ownerGeneralId, detail: outcome?.detail }
+    return { traitId: outcome?.traitId || key, traitName: outcome?.name || outcome?.traitId || key, ownerSide: displaySide, ownerRole: absoluteRole, ownerPlayerId: outcome?.ownerPlayerId, generalId: outcome?.ownerGeneralId, detail: outcome?.detail }
   })
   const title = report.title || (viewType === 'defense' ? `${report.targetName || '目标'} 攻击 ${report.playerName || '我方'}` : viewType === 'reinforcement' ? `增援 ${report.targetName || '目标'}` : `${report.playerName || '我方'} 攻击 ${report.targetName || '目标'}`)
-  return { id: report.id, ownerPlayerId: report.playerId, ownerSide: ownerRole, viewType, sourceType: report.sourceType || 'player_city', battleType: report.battleType || report.type, result: report.result, winnerSide: report.result === 'attacker_victory' ? 'attacker' : report.result === 'defender_victory' ? 'defender' : 'none', title, summary: report.summary, occurredAt: report.createdAt, primarySide, secondarySide, rewards: { resources: report.rewards, drops: report.drops, generalExp: report.generalExpGained }, traits, visibility: { showEnemyRemainingUnits: fullyVisible, showEnemyResources: fullyVisible, showEnemyGenerals: fullyVisible, showEnemyCityDefense: fullyVisible, reason: fullyVisible ? '' : '对防守方造成的损伤不足，因此无法准确获得防守方的战斗情报' }, read: report.read }
+  return { id: report.id, ownerPlayerId: report.playerId, ownerSide: report.ownerSide || ownerRole, viewType, sourceType: report.sourceType || 'player_city', battleType: report.battleType || report.type, result: report.result, winnerSide: report.result === 'attacker_victory' ? 'attacker' : report.result === 'defender_victory' ? 'defender' : 'none', title, summary: report.summary, occurredAt: report.createdAt, primarySide, secondarySide, rewards: { resources: report.rewards, drops: report.drops, cityGold: report.overflowCityGold, generalExp: report.generalExpGained, generalLevelBefore: report.generalLevelBefore, generalLevelAfter: report.generalLevelAfter, overflow: report.overflow }, traits, visibility: { showEnemyRemainingUnits: fullyVisible, showEnemyResources: fullyVisible, showEnemyGenerals: fullyVisible, showEnemyCityDefense: fullyVisible, reason: fullyVisible ? '' : '对防守方造成的损伤不足，因此无法准确获得防守方的战斗情报' }, read: report.read }
+}
+
+/** 按字段补齐部分迁移奖励，标准明确返回的零值和空列表不回退。 */
+function normalizedRewards(legacy: BattleReportDetailState['rewards'], standard?: BattleReportDetailState['rewards']): BattleReportDetailState['rewards'] {
+  return {
+    resources: standard?.resources ?? legacy.resources,
+    drops: standard?.drops ?? legacy.drops,
+    cityGold: standard?.cityGold ?? legacy.cityGold,
+    generalExp: standard?.generalExp ?? legacy.generalExp,
+    generalLevelBefore: standard?.generalLevelBefore ?? legacy.generalLevelBefore,
+    generalLevelAfter: standard?.generalLevelAfter ?? legacy.generalLevelAfter,
+    overflow: standard?.overflow ?? legacy.overflow,
+  }
+}
+
+/** 合并部分迁移战报，标准真实时间线优先，缺失时回退旧触发结果。 */
+function normalizedDetail(report: BattleReportState): BattleReportDetailState {
+  const legacy = legacyDetail(report)
+  const detail = report.detail ?? legacy
+  const legacyTraits = legacy.traits ?? []
+  const traits = (detail.traits?.length ?? 0) > 0 || legacyTraits.length === 0 ? detail.traits : legacyTraits
+  return { ...detail, rewards: normalizedRewards(legacy.rewards, detail.rewards), traits }
+}
+
+/** 格式化武将本场经验，并只在真实升级时附加等级变化。 */
+export function formatGeneralProgress(exp: number | null, levelBefore: number | null, levelAfter: number | null) {
+  const text = `+${Math.max(0, exp ?? 0).toLocaleString('zh-CN')}`
+  return (levelBefore ?? 0) > 0 && (levelAfter ?? 0) > (levelBefore ?? 0) ? `${text} · Lv.${levelBefore} → Lv.${levelAfter}` : text
 }
 
 /** 把一份真实战报转换为完整官方战报视图模型。 */
 export function toOfficialBattleReport(report: BattleReportState): OfficialBattleReportViewModel {
-  const detail = report.detail ?? legacyDetail(report)
-  const ownerRole = detail.ownerSide || (detail.viewType === 'defense' ? 'defender' : detail.viewType === 'reinforcement' ? 'reinforcement' : 'attacker')
-  const ownerGeneralExp = Math.max(0, detail.rewards.generalExp ?? 0)
+  const detail = normalizedDetail(report)
+  const primaryProgress = generalProgressForSide(detail, detail.primarySide)
   const enemyVisible = detail.viewType === 'defense' || detail.visibility.showEnemyRemainingUnits
-  const sides = [mapSide(detail.primarySide, 0, detail.winnerSide, sideReportTraits(detail, detail.primarySide, true, report.traitOutcomes, enemyVisible), ownerRole === 'attacker' ? ownerGeneralExp : null)]
+  const sides = [mapSide(detail.primarySide, 0, detail.winnerSide, sideTriggeredTraits(detail, detail.primarySide, true, report.traitOutcomes, enemyVisible), primaryProgress.exp, primaryProgress.levelBefore, primaryProgress.levelAfter)]
   if (detail.secondarySide && enemyVisible) {
     const npcDefender = detail.sourceType === 'npc_city' || /NPC/i.test(detail.secondarySide.targetName || detail.secondarySide.cityName || '')
-    sides.push(mapSide(detail.secondarySide, 1, detail.winnerSide, sideReportTraits(detail, detail.secondarySide, false, report.traitOutcomes, enemyVisible), ownerRole === 'defender' ? ownerGeneralExp : null, undefined, npcDefender))
+    const secondaryProgress = generalProgressForSide(detail, detail.secondarySide)
+    sides.push(mapSide(detail.secondarySide, 1, detail.winnerSide, sideTriggeredTraits(detail, detail.secondarySide, false, report.traitOutcomes, enemyVisible), secondaryProgress.exp, secondaryProgress.levelBefore, secondaryProgress.levelAfter, undefined, npcDefender))
   }
-  for (const [index, reinforcement] of (enemyVisible ? (report.pvpReinforcements ?? []) : []).entries()) {
+  const seenReinforcementIds = new Set<string>()
+  const detailAlreadyShowsOwnerReinforcement = detail.viewType === 'reinforcement' && detail.primarySide.role === 'reinforcement'
+  const reinforcements = (enemyVisible && !detailAlreadyShowsOwnerReinforcement ? (report.pvpReinforcements ?? []) : []).filter((reinforcement) => {
+    if (seenReinforcementIds.has(reinforcement.reinforcementId)) return false
+    seenReinforcementIds.add(reinforcement.reinforcementId)
+    return true
+  })
+  for (const [index, reinforcement] of reinforcements.entries()) {
     const losses = report.pvpReinforcementLosses?.[reinforcement.reinforcementId] ?? {}
     const reinforcementSide: BattleReportSideState = { role: 'reinforcement', playerId: reinforcement.fromPlayerId, playerName: reinforcement.fromPlayerName, cityName: reinforcement.fromPlayerName, faction: reinforcement.faction, power: 0, generals: reinforcement.generals, units: Object.keys({ ...reinforcement.troops, ...losses }).map((unitType) => ({ unitType, amountBefore: reinforcement.troops[unitType] ?? 0, dispatched: reinforcement.troops[unitType] ?? 0, lost: losses[unitType] ?? 0, survived: Math.max(0, (reinforcement.troops[unitType] ?? 0) - (losses[unitType] ?? 0)) })) }
-    const reinforcementExp = reinforcement.generalExpGained ?? (ownerRole === 'reinforcement' && reinforcement.fromPlayerId === detail.ownerPlayerId ? ownerGeneralExp : null)
-    sides.push(mapSide(reinforcementSide, index + 2, detail.winnerSide, sideReportTraits(detail, reinforcementSide, false, report.traitOutcomes, enemyVisible), reinforcementExp, 'reinforcement'))
+    const reinforcementProgress = generalProgressForSide(detail, reinforcementSide)
+    const reinforcementExp = reinforcement.generalExpGained ?? reinforcementProgress.exp
+    const reinforcementLevelBefore = reinforcement.generalLevelBefore ?? reinforcementProgress.levelBefore
+    const reinforcementLevelAfter = reinforcement.generalLevelAfter ?? reinforcementProgress.levelAfter
+    sides.push(mapSide(reinforcementSide, index + 2, detail.winnerSide, sideTriggeredTraits(detail, reinforcementSide, false, report.traitOutcomes, enemyVisible), reinforcementExp, reinforcementLevelBefore, reinforcementLevelAfter, 'reinforcement'))
   }
   const resources = detail.rewards.resources ?? report.rewards
   const drops = detail.rewards.drops ?? report.drops

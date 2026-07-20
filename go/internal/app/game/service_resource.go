@@ -1,6 +1,8 @@
+// 本文件归口玩家资源结算、产量计算和资源类将领特性。
 package game
 
 import (
+	"math"
 	"reflect"
 	"strings"
 	"time"
@@ -136,7 +138,8 @@ func (s *Service) FillResourcesPaid(playerID string) (GameState, int, error) {
 
 // settleResources 结算资源产出、建筑升级完成、征兵队列完成
 func settleResources(state GameState, now time.Time) (GameState, bool) {
-	now = now.UTC()
+	// 结算时间与 RFC3339 持久化精度保持一致，防止同一秒重复读取时反复结算小数秒。
+	now = now.UTC().Truncate(time.Second)
 	changed := false
 
 	if ApplyConstructionBureauResourceSlots(&state, now) {
@@ -324,6 +327,24 @@ func settleResources(state GameState, now time.Time) (GameState, bool) {
 	return state, changed
 }
 
+// settleResourcesBeforeGeneralRelease 在移除离城占用前完成结算，防止归城后追溯获得离城期间的城内加成。
+func settleResourcesBeforeGeneralRelease(state *GameState, now time.Time) {
+	if state == nil {
+		return
+	}
+	next, _ := settleResources(*state, now)
+	*state = next
+}
+
+// refreshResourcesAfterGeneralRelease 零时长刷新归城后的当前产量，不追补已经按离城状态结算的资源。
+func refreshResourcesAfterGeneralRelease(state *GameState, now time.Time) {
+	if state == nil {
+		return
+	}
+	next, _ := settleResources(*state, now)
+	*state = next
+}
+
 func addProducedResource(current int, perHour int, elapsedSeconds float64, capacity int) int {
 	if current >= capacity || perHour <= 0 || elapsedSeconds <= 0 {
 		return current
@@ -339,22 +360,16 @@ func addProducedResource(current int, perHour int, elapsedSeconds float64, capac
 
 // applyGuardPerMinuteTraits 按资源结算间隔应用将领产兵类特性。
 func applyGuardPerMinuteTraits(state *GameState, elapsedSeconds float64) bool {
-	if state == nil || state.General == nil || elapsedSeconds <= 0 {
+	if state == nil || state.General == nil || elapsedSeconds <= 0 || !generalAvailableAtHome(state.GeneralAssignments, state.General.ID) {
 		return false
 	}
+	state.GeneralTraitProgress = cloneGeneralTraitProgress(state.GeneralTraitProgress)
 	generalCopy := cloneGeneral(*state.General)
 	applyHeroConfigToGeneral(&generalCopy)
 	changed := false
 	for _, trait := range generalCopy.Traits {
 		perMinute := trait.Params["guardPerMinute"]
 		if perMinute <= 0 {
-			continue
-		}
-		amount := int(perMinute * elapsedSeconds / 60)
-		if maxPerSettle := int(trait.Params["maxGuardPerDay"]); maxPerSettle > 0 && amount > maxPerSettle {
-			amount = maxPerSettle
-		}
-		if amount <= 0 {
 			continue
 		}
 		unitType := strings.TrimSpace(trait.TargetUnitType)
@@ -364,10 +379,74 @@ func applyGuardPerMinuteTraits(state *GameState, elapsedSeconds float64) bool {
 		if unitType == "" {
 			continue
 		}
+		progressKey := guardProductionProgressKey(generalCopy.ID, trait.TraitID, unitType)
+		amount, remainder := calculateGuardProduction(state.GeneralTraitProgress[progressKey], perMinute, elapsedSeconds, guardProductionLimit(trait.Params))
+		if updateGeneralTraitProgress(state.GeneralTraitProgress, progressKey, remainder) {
+			changed = true
+		}
+		if amount <= 0 {
+			continue
+		}
 		AddArmyUnit(state, unitType, amount)
 		changed = true
 	}
 	return changed
+}
+
+// calculateGuardProduction 按累计小数进度计算本次整数产兵量，并在触及单次上限时丢弃超额进度。
+func calculateGuardProduction(progress float64, perMinute float64, elapsedSeconds float64, maxPerSettle int) (int, float64) {
+	total := progress + perMinute*elapsedSeconds/60
+	if total <= 0 {
+		return 0, 0
+	}
+	if maxPerSettle > 0 && total >= float64(maxPerSettle) {
+		return maxPerSettle, 0
+	}
+	amount := int(math.Floor(total + 1e-9))
+	remainder := total - float64(amount)
+	if remainder < 1e-9 {
+		remainder = 0
+	}
+	return amount, remainder
+}
+
+// guardProductionLimit 读取单次产兵上限，并兼容尚未经过配置归一化的旧参数。
+func guardProductionLimit(params map[string]float64) int {
+	if value := int(params["maxGuardPerSettle"]); value > 0 {
+		return value
+	}
+	return int(params["maxGuardPerDay"])
+}
+
+// guardProductionProgressKey 为不同将领、特性和目标兵种隔离累计进度。
+func guardProductionProgressKey(generalID string, traitID string, unitType string) string {
+	return strings.Join([]string{generalID, traitID, unitType}, ":")
+}
+
+// cloneGeneralTraitProgress 复制特性进度，避免值语义 GameState 仍共享原始 map。
+func cloneGeneralTraitProgress(progress map[string]float64) map[string]float64 {
+	cloned := make(map[string]float64, len(progress))
+	for key, value := range progress {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+// updateGeneralTraitProgress 保存有效小数进度，整数边界时移除无意义的零值。
+func updateGeneralTraitProgress(progress map[string]float64, key string, value float64) bool {
+	previous, existed := progress[key]
+	if value <= 0 {
+		if existed {
+			delete(progress, key)
+			return true
+		}
+		return false
+	}
+	if existed && math.Abs(previous-value) < 1e-9 {
+		return false
+	}
+	progress[key] = value
+	return true
 }
 
 // firstCombatUnitByCategory 返回指定阵营中第一个可战斗兵种。

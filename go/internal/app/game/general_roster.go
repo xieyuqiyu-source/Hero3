@@ -152,6 +152,24 @@ func mainAssignedGeneralID(assignments []GeneralAssignment) string {
 	return ""
 }
 
+// generalAvailableAtHome 判断武将是否只占用主将槽、当前真实留在城内。
+func generalAvailableAtHome(assignments []GeneralAssignment, generalID string) bool {
+	generalID = strings.TrimSpace(generalID)
+	if generalID == "" {
+		return false
+	}
+	for _, assignment := range assignments {
+		if strings.TrimSpace(assignment.GeneralID) != generalID {
+			continue
+		}
+		if assignment.ID == GeneralAssignmentMain || assignment.Slot == GeneralAssignmentMain {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 func ownedGeneralExists(generals []General, generalID string) bool {
 	_, ok := findOwnedGeneral(generals, generalID)
 	return ok
@@ -167,12 +185,33 @@ func findOwnedGeneral(generals []General, generalID string) (General, bool) {
 	return General{}, false
 }
 
+// cloneGeneralTraitInstances 深拷贝特性及其参数、方向和场景，避免快照之间共享可变字段。
+func cloneGeneralTraitInstances(src []GeneralTraitInstance) []GeneralTraitInstance {
+	if src == nil {
+		return nil
+	}
+	dst := make([]GeneralTraitInstance, len(src))
+	for i, trait := range src {
+		dst[i] = trait
+		dst[i].Params = cloneFloatMap(trait.Params)
+		dst[i].AllowedSides = append([]string(nil), trait.AllowedSides...)
+		dst[i].AllowedScenes = append([]string(nil), trait.AllowedScenes...)
+	}
+	return dst
+}
+
 func cloneGeneral(src General) General {
 	dst := src
 	if src.Stats != nil {
 		dst.Stats = make(map[string]int, len(src.Stats))
 		for key, value := range src.Stats {
 			dst.Stats[key] = value
+		}
+	}
+	if src.EffectiveStats != nil {
+		dst.EffectiveStats = make(map[string]int, len(src.EffectiveStats))
+		for key, value := range src.EffectiveStats {
+			dst.EffectiveStats[key] = value
 		}
 	}
 	if src.Attributes != nil {
@@ -193,9 +232,7 @@ func cloneGeneral(src General) General {
 			dst.AttributeBreakdown[key] = append([]GeneralAttributeBreakdownItem{}, values...)
 		}
 	}
-	if src.Traits != nil {
-		dst.Traits = append([]GeneralTraitInstance{}, src.Traits...)
-	}
+	dst.Traits = cloneGeneralTraitInstances(src.Traits)
 	return dst
 }
 

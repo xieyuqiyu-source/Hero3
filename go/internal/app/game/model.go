@@ -1,3 +1,4 @@
+// 本文件定义游戏状态、将领、战报及相关接口数据模型。
 package game
 
 import (
@@ -108,6 +109,7 @@ type General struct {
 	NextLevelExp        int                                        `json:"nextLevelExp,omitempty"`        // 下一等级所需累计经验；满级为 0
 	AvailableStatPoints int                                        `json:"availableStatPoints,omitempty"` // 可分配四维点数
 	Stats               map[string]int                             `json:"stats,omitempty"`               // 四维加点，单项上限 100
+	EffectiveStats      map[string]int                             `json:"effectiveStats,omitempty"`      // 四维最终值，包含将领被动特性
 	Attributes          map[string]float64                         `json:"attributes,omitempty"`          // 展示用多维属性，来源于等级属性 + 四维加点 + 将领固定属性
 	AttributeBreakdown  map[string][]GeneralAttributeBreakdownItem `json:"attributeBreakdown,omitempty"`  // 属性来源拆分，供前端 tooltip 展示
 	Buffs               map[string]float64                         `json:"buffs"`                         // 兼容旧字段，Modifier 管线仍从这里读取
@@ -132,12 +134,15 @@ type GeneralAttributeBreakdownItem struct {
 // GeneralTraitInstance 玩家身上激活的特性实例（trait id + 当前参数）
 // 在玩家创建/读取时根据 GeneralsConfig 填充
 type GeneralTraitInstance struct {
-	TraitID        string             `json:"traitId"`                  // 对应 traits 注册中心
-	TraitType      string             `json:"traitType,omitempty"`      // special / bonus
-	Name           string             `json:"name"`                     // 显示名（冗余便于前端）
-	Scope          string             `json:"scope,omitempty"`          // 作用范围
-	TargetUnitType string             `json:"targetUnitType,omitempty"` // 目标兵种
-	Params         map[string]float64 `json:"params"`                   // GM 配置的当前参数
+	TraitID         string             `json:"traitId"`                   // 对应 traits 注册中心
+	TraitType       string             `json:"traitType,omitempty"`       // special / bonus
+	Name            string             `json:"name"`                      // 显示名（冗余便于前端）
+	Scope           string             `json:"scope,omitempty"`           // 作用范围
+	TargetUnitType  string             `json:"targetUnitType,omitempty"`  // 目标兵种
+	AllowedSides    []string           `json:"allowedSides,omitempty"`    // 允许触发方
+	AllowedScenes   []string           `json:"allowedScenes,omitempty"`   // 允许玩法场景
+	RequiredOutcome string             `json:"requiredOutcome,omitempty"` // 胜负触发条件
+	Params          map[string]float64 `json:"params"`                    // GM 配置的当前参数
 }
 
 // TraitOutcomeReport 战报中单条特性触发结果
@@ -192,6 +197,7 @@ type BattleReport struct {
 	EnemyPower               int                           `json:"enemyPower"`
 	DispatchedUnits          map[string]int                `json:"dispatchedUnits"`
 	LostUnits                map[string]int                `json:"lostUnits"`
+	SurvivedUnits            map[string]int                `json:"survivedUnits,omitempty"` // 战后实际存活或归队兵力
 	DefenderFaction          string                        `json:"defenderFaction"`
 	DefenderUnits            map[string]int                `json:"defenderUnits"`
 	DefenderLostUnits        map[string]int                `json:"defenderLostUnits"`
@@ -209,7 +215,7 @@ type BattleReport struct {
 	GeneralLevelAfter        int                           `json:"generalLevelAfter,omitempty"`      // 战斗后将领等级
 	CapturedUnits            map[string]int                `json:"capturedUnits,omitempty"`          // 美人计俘虏到军队
 	CapturedToGarrison       map[string]int                `json:"capturedToGarrison,omitempty"`     // 美人计俘虏到驻防
-	RevivedUnits             map[string]int                `json:"revivedUnits,omitempty"`           // 仁德复活
+	RevivedUnits             map[string]int                `json:"revivedUnits,omitempty"`           // 战后复活或最终减损返还
 	TraitTriggered           []string                      `json:"traitTriggered,omitempty"`         // 触发了哪些特性（前端展示）
 	TraitOutcomes            map[string]TraitOutcomeReport `json:"traitOutcomes,omitempty"`          // 每个触发特性的具体结果
 	PvpPointsDelta           map[string]int                `json:"pvpPointsDelta,omitempty"`         // PVP 积分变化
@@ -374,20 +380,24 @@ type BattleReportGeneral struct {
 	GeneralExpGained   *int                   `json:"generalExpGained,omitempty"`
 	GeneralLevelBefore *int                   `json:"generalLevelBefore,omitempty"`
 	GeneralLevelAfter  *int                   `json:"generalLevelAfter,omitempty"`
+	Stats              map[string]int         `json:"stats,omitempty"`
+	EffectiveStats     map[string]int         `json:"effectiveStats,omitempty"`
 	Attributes         map[string]float64     `json:"attributes,omitempty"`
+	Buffs              map[string]float64     `json:"buffs,omitempty"`
 	Traits             []GeneralTraitInstance `json:"traits,omitempty"`
 }
 
 // BattleReportTrait 保存战斗中特性触发的标准展示数据。
 type BattleReportTrait struct {
-	TraitID     string                 `json:"traitId"`
-	TraitName   string                 `json:"traitName,omitempty"`
-	OwnerSide   string                 `json:"ownerSide,omitempty"`
-	OwnerRole   string                 `json:"ownerRole,omitempty"`
-	GeneralID   string                 `json:"generalId,omitempty"`
-	GeneralName string                 `json:"generalName,omitempty"`
-	Summary     string                 `json:"summary,omitempty"`
-	Detail      map[string]interface{} `json:"detail,omitempty"`
+	TraitID       string                 `json:"traitId"`
+	TraitName     string                 `json:"traitName,omitempty"`
+	OwnerSide     string                 `json:"ownerSide,omitempty"`
+	OwnerRole     string                 `json:"ownerRole,omitempty"`
+	OwnerPlayerID string                 `json:"ownerPlayerId,omitempty"`
+	GeneralID     string                 `json:"generalId,omitempty"`
+	GeneralName   string                 `json:"generalName,omitempty"`
+	Summary       string                 `json:"summary,omitempty"`
+	Detail        map[string]interface{} `json:"detail,omitempty"`
 }
 
 // BattleReportRewards 保存奖励快照，实际发放仍由奖励系统完成。
@@ -552,36 +562,37 @@ type MailClaimResult struct {
 }
 
 type GameState struct {
-	Player              Player                  `json:"player"`
-	Resources           ResourceState           `json:"resources"`
-	Inventory           map[string]ItemStack    `json:"inventory,omitempty"`
-	InventorySlots      []ItemStack             `json:"inventorySlots,omitempty"`
-	ResourceProduction  ResourceProduction      `json:"resourceProduction"`
-	ResourceSettledAt   string                  `json:"resourceSettledAt"`
-	CityGold            FlexInt                 `json:"cityGold"`
-	LastExchangeAt      string                  `json:"lastExchangeAt,omitempty"`
-	ProductionBoost     int                     `json:"productionBoost,omitempty"`    // 当前产量加成倍率，同倍率购买续时，不同倍率购买重算
-	ProductionBoostEnd  string                  `json:"productionBoostEnd,omitempty"` // 加成到期时间
-	CapacityBoost       int                     `json:"capacityBoost,omitempty"`      // 当前仓库容量加成倍率，同倍率购买续时，不同倍率购买重算
-	CapacityBoostEnd    string                  `json:"capacityBoostEnd,omitempty"`   // 容量加成到期时间
-	Buildings           []Building              `json:"buildings"`
-	ResourceSlots       []ResourceSlot          `json:"resourceSlots,omitempty"`
-	General             *General                `json:"general"`
-	Generals            []General               `json:"generals,omitempty"`
-	GeneralAssignments  []GeneralAssignment     `json:"generalAssignments,omitempty"`
-	GeneralChangeUntil  string                  `json:"generalChangeUntil,omitempty"` // 换将冷却结束时间，空表示可更换
-	Army                []ArmyUnit              `json:"army"`
-	RecruitQueues       []RecruitQueue          `json:"recruitQueues"`
-	NpcState            *NpcState               `json:"npcState,omitempty"`
-	MapTargets          []MapTarget             `json:"mapTargets"`
-	RecentBattleReports []BattleReport          `json:"recentBattleReports"`
-	UnreadMessageCount  int                     `json:"unreadMessageCount"`
-	UnreadMailCount     int                     `json:"unreadMailCount"`
-	ActiveModifiers     []ModifierBreakdownItem `json:"activeModifiers,omitempty"`
-	Buffs               []Buff                  `json:"buffs,omitempty"` // 通用加成列表（GM/活动/任务等）
-	DeleteRequestedAt   string                  `json:"deleteRequestedAt,omitempty"`
-	DeleteScheduledAt   string                  `json:"deleteScheduledAt,omitempty"`
-	ServerTime          string                  `json:"serverTime"`
+	Player               Player                  `json:"player"`
+	Resources            ResourceState           `json:"resources"`
+	Inventory            map[string]ItemStack    `json:"inventory,omitempty"`
+	InventorySlots       []ItemStack             `json:"inventorySlots,omitempty"`
+	ResourceProduction   ResourceProduction      `json:"resourceProduction"`
+	ResourceSettledAt    string                  `json:"resourceSettledAt"`
+	GeneralTraitProgress map[string]float64      `json:"generalTraitProgress,omitempty"` // 非战斗特性的跨结算小数进度，防止高频刷新造成数值损失
+	CityGold             FlexInt                 `json:"cityGold"`
+	LastExchangeAt       string                  `json:"lastExchangeAt,omitempty"`
+	ProductionBoost      int                     `json:"productionBoost,omitempty"`    // 当前产量加成倍率，同倍率购买续时，不同倍率购买重算
+	ProductionBoostEnd   string                  `json:"productionBoostEnd,omitempty"` // 加成到期时间
+	CapacityBoost        int                     `json:"capacityBoost,omitempty"`      // 当前仓库容量加成倍率，同倍率购买续时，不同倍率购买重算
+	CapacityBoostEnd     string                  `json:"capacityBoostEnd,omitempty"`   // 容量加成到期时间
+	Buildings            []Building              `json:"buildings"`
+	ResourceSlots        []ResourceSlot          `json:"resourceSlots,omitempty"`
+	General              *General                `json:"general"`
+	Generals             []General               `json:"generals,omitempty"`
+	GeneralAssignments   []GeneralAssignment     `json:"generalAssignments,omitempty"`
+	GeneralChangeUntil   string                  `json:"generalChangeUntil,omitempty"` // 换将冷却结束时间，空表示可更换
+	Army                 []ArmyUnit              `json:"army"`
+	RecruitQueues        []RecruitQueue          `json:"recruitQueues"`
+	NpcState             *NpcState               `json:"npcState,omitempty"`
+	MapTargets           []MapTarget             `json:"mapTargets"`
+	RecentBattleReports  []BattleReport          `json:"recentBattleReports"`
+	UnreadMessageCount   int                     `json:"unreadMessageCount"`
+	UnreadMailCount      int                     `json:"unreadMailCount"`
+	ActiveModifiers      []ModifierBreakdownItem `json:"activeModifiers,omitempty"`
+	Buffs                []Buff                  `json:"buffs,omitempty"` // 通用加成列表（GM/活动/任务等）
+	DeleteRequestedAt    string                  `json:"deleteRequestedAt,omitempty"`
+	DeleteScheduledAt    string                  `json:"deleteScheduledAt,omitempty"`
+	ServerTime           string                  `json:"serverTime"`
 }
 
 func newPlayerState(id string, nickname string, faction string, generalID string, now time.Time) GameState {

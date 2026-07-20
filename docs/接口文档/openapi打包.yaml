@@ -1013,6 +1013,68 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/pvp/scout:
+    post:
+      tags:
+      - Map
+      summary: 派出玩家侦查行军
+      operationId: scoutPvpTarget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PvpScoutRequest'
+      responses:
+        '200':
+          description: 侦查行军已创建，并返回留城结算后的权威玩家状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PvpScoutResponse'
+        '400':
+          description: 参数错误或没有可派出的侦察兵
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 目标状态或行军条件不允许
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/pvp/attacks:
+    post:
+      tags:
+      - Map
+      summary: 派出玩家攻击或掠夺行军
+      operationId: startPvpAttack
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PvpAttackRequest'
+      responses:
+        '200':
+          description: 攻击或掠夺行军已创建，并返回留城结算后的权威玩家状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PvpAttackResponse'
+        '400':
+          description: 参数、兵力或武将选择错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 目标保护、冷却或行军条件不允许
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/world-map/view:
     get:
       tags:
@@ -4149,6 +4211,12 @@ components:
           type: string
           format: date-time
           description: 资源上次由后端权威结算的时间。
+        generalTraitProgress:
+          type: object
+          description: 非战斗将领特性的后端累计小数进度；客户端只读取权威兵力，不据此自行结算。
+          additionalProperties:
+            type: number
+            format: double
         cityGold:
           type: integer
           description: 城内金币，主要用于加速和城内消费。
@@ -4686,6 +4754,11 @@ components:
           type: object
           additionalProperties:
             type: integer
+        effectiveStats:
+          type: object
+          description: 包含将领被动特性后的四维最终值。
+          additionalProperties:
+            type: integer
         attributes:
           type: object
           additionalProperties:
@@ -4718,6 +4791,23 @@ components:
           type: string
         targetUnitType:
           type: string
+        allowedSides:
+          type: array
+          items:
+            type: string
+            enum:
+            - attacker
+            - defender
+            - reinforcement
+        allowedScenes:
+          type: array
+          items:
+            type: string
+        requiredOutcome:
+          type: string
+          enum:
+          - win
+          - loss
         params:
           type: object
           additionalProperties:
@@ -4841,6 +4931,15 @@ components:
           type: string
         ownerPlayerId:
           type: string
+        playerFaction:
+          type: string
+          description: 兼容字段，战报所有者阵营；防守视角中对应守城方。
+        playerName:
+          type: string
+          description: 兼容字段，战报所有者名称；防守视角中对应守城方。
+        playerPower:
+          type: integer
+          description: 兼容字段，战报所有者本场战力。
         viewType:
           type: string
           enum:
@@ -4898,6 +4997,126 @@ components:
           type: string
         targetName:
           type: string
+        defenderFaction:
+          type: string
+          description: 兼容字段，战报目标阵营；防守视角中对应来袭方。
+        enemyPower:
+          type: integer
+          description: 兼容字段，战报目标本场战力。
+        dispatchedUnits:
+          type: object
+          description: 兼容字段，本场出动兵力。
+          additionalProperties:
+            type: integer
+        lostUnits:
+          type: object
+          description: 兼容字段，本场或聚合战斗累计阵亡兵力。
+          additionalProperties:
+            type: integer
+        survivedUnits:
+          type: object
+          description: 战后实际存活或归队兵力；复活、最终减损和扫荡聚合场景应优先使用该值。
+          additionalProperties:
+            type: integer
+        defenderUnits:
+          type: object
+          description: 兼容字段，战报目标本场出动兵力；防守视角中对应来袭方。
+          additionalProperties:
+            type: integer
+        defenderLostUnits:
+          type: object
+          description: 兼容字段，战报目标本场损失。
+          additionalProperties:
+            type: integer
+        defenderResources:
+          type: object
+          description: 兼容字段，按情报可见性保存的战报目标资源快照。
+          additionalProperties:
+            type: integer
+        defenderRevealed:
+          type: boolean
+          description: 兼容字段，目标兵力、资源、将领和城墙是否已向战报所有者揭示。
+        rewards:
+          type: object
+          description: 兼容字段，本场实际获得或掠夺的资源。
+          additionalProperties:
+            type: integer
+        overflow:
+          type: object
+          description: 兼容字段，超出容量未能获得的资源。
+          additionalProperties:
+            type: integer
+        overflowCityGold:
+          type: integer
+          description: 兼容字段，本场实际获得的城金。
+        revivedUnits:
+          type: object
+          description: 战后复活或通过最终减损返还的逐兵种数量。
+          additionalProperties:
+            type: integer
+        traitTriggered:
+          type: array
+          description: 兼容字段，按真实触发顺序保存特性结果的存储键；展示名称应读取对应结果的 traitId。
+          items:
+            type: string
+        traitOutcomes:
+          type: object
+          description: 兼容字段，按存储键保存每条真实特性结果；同一特性可因触发者不同出现多条。
+          additionalProperties:
+            $ref: '#/components/schemas/TraitOutcomeReport'
+        generalExpGained:
+          type: integer
+          description: 当前战报拥有者的参战武将在本场实际获得的经验。
+        generalLevelBefore:
+          type: integer
+          description: 当前战报拥有者的参战武将战前等级。
+        generalLevelAfter:
+          type: integer
+          description: 当前战报拥有者的参战武将战后等级。
+        pvpAttackerGenerals:
+          type: array
+          description: 兼容字段，本场进攻方将领快照；不等同于真实触发时间线。
+          items:
+            $ref: '#/components/schemas/BattleReportGeneral'
+        pvpDefenderGenerals:
+          type: array
+          description: 兼容字段，本场防守方将领快照；不等同于真实触发时间线。
+          items:
+            $ref: '#/components/schemas/BattleReportGeneral'
+        pvpReinforcements:
+          type: array
+          description: 本场实际参战的逐批援军快照，包含后端权威经验和等级变化。
+          items:
+            $ref: '#/components/schemas/BattleReportReinforcementSnapshot'
+        pvpReinforcementLosses:
+          type: object
+          description: 按增援批次 ID 和兵种 ID 保存的本场实际损失。
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: integer
+        pvpWall:
+          type: object
+          description: 兼容字段，本场防守方城墙的后端权威快照；前端不得自行重算。
+          properties:
+            faction:
+              type: string
+            level:
+              type: integer
+            base:
+              type: number
+            multiplier:
+              type: number
+            factionDefenseBonus:
+              type: number
+            totalDefenseBonus:
+              type: number
+            hardness:
+              type: number
+            minDamagedLevelFrom20:
+              type: integer
+            maxDamagedLevelFrom20:
+              type: integer
         detail:
           $ref: '#/components/schemas/BattleReportDetail'
         drops:
@@ -5031,6 +5250,30 @@ components:
           type: string
         result:
           type: string
+        winnerSide:
+          type: string
+          enum:
+          - attacker
+          - defender
+          - draw
+          - none
+        ownerSide:
+          type: string
+          enum:
+          - attacker
+          - defender
+          - reinforcement
+          - scout
+          - observer
+        ownerOutcome:
+          type: string
+          enum:
+          - victory
+          - defeat
+          - draw
+          - intel_success
+          - intel_failed
+          - notice
         title:
           type: string
         summary:
@@ -5132,6 +5375,28 @@ components:
         generalLevelAfter:
           type: integer
           description: 该参战将领结算经验后的等级。
+        stats:
+          type: object
+          additionalProperties:
+            type: integer
+        effectiveStats:
+          type: object
+          description: 包含被动特性加成后的本场最终四维快照。
+          additionalProperties:
+            type: integer
+        attributes:
+          type: object
+          additionalProperties:
+            type: number
+        buffs:
+          type: object
+          additionalProperties:
+            type: number
+        traits:
+          type: array
+          description: 参战将领拥有的特性快照，不等同于本场实际触发时间线。
+          items:
+            $ref: '#/components/schemas/GeneralTraitInstance'
     BattleReportTrait:
       type: object
       properties:
@@ -5142,6 +5407,8 @@ components:
         ownerSide:
           type: string
         ownerRole:
+          type: string
+        ownerPlayerId:
           type: string
         generalId:
           type: string
@@ -5270,6 +5537,72 @@ components:
         createdAt:
           type: string
           format: date-time
+    BattleReportReinforcementSnapshot:
+      type: object
+      properties:
+        reinforcementId:
+          type: string
+        fromPlayerId:
+          type: string
+        fromPlayerName:
+          type: string
+        faction:
+          type: string
+        troops:
+          type: object
+          description: 本场战斗开始时实际出动的增援兵力。
+          additionalProperties:
+            type: integer
+        generals:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReinforcementGeneralSnapshot'
+        generalExpGained:
+          type: integer
+          description: 该批增援携带武将在本场实际获得的经验。
+        generalLevelBefore:
+          type: integer
+          description: 该批增援携带武将的本场战前等级，由服务端按累计经验基线计算。
+        generalLevelAfter:
+          type: integer
+          description: 该批增援携带武将的本场战后等级，由服务端结算，前端不得自行推算。
+        buffs:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        sourceTags:
+          type: object
+          additionalProperties:
+            type: string
+    TraitOutcomeReport:
+      type: object
+      required:
+      - traitId
+      properties:
+        traitId:
+          type: string
+          description: 正式特性 ID，不一定等于 traitOutcomes 的内部存储键。
+        name:
+          type: string
+        traitType:
+          type: string
+        ownerSide:
+          type: string
+          enum:
+          - attacker
+          - defender
+          - reinforcement
+        ownerGeneralId:
+          type: string
+        ownerPlayerId:
+          type: string
+          description: 特性触发玩家；多名援军使用同一将领时用于精确归属。
+        scope:
+          type: string
+        detail:
+          type: object
+          additionalProperties: true
     Mail:
       type: object
       required:
@@ -6681,6 +7014,9 @@ components:
       - army
       - recruitQueues
       - resources
+      - resourceProduction
+      - resourceSettledAt
+      - generalTraitProgress
       - cityGold
       - serverTime
       properties:
@@ -6694,6 +7030,18 @@ components:
             $ref: '#/components/schemas/RecruitQueue'
         resources:
           $ref: '#/components/schemas/ResourceState'
+        resourceProduction:
+          $ref: '#/components/schemas/ResourceProduction'
+        resourceSettledAt:
+          type: string
+          format: date-time
+          description: 本次军事动作完成后的权威资源结算时间。
+        generalTraitProgress:
+          type: object
+          description: 本次军事动作完成后的非战斗将领特性累计进度，空进度返回空对象。
+          additionalProperties:
+            type: number
+            format: double
         cityGold:
           type: integer
           example: 120
@@ -6723,6 +7071,203 @@ components:
         accountGold:
           type: integer
           description: 操作后的账户金币余额。
+        serverTime:
+          type: string
+          format: date-time
+    PvpScoutRequest:
+      type: object
+      required:
+      - playerId
+      - targetPlayerId
+      properties:
+        playerId:
+          type: string
+        targetPlayerId:
+          type: string
+    PvpAttackRequest:
+      type: object
+      required:
+      - playerId
+      - targetPlayerId
+      - troops
+      properties:
+        playerId:
+          type: string
+        targetPlayerId:
+          type: string
+        troops:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 1
+        generalIds:
+          type: array
+          maxItems: 1
+          items:
+            type: string
+        marchMode:
+          type: string
+          enum:
+          - attack
+          - plunder
+          default: attack
+    PvpMarch:
+      type: object
+      required:
+      - id
+      - attackerPlayerId
+      - attackerName
+      - attackerFaction
+      - defenderPlayerId
+      - defenderName
+      - defenderFaction
+      - marchType
+      - status
+      - attackTroops
+      - speedMultiplier
+      - durationSeconds
+      - startedAt
+      - arrivesAt
+      - acceleratedTimes
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+        attackerPlayerId:
+          type: string
+        attackerName:
+          type: string
+        attackerFaction:
+          type: string
+        defenderPlayerId:
+          type: string
+        defenderName:
+          type: string
+        defenderFaction:
+          type: string
+        marchType:
+          type: string
+          enum:
+          - attack
+          - plunder
+          - scout
+        status:
+          type: string
+        attackTroops:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+        attackGenerals:
+          type: array
+          items:
+            type: string
+        speedMultiplier:
+          type: number
+          format: double
+        durationSeconds:
+          type: integer
+          minimum: 1
+        startedAt:
+          type: string
+          format: date-time
+        arrivesAt:
+          type: string
+          format: date-time
+        returnStartedAt:
+          type: string
+          format: date-time
+        returnsAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+        attackerReportId:
+          type: string
+        defenderReportId:
+          type: string
+        battleId:
+          type: string
+        acceleratedTimes:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PvpAttackResponse:
+      type: object
+      required:
+      - march
+      - army
+      - resources
+      - resourceProduction
+      - resourceSettledAt
+      - generalTraitProgress
+      - serverTime
+      properties:
+        march:
+          $ref: '#/components/schemas/PvpMarch'
+        army:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        resources:
+          $ref: '#/components/schemas/ResourceState'
+        resourceProduction:
+          $ref: '#/components/schemas/ResourceProduction'
+        resourceSettledAt:
+          type: string
+          format: date-time
+        generalTraitProgress:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+        generals:
+          type: array
+          items:
+            $ref: '#/components/schemas/General'
+        generalAssignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeneralAssignment'
+        serverTime:
+          type: string
+          format: date-time
+    PvpScoutResponse:
+      type: object
+      required:
+      - march
+      - army
+      - resources
+      - resourceProduction
+      - resourceSettledAt
+      - generalTraitProgress
+      - serverTime
+      properties:
+        march:
+          $ref: '#/components/schemas/PvpMarch'
+        army:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArmyUnit'
+        resources:
+          $ref: '#/components/schemas/ResourceState'
+        resourceProduction:
+          $ref: '#/components/schemas/ResourceProduction'
+        resourceSettledAt:
+          type: string
+          format: date-time
+        generalTraitProgress:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
         serverTime:
           type: string
           format: date-time
@@ -6779,10 +7324,33 @@ components:
         generalLevelAfter:
           type: integer
           description: 本场战斗结算后等级。
+        exp:
+          type: integer
+          description: 增援出发或上一场结算后冻结的武将累计经验，用于服务端计算下一场等级变化。
+        stats:
+          type: object
+          description: 增援出发时将领的基础属性快照。
+          additionalProperties:
+            type: integer
+        effectiveStats:
+          type: object
+          description: 增援出发时包含被动特性加成后的最终四维快照。
+          additionalProperties:
+            type: integer
+        attributes:
+          type: object
+          description: 增援出发时将领的战斗与玩法属性快照。
+          additionalProperties:
+            type: number
         buffs:
           type: object
           additionalProperties:
             type: number
+        traits:
+          type: array
+          description: 增援出发时将领拥有的真实特性快照；不等同于本场实际触发时间线。
+          items:
+            $ref: '#/components/schemas/GeneralTraitInstance'
         assignment:
           type: string
     GarrisonRules:
@@ -6893,6 +7461,7 @@ components:
           $ref: '#/components/schemas/GarrisonRules'
         speedMultiplier:
           type: number
+          description: 服务端按最终行军时长计算的实际倍率，包含将领行军特性；客户端请求中的同名字段不会直接生效。
         marchSeconds:
           type: integer
         returnSeconds:
@@ -6953,6 +7522,18 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/ArmyUnit'
+            resources:
+              $ref: '#/components/schemas/ResourceState'
+            resourceProduction:
+              $ref: '#/components/schemas/ResourceProduction'
+            resourceSettledAt:
+              type: string
+              format: date-time
+            generalTraitProgress:
+              type: object
+              additionalProperties:
+                type: number
+                format: double
             generals:
               type: array
               items:
@@ -7363,6 +7944,9 @@ components:
       required:
       - battleReport
       - resources
+      - resourceProduction
+      - resourceSettledAt
+      - generalTraitProgress
       - army
       - cityGold
       - serverTime
@@ -7371,6 +7955,18 @@ components:
           $ref: '#/components/schemas/BattleReport'
         resources:
           $ref: '#/components/schemas/ResourceState'
+        resourceProduction:
+          $ref: '#/components/schemas/ResourceProduction'
+        resourceSettledAt:
+          type: string
+          format: date-time
+          description: 本次 NPC 进攻结算后的权威资源结算时间。
+        generalTraitProgress:
+          type: object
+          description: 本次 NPC 进攻结算后的非战斗将领特性累计进度，空进度返回空对象。
+          additionalProperties:
+            type: number
+            format: double
         army:
           type: array
           items:
@@ -7429,6 +8025,9 @@ components:
       - failed
       - stopped
       - resources
+      - resourceProduction
+      - resourceSettledAt
+      - generalTraitProgress
       - army
       - cityGold
       - serverTime
@@ -7449,6 +8048,18 @@ components:
           example: false
         resources:
           $ref: '#/components/schemas/ResourceState'
+        resourceProduction:
+          $ref: '#/components/schemas/ResourceProduction'
+        resourceSettledAt:
+          type: string
+          format: date-time
+          description: 本次 NPC 扫荡结算后的权威资源结算时间。
+        generalTraitProgress:
+          type: object
+          description: 本次 NPC 扫荡结算后的非战斗将领特性累计进度，空进度返回空对象。
+          additionalProperties:
+            type: number
+            format: double
         army:
           type: array
           items:
@@ -7554,6 +8165,10 @@ components:
       required:
       - success
       - npcCity
+      - resources
+      - resourceProduction
+      - resourceSettledAt
+      - generalTraitProgress
       - army
       - serverTime
       properties:
@@ -7565,6 +8180,20 @@ components:
         npcCity:
           $ref: '#/components/schemas/NpcCity'
           nullable: true
+        resources:
+          $ref: '#/components/schemas/ResourceState'
+        resourceProduction:
+          $ref: '#/components/schemas/ResourceProduction'
+        resourceSettledAt:
+          type: string
+          format: date-time
+          description: 本次 NPC 侦查结算后的权威资源结算时间。
+        generalTraitProgress:
+          type: object
+          description: 本次 NPC 侦查结算后的非战斗将领特性累计进度，空进度返回空对象。
+          additionalProperties:
+            type: number
+            format: double
         army:
           type: array
           items:
@@ -8083,10 +8712,35 @@ components:
           type: object
           additionalProperties:
             type: integer
+        revivedUnits:
+          type: object
+          description: 玩家战后由复活、减损或返兵特性实际归队的逐兵种数量。
+          additionalProperties:
+            type: integer
+        survivedTroops:
+          type: object
+          description: 本次玩家出战队伍经过阵亡、俘虏归队和战后返兵后的最终存活数量。
+          additionalProperties:
+            type: integer
         enemyLosses:
           type: object
           additionalProperties:
             type: integer
+        enemyCaptured:
+          type: object
+          description: 敌军被俘并进入玩家军队或获得驻防的逐兵种数量，不计入阵亡。
+          additionalProperties:
+            type: integer
+        enemyRemaining:
+          type: object
+          description: 本次结算后当前波敌军权威剩余兵力。
+          additionalProperties:
+            type: integer
+        traitOutcomes:
+          type: object
+          description: 本次副本战斗真实触发的将领特性结果，数值与对应战报一致。
+          additionalProperties:
+            $ref: '#/components/schemas/TraitOutcomeReport'
         passed:
           type: boolean
         reportId:
@@ -8324,6 +8978,26 @@ components:
           type: string
           description: 目标兵种或兵种分类。
           example: infantry
+        allowedSides:
+          type: array
+          description: 允许触发的战斗归属方；为空表示不限制。
+          items:
+            type: string
+            enum:
+            - attacker
+            - defender
+            - reinforcement
+        allowedScenes:
+          type: array
+          description: 允许触发的玩法场景；为空表示不限制。
+          items:
+            type: string
+        requiredOutcome:
+          type: string
+          description: 仅在归属方满足指定胜负结果时触发。
+          enum:
+          - win
+          - loss
         params:
           type: object
           additionalProperties:

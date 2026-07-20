@@ -9,6 +9,11 @@ function stateFor(playerId: string): GameStateResponse {
   return { player: { id: playerId, nickname: playerId, faction: 'wei' }, resources: { items: {}, capacity: {} }, resourceProduction: {}, resourceSettledAt: '', cityGold: 0, buildings: [], resourceSlots: [], general: null, army: [], recruitQueues: [], unreadMessageCount: 0, unreadMailCount: 0, serverTime: '2026-07-12T08:00:00Z' }
 }
 
+/** 创建派兵事务完成后的权威资源和非战斗特性结算字段。 */
+function dispatchSettlement() {
+  return { resources: { items: { wood: 321 }, capacity: { wood: 1000 } }, resourceProduction: { wood: 53 }, resourceSettledAt: '2026-07-12T08:00:00Z', generalTraitProgress: { 'caocao:weiwu_haoling:huWei': 0.25 } }
+}
+
 /** 创建测试可控的延迟 Promise。 */
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -93,14 +98,17 @@ describe('玩家真实状态服务', () => {
     expect(upgradeBuilding).toHaveBeenCalledOnce()
   })
 
-  it('征兵成功后以后端结果更新资源和队列', async () => {
+  it('征兵成功后以后端结果更新资源、结算时点、特性进度和队列', async () => {
     const state = store()
     Object.assign(state, { phase: 'ready', playerId: 'p1', data: stateFor('p1') })
-    const recruit = vi.fn(async () => ({ army: [], recruitQueues: [{ id: 'q1', unitType: 'huWei', amount: 20, endsAt: '2026-07-12T08:10:00Z' }], resources: { items: { wood: 80 }, capacity: { wood: 100 } }, cityGold: 7, serverTime: '2026-07-12T08:00:01Z' }))
+    const recruit = vi.fn(async () => ({ army: [], recruitQueues: [{ id: 'q1', unitType: 'huWei', amount: 20, endsAt: '2026-07-12T08:10:00Z' }], resources: { items: { wood: 80 }, capacity: { wood: 100 } }, resourceProduction: { wood: 53 }, resourceSettledAt: '2026-07-12T08:00:01Z', generalTraitProgress: { 'caocao:weiwu_haoling:huWei': 0.25 }, cityGold: 7, serverTime: '2026-07-12T08:00:01Z' }))
     await createGameStateService({ recruit } as unknown as GameApi, state).recruit('huWei', 20)
     expect(recruit).toHaveBeenCalledWith('p1', 'huWei', 20)
     expect(state.data?.recruitQueues[0].id).toBe('q1')
     expect(state.data?.resources.items.wood).toBe(80)
+    expect(state.data?.resourceProduction.wood).toBe(53)
+    expect(state.data?.resourceSettledAt).toBe('2026-07-12T08:00:01Z')
+    expect(state.data?.generalTraitProgress).toEqual({ 'caocao:weiwu_haoling:huWei': 0.25 })
     expect(state).toMatchObject({ recruitActionSucceeded: true, recruitActionType: 'recruit', recruitResultVersion: 1 })
   })
 
@@ -116,6 +124,27 @@ describe('玩家真实状态服务', () => {
     expect(state.data?.generalAssignments?.[0]).toMatchObject({ generalId: 'g1', slot: 'reinforcement' })
   })
 
+  it('并发军事刷新只请求一次并采用后端权威产兵结果', async () => {
+    const state = store()
+    const current = stateFor('p1')
+    Object.assign(state, { phase: 'ready', playerId: 'p1', data: current })
+    const pending = deferred<Awaited<ReturnType<GameApi['militaryView']>>>()
+    const militaryView = vi.fn(() => pending.promise)
+    const service = createGameStateService({ militaryView } as unknown as GameApi, state)
+
+    const first = service.refreshMilitary()
+    await service.refreshMilitary()
+    expect(militaryView).toHaveBeenCalledOnce()
+    pending.resolve({
+      army: [{ unitType: 'huWei', amount: 25 }], recruitQueues: [], resources: current.resources,
+      cityGold: 0, general: current.general, generals: current.generals ?? [], generalAssignments: [],
+      serverTime: '2026-07-19T08:00:03Z',
+    })
+    await first
+    expect(state.data).toMatchObject({ army: [{ unitType: 'huWei', amount: 25 }], serverTime: '2026-07-19T08:00:03Z' })
+    expect(state.militaryRefreshing).toBe(false)
+  })
+
   it('军事接口明确返回空武将时清除旧的驻城武将', async () => {
     const state = store()
     const current = stateFor('p1')
@@ -127,7 +156,7 @@ describe('玩家真实状态服务', () => {
   })
 
   it('非法数量与重复点击都不会产生重复征兵请求', async () => {
-    const pending = deferred<never>()
+    const pending = deferred<Awaited<ReturnType<GameApi['recruit']>>>()
     const recruit = vi.fn(() => pending.promise)
     const state = store()
     Object.assign(state, { phase: 'ready', playerId: 'p1', data: stateFor('p1') })
@@ -135,26 +164,38 @@ describe('玩家真实状态服务', () => {
     await service.recruit('huWei', 0)
     expect(recruit).not.toHaveBeenCalled()
     expect(state.recruitActionMessage).toContain('1 至 100000')
-    void service.recruit('huWei', 10)
+    const first = service.recruit('huWei', 10)
     await service.recruit('jinWeiSoldier', 10)
     expect(recruit).toHaveBeenCalledOnce()
+    pending.resolve({
+      army: [], recruitQueues: [{ id: 'discounted-q1', unitType: 'huWei', amount: 10, endsAt: '2026-07-12T08:10:00Z' }],
+      resources: { items: { wood: 0 }, capacity: { wood: 100 } }, resourceProduction: { wood: 53 }, resourceSettledAt: '2026-07-12T08:00:01Z', generalTraitProgress: {}, cityGold: 7, serverTime: '2026-07-12T08:00:01Z',
+    })
+    await first
+    expect(state.data?.recruitQueues).toHaveLength(1)
+    expect(state.data?.recruitQueues[0]).toMatchObject({ id: 'discounted-q1', amount: 10 })
+    expect(state.data?.resources.items.wood).toBe(0)
   })
 
   it('征兵失败保留当前数据并公开可读错误', async () => {
     const current = stateFor('p1')
     current.resources.items.wood = 99
+    current.resourceProduction = { wood: 53 }
+    current.resourceSettledAt = '2026-07-12T07:59:59Z'
+    current.generalTraitProgress = { 'caocao:weiwu_haoling:huWei': 0.5 }
+    const before = structuredClone(current)
     const state = store()
     Object.assign(state, { phase: 'ready', playerId: 'p1', data: current })
     const service = createGameStateService({ recruit: vi.fn(async () => { throw new Error('资源不足，无法执行操作') }) } as unknown as GameApi, state)
     await service.recruit('huWei', 10)
-    expect(state.data?.resources.items.wood).toBe(99)
+    expect(state.data).toEqual(before)
     expect(state).toMatchObject({ recruitActionSucceeded: false, recruitActionMessage: '资源不足，无法执行操作' })
   })
 
   it('立即完成成功后合并兵力、队列和城金', async () => {
     const state = store()
     Object.assign(state, { phase: 'ready', playerId: 'p1', data: stateFor('p1') })
-    const instantCompleteRecruit = vi.fn(async () => ({ army: [{ unitType: 'huWei', amount: 20 }], recruitQueues: [], resources: { items: {}, capacity: {} }, cityGold: 5, serverTime: '2026-07-12T08:00:02Z' }))
+    const instantCompleteRecruit = vi.fn(async () => ({ army: [{ unitType: 'huWei', amount: 20 }], recruitQueues: [], resources: { items: {}, capacity: {} }, resourceProduction: {}, resourceSettledAt: '2026-07-12T08:00:02Z', generalTraitProgress: {}, cityGold: 5, serverTime: '2026-07-12T08:00:02Z' }))
     await createGameStateService({ instantCompleteRecruit } as unknown as GameApi, state).instantCompleteRecruit('q1')
     expect(instantCompleteRecruit).toHaveBeenCalledWith('p1', 'q1')
     expect(state.data?.army[0].amount).toBe(20)
@@ -169,7 +210,7 @@ describe('玩家真实状态服务', () => {
     const service = createGameStateService({ recruit: vi.fn(() => pending.promise), gameState: vi.fn(async () => stateFor('p2')) } as unknown as GameApi, state)
     const action = service.recruit('huWei', 1)
     await service.load('p2')
-    pending.resolve({ army: [{ unitType: 'huWei', amount: 999 }], recruitQueues: [], resources: { items: {}, capacity: {} }, cityGold: 0, serverTime: '2026-07-12T08:00:03Z' })
+    pending.resolve({ army: [{ unitType: 'huWei', amount: 999 }], recruitQueues: [], resources: { items: {}, capacity: {} }, resourceProduction: {}, resourceSettledAt: '2026-07-12T08:00:03Z', generalTraitProgress: {}, cityGold: 0, serverTime: '2026-07-12T08:00:03Z' })
     await action
     expect(state.data?.player.id).toBe('p2')
     expect(state.data?.army).toEqual([])
@@ -252,11 +293,12 @@ describe('玩家真实状态服务', () => {
     const current = stateFor('p1')
     current.army = [{ unitType: 'huWei', amount: 20 }]
     Object.assign(state, { phase: 'ready', playerId: 'p1', data: current })
-    const startPvpAttack = vi.fn(async (_playerId: string, _targetId: string, troops: Record<string, number>, _generalIds: string[], marchMode: string) => ({ march: { id: 'm1', marchType: marchMode, status: 'marching', attackTroops: troops, durationSeconds: 60, startedAt: '', arrivesAt: '2026-07-12T08:01:00Z' }, army: [{ unitType: 'huWei', amount: 15 }], serverTime: '2026-07-12T08:00:00Z' }))
+    const startPvpAttack = vi.fn(async (_playerId: string, _targetId: string, troops: Record<string, number>, _generalIds: string[], marchMode: string) => ({ march: { id: 'm1', marchType: marchMode, status: 'marching', attackTroops: troops, durationSeconds: 60, startedAt: '', arrivesAt: '2026-07-12T08:01:00Z' }, army: [{ unitType: 'huWei', amount: 15 }], ...dispatchSettlement(), serverTime: '2026-07-12T08:00:00Z' }))
     const service = createGameStateService({ startPvpAttack } as unknown as GameApi, state)
     await service.dispatchWorldMapCommand('attack', 'p2', { huWei: 5 }, [])
     expect(startPvpAttack).toHaveBeenCalledWith('p1', 'p2', { huWei: 5 }, [], 'attack')
     expect(state.data?.army[0].amount).toBe(15)
+    expect(state.data).toMatchObject(dispatchSettlement())
     expect(state.marchActionMessage).toContain('攻击队伍已出发')
     current.army = [{ unitType: 'huWei', amount: 15 }]
     await service.dispatchWorldMapCommand('plunder', 'p2', { huWei: 2 }, [])
@@ -268,28 +310,104 @@ describe('玩家真实状态服务', () => {
     const current = stateFor('p1')
     current.army = [{ unitType: 'zhanYingTanMa', amount: 8 }]
     Object.assign(state, { phase: 'ready', playerId: 'p1', data: current })
-    const scoutPvpTarget = vi.fn(async () => ({ march: { id: 's1', marchType: 'scout', status: 'marching', attackTroops: { zhanYingTanMa: 8 }, durationSeconds: 60, startedAt: '', arrivesAt: '2026-07-12T08:01:00Z' }, army: [], serverTime: '2026-07-12T08:00:00Z' }))
+    const scoutPvpTarget = vi.fn(async () => ({ march: { id: 's1', marchType: 'scout', status: 'marching', attackTroops: { zhanYingTanMa: 8 }, durationSeconds: 60, startedAt: '', arrivesAt: '2026-07-12T08:01:00Z' }, army: [], ...dispatchSettlement(), serverTime: '2026-07-12T08:00:00Z' }))
     await createGameStateService({ scoutPvpTarget } as unknown as GameApi, state).dispatchWorldMapCommand('scout', 'p2', { huWei: 999 }, [])
     expect(scoutPvpTarget).toHaveBeenCalledWith('p1', 'p2')
     expect(state.data?.army).toEqual([])
+    expect(state.data).toMatchObject(dispatchSettlement())
     expect(state.marchActionSucceeded).toBe(true)
   })
 
-  it('增援以后端 patch 更新兵力武将占用并阻止重复提交', async () => {
-    const pending = deferred<{ reinforcement: { reinforcementId: string; status: string; troops: Record<string, number>; marchSeconds: number; sentAt: string; arriveAt: string }; patch: { army: GameStateResponse['army']; generals: []; generalAssignments: []; serverTime: string } }>()
+  it('侦查失败保留魏武号令进度、兵力和结算时间且不创建行军', async () => {
     const state = store()
     const current = stateFor('p1')
-    current.army = [{ unitType: 'huWei', amount: 20 }]
+    current.army = [{ unitType: 'huWei', amount: 100 }]
+    current.generalTraitProgress = { 'caocao:weiwu_haoling:huWei': 0.5 }
+    current.resourceSettledAt = '2026-07-12T07:59:57Z'
+    current.generalAssignments = [{ id: 'main', generalId: 'caocao', slot: 'main', status: 'active' }]
+    Object.assign(state, { phase: 'ready', playerId: 'p1', data: current })
+    const scoutPvpTarget = vi.fn(async () => { throw new Error('侦察兵不足') })
+
+    await createGameStateService({ scoutPvpTarget } as unknown as GameApi, state).dispatchWorldMapCommand('scout', 'p2', {}, [])
+
+    expect(scoutPvpTarget).toHaveBeenCalledWith('p1', 'p2')
+    expect(state.data?.army).toEqual([{ unitType: 'huWei', amount: 100 }])
+    expect(state.data?.generalTraitProgress).toEqual({ 'caocao:weiwu_haoling:huWei': 0.5 })
+    expect(state.data?.resourceSettledAt).toBe('2026-07-12T07:59:57Z')
+    expect(state.data?.generalAssignments).toEqual([{ id: 'main', generalId: 'caocao', slot: 'main', status: 'active' }])
+    expect(state.outgoingMarches).toEqual([])
+    expect(state).toMatchObject({ dispatchingMarch: false, marchActionSucceeded: false, marchActionMessage: '侦察兵不足' })
+  })
+
+  it('吕蒙增援以后端加速时间和 patch 更新权威状态并阻止重复提交', async () => {
+    const pending = deferred<Awaited<ReturnType<GameApi['sendReinforcement']>>>()
+    const state = store()
+    const current = stateFor('p1')
+    current.army = [{ unitType: 'wuInfantry', amount: 100 }]
     Object.assign(state, { phase: 'ready', playerId: 'p1', data: current })
     const sendReinforcement = vi.fn(() => pending.promise)
     const service = createGameStateService({ sendReinforcement } as unknown as GameApi, state)
-    const dispatching = service.dispatchWorldMapCommand('reinforce', 'p2', { huWei: 5 }, ['g1'])
-    await service.dispatchWorldMapCommand('reinforce', 'p2', { huWei: 5 }, ['g1'])
+    const dispatching = service.dispatchWorldMapCommand('reinforce', 'p2', { wuInfantry: 100 }, ['lvmeng'])
+    await service.dispatchWorldMapCommand('reinforce', 'p2', { wuInfantry: 100 }, ['lvmeng'])
     expect(sendReinforcement).toHaveBeenCalledOnce()
-    pending.resolve({ reinforcement: { reinforcementId: 'r1', status: 'marching', troops: { huWei: 5 }, marchSeconds: 60, sentAt: '', arriveAt: '2026-07-12T08:01:00Z' }, patch: { army: [{ unitType: 'huWei', amount: 15 }], generals: [], generalAssignments: [], serverTime: '2026-07-12T08:00:00Z' } })
+    pending.resolve({
+      reinforcement: { reinforcementId: 'lvmeng-r1', status: 'marching', troops: { wuInfantry: 100 }, marchSeconds: 2063, speedMultiplier: 2970 / 2063, sentAt: '2026-07-12T08:00:00Z', arriveAt: '2026-07-12T08:34:23Z' },
+      patch: { army: [], ...dispatchSettlement(), generals: [], generalAssignments: [{ id: 'lvmeng-r1_lvmeng', generalId: 'lvmeng', slot: 'reinforcement', status: 'marching' }], serverTime: '2026-07-12T08:00:00Z' },
+    })
     await dispatching
-    expect(state.data?.army[0].amount).toBe(15)
-    expect(state.marchActionMessage).toContain('增援队伍已出发')
+    expect(state.data?.army).toEqual([])
+    expect(state.data?.generalAssignments).toEqual([{ id: 'lvmeng-r1_lvmeng', generalId: 'lvmeng', slot: 'reinforcement', status: 'marching' }])
+    expect(state.data).toMatchObject(dispatchSettlement())
+    expect(state.marchActionMessage).toContain('2026-07-12T08:34:23Z')
+  })
+
+  it('攻击与增援共享提交锁并只采用唯一成功请求的权威状态', async () => {
+    const pending = deferred<Awaited<ReturnType<GameApi['startPvpAttack']>>>()
+    const state = store()
+    const current = stateFor('p1')
+    current.army = [{ unitType: 'huWei', amount: 125 }]
+    current.generalTraitProgress = { 'caocao:weiwu_haoling:huWei': 0.5 }
+    Object.assign(state, { phase: 'ready', playerId: 'p1', data: current })
+    const startPvpAttack = vi.fn(() => pending.promise)
+    const sendReinforcement = vi.fn()
+    const service = createGameStateService({ startPvpAttack, sendReinforcement } as unknown as GameApi, state)
+
+    const attacking = service.dispatchWorldMapCommand('attack', 'p2', { huWei: 100 }, ['caocao'])
+    await service.dispatchWorldMapCommand('reinforce', 'p2', { huWei: 100 }, ['caocao'])
+    expect(startPvpAttack).toHaveBeenCalledOnce()
+    expect(sendReinforcement).not.toHaveBeenCalled()
+    pending.resolve({
+      march: { id: 'caocao-m1', marchType: 'attack', status: 'marching', attackTroops: { huWei: 100 }, durationSeconds: 60, speedMultiplier: 1, startedAt: '', arrivesAt: '2026-07-12T08:01:00Z', attackGenerals: ['caocao'] },
+      army: [{ unitType: 'huWei', amount: 25 }], ...dispatchSettlement(), generalTraitProgress: {},
+      generals: [], generalAssignments: [{ id: 'caocao-m1_caocao', generalId: 'caocao', slot: 'pvp', status: 'marching' }], serverTime: '2026-07-12T08:00:00Z',
+    })
+    await attacking
+
+    expect(state.data?.army).toEqual([{ unitType: 'huWei', amount: 25 }])
+    expect(state.data?.generalTraitProgress).toEqual({})
+    expect(state.data?.generalAssignments).toEqual([{ id: 'caocao-m1_caocao', generalId: 'caocao', slot: 'pvp', status: 'marching' }])
+    expect(state).toMatchObject({ dispatchingMarch: false, marchActionSucceeded: true })
+  })
+
+  it('行军加速结果以后端时间为准且快速重复攻击只提交一次', async () => {
+    const pending = deferred<Awaited<ReturnType<GameApi['startPvpAttack']>>>()
+    const state = store()
+    const current = stateFor('p1')
+    current.army = [{ unitType: 'huWei', amount: 100 }]
+    Object.assign(state, { phase: 'ready', playerId: 'p1', data: current })
+    const startPvpAttack = vi.fn(() => pending.promise)
+    const service = createGameStateService({ startPvpAttack } as unknown as GameApi, state)
+    const first = service.dispatchWorldMapCommand('attack', 'p2', { huWei: 100 }, ['lvmeng'])
+    await service.dispatchWorldMapCommand('attack', 'p2', { huWei: 100 }, ['lvmeng'])
+    expect(startPvpAttack).toHaveBeenCalledOnce()
+    pending.resolve({
+      march: { id: 'lvmeng-m1', marchType: 'attack', status: 'marching', attackTroops: { huWei: 100 }, durationSeconds: 2063, speedMultiplier: 10800 / 2063, startedAt: '2026-07-12T08:00:00Z', arrivesAt: '2026-07-12T08:34:23Z', attackGenerals: ['lvmeng'] },
+      army: [], ...dispatchSettlement(), generals: [], generalAssignments: [{ id: 'lvmeng-m1_lvmeng', generalId: 'lvmeng', slot: 'pvp', status: 'marching' }], serverTime: '2026-07-12T08:00:00Z',
+    })
+    await first
+    expect(state.data?.army).toEqual([])
+    expect(state.data?.generalAssignments).toEqual([{ id: 'lvmeng-m1_lvmeng', generalId: 'lvmeng', slot: 'pvp', status: 'marching' }])
+    expect(state.marchActionMessage).toContain('2026-07-12T08:34:23Z')
   })
 
   it('未选择兵力或切换玩家后不会错误创建和回写行军', async () => {
@@ -305,7 +423,7 @@ describe('玩家真实状态服务', () => {
     expect(state.marchActionMessage).toContain('至少选择')
     const dispatching = service.dispatchWorldMapCommand('attack', 'p2', { huWei: 1 }, [])
     await service.load('p2')
-    pending.resolve({ march: { id: 'm1', marchType: 'attack', status: 'marching', attackTroops: { huWei: 1 }, durationSeconds: 60, startedAt: '', arrivesAt: '' }, army: [{ unitType: 'huWei', amount: 999 }], serverTime: '' })
+    pending.resolve({ march: { id: 'm1', marchType: 'attack', status: 'marching', attackTroops: { huWei: 1 }, durationSeconds: 60, startedAt: '', arrivesAt: '' }, army: [{ unitType: 'huWei', amount: 999 }], ...dispatchSettlement(), serverTime: '' })
     await dispatching
     expect(state.data?.player.id).toBe('p2')
     expect(state.data?.army).toEqual([])

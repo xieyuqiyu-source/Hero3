@@ -91,6 +91,9 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
       const result = await gameApi.attackNpc(activePlayerId, city.id, mode as 'attack' | 'plunder', dispatchUnits, selectedGeneralIds)
       patchState({
         resources: result.resources,
+        resourceProduction: result.resourceProduction,
+        resourceSettledAt: result.resourceSettledAt,
+        generalTraitProgress: result.generalTraitProgress,
         army: result.army,
         general: result.general,
         generals: result.generals,
@@ -112,6 +115,10 @@ const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
     try {
       const result = await gameApi.scoutNpc(activePlayerId, city.id)
       patchState({
+        resources: result.resources,
+        resourceProduction: result.resourceProduction,
+        resourceSettledAt: result.resourceSettledAt,
+        generalTraitProgress: result.generalTraitProgress,
         army: result.army,
         npcState: result.npcState,
         serverTime: result.serverTime,

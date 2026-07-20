@@ -1,3 +1,4 @@
+// 本文件定义将领特性各触发阶段的核心上下文和结构化输出。
 package general
 
 import (
@@ -45,6 +46,11 @@ type BeforeBattleContext struct {
 	// 主城兵进入军队，跨阵营进入驻防
 	CapturedToArmy     map[string]int
 	CapturedToGarrison map[string]int
+	// 战前真实伤亡会在战斗结算后并入 CombatResult；压制兵不写入这里。
+	AttackerPreBattleLosses map[string]int
+	DefenderPreBattleLosses map[string]int
+	AttackerSuppressedUnits map[string]int
+	DefenderSuppressedUnits map[string]int
 
 	// 元信息
 	IsPvP       bool
@@ -64,14 +70,15 @@ func (c *BeforeBattleContext) EventType() string { return EventBeforeBattle }
 //
 // 触发顺序：buildCombatArmy → combat.Resolve → 此事件 → applyBattleResult
 type AfterCombatResolveContext struct {
-	Result            *combat.CombatResult // 战斗结果（可改）
-	Attacker          *combat.Army         // 进攻方
-	Defender          *combat.Army         // 防守方
-	AttackerOwnsTrait bool
-	DefenderOwnsTrait bool
-	Actor             TraitActor
-	Scene             string
-	DisabledTraitSide map[string]int // 已被压制的阵营特性数量，key: attacker/defender/reinforcement
+	Result                   *combat.CombatResult // 战斗结果（可改）
+	Attacker                 *combat.Army         // 进攻方
+	Defender                 *combat.Army         // 防守方
+	AttackerOwnsTrait        bool
+	DefenderOwnsTrait        bool
+	Actor                    TraitActor
+	Scene                    string
+	DisabledTraitSide        map[string]int      // 已被压制的阵营特性数量，key: attacker/defender/reinforcement
+	DisabledTraitOutcomeKeys map[string][]string // 每次压制额度对应的战报结果 key，供总线回填实际拦截数量
 
 	IsAttackerOnly bool // 是否只在进攻方触发（如周瑜火攻）
 
@@ -94,6 +101,7 @@ type AfterBattleContext struct {
 	PlayerLosses map[string]int // 玩家本场损失（按 unitType）
 	IsAttacker   bool           // 该玩家是进攻方还是防守方
 	Won          bool           // 该玩家是否胜利
+	Winner       string         // 真实胜方：attacker / defender / draw；用于区分战败和平局
 	Actor        TraitActor     // 当前分发批次的特性归属
 	Scene        string         // attack / defense / reinforcement_defense 等
 

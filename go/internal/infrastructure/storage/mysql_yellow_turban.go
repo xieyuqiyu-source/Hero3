@@ -129,6 +129,14 @@ func (r *MySQLRepository) ResolveYellowTurbanBattleTransaction(marchID string, u
 	if err := updateYellowTurbanMarchTx(tx, march); err != nil {
 		return game.GameState{}, game.YellowTurbanMarch{}, game.BattleReport{}, nil, err
 	}
+	for _, battleReport := range append([]game.BattleReport{report}, reinforcementReports...) {
+		if battleReport.ID == "" {
+			continue
+		}
+		if err := insertBattleReportTx(tx, battleReport); err != nil && !isDuplicateEntry(err) {
+			return game.GameState{}, game.YellowTurbanMarch{}, game.BattleReport{}, nil, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return game.GameState{}, game.YellowTurbanMarch{}, game.BattleReport{}, nil, err
 	}

@@ -19,8 +19,22 @@ function gameStore(): GameStateStore {
   return { data, receivedAt: null } as GameStateStore
 }
 
+/** 创建 NPC 动作返回的留城特性权威结算字段。 */
+function npcSettlement() {
+  return {
+    resources: { items: { wood: 99 }, capacity: { wood: 100 } },
+    resourceProduction: { wood: 12 },
+    resourceSettledAt: '2026-07-14T00:59:59Z',
+    generalTraitProgress: { 'caocao:weiwu_haoling:huWei': 0.5 },
+  }
+}
+
 /** 创建测试可控的延迟响应。 */
-function deferred<T>() { let resolve!: (value: T) => void; return { promise: new Promise<T>((done) => { resolve = done }), resolve } }
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  return { promise: new Promise<T>((done, fail) => { resolve = done; reject = fail }), resolve, reject }
+}
 
 describe('NPC 状态服务', () => {
   it('加载真实列表并保留后端返回数量', async () => {
@@ -51,21 +65,102 @@ describe('NPC 状态服务', () => {
     const state = npcStore()
     Object.assign(state, { phase: 'ready', playerId: 'p1', data: { cities: [city()], lastRefreshedAt: '' } })
     const game = gameStore()
-    const attackNpc = vi.fn(async () => ({ battleReport: {}, resources: { items: { wood: 99 }, capacity: { wood: 100 } }, army: [{ unitType: 'huWei', amount: 7 }], cityGold: 8, npcState: { cities: [city()], lastRefreshedAt: '' }, serverTime: '2026-07-14T01:00:00Z' }))
+    const settlement = npcSettlement()
+    const attackNpc = vi.fn(async () => ({ battleReport: {}, ...settlement, army: [{ unitType: 'huWei', amount: 7 }], cityGold: 8, npcState: { cities: [city()], lastRefreshedAt: '' }, serverTime: '2026-07-14T01:00:00Z' }))
     await createNpcStateService({ attackNpc } as unknown as GameApi, state, game).dispatch('attack', 'npc-1', { huWei: 3 }, [])
     expect(attackNpc).toHaveBeenCalledWith('p1', 'npc-1', 'attack', { huWei: 3 }, [])
-    expect(game.data).toMatchObject({ army: [{ unitType: 'huWei', amount: 7 }], cityGold: 8, serverTime: '2026-07-14T01:00:00Z' })
+    expect(game.data).toMatchObject({ ...settlement, army: [{ unitType: 'huWei', amount: 7 }], cityGold: 8, serverTime: '2026-07-14T01:00:00Z' })
     expect(state.actionMessage).toContain('即时结算')
+  })
+
+  it('攻击失败时不回写玩家状态也不标记成功结果', async () => {
+    const state = npcStore()
+    Object.assign(state, { phase: 'ready', playerId: 'p1', data: { cities: [city()], lastRefreshedAt: '' } })
+    const game = gameStore()
+    const before = structuredClone(game.data)
+    const attackNpc = vi.fn(async () => { throw new Error('只能选择一名将领') })
+    await createNpcStateService({ attackNpc } as unknown as GameApi, state, game).dispatch('attack', 'npc-1', { huWei: 3 }, ['g1'])
+    expect(attackNpc).toHaveBeenCalledWith('p1', 'npc-1', 'attack', { huWei: 3 }, ['g1'])
+    expect(game.data).toEqual(before)
+    expect(state).toMatchObject({ operating: false, actionSucceeded: false, actionMessage: '只能选择一名将领', resultVersion: 1 })
+  })
+
+  it('NPC 与 PVP 争用失败时保留较新的行军权威状态', async () => {
+    const state = npcStore()
+    Object.assign(state, { phase: 'ready', playerId: 'p1', data: { cities: [city()], lastRefreshedAt: '' } })
+    const game = gameStore()
+    const pending = deferred<Awaited<ReturnType<GameApi['attackNpc']>>>()
+    const service = createNpcStateService({ attackNpc: vi.fn(() => pending.promise) } as unknown as GameApi, state, game)
+
+    const attacking = service.dispatch('attack', 'npc-1', { huWei: 10 }, ['caocao'])
+    Object.assign(game.data!, {
+      army: [{ unitType: 'huWei', amount: 25 }],
+      generalAssignments: [{ id: 'pvp-caocao', generalId: 'caocao', slot: 'pvp', status: 'marching' }],
+      serverTime: '2026-07-14T01:00:00Z',
+    })
+    pending.reject(new Error('兵力或将领已被另一支队伍占用'))
+    await attacking
+
+    expect(game.data).toMatchObject({
+      army: [{ unitType: 'huWei', amount: 25 }],
+      generalAssignments: [{ id: 'pvp-caocao', generalId: 'caocao', slot: 'pvp', status: 'marching' }],
+      serverTime: '2026-07-14T01:00:00Z',
+    })
+    expect(state).toMatchObject({ operating: false, actionSucceeded: false, actionMessage: '兵力或将领已被另一支队伍占用' })
+  })
+
+  it('NPC 与增援争用失败时保留较新的增援权威状态', async () => {
+    const state = npcStore()
+    Object.assign(state, { phase: 'ready', playerId: 'p1', data: { cities: [city()], lastRefreshedAt: '' } })
+    const game = gameStore()
+    const pending = deferred<Awaited<ReturnType<GameApi['attackNpc']>>>()
+    const service = createNpcStateService({ attackNpc: vi.fn(() => pending.promise) } as unknown as GameApi, state, game)
+
+    const attacking = service.dispatch('attack', 'npc-1', { huWei: 10 }, ['caocao'])
+    Object.assign(game.data!, {
+      army: [{ unitType: 'huWei', amount: 25 }],
+      resources: { items: { wood: 1201 }, capacity: { wood: 4800 } },
+      generalTraitProgress: {},
+      generalAssignments: [{ id: 'reinforcement-caocao', generalId: 'caocao', slot: 'reinforcement', status: 'marching' }],
+      serverTime: '2026-07-14T01:01:00Z',
+    })
+    pending.reject(new Error('兵力或将领已被增援队伍占用'))
+    await attacking
+
+    expect(game.data).toMatchObject({
+      army: [{ unitType: 'huWei', amount: 25 }],
+      resources: { items: { wood: 1201 }, capacity: { wood: 4800 } },
+      generalTraitProgress: {},
+      generalAssignments: [{ id: 'reinforcement-caocao', generalId: 'caocao', slot: 'reinforcement', status: 'marching' }],
+      serverTime: '2026-07-14T01:01:00Z',
+    })
+    expect(state).toMatchObject({ operating: false, actionSucceeded: false, actionMessage: '兵力或将领已被增援队伍占用' })
   })
 
   it('侦查不提交前端兵量并以后端结果扣减侦察兵', async () => {
     const state = npcStore()
     Object.assign(state, { phase: 'ready', playerId: 'p1', data: { cities: [city()], lastRefreshedAt: '' } })
     const game = gameStore()
-    const scoutNpc = vi.fn(async () => ({ success: true, battleReport: {}, npcCity: city(), army: [{ unitType: 'zhanYingTanMa', amount: 3 }], npcState: { cities: [city()], lastRefreshedAt: '' }, serverTime: '2026-07-14T01:00:00Z' }))
+    const settlement = npcSettlement()
+    const scoutNpc = vi.fn(async () => ({ success: true, battleReport: {}, npcCity: city(), ...settlement, army: [{ unitType: 'zhanYingTanMa', amount: 3 }], npcState: { cities: [city()], lastRefreshedAt: '' }, serverTime: '2026-07-14T01:00:00Z' }))
     await createNpcStateService({ scoutNpc } as unknown as GameApi, state, game).dispatch('scout', 'npc-1', { huWei: 999 }, ['g1'])
     expect(scoutNpc).toHaveBeenCalledWith('p1', 'npc-1')
     expect(game.data?.army).toEqual([{ unitType: 'zhanYingTanMa', amount: 3 }])
+    expect(game.data).toMatchObject(settlement)
+  })
+
+  it('侦查失败时不回写留城特性结算状态或 NPC 状态', async () => {
+    const state = npcStore()
+    Object.assign(state, { phase: 'ready', playerId: 'p1', data: { cities: [city()], lastRefreshedAt: '' } })
+    const game = gameStore()
+    const beforeGame = structuredClone(game.data)
+    const beforeNpc = structuredClone(state.data)
+    const scoutNpc = vi.fn(async () => { throw new Error('兵力不足') })
+    await createNpcStateService({ scoutNpc } as unknown as GameApi, state, game).dispatch('scout', 'npc-1', {}, [])
+    expect(scoutNpc).toHaveBeenCalledWith('p1', 'npc-1')
+    expect(game.data).toEqual(beforeGame)
+    expect(state.data).toEqual(beforeNpc)
+    expect(state).toMatchObject({ operating: false, actionSucceeded: false, actionMessage: '兵力不足', resultVersion: 1 })
   })
 
   it('切换玩家后旧列表响应不能覆盖新玩家', async () => {

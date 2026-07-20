@@ -1,10 +1,11 @@
+// 本文件负责军情列表分页、详情读取、重复战报隔离和删除操作。
 import { useCallback, useEffect, useState, type FC } from 'react'
 import { ChevronLeft, ChevronRight, Loader2, Trash2 } from 'lucide-react'
 import { useGameStore } from '@/store/gameStore'
 import { gameApi } from '@/api/game'
 import type { BattleReport } from '@/types/game'
 import BattleReportDetail from './components/BattleReportDetail'
-import { REPORT_OUTCOME_CONFIG, REPORT_SOURCE_CONFIG, REPORT_VIEW_CONFIG, REPORT_VIEW_TABS, buildReportListParams, reportTotalPages, resolveReportOutcome, shouldShowEmptyReports } from './reportPresentation'
+import { REPORT_OUTCOME_CONFIG, REPORT_SOURCE_CONFIG, REPORT_VIEW_CONFIG, REPORT_VIEW_TABS, buildReportListParams, reportTotalPages, resolveReportOutcome, shouldShowEmptyReports, uniqueReportsById } from './reportPresentation'
 
 const EMPTY_REPORTS: BattleReport[] = []
 const PAGE_SIZE = 10
@@ -14,6 +15,7 @@ function safeReportMap(value?: Record<string, number> | null): Record<string, nu
   return value ?? {}
 }
 
+// NewsPage 以后端战报 ID 为列表唯一键，并按需读取完整详情。
 const NewsPage: FC = () => {
   const [selectedReport, setSelectedReport] = useState<BattleReport | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
@@ -39,7 +41,7 @@ const NewsPage: FC = () => {
     setLoading(true)
     try {
       const result = await gameApi.listReports(activePlayerId, page, PAGE_SIZE, buildReportListParams(activeView))
-      const nextReports = Array.isArray(result.reports) ? result.reports : EMPTY_REPORTS
+      const nextReports = uniqueReportsById(Array.isArray(result.reports) ? result.reports : EMPTY_REPORTS)
       const nextTotal = typeof result.total === 'number' ? result.total : nextReports.length
       setReports(nextReports)
       setTotalReports(nextTotal)

@@ -39,70 +39,85 @@ func (s *Service) SendReinforcement(req SendReinforcementRequest) (Reinforcement
 	}
 	distance := worldMapDistance(WorldCoordinate{X: fromPosition.X, Y: fromPosition.Y}, WorldCoordinate{X: toPosition.X, Y: toPosition.Y})
 
-	fromState, _, record, err := s.repo.CreateReinforcementWithState(fromPlayerID, toPlayerID, now, func(from *GameState, to *GameState, targetRecords []Reinforcement) (Reinforcement, error) {
-		if err := ensureReinforcementSourceSlot(fromPlayerID, targetRecords); err != nil {
-			return Reinforcement{}, err
+	var fromState GameState
+	var record Reinforcement
+	for attempt := 0; attempt < 3; attempt++ {
+		fromState, _, record, err = s.repo.CreateReinforcementWithState(fromPlayerID, toPlayerID, now, func(from *GameState, to *GameState, targetRecords []Reinforcement) (Reinforcement, error) {
+			if err := ensureReinforcementSourceSlot(fromPlayerID, targetRecords); err != nil {
+				return Reinforcement{}, err
+			}
+			nextFrom, _ := settleResources(*from, now)
+			*from = nextFrom
+			if _, err := validateAndConsumeArmy(from, troops); err != nil {
+				return Reinforcement{}, err
+			}
+			EnsureGeneralRoster(from, now)
+			reinforcementID := "reinforcement_" + randomID(12)
+			if err := validateReinforcementSourceGeneral(fromPlayerID, req.GeneralIDs, targetRecords); err != nil {
+				return Reinforcement{}, err
+			}
+			generals, err := reserveReinforcementGenerals(from, req.GeneralIDs, reinforcementID, now)
+			if err != nil {
+				return Reinforcement{}, err
+			}
+			generalIDs := make([]string, 0, len(generals))
+			for _, item := range generals {
+				generalIDs = append(generalIDs, item.ID)
+			}
+			baseMarchSeconds := reinforcementTravelSecondsForDistance(distance, reinforcementSlowestUnitSpeed(from.Player.Faction, troops), now, CollectModifierSources(from))
+			marchSeconds := dispatchMarchCreateTraits(baseMarchSeconds, "reinforcement", from, generalIDs)
+			traitSpeedMultiplier := 1.0
+			if marchSeconds > 0 {
+				traitSpeedMultiplier = float64(baseMarchSeconds) / float64(marchSeconds)
+			}
+			expectedArriveAt := now.Add(time.Duration(marchSeconds) * time.Second).UTC().Format(resourceDateLayout)
+			record := Reinforcement{
+				ID:                reinforcementID,
+				FromPlayerID:      from.Player.ID,
+				FromPlayerName:    from.Player.Nickname,
+				FromPlayerFaction: from.Player.Faction,
+				ToPlayerID:        to.Player.ID,
+				ToPlayerName:      to.Player.Nickname,
+				ToPlayerFaction:   to.Player.Faction,
+				OwnerPlayerID:     from.Player.ID,
+				HostPlayerID:      to.Player.ID,
+				SourceType:        GarrisonSourceReinforcement,
+				SourceID:          reinforcementID,
+				TargetType:        ReinforcementTargetPlayerCity,
+				TargetID:          to.Player.ID,
+				Status:            ReinforcementStatusMarching,
+				Troops:            cloneStringIntMap(troops),
+				RemainingTroops:   cloneStringIntMap(troops),
+				Generals:          generals,
+				BuffSnapshot:      reinforcementBuffSnapshot(generals),
+				Rules:             defaultGarrisonRules(GarrisonSourceReinforcement),
+				SpeedMultiplier:   speed * traitSpeedMultiplier,
+				MarchSeconds:      marchSeconds,
+				ReturnSeconds:     marchSeconds,
+				SentAt:            nowText,
+				ExpectedArriveAt:  expectedArriveAt,
+				Losses:            map[string]int{},
+				RewardState:       map[string]any{},
+				MailState:         map[string]any{"sent": true},
+				Metadata:          map[string]any{},
+				CreatedAt:         nowText,
+				UpdatedAt:         nowText,
+			}
+			from.ServerTime = nowText
+			return record, nil
+		})
+		if err == nil {
+			break
 		}
-		nextFrom, _ := settleResources(*from, now)
-		*from = nextFrom
-		if _, err := validateAndConsumeArmy(from, troops); err != nil {
-			return Reinforcement{}, err
+		if !isRetryableStorageConflict(err) || attempt == 2 {
+			return ReinforcementResponse{}, err
 		}
-		EnsureGeneralRoster(from, now)
-		reinforcementID := "reinforcement_" + randomID(12)
-		if err := validateReinforcementSourceGeneral(fromPlayerID, req.GeneralIDs, targetRecords); err != nil {
-			return Reinforcement{}, err
-		}
-		generals, err := reserveReinforcementGenerals(from, req.GeneralIDs, reinforcementID, now)
-		if err != nil {
-			return Reinforcement{}, err
-		}
-		generalIDs := make([]string, 0, len(generals))
-		for _, item := range generals {
-			generalIDs = append(generalIDs, item.ID)
-		}
-		marchSeconds := reinforcementTravelSecondsForDistance(distance, reinforcementSlowestUnitSpeed(from.Player.Faction, troops), now, CollectModifierSources(from))
-		marchSeconds = dispatchMarchCreateTraits(marchSeconds, "reinforcement", from, generalIDs)
-		expectedArriveAt := now.Add(time.Duration(marchSeconds) * time.Second).UTC().Format(resourceDateLayout)
-		record := Reinforcement{
-			ID:                reinforcementID,
-			FromPlayerID:      from.Player.ID,
-			FromPlayerName:    from.Player.Nickname,
-			FromPlayerFaction: from.Player.Faction,
-			ToPlayerID:        to.Player.ID,
-			ToPlayerName:      to.Player.Nickname,
-			ToPlayerFaction:   to.Player.Faction,
-			OwnerPlayerID:     from.Player.ID,
-			HostPlayerID:      to.Player.ID,
-			SourceType:        GarrisonSourceReinforcement,
-			SourceID:          reinforcementID,
-			TargetType:        ReinforcementTargetPlayerCity,
-			TargetID:          to.Player.ID,
-			Status:            ReinforcementStatusMarching,
-			Troops:            cloneStringIntMap(troops),
-			RemainingTroops:   cloneStringIntMap(troops),
-			Generals:          generals,
-			BuffSnapshot:      reinforcementBuffSnapshot(generals),
-			Rules:             defaultGarrisonRules(GarrisonSourceReinforcement),
-			SpeedMultiplier:   speed,
-			MarchSeconds:      marchSeconds,
-			ReturnSeconds:     marchSeconds,
-			SentAt:            nowText,
-			ExpectedArriveAt:  expectedArriveAt,
-			Losses:            map[string]int{},
-			RewardState:       map[string]any{},
-			MailState:         map[string]any{"sent": true},
-			Metadata:          map[string]any{},
-			CreatedAt:         nowText,
-			UpdatedAt:         nowText,
-		}
-		from.ServerTime = nowText
-		return record, nil
-	})
+		time.Sleep(time.Duration(attempt+1) * 80 * time.Millisecond)
+	}
 	if err != nil {
 		return ReinforcementResponse{}, err
 	}
-	return ReinforcementResponse{Reinforcement: publicReinforcementRecord(record), Patch: BuildGarrisonActionResult(fromState)}, nil
+	return ReinforcementResponse{Reinforcement: publicReinforcementRecord(record), Patch: BuildGarrisonDispatchActionResult(fromState)}, nil
 }
 
 // CreateGarrisonDetachment 创建一批非增援来源的驻防队伍，不写入玩家常规军队。
@@ -671,9 +686,62 @@ func reinforcementOccupiesSlot(status string) bool {
 	return status == ReinforcementStatusMarching || status == ReinforcementStatusStationed || status == ReinforcementStatusFighting
 }
 
-// obtainedGarrisonID 返回玩家自己的获得驻防队伍固定 ID。
-func obtainedGarrisonID(playerID string) string {
+// ObtainedGarrisonID 返回玩家自己的获得驻防队伍固定 ID，供事务仓储原子合并玩法所得驻防。
+func ObtainedGarrisonID(playerID string) string {
 	return "garrison_obtained_" + strings.TrimSpace(playerID)
+}
+
+// obtainedGarrisonID 保留模块内简写，统一委托公开的固定 ID 规则。
+func obtainedGarrisonID(playerID string) string {
+	return ObtainedGarrisonID(playerID)
+}
+
+// MergeCapturedGarrisonRecord 把本场跨阵营俘虏原子合并到玩家自己的获得驻防队伍。
+func MergeCapturedGarrisonRecord(existing Reinforcement, owner GameState, sourceFaction string, troops map[string]int, sourceID string, now time.Time) Reinforcement {
+	nowText := now.UTC().Format(resourceDateLayout)
+	troops = normalizePositiveTroops(troops)
+	record := cloneReinforcement(existing)
+	if strings.TrimSpace(record.ID) == "" {
+		record = Reinforcement{
+			ID:              ObtainedGarrisonID(owner.Player.ID),
+			TargetType:      ReinforcementTargetPlayerCity,
+			Status:          ReinforcementStatusStationed,
+			Rules:           defaultGarrisonRules(GarrisonSourceObtained),
+			SpeedMultiplier: 1,
+			Losses:          map[string]int{},
+			RewardState:     map[string]any{},
+			MailState:       map[string]any{},
+			Metadata:        map[string]any{},
+			CreatedAt:       nowText,
+		}
+	}
+	normalizeGarrisonRecord(&record)
+	record.ID = ObtainedGarrisonID(owner.Player.ID)
+	record.FromPlayerID = owner.Player.ID
+	record.FromPlayerName = owner.Player.Nickname
+	record.ToPlayerID = owner.Player.ID
+	record.ToPlayerName = owner.Player.Nickname
+	record.OwnerPlayerID = owner.Player.ID
+	record.HostPlayerID = owner.Player.ID
+	record.SourceType = GarrisonSourceObtained
+	record.SourceID = GarrisonSourceObtained
+	record.FromPlayerFaction = firstNonEmpty(record.FromPlayerFaction, strings.TrimSpace(sourceFaction), owner.Player.Faction)
+	record.ToPlayerFaction = owner.Player.Faction
+	record.TargetType = ReinforcementTargetPlayerCity
+	record.TargetID = owner.Player.ID
+	record.Status = ReinforcementStatusStationed
+	record.Rules = defaultGarrisonRules(GarrisonSourceObtained)
+	record.Troops = mergeTroopMaps(record.Troops, troops)
+	record.RemainingTroops = mergeTroopMaps(record.RemainingTroops, troops)
+	record.Metadata = mergeGarrisonMetadata(record.Metadata, map[string]any{
+		"reason":              "beauty_trap_capture",
+		"lastCaptureSourceId": strings.TrimSpace(sourceID),
+	})
+	record.IsAnnihilated = false
+	record.ArrivedAt = firstNonEmpty(record.ArrivedAt, nowText)
+	record.SentAt = firstNonEmpty(record.SentAt, nowText)
+	record.UpdatedAt = nowText
+	return record
 }
 
 // findObtainedGarrison 查找玩家自己的“获得”驻防队伍，用于后续兵种合并。
@@ -682,7 +750,7 @@ func (s *Service) findObtainedGarrison(ownerPlayerID string, hostPlayerID string
 	if err != nil {
 		return Reinforcement{}, err
 	}
-	stableID := obtainedGarrisonID(ownerPlayerID)
+	stableID := ObtainedGarrisonID(ownerPlayerID)
 	fallback := Reinforcement{}
 	for _, item := range items {
 		normalizeGarrisonRecord(&item)
@@ -934,15 +1002,16 @@ func reserveReinforcementGenerals(state *GameState, generalIDs []string, reinfor
 			AssignedAt: now.UTC().Format(resourceDateLayout),
 		})
 		result = append(result, ReinforcementGeneralSnapshot{
-			ID:         general.ID,
-			Name:       general.Name,
-			Level:      general.Level,
-			Exp:        general.Exp,
-			Stats:      cloneStringIntMap(general.Stats),
-			Attributes: cloneFloatMap(general.Attributes),
-			Buffs:      cloneFloatMap(general.Buffs),
-			Traits:     append([]GeneralTraitInstance(nil), general.Traits...),
-			Assignment: assignmentID,
+			ID:             general.ID,
+			Name:           general.Name,
+			Level:          general.Level,
+			Exp:            general.Exp,
+			Stats:          cloneStringIntMap(general.Stats),
+			EffectiveStats: cloneStringIntMap(general.EffectiveStats),
+			Attributes:     cloneFloatMap(general.Attributes),
+			Buffs:          cloneFloatMap(general.Buffs),
+			Traits:         cloneGeneralTraitInstances(general.Traits),
+			Assignment:     assignmentID,
 		})
 		if len(result) > 1 {
 			return nil, ErrInvalidGeneral
@@ -952,16 +1021,7 @@ func reserveReinforcementGenerals(state *GameState, generalIDs []string, reinfor
 }
 
 func generalAvailableForReinforcement(assignments []GeneralAssignment, generalID string) bool {
-	for _, assignment := range assignments {
-		if strings.TrimSpace(assignment.GeneralID) != generalID {
-			continue
-		}
-		if assignment.ID == GeneralAssignmentMain || assignment.Slot == GeneralAssignmentMain {
-			continue
-		}
-		return false
-	}
-	return true
+	return generalAvailableAtHome(assignments, generalID)
 }
 
 func reinforcementAssignmentID(reinforcementID string, generalID string) string {
@@ -1080,7 +1140,9 @@ func completeReinforcementReturn(from *GameState, record *Reinforcement, now tim
 			addToArmy(&from.Army, unitType, amount)
 		}
 	}
+	settleResourcesBeforeGeneralRelease(from, now)
 	releaseReinforcementGenerals(from, record)
+	refreshResourcesAfterGeneralRelease(from, now)
 	nowText := now.UTC().Format(resourceDateLayout)
 	record.Status = ReinforcementStatusCompleted
 	record.ReturnedAt = nowText
@@ -1185,9 +1247,10 @@ func cloneReinforcementGenerals(src []ReinforcementGeneralSnapshot) []Reinforcem
 	for i, item := range src {
 		dst[i] = item
 		dst[i].Stats = cloneStringIntMap(item.Stats)
+		dst[i].EffectiveStats = cloneStringIntMap(item.EffectiveStats)
 		dst[i].Attributes = cloneFloatMap(item.Attributes)
 		dst[i].Buffs = cloneFloatMap(item.Buffs)
-		dst[i].Traits = append([]GeneralTraitInstance(nil), item.Traits...)
+		dst[i].Traits = cloneGeneralTraitInstances(item.Traits)
 		dst[i].GeneralExpGained = cloneIntPointer(item.GeneralExpGained)
 		dst[i].GeneralLevelBefore = cloneIntPointer(item.GeneralLevelBefore)
 		dst[i].GeneralLevelAfter = cloneIntPointer(item.GeneralLevelAfter)

@@ -428,6 +428,9 @@ AttackNpcResponse:
   required:
   - battleReport
   - resources
+  - resourceProduction
+  - resourceSettledAt
+  - generalTraitProgress
   - army
   - cityGold
   - serverTime
@@ -436,6 +439,18 @@ AttackNpcResponse:
       $ref: '#/components/schemas/BattleReport'
     resources:
       $ref: '#/components/schemas/ResourceState'
+    resourceProduction:
+      $ref: '#/components/schemas/ResourceProduction'
+    resourceSettledAt:
+      type: string
+      format: date-time
+      description: 本次 NPC 进攻结算后的权威资源结算时间。
+    generalTraitProgress:
+      type: object
+      description: 本次 NPC 进攻结算后的非战斗将领特性累计进度，空进度返回空对象。
+      additionalProperties:
+        type: number
+        format: double
     army:
       type: array
       items:
@@ -494,6 +509,9 @@ SweepNpcResponse:
   - failed
   - stopped
   - resources
+  - resourceProduction
+  - resourceSettledAt
+  - generalTraitProgress
   - army
   - cityGold
   - serverTime
@@ -514,6 +532,18 @@ SweepNpcResponse:
       example: false
     resources:
       $ref: '#/components/schemas/ResourceState'
+    resourceProduction:
+      $ref: '#/components/schemas/ResourceProduction'
+    resourceSettledAt:
+      type: string
+      format: date-time
+      description: 本次 NPC 扫荡结算后的权威资源结算时间。
+    generalTraitProgress:
+      type: object
+      description: 本次 NPC 扫荡结算后的非战斗将领特性累计进度，空进度返回空对象。
+      additionalProperties:
+        type: number
+        format: double
     army:
       type: array
       items:
@@ -619,6 +649,10 @@ ScoutNpcResponse:
   required:
   - success
   - npcCity
+  - resources
+  - resourceProduction
+  - resourceSettledAt
+  - generalTraitProgress
   - army
   - serverTime
   properties:
@@ -630,6 +664,20 @@ ScoutNpcResponse:
     npcCity:
       $ref: '#/components/schemas/NpcCity'
       nullable: true
+    resources:
+      $ref: '#/components/schemas/ResourceState'
+    resourceProduction:
+      $ref: '#/components/schemas/ResourceProduction'
+    resourceSettledAt:
+      type: string
+      format: date-time
+      description: 本次 NPC 侦查结算后的权威资源结算时间。
+    generalTraitProgress:
+      type: object
+      description: 本次 NPC 侦查结算后的非战斗将领特性累计进度，空进度返回空对象。
+      additionalProperties:
+        type: number
+        format: double
     army:
       type: array
       items:

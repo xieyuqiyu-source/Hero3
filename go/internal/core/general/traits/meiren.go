@@ -6,19 +6,16 @@
 //   - 完全独立，不依赖其他特性
 package traits
 
-import (
-	"math/rand"
-
-	"hero3/internal/core/general"
-)
+import "hero3/internal/core/general"
 
 // Meiren 美人计（甄宓）
 //
 // 战斗开始前触发：
 // - 按 captureRate 比例俘虏敌方各兵种（随机）
 // - 单种兵俘虏数量不超过 captureMax
-// - 同阵营 / NPC：俘虏归我方军队
-// - 跨阵营 PvP：俘虏进我方驻防
+// - 同阵营兵种最终归我方军队
+// - 跨阵营兵种最终进入我方驻防
+// - NPC 先写入候选归队结果，再由应用层按兵种阵营确认最终去向
 // - 剩余的兵正常进入战斗
 type Meiren struct{}
 
@@ -62,9 +59,7 @@ func (m *Meiren) beforeBattle(ctx general.EventContext, p general.Params) {
 		return
 	}
 
-	// 触发概率（限制在 0-1 之间）
-	chance := p.FloatWithBounds("triggerChance", 1.0, 0, 1)
-	if chance < 1.0 && rand.Float64() > chance {
+	if !triggeredWithDefault(p, 1) {
 		return
 	}
 
@@ -76,7 +71,7 @@ func (m *Meiren) beforeBattle(ctx general.EventContext, p general.Params) {
 		return
 	}
 
-	// 决定俘虏归属
+	// 决定核心层候选归属；NPC 的最终去向由应用层按兵种阵营再次拆分。
 	var dest map[string]int
 	if c.SameFaction || !c.IsPvP {
 		// 同阵营或 NPC：进入军队
@@ -94,6 +89,7 @@ func (m *Meiren) beforeBattle(ctx general.EventContext, p general.Params) {
 
 	// 从敌方按比例俘虏，并从 Defender.Units 中扣除
 	totalCapturedAll := 0
+	capturedByUnit := map[string]int{}
 	for i := range c.Defender.Units {
 		unit := &c.Defender.Units[i]
 		if unit.Count <= 0 {
@@ -108,6 +104,7 @@ func (m *Meiren) beforeBattle(ctx general.EventContext, p general.Params) {
 		}
 		unit.Count -= captured
 		dest[unit.ID] += captured
+		capturedByUnit[unit.ID] += captured
 		totalCapturedAll += captured
 	}
 
@@ -115,6 +112,17 @@ func (m *Meiren) beforeBattle(ctx general.EventContext, p general.Params) {
 	if totalCapturedAll > 0 {
 		if c.Triggered == nil {
 			c.Triggered = map[string]general.TraitOutcome{}
+		}
+		detail := map[string]interface{}{
+			"totalCaptured": totalCapturedAll,
+			"captureRate":   rate,
+			"captureMax":    maxPerType,
+			"triggerChance": p.FloatWithBounds("triggerChance", 1, 0, 1),
+		}
+		if c.SameFaction || !c.IsPvP {
+			detail["capturedUnits"] = capturedByUnit
+		} else {
+			detail["capturedToGarrison"] = capturedByUnit
 		}
 		c.Triggered["meiren"] = general.TraitOutcome{
 			TraitID:        "meiren",
@@ -124,9 +132,7 @@ func (m *Meiren) beforeBattle(ctx general.EventContext, p general.Params) {
 			OwnerGeneralID: c.Actor.GeneralID,
 			OwnerPlayerID:  c.Actor.PlayerID,
 			Scope:          c.Actor.Scope,
-			Detail: map[string]interface{}{
-				"totalCaptured": totalCapturedAll,
-			},
+			Detail:         detail,
 		}
 	}
 }

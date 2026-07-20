@@ -13,6 +13,8 @@ export interface AggregatedReinforcementSnapshot {
   losses: Record<string, number>
   generals: ReinforcementGeneralSnapshot[]
   generalExpGained: number
+  generalLevelBefore?: number
+  generalLevelAfter?: number
 }
 
 // reinforcementGroupIdentity 优先按玩家归并，没有玩家身份时按来源城市或来源实体归并。
@@ -59,10 +61,13 @@ export function aggregateReinforcementSnapshots(
         losses: {},
         generals: item.generals?.[0] ? [item.generals[0]] : [],
         generalExpGained: 0,
+        generalLevelBefore: undefined,
+        generalLevelAfter: undefined,
       })
     }
 
     const group = groups[index]
+    if (group.reinforcementIds.includes(item.reinforcementId)) return
     group.reinforcementIds.push(item.reinforcementId)
     if (!group.playerName && item.fromPlayerName) group.playerName = item.fromPlayerName
     if (!group.faction && item.faction) group.faction = item.faction
@@ -72,6 +77,12 @@ export function aggregateReinforcementSnapshots(
     const itemGeneralId = item.generals?.[0]?.id
     if (displayedGeneralId && itemGeneralId === displayedGeneralId && Number.isFinite(generalExpGained) && generalExpGained > 0) {
       group.generalExpGained += generalExpGained
+      if ((item.generalLevelBefore ?? 0) > 0 && group.generalLevelBefore === undefined) {
+        group.generalLevelBefore = item.generalLevelBefore
+      }
+      if ((item.generalLevelAfter ?? 0) > 0) {
+        group.generalLevelAfter = Math.max(group.generalLevelAfter ?? 0, item.generalLevelAfter ?? 0)
+      }
     }
     mergeAmounts(group.troops, item.troops)
     mergeAmounts(group.losses, lossesByReinforcement[item.reinforcementId])

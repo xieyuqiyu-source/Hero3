@@ -19,6 +19,9 @@ const buildingNames: Record<string, string> = Object.fromEntries(
 )
 
 const unitDefinitions: Partial<Record<string, { name: string; category: 'infantry' | 'cavalry' | 'siege' | 'special' }>> = {
+  weiInfantry: { name: '魏步兵', category: 'infantry' }, weiCavalry: { name: '魏骑兵', category: 'cavalry' },
+  shuInfantry: { name: '蜀步兵', category: 'infantry' }, shuCavalry: { name: '蜀骑兵', category: 'cavalry' },
+  wuInfantry: { name: '吴步兵', category: 'infantry' }, wuCavalry: { name: '吴骑兵', category: 'cavalry' },
   azureDragon: { name: '青龙军', category: 'infantry' }, flyingKite: { name: '飞鸢', category: 'infantry' }, greedyWolf: { name: '贪狼营', category: 'infantry' },
   qilinGuard: { name: '麒麟卫', category: 'infantry' }, qingZhouArmy: { name: '青州军', category: 'infantry' }, jinWeiSoldier: { name: '禁卫甲士', category: 'infantry' },
   huWei: { name: '虎卫', category: 'infantry' }, shadowGuard: { name: '影卫', category: 'infantry' }, xiuLuo: { name: '修罗', category: 'infantry' },
@@ -32,6 +35,17 @@ const unitDefinitions: Partial<Record<string, { name: string; category: 'infantr
   shuMerchant: { name: '蜀国商人', category: 'special' }, weiMerchant: { name: '魏国商人', category: 'special' }, wuMerchant: { name: '吴国商人', category: 'special' },
 }
 
+/** 将兵种 ID 转换为武林三国前端统一使用的中文名称。 */
+export function unitNameForType(unitType: string): string {
+  return unitDefinitions[unitType]?.name ?? unitType
+}
+
+/** 以官网标准兵种名称为唯一依据的 army_content 缩略图映射。 */
+export const officialUnitIconsByName: Record<string, string> = {
+  '青州军': '101.gif', '禁卫甲士': '102.gif', '虎卫': '103.gif', '战鹰骑探': '104.gif', '骁骑营': '105.gif', '虎豹骑': '106.gif', '冲撞车': '107.gif', '霹雳车': '108.gif', '建筑师': '109.gif', '士族': '110.gif',
+  '贪狼营': '111.gif', '麒麟卫': '112.gif', '青龙军': '113.gif', '飞鸢': '114.gif', '西凉铁骑': '115.gif', '南蛮象': '116.gif', '临冲车': '117.gif', '轰天雷': '118.gif', '木牛流马': '119.gif', '汉室宗亲': '120.gif',
+  '影卫': '121.gif', '修罗': '123.gif', '密探': '124.gif', '神风': '125.gif', '朱雀骑': '126.gif', '霸王骑': '127.gif', '对楼车': '128.gif', '炬石车': '129.gif', '风水师': '130.gif', '太平术士': '131.gif',
+}
 const generalIcons: Record<string, string> = { wei: 'general_tag_1.gif', shu: 'general_tag_2.gif', wu: 'general_tag_3.gif' }
 const categoryOrder = { infantry: 0, cavalry: 1, siege: 2, special: 3, unknown: 4 }
 

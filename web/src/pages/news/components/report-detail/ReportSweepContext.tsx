@@ -23,8 +23,8 @@ const ReportSweepContext: FC<ReportSweepContextProps> = ({ sweep }) => {
       <h3 className="text-xs font-bold text-cyan-500">扫荡摘要</h3>
       <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px] text-[var(--color-text-secondary)] sm:grid-cols-4">
         <span>目标 {sweep.requested ?? defenders.length}</span>
-        <span>成功 {sweep.success ?? 0}</span>
-        <span>失败 {sweep.failed ?? 0}</span>
+        <span>已结算 {sweep.success ?? 0}</span>
+        <span>异常 {sweep.failed ?? 0}</span>
         <span>中止 {sweep.stopped ? '是' : '否'}</span>
       </div>
       {defenders.length > 0 && (

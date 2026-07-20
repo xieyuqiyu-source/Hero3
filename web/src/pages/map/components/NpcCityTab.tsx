@@ -104,6 +104,9 @@ const NpcCityTab: FC = () => {
       const result = completedTask.result
       useGameStore.getState().patchState({
         resources: result.resources,
+        resourceProduction: result.resourceProduction,
+        resourceSettledAt: result.resourceSettledAt,
+        generalTraitProgress: result.generalTraitProgress,
         army: result.army,
         general: result.general,
         generals: result.generals,

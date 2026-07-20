@@ -1,6 +1,7 @@
+// 本文件归口玩家兵力数组的通用变更和转换 helper。
 package game
 
-// 本文件归口玩家兵力数组的通用变更和转换 helper。
+import "sort"
 
 // AddArmyUnit 给玩家增加指定兵种兵力。
 func AddArmyUnit(state *GameState, unitType string, amount int) {
@@ -81,5 +82,8 @@ func armyMapToSlice(m map[string]int) []ArmyUnit {
 			out = append(out, ArmyUnit{UnitType: unitType, Amount: amount})
 		}
 	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].UnitType < out[j].UnitType
+	})
 	return out
 }

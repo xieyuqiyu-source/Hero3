@@ -33,6 +33,9 @@ watch(() => props.resultVersion, () => {
 /** 判断武将是否被除主将槽外的真实任务占用。 */
 function generalBusy(generalId: string) { return props.assignments.some((assignment) => assignment.generalId === generalId && assignment.id !== 'main' && assignment.slot !== 'main') }
 
+/** 显示包含被动特性加成后的武力，便于即时战斗前核对实际数值。 */
+function generalForce(general: GeneralState) { return general.effectiveStats?.force ?? general.stats?.force ?? 0 }
+
 /** 将兵力输入限制为当前后端返回的可用整数范围。 */
 function normalizedAmount(unit: RecruitmentUnitViewModel) {
   if (!unit.dispatchable) return 0
@@ -88,7 +91,7 @@ function submitCommand() {
         <div class="march-command-general">
           <img src="/assets/official/map/command/top_xz.gif" alt="武将" />
           <span v-if="!generals.length">当前没有可出征武将</span>
-          <label v-for="general in generals" :key="general.id" :class="{ busy: generalBusy(general.id) }"><input v-model="selectedGeneralId" type="radio" name="npc-general" :value="general.id" :disabled="submitting || action === 'scout' || generalBusy(general.id)" />{{ general.name }}(Lv {{ general.level }})</label>
+          <label v-for="general in generals" :key="general.id" :class="{ busy: generalBusy(general.id) }"><input v-model="selectedGeneralId" type="radio" name="npc-general" :value="general.id" :disabled="submitting || action === 'scout' || generalBusy(general.id)" />{{ general.name }}(Lv {{ general.level }}，武力 {{ generalForce(general) }})</label>
           <label v-if="generals.length"><input v-model="selectedGeneralId" type="radio" name="npc-general" value="" :disabled="submitting || action === 'scout'" />不出动</label>
         </div>
         <div v-if="action === 'scout'" class="march-scout-note">

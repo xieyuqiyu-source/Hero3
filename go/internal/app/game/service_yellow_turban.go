@@ -135,6 +135,9 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 	if err != nil {
 		return BattleReport{}, err
 	}
+	if march.Status == YellowTurbanMarchStatusResolved && strings.TrimSpace(march.DefenderReportID) != "" {
+		return s.finalizeResolvedYellowTurbanMarch(march, now)
+	}
 	if march.Status != YellowTurbanMarchStatusMarching {
 		if march.Status == YellowTurbanMarchStatusResolved && strings.TrimSpace(march.DefenderReportID) != "" {
 			return s.retryResolvedYellowTurbanRewards(march, now)
@@ -158,8 +161,9 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 			return BattleReport{}, nil, nil, err
 		}
 		defenderGeneralIDs := pvpDefenseGeneralIDs(state)
+		defenderGeneralSnapshots := buildPvpDefenseGeneralSnapshots(state)
 		defenderTraits := buildActiveTraitsForGeneralIDs(state, defenderGeneralIDs)
-		defenderUnits, sourceGroups, err := buildPvpDefenderUnits(state, reinforcements, now)
+		defenderUnits, sourceGroups, reinforcementBeforeOutcomes, err := buildPvpDefenderUnits(state, reinforcements, now, "yellow_turban")
 		if errors.Is(err, ErrNoUnitsSelected) {
 			defenderUnits = []combat.Unit{}
 			sourceGroups = nil
@@ -175,6 +179,7 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 			DefenderOwnsTrait: true,
 			IsPvP:             true,
 			SameFaction:       march.SourceFaction == state.Player.Faction,
+			Scene:             "yellow_turban",
 		}
 		general.Dispatch(defenderBeforeCtx, defenderTraits)
 		battle := combat.Resolve(combat.CombatInput{
@@ -184,6 +189,7 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 			WallLevel:   pvpDefenderCityWallLevel(state),
 			WallFaction: state.Player.Faction,
 		})
+		applyPreBattleLossesToCombatResult(&battle, defenderBeforeCtx)
 		afterCombatCtx := &general.AfterCombatResolveContext{
 			Result:            &battle,
 			Attacker:          &attackerArmy,
@@ -191,13 +197,19 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 			AttackerOwnsTrait: false,
 			DefenderOwnsTrait: true,
 			IsAttackerOnly:    true,
+			Scene:             "yellow_turban",
 		}
-		general.Dispatch(afterCombatCtx, withTraitOwnerSide(defenderTraits, "defender"))
+		sharedDefenderTraits, sourceDefenderTraits := partitionMainDefenderSourceTraits(defenderTraits)
+		general.Dispatch(afterCombatCtx, withTraitOwnerSide(sharedDefenderTraits, "defender"))
 		defenderTotalLosses := combatLossMap(battle.DefenderLosses)
 		attackerLosses := combatLossMap(battle.AttackerLosses)
 		defenderLosses, reinforcementLosses := allocatePvpDefenderLosses(defenderTotalLosses, sourceGroups)
+		defenderLosses = applyMainDefenderAfterCombatTraits(defenderBefore, defenderLosses, state.Player.Faction, sourceDefenderTraits, afterCombatCtx)
 		applyArmyLosses(state, defenderLosses)
-		totalReinforcementLosses := applyReinforcementAfterBattleTraits(reinforcements, reinforcementLosses, battle.Winner)
+		reinforcementResolution := resolveReinforcementAfterBattleTraits(reinforcements, reinforcementLosses, battle.Winner, "yellow_turban", 0)
+		totalReinforcementLosses := reinforcementResolution.FinalLosses
+		reinforcementTraitOutcomes := mergeReinforcementTraitOutcomeMaps(nil, reinforcementBeforeOutcomes)
+		reinforcementTraitOutcomes = mergeReinforcementTraitOutcomeMaps(reinforcementTraitOutcomes, reinforcementResolution.Outcomes)
 		changedReinforcements := applyPvpReinforcementLosses(reinforcements, totalReinforcementLosses, now)
 		defenderArmyMap := armySliceToMap(state.Army)
 		defenderAfterBattleCtx := &general.AfterBattleContext{
@@ -205,6 +217,8 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 			PlayerLosses: defenderLosses,
 			IsAttacker:   false,
 			Won:          battle.Winner == "defender",
+			Winner:       battle.Winner,
+			Scene:        "yellow_turban",
 		}
 		general.Dispatch(defenderAfterBattleCtx, defenderTraits)
 		if len(defenderAfterBattleCtx.Revived) > 0 {
@@ -250,14 +264,18 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 			CreatedAt:         nowText,
 		}
 		report.EventID = eventID
-		report.PvpDefenderGenerals = buildPvpDefenseGeneralSnapshots(state)
+		report.PvpDefenderGenerals = defenderGeneralSnapshots
 		report.PvpReinforcements = buildPvpReinforcementSnapshot(reinforcements, reinforcementGeneralExp)
 		report.PvpReinforcementLosses = cloneNestedStringIntMap(totalReinforcementLosses)
+		report.SurvivedUnits = cloneStringIntMap(defenderArmyMap)
 		if len(defenderAfterBattleCtx.Revived) > 0 {
 			report.RevivedUnits = cloneStringIntMap(defenderAfterBattleCtx.Revived)
 		}
 		mergeTraitOutcomes(&report, defenderBeforeCtx.Triggered)
+		mergeTraitOutcomes(&report, flattenReinforcementTraitOutcomes(reinforcementBeforeOutcomes))
 		mergeTraitOutcomes(&report, afterCombatCtx.Triggered)
+		mergeTraitOutcomes(&report, flattenReinforcementTraitOutcomes(reinforcementResolution.AfterCombatOutcomes))
+		mergeTraitOutcomes(&report, flattenReinforcementTraitOutcomes(reinforcementResolution.AfterBattleOutcomes))
 		mergeTraitOutcomes(&report, defenderAfterBattleCtx.Triggered)
 		if defenderExpResult.Gained > 0 {
 			report.GeneralExpGained = defenderExpResult.Gained
@@ -268,7 +286,11 @@ func (s *Service) ResolveYellowTurbanMarch(marchID string) (BattleReport, error)
 		report.Detail.Extra = mergeReportExtraMap(report.Detail.Extra, map[string]interface{}{
 			"yellowTurban": buildYellowTurbanReportExtra(lockedMarch),
 		})
-		reinforcementReports := buildPvpReinforcementReports(report, nil, state, changedReinforcements, totalReinforcementLosses, reinforcementGeneralExp, nowText)
+		reinforcementReports := buildPvpReinforcementReportsByPhase(&report, eventID, nil, state, changedReinforcements, totalReinforcementLosses, reinforcementGeneralExp, reinforcementTraitReportPhases{
+			Before: reinforcementBeforeOutcomes, SelfAfterCombat: reinforcementResolution.AfterCombatOutcomes,
+			AfterBattle: reinforcementResolution.AfterBattleOutcomes, All: reinforcementTraitOutcomes,
+		}, reportResult, nowText)
+		advanceReinforcementGeneralSnapshots(changedReinforcements, reinforcementGeneralExp)
 		for i := range reinforcementReports {
 			reinforcementReports[i].SourceType = ReportSourceYellowTurban
 			reinforcementReports[i].BattleType = BattleTypeYellowTurban
@@ -329,6 +351,40 @@ func (s *Service) retryResolvedYellowTurbanRewards(march YellowTurbanMarch, now 
 	}
 	if err := s.applyReinforcementGeneralExpFromReports(reinforcementReports, now); err != nil {
 		return BattleReport{}, err
+	}
+	return report, nil
+}
+
+// finalizeResolvedYellowTurbanMarch 从事务内战报恢复标准事件和援军武将经验结算。
+func (s *Service) finalizeResolvedYellowTurbanMarch(march YellowTurbanMarch, now time.Time) (BattleReport, error) {
+	report, err := s.repo.GetReportForPlayer(march.TargetPlayerID, march.DefenderReportID)
+	if err != nil {
+		return BattleReport{}, err
+	}
+	reports, err := s.repo.ListReportsByEventForAdmin(report.EventID)
+	if err != nil {
+		return BattleReport{}, err
+	}
+	if len(reports) == 0 {
+		reports = []BattleReport{report}
+	}
+	if _, err := s.CreateBattleReports(BattleReportCreateInput{
+		EventID:    report.EventID,
+		SourceType: ReportSourceYellowTurban,
+		SourceID:   march.ID,
+		BattleType: BattleTypeYellowTurban,
+		Result:     report.Result,
+		Reports:    reports,
+		Extra: map[string]interface{}{
+			"yellowTurbanMarchId": march.ID,
+			"sourceCityId":        march.SourceCityID,
+			"riskLevelId":         march.RiskLevelID,
+		},
+	}); err != nil {
+		return BattleReport{}, err
+	}
+	if err := s.applyReinforcementGeneralExpFromReports(reports, now); err != nil {
+		return report, err
 	}
 	return report, nil
 }

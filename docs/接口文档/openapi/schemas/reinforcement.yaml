@@ -48,10 +48,33 @@ ReinforcementGeneralSnapshot:
     generalLevelAfter:
       type: integer
       description: 本场战斗结算后等级。
+    exp:
+      type: integer
+      description: 增援出发或上一场结算后冻结的武将累计经验，用于服务端计算下一场等级变化。
+    stats:
+      type: object
+      description: 增援出发时将领的基础属性快照。
+      additionalProperties:
+        type: integer
+    effectiveStats:
+      type: object
+      description: 增援出发时包含被动特性加成后的最终四维快照。
+      additionalProperties:
+        type: integer
+    attributes:
+      type: object
+      description: 增援出发时将领的战斗与玩法属性快照。
+      additionalProperties:
+        type: number
     buffs:
       type: object
       additionalProperties:
         type: number
+    traits:
+      type: array
+      description: 增援出发时将领拥有的真实特性快照；不等同于本场实际触发时间线。
+      items:
+        $ref: '#/components/schemas/GeneralTraitInstance'
     assignment:
       type: string
 GarrisonRules:
@@ -149,6 +172,7 @@ Reinforcement:
       $ref: '#/components/schemas/GarrisonRules'
     speedMultiplier:
       type: number
+      description: 服务端按最终行军时长计算的实际倍率，包含将领行军特性；客户端请求中的同名字段不会直接生效。
     marchSeconds:
       type: integer
     returnSeconds:
@@ -209,6 +233,18 @@ ReinforcementResponse:
           type: array
           items:
             $ref: '#/components/schemas/ArmyUnit'
+        resources:
+          $ref: '#/components/schemas/ResourceState'
+        resourceProduction:
+          $ref: '#/components/schemas/ResourceProduction'
+        resourceSettledAt:
+          type: string
+          format: date-time
+        generalTraitProgress:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
         generals:
           type: array
           items:

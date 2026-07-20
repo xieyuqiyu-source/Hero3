@@ -10,6 +10,15 @@ BattleReport:
       type: string
     ownerPlayerId:
       type: string
+    playerFaction:
+      type: string
+      description: 兼容字段，战报所有者阵营；防守视角中对应守城方。
+    playerName:
+      type: string
+      description: 兼容字段，战报所有者名称；防守视角中对应守城方。
+    playerPower:
+      type: integer
+      description: 兼容字段，战报所有者本场战力。
     viewType:
       type: string
       enum: [attack, defense, reinforcement, scout, system]
@@ -33,19 +42,130 @@ BattleReport:
       type: string
     result:
       type: string
-    winnerSide:
-      type: string
-      enum: [attacker, defender, draw, none]
-    ownerSide:
-      type: string
-      enum: [attacker, defender, reinforcement, scout, observer]
-    ownerOutcome:
-      type: string
-      enum: [victory, defeat, draw, intel_success, intel_failed, notice]
     targetId:
       type: string
     targetName:
       type: string
+    defenderFaction:
+      type: string
+      description: 兼容字段，战报目标阵营；防守视角中对应来袭方。
+    enemyPower:
+      type: integer
+      description: 兼容字段，战报目标本场战力。
+    dispatchedUnits:
+      type: object
+      description: 兼容字段，本场出动兵力。
+      additionalProperties:
+        type: integer
+    lostUnits:
+      type: object
+      description: 兼容字段，本场或聚合战斗累计阵亡兵力。
+      additionalProperties:
+        type: integer
+    survivedUnits:
+      type: object
+      description: 战后实际存活或归队兵力；复活、最终减损和扫荡聚合场景应优先使用该值。
+      additionalProperties:
+        type: integer
+    defenderUnits:
+      type: object
+      description: 兼容字段，战报目标本场出动兵力；防守视角中对应来袭方。
+      additionalProperties:
+        type: integer
+    defenderLostUnits:
+      type: object
+      description: 兼容字段，战报目标本场损失。
+      additionalProperties:
+        type: integer
+    defenderResources:
+      type: object
+      description: 兼容字段，按情报可见性保存的战报目标资源快照。
+      additionalProperties:
+        type: integer
+    defenderRevealed:
+      type: boolean
+      description: 兼容字段，目标兵力、资源、将领和城墙是否已向战报所有者揭示。
+    rewards:
+      type: object
+      description: 兼容字段，本场实际获得或掠夺的资源。
+      additionalProperties:
+        type: integer
+    overflow:
+      type: object
+      description: 兼容字段，超出容量未能获得的资源。
+      additionalProperties:
+        type: integer
+    overflowCityGold:
+      type: integer
+      description: 兼容字段，本场实际获得的城金。
+    revivedUnits:
+      type: object
+      description: 战后复活或通过最终减损返还的逐兵种数量。
+      additionalProperties:
+        type: integer
+    traitTriggered:
+      type: array
+      description: 兼容字段，按真实触发顺序保存特性结果的存储键；展示名称应读取对应结果的 traitId。
+      items:
+        type: string
+    traitOutcomes:
+      type: object
+      description: 兼容字段，按存储键保存每条真实特性结果；同一特性可因触发者不同出现多条。
+      additionalProperties:
+        $ref: '#/components/schemas/TraitOutcomeReport'
+    generalExpGained:
+      type: integer
+      description: 当前战报拥有者的参战武将在本场实际获得的经验。
+    generalLevelBefore:
+      type: integer
+      description: 当前战报拥有者的参战武将战前等级。
+    generalLevelAfter:
+      type: integer
+      description: 当前战报拥有者的参战武将战后等级。
+    pvpAttackerGenerals:
+      type: array
+      description: 兼容字段，本场进攻方将领快照；不等同于真实触发时间线。
+      items:
+        $ref: '#/components/schemas/BattleReportGeneral'
+    pvpDefenderGenerals:
+      type: array
+      description: 兼容字段，本场防守方将领快照；不等同于真实触发时间线。
+      items:
+        $ref: '#/components/schemas/BattleReportGeneral'
+    pvpReinforcements:
+      type: array
+      description: 本场实际参战的逐批援军快照，包含后端权威经验和等级变化。
+      items:
+        $ref: '#/components/schemas/BattleReportReinforcementSnapshot'
+    pvpReinforcementLosses:
+      type: object
+      description: 按增援批次 ID 和兵种 ID 保存的本场实际损失。
+      additionalProperties:
+        type: object
+        additionalProperties:
+          type: integer
+    pvpWall:
+      type: object
+      description: 兼容字段，本场防守方城墙的后端权威快照；前端不得自行重算。
+      properties:
+        faction:
+          type: string
+        level:
+          type: integer
+        base:
+          type: number
+        multiplier:
+          type: number
+        factionDefenseBonus:
+          type: number
+        totalDefenseBonus:
+          type: number
+        hardness:
+          type: number
+        minDamagedLevelFrom20:
+          type: integer
+        maxDamagedLevelFrom20:
+          type: integer
     detail:
       $ref: '#/components/schemas/BattleReportDetail'
     drops:
@@ -77,6 +197,30 @@ BattleReportPage:
     total:
       type: integer
       example: 23
+TraitOutcomeReport:
+  type: object
+  required: [traitId]
+  properties:
+    traitId:
+      type: string
+      description: 正式特性 ID，不一定等于 traitOutcomes 的内部存储键。
+    name:
+      type: string
+    traitType:
+      type: string
+    ownerSide:
+      type: string
+      enum: [attacker, defender, reinforcement]
+    ownerGeneralId:
+      type: string
+    ownerPlayerId:
+      type: string
+      description: 特性触发玩家；多名援军使用同一将领时用于精确归属。
+    scope:
+      type: string
+    detail:
+      type: object
+      additionalProperties: true
 BattleReportEventContext:
   type: object
   required: [event, reports, participants]
@@ -174,6 +318,15 @@ BattleReportDetail:
       type: string
     result:
       type: string
+    winnerSide:
+      type: string
+      enum: [attacker, defender, draw, none]
+    ownerSide:
+      type: string
+      enum: [attacker, defender, reinforcement, scout, observer]
+    ownerOutcome:
+      type: string
+      enum: [victory, defeat, draw, intel_success, intel_failed, notice]
     title:
       type: string
     summary:
@@ -275,6 +428,28 @@ BattleReportGeneral:
     generalLevelAfter:
       type: integer
       description: 该参战将领结算经验后的等级。
+    stats:
+      type: object
+      additionalProperties:
+        type: integer
+    effectiveStats:
+      type: object
+      description: 包含被动特性加成后的本场最终四维快照。
+      additionalProperties:
+        type: integer
+    attributes:
+      type: object
+      additionalProperties:
+        type: number
+    buffs:
+      type: object
+      additionalProperties:
+        type: number
+    traits:
+      type: array
+      description: 参战将领拥有的特性快照，不等同于本场实际触发时间线。
+      items:
+        $ref: '#/components/schemas/GeneralTraitInstance'
 BattleReportTrait:
   type: object
   properties:
@@ -285,6 +460,8 @@ BattleReportTrait:
     ownerSide:
       type: string
     ownerRole:
+      type: string
+    ownerPlayerId:
       type: string
     generalId:
       type: string
@@ -405,27 +582,16 @@ BattleReportReinforcementSnapshot:
     generals:
       type: array
       items:
-        type: object
-        properties:
-          id:
-            type: string
-          name:
-            type: string
-          level:
-            type: integer
-          generalExpGained:
-            type: integer
-            description: 该增援将领在本场实际获得的经验。
-          generalLevelBefore:
-            type: integer
-            description: 该增援将领在本场结算前等级。
-          generalLevelAfter:
-            type: integer
-            description: 该增援将领在本场结算后等级。
-        additionalProperties: true
+        $ref: '#/components/schemas/ReinforcementGeneralSnapshot'
     generalExpGained:
       type: integer
       description: 该批增援携带武将在本场实际获得的经验。
+    generalLevelBefore:
+      type: integer
+      description: 该批增援携带武将的本场战前等级，由服务端按累计经验基线计算。
+    generalLevelAfter:
+      type: integer
+      description: 该批增援携带武将的本场战后等级，由服务端结算，前端不得自行推算。
     buffs:
       type: array
       items:

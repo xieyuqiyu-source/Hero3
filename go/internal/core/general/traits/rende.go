@@ -1,8 +1,8 @@
+// 本文件实现刘备“仁德天下”的战后复活和战报明细。
 package traits
 
 import (
 	"math"
-	"math/rand"
 
 	"hero3/internal/core/general"
 )
@@ -17,18 +17,26 @@ import (
 // - 所有兵种都能复活
 type Rende struct{}
 
+// init 注册仁德特性。
 func init() {
 	general.Register(&Rende{})
 }
 
-func (r *Rende) ID() string   { return "rende" }
+// ID 返回仁德特性 ID。
+func (r *Rende) ID() string { return "rende" }
+
+// Name 返回仁德展示名称。
 func (r *Rende) Name() string { return "仁德天下" }
+
+// Type 返回仁德特性类型。
 func (r *Rende) Type() string { return general.TraitTypeSpecial }
 
+// Description 返回仁德当前效果说明。
 func (r *Rende) Description(p general.Params) string {
 	return "战斗结束后，损失的兵有概率复活归队"
 }
 
+// ParamSchema 返回仁德可配置参数。
 func (r *Rende) ParamSchema() []general.ParamField {
 	return []general.ParamField{
 		{Key: "effectRate", Label: "复活比例", Description: "损失兵的复活比例", Default: 0.5, Min: 0, Max: 1, Step: 0.01},
@@ -38,6 +46,7 @@ func (r *Rende) ParamSchema() []general.ParamField {
 	}
 }
 
+// Subscribe 订阅战斗结束事件。
 func (r *Rende) Subscribe() []general.EventSubscription {
 	return []general.EventSubscription{
 		{
@@ -48,15 +57,14 @@ func (r *Rende) Subscribe() []general.EventSubscription {
 	}
 }
 
+// afterBattle 计算各兵种真实复活数并写入特性战报。
 func (r *Rende) afterBattle(ctx general.EventContext, p general.Params) {
 	c, ok := ctx.(*general.AfterBattleContext)
 	if !ok {
 		return
 	}
 
-	// 触发概率（限制在 0-1 之间）
-	chance := p.FloatWithBounds("triggerChance", 0.5, 0, 1)
-	if rand.Float64() > chance {
+	if !triggeredWithDefault(p, 0.5) {
 		return
 	}
 
@@ -72,11 +80,14 @@ func (r *Rende) afterBattle(ctx general.EventContext, p general.Params) {
 	}
 
 	totalRevived := 0
-	for unitType, lost := range c.PlayerLosses {
-		if lost <= 0 {
-			continue
-		}
+	revivedUnits := map[string]int{}
+	for _, unitType := range sortedLossUnitTypes(c.PlayerLosses) {
+		lost := c.PlayerLosses[unitType]
 		revived := int(math.Floor(float64(lost) * rate))
+		remainingLoss := lost - c.Revived[unitType]
+		if revived > remainingLoss {
+			revived = remainingLoss
+		}
 		if revived <= 0 {
 			continue
 		}
@@ -88,6 +99,7 @@ func (r *Rende) afterBattle(ctx general.EventContext, p general.Params) {
 		}
 		c.Revived[unitType] += revived
 		c.PlayerArmy[unitType] += revived
+		revivedUnits[unitType] += revived
 		totalRevived += revived
 	}
 
@@ -104,7 +116,11 @@ func (r *Rende) afterBattle(ctx general.EventContext, p general.Params) {
 			OwnerPlayerID:  c.Actor.PlayerID,
 			Scope:          c.Actor.Scope,
 			Detail: map[string]interface{}{
-				"totalRevived": totalRevived,
+				"totalRevived":   totalRevived,
+				"revivedUnits":   revivedUnits,
+				"effectRate":     rate,
+				"maxReviveCount": maxRevive,
+				"triggerChance":  p.FloatWithBounds("triggerChance", 0.5, 0, 1),
 			},
 		}
 	}

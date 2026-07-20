@@ -33,14 +33,17 @@ type AttackNpcRequest struct {
 
 // AttackNpcResponse 攻击 NPC 响应
 type AttackNpcResponse struct {
-	BattleReport BattleReport  `json:"battleReport"`
-	Resources    ResourceState `json:"resources"`
-	Army         []ArmyUnit    `json:"army"`
-	General      *General      `json:"general,omitempty"`
-	Generals     []General     `json:"generals,omitempty"`
-	CityGold     FlexInt       `json:"cityGold"`
-	NpcState     *NpcState     `json:"npcState,omitempty"`
-	ServerTime   string        `json:"serverTime"`
+	BattleReport         BattleReport       `json:"battleReport"`
+	Resources            ResourceState      `json:"resources"`
+	ResourceProduction   ResourceProduction `json:"resourceProduction"`
+	ResourceSettledAt    string             `json:"resourceSettledAt"`
+	GeneralTraitProgress map[string]float64 `json:"generalTraitProgress"`
+	Army                 []ArmyUnit         `json:"army"`
+	General              *General           `json:"general,omitempty"`
+	Generals             []General          `json:"generals,omitempty"`
+	CityGold             FlexInt            `json:"cityGold"`
+	NpcState             *NpcState          `json:"npcState,omitempty"`
+	ServerTime           string             `json:"serverTime"`
 }
 
 // SweepNpcRequest 批量扫荡 NPC 请求。
@@ -53,17 +56,20 @@ type SweepNpcRequest struct {
 
 // SweepNpcResponse 批量扫荡 NPC 响应。
 type SweepNpcResponse struct {
-	BattleReport BattleReport  `json:"battleReport"`
-	Done         int           `json:"done"`
-	Failed       int           `json:"failed"`
-	Stopped      bool          `json:"stopped"`
-	Resources    ResourceState `json:"resources"`
-	Army         []ArmyUnit    `json:"army"`
-	General      *General      `json:"general,omitempty"`
-	Generals     []General     `json:"generals,omitempty"`
-	CityGold     FlexInt       `json:"cityGold"`
-	NpcState     *NpcState     `json:"npcState,omitempty"`
-	ServerTime   string        `json:"serverTime"`
+	BattleReport         BattleReport       `json:"battleReport"`
+	Done                 int                `json:"done"`
+	Failed               int                `json:"failed"`
+	Stopped              bool               `json:"stopped"`
+	Resources            ResourceState      `json:"resources"`
+	ResourceProduction   ResourceProduction `json:"resourceProduction"`
+	ResourceSettledAt    string             `json:"resourceSettledAt"`
+	GeneralTraitProgress map[string]float64 `json:"generalTraitProgress"`
+	Army                 []ArmyUnit         `json:"army"`
+	General              *General           `json:"general,omitempty"`
+	Generals             []General          `json:"generals,omitempty"`
+	CityGold             FlexInt            `json:"cityGold"`
+	NpcState             *NpcState          `json:"npcState,omitempty"`
+	ServerTime           string             `json:"serverTime"`
 }
 
 // BattleSimulationRequest 战斗模拟请求：只计算战果，不扣兵、不保存战报。
@@ -93,12 +99,16 @@ type ScoutNpcRequest struct {
 
 // ScoutNpcResponse 侦查 NPC 响应
 type ScoutNpcResponse struct {
-	Success      bool         `json:"success"`
-	BattleReport BattleReport `json:"battleReport"`
-	NpcCity      *NpcCity     `json:"npcCity"`
-	Army         []ArmyUnit   `json:"army"`
-	NpcState     *NpcState    `json:"npcState,omitempty"`
-	ServerTime   string       `json:"serverTime"`
+	Success              bool               `json:"success"`
+	BattleReport         BattleReport       `json:"battleReport"`
+	NpcCity              *NpcCity           `json:"npcCity"`
+	Resources            ResourceState      `json:"resources"`
+	ResourceProduction   ResourceProduction `json:"resourceProduction"`
+	ResourceSettledAt    string             `json:"resourceSettledAt"`
+	GeneralTraitProgress map[string]float64 `json:"generalTraitProgress"`
+	Army                 []ArmyUnit         `json:"army"`
+	NpcState             *NpcState          `json:"npcState,omitempty"`
+	ServerTime           string             `json:"serverTime"`
 }
 
 // AttackNpc 攻击 NPC 城池
@@ -324,14 +334,17 @@ func (s *Service) attackNpc(req AttackNpcRequest, saveReport bool) (AttackNpcRes
 	}
 
 	return AttackNpcResponse{
-		BattleReport: report,
-		Resources:    state.Resources,
-		Army:         state.Army,
-		General:      state.General,
-		Generals:     state.Generals,
-		CityGold:     state.CityGold,
-		NpcState:     state.NpcState,
-		ServerTime:   state.ServerTime,
+		BattleReport:         report,
+		Resources:            state.Resources,
+		ResourceProduction:   state.ResourceProduction,
+		ResourceSettledAt:    state.ResourceSettledAt,
+		GeneralTraitProgress: cloneGeneralTraitProgress(state.GeneralTraitProgress),
+		Army:                 state.Army,
+		General:              state.General,
+		Generals:             state.Generals,
+		CityGold:             state.CityGold,
+		NpcState:             state.NpcState,
+		ServerTime:           state.ServerTime,
 	}, nil
 }
 
@@ -390,6 +403,7 @@ func resolveNpcBattleOnState(state *GameState, req AttackNpcRequest, now time.Ti
 	attackerArmy := buildCombatArmy(state.Player.Faction, attackerUnits)
 	defenderArmy := buildNpcCombatArmy(npc)
 	activeTraits := buildActiveTraitsForGeneralIDs(state, generalIDs)
+	generalSnapshots := buildPvpGeneralSnapshots(state, generalIDs)
 	beforeCtx := &general.BeforeBattleContext{
 		Attacker:          &attackerArmy,
 		Defender:          &defenderArmy,
@@ -397,10 +411,13 @@ func resolveNpcBattleOnState(state *GameState, req AttackNpcRequest, now time.Ti
 		DefenderOwnsTrait: false,
 		IsPvP:             false,
 		SameFaction:       true,
+		Scene:             mode,
 	}
 	general.Dispatch(beforeCtx, activeTraits)
 	capturedToArmy, routedToGarrison := splitCapturedUnitsByOwnerFaction(state.Player.Faction, beforeCtx.CapturedToArmy)
 	capturedToGarrison := mergeTroopMaps(routedToGarrison, beforeCtx.CapturedToGarrison)
+	capturedDefenderUnits := mergeTroopMaps(capturedToArmy, capturedToGarrison)
+	routeNpcCaptureTraitOutcomes(beforeCtx.Triggered, capturedToArmy, capturedToGarrison)
 	for unitType, count := range capturedToArmy {
 		mergeIntoArmy(state, unitType, count)
 	}
@@ -411,6 +428,7 @@ func resolveNpcBattleOnState(state *GameState, req AttackNpcRequest, now time.Ti
 		Defender:  defenderArmy,
 		WallLevel: 0,
 	})
+	applyPreBattleLossesToCombatResult(&result, beforeCtx)
 
 	afterCombatCtx := &general.AfterCombatResolveContext{
 		Result:            &result,
@@ -419,10 +437,11 @@ func resolveNpcBattleOnState(state *GameState, req AttackNpcRequest, now time.Ti
 		AttackerOwnsTrait: true,
 		DefenderOwnsTrait: false,
 		IsAttackerOnly:    true,
+		Scene:             mode,
 	}
 	general.Dispatch(afterCombatCtx, activeTraits)
 
-	report := applyNpcBattleResult(state, npc, result, attackerUnits, mode, now)
+	report := applyNpcBattleResult(state, npc, result, attackerUnits, beforeCtx.DefenderSuppressedUnits, capturedDefenderUnits, mode, now)
 	if len(capturedToArmy) > 0 {
 		report.CapturedUnits = capturedToArmy
 	}
@@ -438,6 +457,8 @@ func resolveNpcBattleOnState(state *GameState, req AttackNpcRequest, now time.Ti
 		PlayerLosses: report.LostUnits,
 		IsAttacker:   true,
 		Won:          report.Result == "attacker_victory",
+		Winner:       result.Winner,
+		Scene:        mode,
 	}
 	general.Dispatch(afterBattleCtx, activeTraits)
 	if len(afterBattleCtx.Revived) > 0 {
@@ -450,6 +471,7 @@ func resolveNpcBattleOnState(state *GameState, req AttackNpcRequest, now time.Ti
 		}
 	}
 	mergeTraitOutcomes(&report, afterBattleCtx.Triggered)
+	report.SurvivedUnits = calculateReportSurvivedUnits(report.DispatchedUnits, report.LostUnits, report.RevivedUnits, report.CapturedUnits)
 
 	expResult := applyGeneralBattleExpToRoster(state, generalIDs, calculateGeneralBattleExpFromLosses(npc.Faction, result.DefenderLosses))
 	if expResult.Gained > 0 {
@@ -479,7 +501,7 @@ func resolveNpcBattleOnState(state *GameState, req AttackNpcRequest, now time.Ti
 		mergeRewardApplyResult(&rewardApply, apply)
 		report.Drops = dropSnapshots
 	}
-	report.PvpAttackerGenerals = buildPvpGeneralSnapshots(state, generalIDs)
+	report.PvpAttackerGenerals = generalSnapshots
 	report.GrantedRewards = buildBattleGrantedRewards(report)
 
 	if report.OverflowCityGold > 0 {
@@ -491,6 +513,30 @@ func resolveNpcBattleOnState(state *GameState, req AttackNpcRequest, now time.Ti
 		CapturedToGarrison:    capturedToGarrison,
 		CapturedSourceFaction: npc.Faction,
 	}, nil
+}
+
+// routeNpcCaptureTraitOutcomes 按应用层最终兵种归属修正 NPC 俘虏特性的战报去向。
+func routeNpcCaptureTraitOutcomes(outcomes map[string]general.TraitOutcome, capturedToArmy map[string]int, capturedToGarrison map[string]int) {
+	for key, outcome := range outcomes {
+		if outcome.TraitID != "meiren" {
+			continue
+		}
+		detail := make(map[string]interface{}, len(outcome.Detail)+2)
+		for detailKey, value := range outcome.Detail {
+			if detailKey == "capturedUnits" || detailKey == "capturedToGarrison" {
+				continue
+			}
+			detail[detailKey] = value
+		}
+		if len(capturedToArmy) > 0 {
+			detail["capturedUnits"] = cloneStringIntMap(capturedToArmy)
+		}
+		if len(capturedToGarrison) > 0 {
+			detail["capturedToGarrison"] = cloneStringIntMap(capturedToGarrison)
+		}
+		outcome.Detail = detail
+		outcomes[key] = outcome
+	}
 }
 
 const maxNpcSweepTargets = 20
@@ -544,13 +590,16 @@ func (s *Service) sweepNpc(req SweepNpcRequest, limit int) (SweepNpcResponse, er
 	}
 	sweepReportID := "br_" + randomID(8)
 	initialResponse := SweepNpcResponse{
-		Resources:  state.Resources,
-		Army:       state.Army,
-		General:    state.General,
-		Generals:   state.Generals,
-		CityGold:   state.CityGold,
-		NpcState:   state.NpcState,
-		ServerTime: state.ServerTime,
+		Resources:            state.Resources,
+		ResourceProduction:   state.ResourceProduction,
+		ResourceSettledAt:    state.ResourceSettledAt,
+		GeneralTraitProgress: cloneGeneralTraitProgress(state.GeneralTraitProgress),
+		Army:                 state.Army,
+		General:              state.General,
+		Generals:             state.Generals,
+		CityGold:             state.CityGold,
+		NpcState:             state.NpcState,
+		ServerTime:           state.ServerTime,
 	}
 	response := initialResponse
 	var reports []BattleReport
@@ -629,6 +678,9 @@ func (s *Service) sweepNpc(req SweepNpcRequest, limit int) (SweepNpcResponse, er
 				}
 			}
 			attemptResponse.Resources = state.Resources
+			attemptResponse.ResourceProduction = state.ResourceProduction
+			attemptResponse.ResourceSettledAt = state.ResourceSettledAt
+			attemptResponse.GeneralTraitProgress = cloneGeneralTraitProgress(state.GeneralTraitProgress)
 			attemptResponse.Army = state.Army
 			attemptResponse.General = state.General
 			attemptResponse.Generals = state.Generals
@@ -779,6 +831,7 @@ func sweepUnitsFromArmy(army []ArmyUnit) map[string]int {
 func buildNpcSweepReport(reportID string, reports []BattleReport, mode string, requested int, failed int, stopped bool) BattleReport {
 	first := reports[0]
 	last := reports[len(reports)-1]
+	result, victories, defeats, draws := summarizeNpcSweepOutcomes(reports)
 	aggregate := BattleReport{
 		ID:               reportID,
 		PlayerID:         first.PlayerID,
@@ -792,9 +845,10 @@ func buildNpcSweepReport(reportID string, reports []BattleReport, mode string, r
 		TargetID:         "npc_sweep",
 		TargetName:       "NPC 扫荡",
 		Type:             mode,
-		Result:           "attacker_victory",
+		Result:           result,
 		PlayerPower:      first.PlayerPower,
 		DispatchedUnits:  cloneStringIntMap(first.DispatchedUnits),
+		SurvivedUnits:    cloneStringIntMap(last.SurvivedUnits),
 		DefenderFaction:  first.DefenderFaction,
 		DefenderRevealed: true,
 		Read:             false,
@@ -823,11 +877,11 @@ func buildNpcSweepReport(reportID string, reports []BattleReport, mode string, r
 			aggregate.GeneralLevelAfter = report.GeneralLevelAfter
 		}
 		aggregate.Drops = append(aggregate.Drops, report.Drops...)
-		aggregate.PvpAttackerGenerals = latestPvpGeneralSnapshots(aggregate.PvpAttackerGenerals, report.PvpAttackerGenerals)
+		aggregate.PvpAttackerGenerals = initialPvpGeneralSnapshots(aggregate.PvpAttackerGenerals, report.PvpAttackerGenerals)
 		mergeReportTraitOutcomes(&aggregate, report)
 	}
 	aggregate.GrantedRewards = buildBattleGrantedRewards(aggregate)
-	aggregate.Summary = fmt.Sprintf("扫荡 %d 城，成功 %d 场，失败 %d 场，获得 %d 城金，武将经验 +%d。", requested, len(reports), failed, aggregate.OverflowCityGold, aggregate.GeneralExpGained)
+	aggregate.Summary = fmt.Sprintf("扫荡 %d 城，完成 %d 场（胜 %d、负 %d、平 %d），结算异常 %d 场，获得 %d 城金，武将经验 +%d。", requested, len(reports), victories, defeats, draws, failed, aggregate.OverflowCityGold, aggregate.GeneralExpGained)
 	detail := BuildBattleReportDetail(aggregate)
 	if detail.Extra == nil {
 		detail.Extra = map[string]interface{}{}
@@ -842,6 +896,28 @@ func buildNpcSweepReport(reportID string, reports []BattleReport, mode string, r
 	}
 	aggregate.Detail = &detail
 	return aggregate
+}
+
+// summarizeNpcSweepOutcomes 汇总真实胜负；只有全胜或全败才给出单边结论，混合结果记为平局。
+func summarizeNpcSweepOutcomes(reports []BattleReport) (string, int, int, int) {
+	victories, defeats, draws := 0, 0, 0
+	for _, report := range reports {
+		switch report.Result {
+		case "attacker_victory":
+			victories++
+		case "defender_victory":
+			defeats++
+		default:
+			draws++
+		}
+	}
+	if len(reports) > 0 && victories == len(reports) {
+		return "attacker_victory", victories, defeats, draws
+	}
+	if len(reports) > 0 && defeats == len(reports) {
+		return "defender_victory", victories, defeats, draws
+	}
+	return "draw", victories, defeats, draws
 }
 
 // buildNpcSweepDefenders 构造扫荡聚合战报里的轻量 NPC 防守方明细，完整战损使用聚合字段保存。
@@ -861,12 +937,12 @@ func buildNpcSweepDefenders(reports []BattleReport) []BattleReportSweepDefender 
 	return defenders
 }
 
-// latestPvpGeneralSnapshots 保留最新的武将快照，确保聚合战报展示扫荡结束后的等级。
-func latestPvpGeneralSnapshots(current []PvpGeneralSnapshot, next []PvpGeneralSnapshot) []PvpGeneralSnapshot {
-	if len(next) == 0 {
+// initialPvpGeneralSnapshots 保留第一场战前武将快照，使其与聚合战力和初始出动兵力处于同一时点。
+func initialPvpGeneralSnapshots(current []PvpGeneralSnapshot, next []PvpGeneralSnapshot) []PvpGeneralSnapshot {
+	if len(current) > 0 || len(next) == 0 {
 		return current
 	}
-	return append([]PvpGeneralSnapshot(nil), next...)
+	return clonePvpGeneralSnapshots(next)
 }
 
 // mergeReportTraitOutcomes 合并单场战报中的特性触发信息。
@@ -878,20 +954,157 @@ func mergeReportTraitOutcomes(target *BattleReport, source BattleReport) {
 		target.TraitOutcomes = map[string]TraitOutcomeReport{}
 	}
 	for _, traitID := range source.TraitTriggered {
-		alreadyIn := false
-		for _, existing := range target.TraitTriggered {
-			if existing == traitID {
-				alreadyIn = true
-				break
+		if outcome, ok := source.TraitOutcomes[traitID]; ok {
+			storageKey := reportTraitOutcomeStorageKey(target.TraitOutcomes, traitID, outcome)
+			if current, exists := target.TraitOutcomes[storageKey]; exists && sameReportTraitOutcomeOwner(current, outcome) {
+				target.TraitOutcomes[storageKey] = mergeRepeatedSweepTraitOutcome(current, outcome)
+			} else {
+				target.TraitOutcomes[storageKey] = outcome
+			}
+			alreadyIn := false
+			for _, existing := range target.TraitTriggered {
+				if existing == storageKey {
+					alreadyIn = true
+					break
+				}
+			}
+			if !alreadyIn {
+				target.TraitTriggered = append(target.TraitTriggered, storageKey)
 			}
 		}
-		if !alreadyIn {
-			target.TraitTriggered = append(target.TraitTriggered, traitID)
+	}
+}
+
+// mergeRepeatedSweepTraitOutcome 汇总同一将领在多场扫荡中重复触发的实际数量，并保留单场属性修正口径。
+func mergeRepeatedSweepTraitOutcome(current TraitOutcomeReport, next TraitOutcomeReport) TraitOutcomeReport {
+	currentCount := traitDetailIntOr(current.Detail["triggerCount"], 1)
+	nextCount := traitDetailIntOr(next.Detail["triggerCount"], 1)
+	merged := make(map[string]interface{}, len(current.Detail)+len(next.Detail)+1)
+	for key, value := range current.Detail {
+		merged[key] = value
+	}
+	for key, value := range next.Detail {
+		if key == "triggerCount" {
+			continue
 		}
-		if outcome, ok := source.TraitOutcomes[traitID]; ok {
-			target.TraitOutcomes[traitID] = outcome
+		if isCumulativeSweepTraitMap(key) {
+			if totals, ok := sumTraitDetailMaps(merged[key], value); ok {
+				merged[key] = totals
+				continue
+			}
+		}
+		if isCumulativeSweepTraitNumber(key) {
+			if left, leftOK := traitDetailInt(merged[key]); leftOK {
+				if right, rightOK := traitDetailInt(value); rightOK {
+					merged[key] = left + right
+					continue
+				}
+			}
+		}
+		merged[key] = value
+	}
+	merged["triggerCount"] = currentCount + nextCount
+	current.Detail = merged
+	return current
+}
+
+// isCumulativeSweepTraitMap 判断逐兵种或逐资源实际结算值是否应跨扫荡场次累加。
+func isCumulativeSweepTraitMap(key string) bool {
+	switch key {
+	case "preBattleAffected", "suppressedUnits", "capturedUnits", "capturedToGarrison", "extraLosses", "targetExtraLosses", "reducedLosses", "disabledTraits", "revivedUnits", "returnedUnits", "plunderDelta":
+		return true
+	default:
+		return false
+	}
+}
+
+// isCumulativeSweepTraitNumber 判断旧特性中的实际数量字段是否应跨扫荡场次累加。
+func isCumulativeSweepTraitNumber(key string) bool {
+	switch key {
+	case "extraDamage", "totalCaptured", "totalRevived", "totalSuppressed", "disabledTraitCount":
+		return true
+	default:
+		return false
+	}
+}
+
+// sumTraitDetailMaps 把 JSON 前后两种常见数值 map 转成整数并逐项累加。
+func sumTraitDetailMaps(left interface{}, right interface{}) (map[string]int, bool) {
+	leftMap, leftOK := traitDetailIntMap(left)
+	rightMap, rightOK := traitDetailIntMap(right)
+	if !leftOK || !rightOK {
+		return nil, false
+	}
+	for key, value := range rightMap {
+		leftMap[key] += value
+	}
+	return leftMap, true
+}
+
+// traitDetailIntMap 读取特性详情中的整数 map，并返回独立副本。
+func traitDetailIntMap(value interface{}) (map[string]int, bool) {
+	result := map[string]int{}
+	switch typed := value.(type) {
+	case map[string]int:
+		for key, amount := range typed {
+			result[key] = amount
+		}
+		return result, true
+	case map[string]interface{}:
+		for key, raw := range typed {
+			amount, ok := traitDetailInt(raw)
+			if !ok {
+				return nil, false
+			}
+			result[key] = amount
+		}
+		return result, true
+	default:
+		return nil, false
+	}
+}
+
+// traitDetailInt 兼容内存整数和 JSON 解码后的浮点数。
+func traitDetailInt(value interface{}) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case int32:
+		return int(typed), true
+	case int64:
+		return int(typed), true
+	case float64:
+		if typed == float64(int(typed)) {
+			return int(typed), true
 		}
 	}
+	return 0, false
+}
+
+// traitDetailIntOr 读取可选整数，缺失时使用默认值。
+func traitDetailIntOr(value interface{}, fallback int) int {
+	if parsed, ok := traitDetailInt(value); ok {
+		return parsed
+	}
+	return fallback
+}
+
+// calculateReportSurvivedUnits 按真实阵亡、复活和归队俘虏计算本次队伍最终兵力。
+func calculateReportSurvivedUnits(dispatched map[string]int, lost map[string]int, revived map[string]int, captured map[string]int) map[string]int {
+	result := map[string]int{}
+	for unitType, amount := range dispatched {
+		remaining := amount - lost[unitType] + revived[unitType] + captured[unitType]
+		if remaining > 0 {
+			result[unitType] = remaining
+		}
+	}
+	for unitType, amount := range captured {
+		if _, exists := dispatched[unitType]; exists || amount <= 0 {
+			continue
+		}
+		result[unitType] = amount
+	}
+	return result
 }
 
 // isRetryableStorageConflict 判断数据库事务冲突是否适合立即重试。
@@ -1166,11 +1379,15 @@ func (s *Service) ScoutNpc(req ScoutNpcRequest) (ScoutNpcResponse, error) {
 
 	// 返回结果
 	response := ScoutNpcResponse{
-		Success:      scoutSuccess,
-		BattleReport: report,
-		Army:         state.Army,
-		NpcState:     state.NpcState,
-		ServerTime:   state.ServerTime,
+		Success:              scoutSuccess,
+		BattleReport:         report,
+		Resources:            state.Resources,
+		ResourceProduction:   state.ResourceProduction,
+		ResourceSettledAt:    state.ResourceSettledAt,
+		GeneralTraitProgress: cloneGeneralTraitProgress(state.GeneralTraitProgress),
+		Army:                 state.Army,
+		NpcState:             state.NpcState,
+		ServerTime:           state.ServerTime,
 	}
 	if scoutSuccess {
 		response.NpcCity = revealedNpc
@@ -1214,10 +1431,11 @@ func (s *Service) publishBattleRewardEvents(playerID string, report BattleReport
 
 // --- 内部函数 ---
 
+// buildCombatArmy 复制战斗单位快照，避免战前特性污染原始出征数量。
 func buildCombatArmy(faction string, units []combat.Unit) combat.Army {
 	return combat.Army{
 		Faction: faction,
-		Units:   units,
+		Units:   append([]combat.Unit(nil), units...),
 	}
 }
 
@@ -1252,7 +1470,8 @@ func buildNpcCombatArmy(npc *NpcCity) combat.Army {
 	}
 }
 
-func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatResult, attackerUnits []combat.Unit, mode string, now time.Time) BattleReport {
+// applyNpcBattleResult 按真实伤亡、俘虏、压制基数和情报阈值结算 NPC 状态与战报。
+func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatResult, attackerUnits []combat.Unit, defenderSuppressedUnits map[string]int, capturedDefenderUnits map[string]int, mode string, now time.Time) BattleReport {
 	nowStr := now.UTC().Format(resourceDateLayout)
 
 	// 记录出征数量（战斗前）
@@ -1268,6 +1487,7 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 			defenderUnits[loss.ID] = loss.Count
 		}
 	}
+	defenderUnits = mergeTroopMaps(defenderUnits, defenderSuppressedUnits, capturedDefenderUnits)
 
 	// 计算玩家损失和存活
 	playerLosses := map[string]int{}
@@ -1282,6 +1502,7 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 			defenderLostUnits[loss.ID] = loss.Losses
 		}
 	}
+	actualDefenderLostUnits := cloneStringIntMap(defenderLostUnits)
 
 	// 判断防守方是否暴露（战损 >= 25%）
 	totalDefenderBefore := 0
@@ -1290,6 +1511,9 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 	}
 	totalDefenderLost := 0
 	for _, v := range defenderLostUnits {
+		totalDefenderLost += v
+	}
+	for _, v := range capturedDefenderUnits {
 		totalDefenderLost += v
 	}
 	defenderRevealed := totalDefenderBefore == 0 || float64(totalDefenderLost)/float64(totalDefenderBefore) >= 0.25
@@ -1308,21 +1532,8 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 		}
 	}
 
-	// 扣减 NPC 守军
-	for _, loss := range result.DefenderLosses {
-		if loss.Losses <= 0 {
-			continue
-		}
-		for i := range npc.Army {
-			if npc.Army[i].UnitType == loss.ID {
-				npc.Army[i].Amount -= loss.Losses
-				if npc.Army[i].Amount < 0 {
-					npc.Army[i].Amount = 0
-				}
-				break
-			}
-		}
-	}
+	// 阵亡和俘虏都离开 NPC 守军；战报字段仍分别保留两种结算结果。
+	removeNpcArmyUnits(npc, mergeTroopMaps(actualDefenderLostUnits, capturedDefenderUnits))
 	// 重置守军结算时间
 	npc.ArmySettledAt = nowStr
 
@@ -1397,6 +1608,23 @@ func applyNpcBattleResult(state *GameState, npc *NpcCity, result combat.CombatRe
 
 	// 战报通过统一战报服务独立存储，不再内嵌到 state。
 	return report
+}
+
+// removeNpcArmyUnits 从 NPC 当前守军中扣除已阵亡或被俘的兵力。
+func removeNpcArmyUnits(npc *NpcCity, removed map[string]int) {
+	if npc == nil {
+		return
+	}
+	for i := range npc.Army {
+		amount := removed[npc.Army[i].UnitType]
+		if amount <= 0 {
+			continue
+		}
+		npc.Army[i].Amount -= amount
+		if npc.Army[i].Amount < 0 {
+			npc.Army[i].Amount = 0
+		}
+	}
 }
 
 func buildBattleGrantedRewards(report BattleReport) []Reward {
@@ -1953,6 +2181,8 @@ func projectBattleReportForViewer(raw BattleReport) BattleReport {
 			for i := range report.PvpReinforcements {
 				report.PvpReinforcements[i].Generals = nil
 				report.PvpReinforcements[i].GeneralExpGained = 0
+				report.PvpReinforcements[i].GeneralLevelBefore = 0
+				report.PvpReinforcements[i].GeneralLevelAfter = 0
 				report.PvpReinforcements[i].Buffs = nil
 			}
 			redactReportExtraReinforcementGenerals(report.Detail.Extra)
@@ -2045,15 +2275,31 @@ func cloneBattleReport(report BattleReport) BattleReport {
 	cloned := report
 	cloned.DispatchedUnits = cloneStringIntMap(report.DispatchedUnits)
 	cloned.LostUnits = cloneStringIntMap(report.LostUnits)
+	cloned.SurvivedUnits = cloneStringIntMap(report.SurvivedUnits)
 	cloned.DefenderUnits = cloneStringIntMap(report.DefenderUnits)
 	cloned.DefenderLostUnits = cloneStringIntMap(report.DefenderLostUnits)
 	cloned.DefenderResources = cloneStringIntMap(report.DefenderResources)
 	cloned.Rewards = cloneStringIntMap(report.Rewards)
-	cloned.PvpAttackerGenerals = append([]PvpGeneralSnapshot(nil), report.PvpAttackerGenerals...)
-	cloned.PvpDefenderGenerals = append([]PvpGeneralSnapshot(nil), report.PvpDefenderGenerals...)
-	cloned.PvpReinforcements = append([]DefenseReinforcementUnit(nil), report.PvpReinforcements...)
-	for i := range cloned.PvpReinforcements {
-		cloned.PvpReinforcements[i].Troops = cloneStringIntMap(report.PvpReinforcements[i].Troops)
+	cloned.GrantedRewards = cloneBattleReportRewards(report.GrantedRewards)
+	cloned.Drops = append([]BattleReportDrop(nil), report.Drops...)
+	cloned.Overflow = cloneStringIntMap(report.Overflow)
+	cloned.CapturedUnits = cloneStringIntMap(report.CapturedUnits)
+	cloned.CapturedToGarrison = cloneStringIntMap(report.CapturedToGarrison)
+	cloned.RevivedUnits = cloneStringIntMap(report.RevivedUnits)
+	cloned.TraitTriggered = append([]string(nil), report.TraitTriggered...)
+	cloned.TraitOutcomes = cloneTraitOutcomeReports(report.TraitOutcomes)
+	cloned.PvpPointsDelta = cloneStringIntMap(report.PvpPointsDelta)
+	cloned.PvpAttackerGenerals = clonePvpGeneralSnapshots(report.PvpAttackerGenerals)
+	cloned.PvpDefenderGenerals = clonePvpGeneralSnapshots(report.PvpDefenderGenerals)
+	cloned.PvpReinforcements = cloneDefenseReinforcementUnits(report.PvpReinforcements)
+	cloned.PvpReinforcementLosses = cloneNestedStringIntMap(report.PvpReinforcementLosses)
+	if report.PvpWall != nil {
+		wall := *report.PvpWall
+		cloned.PvpWall = &wall
+	}
+	if report.Share != nil {
+		share := *report.Share
+		cloned.Share = &share
 	}
 	if report.Detail != nil {
 		detail := *report.Detail
@@ -2061,6 +2307,13 @@ func cloneBattleReport(report BattleReport) BattleReport {
 		if report.Detail.SecondarySide != nil {
 			secondary := cloneBattleReportSide(*report.Detail.SecondarySide)
 			detail.SecondarySide = &secondary
+		}
+		detail.Rewards = cloneBattleReportRewardSnapshot(report.Detail.Rewards)
+		detail.Traits = cloneBattleReportTraits(report.Detail.Traits)
+		detail.Extra = cloneBattleReportDynamicMap(report.Detail.Extra)
+		if report.Detail.Share != nil {
+			share := *report.Detail.Share
+			detail.Share = &share
 		}
 		cloned.Detail = &detail
 	}
@@ -2072,7 +2325,147 @@ func cloneBattleReportSide(side BattleReportSide) BattleReportSide {
 	cloned := side
 	cloned.Units = append([]BattleReportUnit(nil), side.Units...)
 	cloned.Resources = cloneStringIntMap(side.Resources)
-	cloned.Generals = append([]BattleReportGeneral(nil), side.Generals...)
+	cloned.Generals = make([]BattleReportGeneral, len(side.Generals))
+	for index, general := range side.Generals {
+		cloned.Generals[index] = general
+		cloned.Generals[index].Stats = cloneStringIntMap(general.Stats)
+		cloned.Generals[index].EffectiveStats = cloneStringIntMap(general.EffectiveStats)
+		cloned.Generals[index].Attributes = cloneFloatMap(general.Attributes)
+		cloned.Generals[index].Buffs = cloneFloatMap(general.Buffs)
+		cloned.Generals[index].Traits = cloneGeneralTraitInstances(general.Traits)
+	}
+	return cloned
+}
+
+// cloneBattleReportRewards 深拷贝奖励及其动态元数据。
+func cloneBattleReportRewards(items []Reward) []Reward {
+	if len(items) == 0 {
+		return nil
+	}
+	cloned := make([]Reward, len(items))
+	for index, item := range items {
+		cloned[index] = item
+		cloned[index].Metadata = cloneBattleReportDynamicMap(item.Metadata)
+	}
+	return cloned
+}
+
+// cloneBattleReportRewardSnapshot 深拷贝标准战报奖励结构。
+func cloneBattleReportRewardSnapshot(rewards BattleReportRewards) BattleReportRewards {
+	cloned := rewards
+	cloned.Resources = cloneStringIntMap(rewards.Resources)
+	cloned.Drops = append([]BattleReportDrop(nil), rewards.Drops...)
+	cloned.Overflow = cloneStringIntMap(rewards.Overflow)
+	cloned.Granted = cloneBattleReportRewards(rewards.Granted)
+	return cloned
+}
+
+// cloneBattleReportTraits 深拷贝标准特性时间线及其实际结果。
+func cloneBattleReportTraits(items []BattleReportTrait) []BattleReportTrait {
+	if len(items) == 0 {
+		return nil
+	}
+	cloned := make([]BattleReportTrait, len(items))
+	for index, item := range items {
+		cloned[index] = item
+		cloned[index].Detail = cloneBattleReportDynamicMap(item.Detail)
+	}
+	return cloned
+}
+
+// cloneDefenseReinforcementUnits 深拷贝战报中的援军兵力、将领和来源标签。
+func cloneDefenseReinforcementUnits(items []DefenseReinforcementUnit) []DefenseReinforcementUnit {
+	if len(items) == 0 {
+		return nil
+	}
+	cloned := make([]DefenseReinforcementUnit, len(items))
+	for index, item := range items {
+		cloned[index] = item
+		cloned[index].Troops = cloneStringIntMap(item.Troops)
+		cloned[index].Generals = cloneReinforcementGenerals(item.Generals)
+		cloned[index].Buffs = append([]ModifierBreakdownItem(nil), item.Buffs...)
+		cloned[index].SourceTags = cloneStringMap(item.SourceTags)
+	}
+	return cloned
+}
+
+// cloneStringMap 深拷贝字符串键值表。
+func cloneStringMap(items map[string]string) map[string]string {
+	if items == nil {
+		return nil
+	}
+	cloned := make(map[string]string, len(items))
+	for key, item := range items {
+		cloned[key] = item
+	}
+	return cloned
+}
+
+// cloneBattleReportDynamicMap 深拷贝特性结果和奖励元数据中的常用 JSON 结构并保留整数表类型。
+func cloneBattleReportDynamicMap(items map[string]interface{}) map[string]interface{} {
+	if items == nil {
+		return nil
+	}
+	cloned := make(map[string]interface{}, len(items))
+	for key, item := range items {
+		cloned[key] = cloneBattleReportDynamicValue(item)
+	}
+	return cloned
+}
+
+// cloneBattleReportDynamicValue 递归复制战报动态字段中的映射和切片。
+func cloneBattleReportDynamicValue(value interface{}) interface{} {
+	switch item := value.(type) {
+	case map[string]interface{}:
+		return cloneBattleReportDynamicMap(item)
+	case map[string]int:
+		return cloneStringIntMap(item)
+	case map[string]float64:
+		return cloneFloatMap(item)
+	case map[string]string:
+		return cloneStringMap(item)
+	case map[string]map[string]int:
+		return cloneNestedStringIntMap(item)
+	case []DefenseReinforcementUnit:
+		return cloneDefenseReinforcementUnits(item)
+	case []BattleReportSweepDefender:
+		return cloneBattleReportSweepDefenders(item)
+	case *PvpWallSnapshot:
+		if item == nil {
+			return (*PvpWallSnapshot)(nil)
+		}
+		cloned := *item
+		return &cloned
+	case PvpWallSnapshot:
+		return item
+	case []interface{}:
+		cloned := make([]interface{}, len(item))
+		for index, child := range item {
+			cloned[index] = cloneBattleReportDynamicValue(child)
+		}
+		return cloned
+	case []string:
+		return append([]string(nil), item...)
+	case []int:
+		return append([]int(nil), item...)
+	case []float64:
+		return append([]float64(nil), item...)
+	default:
+		return value
+	}
+}
+
+// cloneBattleReportSweepDefenders 深拷贝扫荡扩展中的守军兵力与资源快照。
+func cloneBattleReportSweepDefenders(items []BattleReportSweepDefender) []BattleReportSweepDefender {
+	if len(items) == 0 {
+		return nil
+	}
+	cloned := make([]BattleReportSweepDefender, len(items))
+	for index, item := range items {
+		cloned[index] = item
+		cloned[index].Units = append([]BattleReportUnit(nil), item.Units...)
+		cloned[index].Resources = cloneStringIntMap(item.Resources)
+	}
 	return cloned
 }
 
@@ -2134,6 +2527,8 @@ func redactReportExtraReinforcementGenerals(extra map[string]interface{}) {
 		if snapshot, ok := item.(map[string]interface{}); ok {
 			snapshot["generals"] = []interface{}{}
 			delete(snapshot, "generalExpGained")
+			delete(snapshot, "generalLevelBefore")
+			delete(snapshot, "generalLevelAfter")
 			delete(snapshot, "buffs")
 		}
 	}

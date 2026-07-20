@@ -81,6 +81,81 @@ func TestGetMilitaryViewPersistsCaoCaoGuardProduction(t *testing.T) {
 	if got := armySliceToMap(stored.Army)["huWei"]; got != 3000 {
 		t.Fatalf("expected persisted huWei 3000, got %d army=%+v", got, stored.Army)
 	}
+	repeated, err := svc.GetMilitaryView(state.Player.ID)
+	if err != nil {
+		t.Fatalf("repeated GetMilitaryView failed: %v", err)
+	}
+	repeatedStored, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("GetState after repeated view failed: %v", err)
+	}
+	firstSettledAt, firstErr := time.Parse(resourceDateLayout, stored.ResourceSettledAt)
+	repeatedSettledAt, repeatedErr := time.Parse(resourceDateLayout, repeatedStored.ResourceSettledAt)
+	if firstErr != nil || repeatedErr != nil {
+		t.Fatalf("parse settlement timestamps failed: first=%v repeated=%v", firstErr, repeatedErr)
+	}
+	legitimateElapsedSeconds := int(repeatedSettledAt.Sub(firstSettledAt).Seconds())
+	wantRepeated := 3000 + int(500*float64(legitimateElapsedSeconds)/60)
+	if got := armySliceToMap(repeated.Army)["huWei"]; got != wantRepeated {
+		t.Fatalf("expected repeated view to add only %d whole-second guards, got %d army=%+v", wantRepeated-3000, got, repeated.Army)
+	}
+	reports, total, err := repo.ListReports(state.Player.ID, 10, 0)
+	if err != nil || total != 0 || len(reports) != 0 {
+		t.Fatalf("expected guard production not to create battle report, reports=%+v total=%d err=%v", reports, total, err)
+	}
+}
+
+// TestSettleResourcesDoesNotReplayFractionalSecondGuardProduction 验证秒级时间戳不会在同一秒重复结算小数秒产兵。
+func TestSettleResourcesDoesNotReplayFractionalSecondGuardProduction(t *testing.T) {
+	setRealCaoCaoGuardConfig(t)
+	base := time.Date(2026, 7, 19, 8, 0, 0, 0, time.UTC)
+	state := newPlayerState("player_guard_fraction", "主公", "wei", "caocao", base.Add(-24*time.Hour))
+	state.Army = nil
+	state.ResourceSettledAt = base.Add(-24 * time.Hour).Format(resourceDateLayout)
+
+	first, _ := settleResources(state, base.Add(900*time.Millisecond))
+	if got := armySliceToMap(first.Army)["huWei"]; got != 3000 {
+		t.Fatalf("expected first settlement capped at 3000, got %d", got)
+	}
+	second, _ := settleResources(first, base.Add(950*time.Millisecond))
+	if got := armySliceToMap(second.Army)["huWei"]; got != 3000 {
+		t.Fatalf("expected same-second settlement not to replay fractional production, got %d", got)
+	}
+}
+
+// TestWeiwuHaolingProductionIsIndependentFromSettlementFrequency 验证高频资源结算不会因逐次取整少发虎卫。
+func TestWeiwuHaolingProductionIsIndependentFromSettlementFrequency(t *testing.T) {
+	setRealCaoCaoGuardConfig(t)
+	base := time.Date(2026, 7, 19, 8, 0, 0, 0, time.UTC)
+	newState := func(id string) GameState {
+		state := newPlayerState(id, "主公", "wei", "caocao", base)
+		state.Army = nil
+		state.ResourceSettledAt = base.Format(resourceDateLayout)
+		return state
+	}
+
+	single, _ := settleResources(newState("player_guard_single"), base.Add(3*time.Second))
+	frequent := newState("player_guard_frequent")
+	for second := 1; second <= 3; second++ {
+		frequent, _ = settleResources(frequent, base.Add(time.Duration(second)*time.Second))
+	}
+
+	singleGuards := armySliceToMap(single.Army)["huWei"]
+	frequentGuards := armySliceToMap(frequent.Army)["huWei"]
+	if singleGuards != 25 || frequentGuards != singleGuards {
+		t.Fatalf("expected one 3-second settlement and three 1-second settlements both produce 25 guards, single=%d frequent=%d progress=%+v", singleGuards, frequentGuards, frequent.GeneralTraitProgress)
+	}
+	if len(frequent.GeneralTraitProgress) != 0 {
+		t.Fatalf("expected exact three-second production to consume fractional progress, got %+v", frequent.GeneralTraitProgress)
+	}
+}
+
+// TestWeiwuHaolingSettlementCapDiscardsOverflowProgress 验证单次达到上限后不会把被截断的小数延后补发。
+func TestWeiwuHaolingSettlementCapDiscardsOverflowProgress(t *testing.T) {
+	amount, remainder := calculateGuardProduction(0.5, 500, 360*time.Second.Seconds(), 3000)
+	if amount != 3000 || remainder != 0 {
+		t.Fatalf("expected capped settlement to produce 3000 and discard overflow progress, got amount=%d remainder=%f", amount, remainder)
+	}
 }
 
 func setRealCaoCaoGuardConfig(t *testing.T) {
@@ -420,11 +495,16 @@ func TestValidateGeneralsConfigRejectsMissingDualTraits(t *testing.T) {
 	}
 }
 
+// TestGeneralsConfigFileHasAllDualTraits 验证正式将领双特性、注册表和关键场景约束完整一致。
 func TestGeneralsConfigFileHasAllDualTraits(t *testing.T) {
 	original := GetGeneralsConfig()
 	originalFactions := GetFactionsConfig()
+	originalUnits := GetUnitsConfig()
 	if err := LoadFactionsConfig("../../../config/factions.json"); err != nil {
 		t.Fatalf("load factions config: %v", err)
+	}
+	if err := LoadUnitsConfig("../../../config/units"); err != nil {
+		t.Fatalf("load units config: %v", err)
 	}
 	t.Cleanup(func() {
 		generalsMu.Lock()
@@ -433,6 +513,9 @@ func TestGeneralsConfigFileHasAllDualTraits(t *testing.T) {
 		factionsMu.Lock()
 		activeFactions = originalFactions
 		factionsMu.Unlock()
+		unitsMu.Lock()
+		activeUnits = originalUnits
+		unitsMu.Unlock()
 	})
 	if err := LoadGeneralsConfig("../../../config/generals.json"); err != nil {
 		t.Fatalf("load generals config: %v", err)
@@ -441,6 +524,7 @@ func TestGeneralsConfigFileHasAllDualTraits(t *testing.T) {
 	if len(cfg.Heroes) < 24 {
 		t.Fatalf("expected at least 24 generals, got %d", len(cfg.Heroes))
 	}
+	officialTraitIDs := map[string]bool{}
 	for id, hero := range cfg.Heroes {
 		if strings.TrimSpace(hero.SpecialTrait.TraitID) == "" || strings.TrimSpace(hero.BonusTrait.TraitID) == "" {
 			t.Fatalf("general %s missing dual traits: %+v", id, hero)
@@ -448,20 +532,84 @@ func TestGeneralsConfigFileHasAllDualTraits(t *testing.T) {
 		if hero.SpecialTrait.TraitType != "special" || hero.BonusTrait.TraitType != "bonus" {
 			t.Fatalf("general %s has wrong trait types: special=%s bonus=%s", id, hero.SpecialTrait.TraitType, hero.BonusTrait.TraitType)
 		}
+		officialTraitIDs[hero.SpecialTrait.TraitID] = true
+		officialTraitIDs[hero.BonusTrait.TraitID] = true
+	}
+	if len(officialTraitIDs) != 50 {
+		t.Fatalf("expected exactly 50 official trait IDs, got %d: %+v", len(officialTraitIDs), officialTraitIDs)
+	}
+	for generalID, trait := range map[string]GeneralTraitConfig{
+		"xiahouyuan": cfg.Heroes["xiahouyuan"].BonusTrait,
+		"weiyan":     cfg.Heroes["weiyan"].BonusTrait,
+	} {
+		if strings.Join(trait.AllowedSides, ",") != "defender,reinforcement" {
+			t.Fatalf("expected %s defense-only trait to allow defender and reinforcement, got %+v", generalID, trait.AllowedSides)
+		}
+	}
+	for generalID, trait := range map[string]GeneralTraitConfig{
+		"zhenmi":       cfg.Heroes["zhenmi"].BonusTrait,
+		"xuchuSpecial": cfg.Heroes["xuchu"].SpecialTrait,
+		"xuchuBonus":   cfg.Heroes["xuchu"].BonusTrait,
+		"huangzhong":   cfg.Heroes["huangzhong"].SpecialTrait,
+	} {
+		if strings.Join(trait.AllowedSides, ",") != "attacker" {
+			t.Fatalf("expected %s defense-reduction trait to allow attacker only, got %+v", generalID, trait.AllowedSides)
+		}
+	}
+	if trait := cfg.Heroes["simayi"].BonusTrait; strings.Join(trait.AllowedSides, ",") != "defender" {
+		t.Fatalf("expected Simayi attack-reduction trait to allow defender only, got %+v", trait.AllowedSides)
+	}
+	for generalID, trait := range map[string]GeneralTraitConfig{
+		"dianwei":   cfg.Heroes["dianwei"].BonusTrait,
+		"zhangliao": cfg.Heroes["zhangliao"].BonusTrait,
+		"guanyu":    cfg.Heroes["guanyu"].BonusTrait,
+		"zhangfei":  cfg.Heroes["zhangfei"].BonusTrait,
+		"sunce":     cfg.Heroes["sunce"].BonusTrait,
+		"zhouyu":    cfg.Heroes["zhouyu"].BonusTrait,
+	} {
+		if strings.Join(trait.AllowedSides, ",") != "attacker" {
+			t.Fatalf("expected %s attack-only trait to allow attacker only, got %+v", generalID, trait.AllowedSides)
+		}
+	}
+	registered := coregeneral.All()
+	if len(registered) != len(officialTraitIDs) {
+		t.Fatalf("expected registry to exactly match %d official traits, got %d", len(officialTraitIDs), len(registered))
+	}
+	for _, trait := range registered {
+		if !officialTraitIDs[trait.ID()] {
+			t.Fatalf("registered trait %s is not used by official general config", trait.ID())
+		}
 	}
 }
 
-func TestGeneralTraitRegistryCoversDualTraitCatalog(t *testing.T) {
-	traits := coregeneral.All()
-	if len(traits) < 48 {
-		t.Fatalf("expected at least 48 registered traits, got %d", len(traits))
-	}
-	seenTypes := map[string]int{}
-	for _, trait := range traits {
-		seenTypes[trait.Type()]++
-	}
-	if seenTypes["special"] < 24 || seenTypes["bonus"] < 24 {
-		t.Fatalf("expected at least 24 special and 24 bonus traits, got %+v", seenTypes)
+// TestValidateGeneralsConfigRejectsUnknownTargetUnitType 验证错误兵种目标会在配置加载时直接失败。
+func TestValidateGeneralsConfigRejectsUnknownTargetUnitType(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	originalFactions := GetFactionsConfig()
+	factionsMu.Lock()
+	activeFactions = FactionsConfig{"wei": {Generals: []GeneralInfo{{ID: "caocao", Name: "曹操"}}}}
+	factionsMu.Unlock()
+	t.Cleanup(func() {
+		factionsMu.Lock()
+		activeFactions = originalFactions
+		factionsMu.Unlock()
+	})
+
+	cfg := fillTestDualTraits(GeneralsConfig{
+		Enabled: true,
+		Heroes: map[string]GeneralHeroConfig{
+			"caocao": {
+				ID: "caocao", Name: "曹操", Faction: "wei", Enabled: true,
+				BonusTrait: GeneralTraitConfig{
+					TraitID: "weiwu_tongyu", TraitType: "bonus", Enabled: true,
+					Scope: "self_army", TargetUnitType: "missing_unit",
+					Params: map[string]float64{"attackBonusRate": 0.1, "defenseBonusRate": 0.1},
+				},
+			},
+		},
+	})
+	if err := ValidateGeneralsConfig(cfg); err == nil || !strings.Contains(err.Error(), "unknown unit or category") {
+		t.Fatalf("expected unknown target unit validation error, got %v", err)
 	}
 }
 
@@ -784,57 +932,48 @@ func TestApplyHeroConfigCombinesLevelAndHeroAttributes(t *testing.T) {
 }
 
 func TestValidateGeneralsConfigRejectsInvalidTraitParams(t *testing.T) {
-	err := ValidateGeneralsConfig(GeneralsConfig{
-		Enabled: true,
-		Heroes: map[string]GeneralHeroConfig{
-			"zhangliao": {
-				ID:      "zhangliao",
-				Name:    "张辽",
-				Enabled: true,
-				Traits: []GeneralTraitConfig{
-					{
-						TraitID: "weizhenxiaoyao",
-						Enabled: true,
-						Params: map[string]float64{
-							"baseChance":       0.08,
-							"maxChance":        0.35,
-							"baseSuppressRate": 0.08,
-							"maxSuppressRate":  1.5,
-						},
-					},
-				},
-			},
-		},
-	})
-	if err == nil {
-		t.Fatal("expected invalid maxSuppressRate to be rejected")
+	cfg := loadOfficialGeneralsConfigForTest(t)
+	zhangliao := cfg.Heroes["zhangliao"]
+	zhangliao.SpecialTrait.Params["effectRate"] = 1.5
+	cfg.Heroes["zhangliao"] = zhangliao
+	err := ValidateGeneralsConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "effectRate=1.5 out of range") {
+		t.Fatalf("expected invalid effectRate to be rejected, got %v", err)
 	}
 }
 
 func TestValidateGeneralsConfigRejectsUnknownTraitParam(t *testing.T) {
-	err := ValidateGeneralsConfig(GeneralsConfig{
-		Enabled: true,
-		Heroes: map[string]GeneralHeroConfig{
-			"zhangliao": {
-				ID:      "zhangliao",
-				Name:    "张辽",
-				Enabled: true,
-				Traits: []GeneralTraitConfig{
-					{
-						TraitID: "weizhenxiaoyao",
-						Enabled: true,
-						Params: map[string]float64{
-							"baseChance": 0.08,
-							"badParam":   1,
-						},
-					},
-				},
-			},
-		},
-	})
-	if err == nil {
-		t.Fatal("expected unknown trait param to be rejected")
+	cfg := loadOfficialGeneralsConfigForTest(t)
+	zhangliao := cfg.Heroes["zhangliao"]
+	zhangliao.SpecialTrait.Params["badParam"] = 1
+	cfg.Heroes["zhangliao"] = zhangliao
+	err := ValidateGeneralsConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "contains unknown param badParam") {
+		t.Fatalf("expected unknown trait param to be rejected, got %v", err)
 	}
+}
+
+// loadOfficialGeneralsConfigForTest 直接读取正式配置副本，避免参数校验测试依赖可变全局状态。
+func loadOfficialGeneralsConfigForTest(t *testing.T) GeneralsConfig {
+	t.Helper()
+	originalFactions := GetFactionsConfig()
+	if err := LoadFactionsConfig("../../../config/factions.json"); err != nil {
+		t.Fatalf("load factions config: %v", err)
+	}
+	t.Cleanup(func() {
+		factionsMu.Lock()
+		activeFactions = originalFactions
+		factionsMu.Unlock()
+	})
+	content, err := os.ReadFile("../../../config/generals.json")
+	if err != nil {
+		t.Fatalf("read generals config: %v", err)
+	}
+	var cfg GeneralsConfig
+	if err := json.Unmarshal(content, &cfg); err != nil {
+		t.Fatalf("decode generals config: %v", err)
+	}
+	return NormalizeGeneralsConfig(cfg)
 }
 
 func TestApplyGeneralBattleExpPromotesLevel(t *testing.T) {
@@ -2232,12 +2371,12 @@ func TestStartNpcSweepTaskRejectsTooManyTargets(t *testing.T) {
 	}
 }
 
-func TestSweepNpcKeepsGeneralLevelUpInAggregateReportOnly(t *testing.T) {
+func TestSweepNpcKeepsInitialGeneralSnapshotAndAggregatesCrossBattleLevelUps(t *testing.T) {
 	setTestCombatUnitsConfig(t)
 	setTestGeneralsConfig(t, GeneralsConfig{
 		Enabled: true,
 		Common: GeneralsCommonConfig{
-			ExpCurve:   []int{0, 1, 2, 4},
+			ExpCurve:   []int{0, 1, 2, 1000},
 			LevelBuffs: map[int]map[string]float64{1: {}, 2: {}, 3: {}},
 		},
 		Heroes: map[string]GeneralHeroConfig{
@@ -2255,8 +2394,14 @@ func TestSweepNpcKeepsGeneralLevelUpInAggregateReportOnly(t *testing.T) {
 	state := newPlayerState("player_sweep_level_up", "SweepLevel", "wei", "test_general", now)
 	state.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
 	state.Resources.Capacity = map[string]int{"wood": 10000, "stone": 10000, "iron": 10000, "food": 10000}
+	firstCity := testNpcCity("npc_sweep_level_up_1", now)
+	firstCity.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 1}}
+	firstCity.MaxArmy = []ArmyUnit{{UnitType: "weiInfantry", Amount: 1}}
+	secondCity := testNpcCity("npc_sweep_level_up_2", now)
+	secondCity.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 1}}
+	secondCity.MaxArmy = []ArmyUnit{{UnitType: "weiInfantry", Amount: 1}}
 	state.NpcState = &NpcState{
-		Cities:          []NpcCity{testNpcCity("npc_sweep_level_up", now)},
+		Cities:          []NpcCity{firstCity, secondCity},
 		LastRefreshedAt: now.UTC().Format(resourceDateLayout),
 	}
 	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
@@ -2265,23 +2410,37 @@ func TestSweepNpcKeepsGeneralLevelUpInAggregateReportOnly(t *testing.T) {
 
 	result, err := svc.SweepNpc(SweepNpcRequest{
 		PlayerID:   state.Player.ID,
-		NpcIDs:     []string{"npc_sweep_level_up"},
+		NpcIDs:     []string{"npc_sweep_level_up_1", "npc_sweep_level_up_2"},
 		Mode:       "attack",
 		GeneralIDs: []string{"test_general"},
 	})
 	if err != nil {
 		t.Fatalf("SweepNpc failed: %v", err)
 	}
-	if result.BattleReport.BattleType != "sweep" || result.BattleReport.GeneralLevelAfter <= result.BattleReport.GeneralLevelBefore {
-		t.Fatalf("expected sweep aggregate to include level up, got %+v", result.BattleReport)
+	if result.Done != 2 || result.BattleReport.BattleType != "sweep" || result.BattleReport.GeneralExpGained != 2 || result.BattleReport.GeneralLevelBefore != 1 || result.BattleReport.GeneralLevelAfter != 3 {
+		t.Fatalf("expected two-battle sweep to aggregate 2 exp and Lv.1 -> Lv.3, got %+v", result.BattleReport)
+	}
+	if len(result.BattleReport.PvpAttackerGenerals) != 1 || result.BattleReport.PvpAttackerGenerals[0].Level != 1 {
+		t.Fatalf("expected sweep aggregate to keep the first battle pre-battle general snapshot, got %+v", result.BattleReport.PvpAttackerGenerals)
+	}
+	if result.BattleReport.Detail == nil || len(result.BattleReport.Detail.PrimarySide.Generals) != 1 || result.BattleReport.Detail.PrimarySide.Generals[0].Level != 1 ||
+		result.BattleReport.Detail.Rewards.GeneralLevelBefore != result.BattleReport.GeneralLevelBefore || result.BattleReport.Detail.Rewards.GeneralLevelAfter != result.BattleReport.GeneralLevelAfter {
+		t.Fatalf("expected sweep detail to separate pre-battle snapshot and final upgrade, got %+v", result.BattleReport.Detail)
 	}
 	sweepExtra, ok := result.BattleReport.Detail.Extra["sweep"].(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected sweep extra in aggregate report detail, got %+v", result.BattleReport.Detail.Extra)
 	}
 	defenders, ok := sweepExtra["defenders"].([]BattleReportSweepDefender)
-	if !ok || len(defenders) != 1 {
-		t.Fatalf("expected one sweep defender snapshot, got %#v", sweepExtra["defenders"])
+	if !ok || len(defenders) != 2 {
+		t.Fatalf("expected two sweep defender snapshots, got %#v", sweepExtra["defenders"])
+	}
+	stored, err := repo.GetState(state.Player.ID)
+	if err != nil {
+		t.Fatalf("get state after sweep: %v", err)
+	}
+	if got := pvpTestGeneralLevel(stored, "test_general"); got != 3 || pvpTestGeneralExp(stored, "test_general") != 2 {
+		t.Fatalf("expected stored general Lv.3 with 2 exp, got level=%d exp=%d", got, pvpTestGeneralExp(stored, "test_general"))
 	}
 
 	sweepReports, sweepTotal, err := repo.ListReportsByQuery(BattleReportQuery{PlayerID: state.Player.ID, BattleType: "sweep", Page: 1, PageSize: 10})
@@ -2554,6 +2713,11 @@ func TestAttackNpcOnlyAppliesSelectedGeneral(t *testing.T) {
 				Faction: "wei",
 				Enabled: true,
 				Buffs:   map[string]float64{StatAttackBonus: 1},
+				SpecialTrait: GeneralTraitConfig{
+					TraitID: "huogong", TraitType: coregeneral.TraitTypeSpecial, Enabled: true,
+					Scope: "enemy_army", AllowedSides: []string{"attacker"},
+					Params: map[string]float64{"damagePercent": 0.5, "triggerChance": 1},
+				},
 			},
 		},
 	})
@@ -2567,11 +2731,14 @@ func TestAttackNpcOnlyAppliesSelectedGeneral(t *testing.T) {
 	}
 	state := newPlayerState("player_attack_general_rule", "GeneralRule", "wei", "test_general", now)
 	state.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 500}}
+	withoutGeneralCity := testNpcCity("npc_without_general", now)
+	withoutGeneralCity.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 1000}}
+	withoutGeneralCity.MaxArmy = []ArmyUnit{{UnitType: "weiInfantry", Amount: 1000}}
+	withGeneralCity := testNpcCity("npc_with_general", now)
+	withGeneralCity.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 1000}}
+	withGeneralCity.MaxArmy = []ArmyUnit{{UnitType: "weiInfantry", Amount: 1000}}
 	state.NpcState = &NpcState{
-		Cities: []NpcCity{
-			testNpcCity("npc_without_general", now),
-			testNpcCity("npc_with_general", now),
-		},
+		Cities:          []NpcCity{withoutGeneralCity, withGeneralCity},
 		LastRefreshedAt: now.UTC().Format(resourceDateLayout),
 	}
 	if err := repo.CreatePlayer(account.ID, state, now); err != nil {
@@ -2597,6 +2764,12 @@ func TestAttackNpcOnlyAppliesSelectedGeneral(t *testing.T) {
 	if without.BattleReport.GeneralExpGained != 0 || len(without.BattleReport.PvpAttackerGenerals) != 0 {
 		t.Fatalf("expected report without general participation, got %+v", without.BattleReport)
 	}
+	if _, triggered := without.BattleReport.TraitOutcomes["huogong"]; triggered || len(without.BattleReport.TraitTriggered) != 0 {
+		t.Fatalf("expected no formal trait without selected general, got triggered=%+v outcomes=%+v", without.BattleReport.TraitTriggered, without.BattleReport.TraitOutcomes)
+	}
+	if without.BattleReport.Detail == nil || len(without.BattleReport.Detail.Traits) != 0 {
+		t.Fatalf("expected no standard trait timeline without selected general, detail=%+v", without.BattleReport.Detail)
+	}
 
 	withGeneral, err := svc.AttackNpc(AttackNpcRequest{
 		PlayerID:   state.Player.ID,
@@ -2617,6 +2790,9 @@ func TestAttackNpcOnlyAppliesSelectedGeneral(t *testing.T) {
 	}
 	if withGeneral.BattleReport.GeneralExpGained <= 0 || len(withGeneral.BattleReport.PvpAttackerGenerals) != 1 {
 		t.Fatalf("expected report to include selected general and exp, got %+v", withGeneral.BattleReport)
+	}
+	if outcome, triggered := withGeneral.BattleReport.TraitOutcomes["huogong"]; !triggered || outcome.TraitID != "huogong" {
+		t.Fatalf("expected selected general formal trait to trigger, outcomes=%+v", withGeneral.BattleReport.TraitOutcomes)
 	}
 	if withGeneral.BattleReport.PlayerPower <= without.BattleReport.PlayerPower {
 		t.Fatalf("expected selected general to increase attack power, without=%d with=%d", without.BattleReport.PlayerPower, withGeneral.BattleReport.PlayerPower)

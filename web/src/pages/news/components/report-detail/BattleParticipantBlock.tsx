@@ -16,6 +16,8 @@ interface BattleParticipantBlockProps {
   effectTone?: 'normal' | 'highlight'
   result?: 'victory' | 'defeat' | 'draw' | 'none'
   generalExp?: number
+  generalLevelBefore?: number
+  generalLevelAfter?: number
   settlement?: 'attacker' | 'defender' | 'none'
   buildingDamage?: string
   showUnits?: boolean
@@ -89,7 +91,11 @@ function formatDrops(rewards?: BattleReportRewards): string {
 // formatRewardFeedback 生成战后奖励和反馈说明。
 function formatRewardFeedback(rewards?: BattleReportRewards, fallback?: string, includeResources = false): string {
   const parts: string[] = []
-  if ((rewards?.generalExp ?? 0) > 0) parts.push(`武将经验 +${rewards?.generalExp}`)
+  if ((rewards?.generalExp ?? 0) > 0) {
+    const leveledUp = (rewards?.generalLevelBefore ?? 0) > 0 && (rewards?.generalLevelAfter ?? 0) > (rewards?.generalLevelBefore ?? 0)
+    const levelText = leveledUp ? `（Lv.${rewards?.generalLevelBefore} → Lv.${rewards?.generalLevelAfter}）` : ''
+    parts.push(`武将经验 +${rewards?.generalExp}${levelText}`)
+  }
   if ((rewards?.cityGold ?? 0) > 0) parts.push(`城金 +${rewards?.cityGold}`)
   if (includeResources) {
     Object.entries(rewards?.resources ?? {}).forEach(([key, amount]) => {
@@ -109,6 +115,8 @@ const BattleParticipantBlock: FC<BattleParticipantBlockProps> = ({
   effectTone = 'normal',
   result = 'none',
   generalExp = 0,
+  generalLevelBefore,
+  generalLevelAfter,
   settlement = 'none',
   buildingDamage = '无',
   showUnits = true,
@@ -143,7 +151,12 @@ const BattleParticipantBlock: FC<BattleParticipantBlockProps> = ({
               <span className="text-[var(--color-text-muted)]">将领名称：</span>
               <span className="font-bold text-[var(--color-text-primary)]">{showGenerals ? formatGenerals(side) : '情报未揭示'}</span>
               {showGenerals && generalExp > 0 && (
-                <span className="ml-3 whitespace-nowrap font-bold text-emerald-500">武将经验 +{generalExp.toLocaleString()}</span>
+                <span className="ml-3 whitespace-nowrap font-bold text-emerald-500">
+                  武将经验 +{generalExp.toLocaleString()}
+                  {(generalLevelBefore ?? 0) > 0 && (generalLevelAfter ?? 0) > (generalLevelBefore ?? 0)
+                    ? `（Lv.${generalLevelBefore} → Lv.${generalLevelAfter}）`
+                    : ''}
+                </span>
               )}
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-[var(--color-text-secondary)]">

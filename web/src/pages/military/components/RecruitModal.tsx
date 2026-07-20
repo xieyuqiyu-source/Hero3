@@ -1,4 +1,5 @@
-import { useState, useEffect, type FC } from 'react'
+// 本文件负责征兵弹窗、特性折后预估以及征兵请求的重复提交保护。
+import { useState, useEffect, useRef, type FC } from 'react'
 import { Clock, X } from 'lucide-react'
 import type { UnitConfig } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
@@ -21,6 +22,7 @@ const RESOURCE_LABELS: Record<string, string> = {
   food: '粮',
 }
 
+// ModalStatValue 展示单项兵种属性及其加成来源。
 const ModalStatValue: FC<{ label: string; stat: EffectiveUnitStat }> = ({ label, stat }) => {
   const boosted = stat.final !== stat.base
   return (
@@ -54,6 +56,7 @@ const ModalStatValue: FC<{ label: string; stat: EffectiveUnitStat }> = ({ label,
   )
 }
 
+// ModalTimeValue 展示征兵时间及其加成来源。
 const ModalTimeValue: FC<{ stat: EffectiveUnitStat }> = ({ stat }) => (
   <span
     className={`relative group flex items-center gap-0.5 ${stat.final !== stat.base ? 'text-green-500' : 'text-[var(--color-text-muted)]'}`}
@@ -83,10 +86,12 @@ const ModalTimeValue: FC<{ stat: EffectiveUnitStat }> = ({ stat }) => (
   </span>
 )
 
+// RecruitModal 以本地预估辅助输入，并以后端返回值更新权威资源和队列。
 const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, owned }) => {
   const [amount, setAmount] = useState(1)
   const [visible, setVisible] = useState(false)
   const [recruiting, setRecruiting] = useState(false)
+  const recruitingRef = useRef(false)
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const patchMilitaryAction = useGameStore((s) => s.patchMilitaryAction)
   const gameState = useGameStore((s) => s.state)
@@ -120,22 +125,32 @@ const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, ow
     }
   }, [open, maxAmount])
 
-  const handleClose = () => {
+  useEffect(() => {
+    if (!open) {
+      recruitingRef.current = false
+      setRecruiting(false)
+    }
+  }, [open])
+
+  // handleClose 在请求期间拒绝手动关闭，避免重新打开弹窗后重复提交未完成请求。
+  const handleClose = (force = false) => {
+    if (recruitingRef.current && !force) return
     setVisible(false)
     setTimeout(onClose, 200)
   }
 
+  // handleRecruit 用同步引用锁住快速连击，并直接采用后端返回的折后资源与队列。
   const handleRecruit = async () => {
-    if (!activePlayerId || amount <= 0 || recruiting) return
+    if (!activePlayerId || amount <= 0 || recruitingRef.current) return
+    recruitingRef.current = true
     setRecruiting(true)
     try {
       const result = await gameApi.recruit(activePlayerId, unitId, amount)
-      handleClose()
-      // 延迟更新 state，等弹窗动画结束
-      setTimeout(() => patchMilitaryAction(result), 200)
+      patchMilitaryAction(result)
+      handleClose(true)
     } catch {
       // 错误由全局拦截器处理
-    } finally {
+      recruitingRef.current = false
       setRecruiting(false)
     }
   }
@@ -147,7 +162,7 @@ const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, ow
       {/* Backdrop */}
       <div
         className={`absolute inset-0 bg-slate-900/40 backdrop-blur-[4px] transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}
-        onClick={handleClose}
+        onClick={() => handleClose()}
       />
 
       {/* Modal */}
@@ -167,7 +182,7 @@ const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, ow
           <span className="text-sm font-bold text-[var(--color-accent)]">拥有 {owned}</span>
           <button
             type="button"
-            onClick={handleClose}
+            onClick={() => handleClose()}
             className="w-6 h-6 flex items-center justify-center rounded-full text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-accent-light)] cursor-pointer transition-colors"
           >
             <X size={14} />
@@ -239,7 +254,7 @@ const RecruitModal: FC<RecruitModalProps> = ({ open, onClose, unitId, config, ow
         <div className="flex gap-2 px-4 py-3 border-t border-[var(--color-border)]">
           <button
             type="button"
-            onClick={handleClose}
+            onClick={() => handleClose()}
             className="flex-1 px-3 py-2 rounded-xl text-xs font-medium bg-[var(--color-surface-dim)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-muted)] cursor-pointer transition-colors"
           >
             取消

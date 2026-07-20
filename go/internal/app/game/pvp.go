@@ -173,6 +173,9 @@ type PvpGeneralSnapshot struct {
 	GeneralExpGained   *int                   `json:"generalExpGained,omitempty"`
 	GeneralLevelBefore *int                   `json:"generalLevelBefore,omitempty"`
 	GeneralLevelAfter  *int                   `json:"generalLevelAfter,omitempty"`
+	Stats              map[string]int         `json:"stats,omitempty"`
+	EffectiveStats     map[string]int         `json:"effectiveStats,omitempty"`
+	Attributes         map[string]float64     `json:"attributes,omitempty"`
 	Buffs              map[string]float64     `json:"buffs,omitempty"`
 	Traits             []GeneralTraitInstance `json:"traits,omitempty"`
 }
@@ -336,11 +339,15 @@ type PvpAttackRequest struct {
 
 // PvpAttackResponse 是发起 PVP 行军后的响应。
 type PvpAttackResponse struct {
-	March              PvpMarch            `json:"march"`
-	Army               []ArmyUnit          `json:"army"`
-	Generals           []General           `json:"generals,omitempty"`
-	GeneralAssignments []GeneralAssignment `json:"generalAssignments,omitempty"`
-	ServerTime         string              `json:"serverTime"`
+	March                PvpMarch            `json:"march"`
+	Army                 []ArmyUnit          `json:"army"`
+	Resources            ResourceState       `json:"resources"`
+	ResourceProduction   ResourceProduction  `json:"resourceProduction"`
+	ResourceSettledAt    string              `json:"resourceSettledAt"`
+	GeneralTraitProgress map[string]float64  `json:"generalTraitProgress"`
+	Generals             []General           `json:"generals,omitempty"`
+	GeneralAssignments   []GeneralAssignment `json:"generalAssignments,omitempty"`
+	ServerTime           string              `json:"serverTime"`
 }
 
 // PvpMarchActionResponse 是召回、加速等行军操作响应。
@@ -371,7 +378,11 @@ type PvpScoutRequest struct {
 
 // PvpScoutResponse 是发起玩家侦查行军后的响应。
 type PvpScoutResponse struct {
-	March      PvpMarch   `json:"march"`
-	Army       []ArmyUnit `json:"army"`
-	ServerTime string     `json:"serverTime"`
+	March                PvpMarch           `json:"march"`
+	Army                 []ArmyUnit         `json:"army"`
+	Resources            ResourceState      `json:"resources"`
+	ResourceProduction   ResourceProduction `json:"resourceProduction"`
+	ResourceSettledAt    string             `json:"resourceSettledAt"`
+	GeneralTraitProgress map[string]float64 `json:"generalTraitProgress"`
+	ServerTime           string             `json:"serverTime"`
 }

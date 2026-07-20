@@ -31,6 +31,8 @@ export interface GeneralState {
   id: string
   name: string
   level: number
+  stats?: Record<string, number>
+  effectiveStats?: Record<string, number>
   buffs?: Record<string, number>
   traits?: GeneralTraitState[]
 }
@@ -41,6 +43,9 @@ export interface GeneralTraitState {
   name?: string
   scope?: string
   targetUnitType?: string
+  allowedSides?: Array<'attacker' | 'defender' | 'reinforcement'>
+  allowedScenes?: string[]
+  requiredOutcome?: 'win' | 'loss'
   params?: Record<string, number>
 }
 
@@ -106,6 +111,9 @@ export interface NpcRefreshResponse extends NpcStateResponse {
 export interface NpcAttackResponse {
   battleReport: BattleReportState
   resources: ResourceState
+  resourceProduction: Record<string, number>
+  resourceSettledAt: string
+  generalTraitProgress: Record<string, number>
   army: ArmyUnitState[]
   general?: GeneralState | null
   generals?: GeneralState[]
@@ -118,6 +126,10 @@ export interface NpcScoutResponse {
   success: boolean
   battleReport: BattleReportState
   npcCity: NpcCityState | null
+  resources: ResourceState
+  resourceProduction: Record<string, number>
+  resourceSettledAt: string
+  generalTraitProgress: Record<string, number>
   army: ArmyUnitState[]
   npcState?: NpcStateResponse
   serverTime: string
@@ -130,6 +142,8 @@ export interface GameStateResponse {
   resources: ResourceState
   resourceProduction: Record<string, number>
   resourceSettledAt: string
+  /** 非战斗将领特性的后端累计进度，只用于兼容权威状态。 */
+  generalTraitProgress?: Record<string, number>
   capacityBoost?: number
   capacityBoostEnd?: string
   cityGold: number
@@ -187,6 +201,9 @@ export interface MilitaryActionResponse {
   army: ArmyUnitState[]
   recruitQueues: RecruitQueueState[]
   resources: ResourceState
+  resourceProduction: Record<string, number>
+  resourceSettledAt: string
+  generalTraitProgress: Record<string, number>
   cityGold: number
   serverTime: string
 }
@@ -199,6 +216,7 @@ export interface PvpMarchState {
   status: string
   attackTroops: Record<string, number>
   attackGenerals?: string[]
+  speedMultiplier?: number
   durationSeconds: number
   startedAt: string
   arrivesAt: string
@@ -209,9 +227,30 @@ export interface PvpMarchState {
 export interface PvpDispatchResponse {
   march: PvpMarchState
   army: ArmyUnitState[]
+  resources: ResourceState
+  resourceProduction: Record<string, number>
+  resourceSettledAt: string
+  generalTraitProgress: Record<string, number>
   generals?: GeneralState[]
   generalAssignments?: GeneralAssignmentState[]
   serverTime: string
+}
+
+/** 增援携带武将的战斗前快照，与后端 ReinforcementGeneralSnapshot 保持一致。 */
+export interface ReinforcementGeneralSnapshotState {
+  id: string
+  name?: string
+  level?: number
+  exp?: number
+  generalExpGained?: number
+  generalLevelBefore?: number
+  generalLevelAfter?: number
+  stats?: Record<string, number>
+  effectiveStats?: Record<string, number>
+  attributes?: Record<string, number>
+  buffs?: Record<string, number>
+  traits?: GeneralTraitState[]
+  assignment?: string
 }
 
 export interface ReinforcementState {
@@ -219,7 +258,8 @@ export interface ReinforcementState {
   status: string
   troops: Record<string, number>
   remainingTroops?: Record<string, number>
-  generals?: Array<{ id: string; name?: string; level?: number; assignment?: string }>
+  generals?: ReinforcementGeneralSnapshotState[]
+  speedMultiplier?: number
   marchSeconds: number
   sentAt: string
   arriveAt?: string
@@ -231,6 +271,10 @@ export interface ReinforcementDispatchResponse {
   reinforcement: ReinforcementState
   patch?: {
     army?: ArmyUnitState[]
+    resources?: ResourceState
+    resourceProduction?: Record<string, number>
+    resourceSettledAt?: string
+    generalTraitProgress?: Record<string, number>
     generals?: GeneralState[]
     generalAssignments?: GeneralAssignmentState[]
     serverTime: string
@@ -306,6 +350,9 @@ export interface BattleReportGeneralTraitState {
   summary?: string
   scope?: string
   targetUnitType?: string
+  allowedSides?: Array<'attacker' | 'defender' | 'reinforcement'>
+  allowedScenes?: string[]
+  requiredOutcome?: 'win' | 'loss'
   params?: Record<string, number>
 }
 
@@ -318,6 +365,10 @@ export interface BattleReportGeneralState {
   generalExpGained?: number
   generalLevelBefore?: number
   generalLevelAfter?: number
+  stats?: Record<string, number>
+  effectiveStats?: Record<string, number>
+  attributes?: Record<string, number>
+  buffs?: Record<string, number>
   traits?: BattleReportGeneralTraitState[]
 }
 
@@ -366,7 +417,7 @@ export interface BattleReportDetailState {
   primarySide: BattleReportSideState
   secondarySide?: BattleReportSideState | null
   rewards: { resources?: Record<string, number>; drops?: BattleReportDropState[]; cityGold?: number; generalExp?: number; generalLevelBefore?: number; generalLevelAfter?: number; overflow?: Record<string, number> }
-  traits?: Array<{ traitId: string; traitName?: string; ownerSide?: string; ownerRole?: string; generalId?: string; generalName?: string; summary?: string; detail?: Record<string, unknown> }>
+  traits?: Array<{ traitId: string; traitName?: string; ownerSide?: string; ownerRole?: string; ownerPlayerId?: string; generalId?: string; generalName?: string; summary?: string; detail?: Record<string, unknown> }>
   visibility: { showEnemyRemainingUnits: boolean; showEnemyResources: boolean; showEnemyGenerals: boolean; showEnemyCityDefense: boolean; reason?: string; threshold?: number; actualLossRatio?: number }
   extra?: Record<string, unknown>
   read: boolean
@@ -378,8 +429,10 @@ export interface BattleReportReinforcementState {
   fromPlayerName?: string
   faction: string
   troops: Record<string, number>
+  generals?: ReinforcementGeneralSnapshotState[]
   generalExpGained?: number
-  generals?: BattleReportGeneralState[]
+  generalLevelBefore?: number
+  generalLevelAfter?: number
 }
 
 export interface BattleReportState {
@@ -388,32 +441,43 @@ export interface BattleReportState {
   viewType?: string
   sourceType?: string
   battleType?: string
+  ownerSide?: string
   ownerOutcome?: string
   title?: string
   summary?: string
   detail?: BattleReportDetailState
   playerFaction?: string
   playerName?: string
+  playerPower?: number
   targetName?: string
   type: string
   result: string
   dispatchedUnits?: Record<string, number>
   lostUnits?: Record<string, number>
+  survivedUnits?: Record<string, number>
   defenderUnits?: Record<string, number>
   defenderLostUnits?: Record<string, number>
   defenderFaction?: string
+  enemyPower?: number
   defenderResources?: Record<string, number>
   defenderRevealed?: boolean
   rewards?: Record<string, number>
   drops?: BattleReportDropState[]
+  overflow?: Record<string, number>
+  overflowCityGold?: number
   generalExpGained?: number
   generalLevelBefore?: number
   generalLevelAfter?: number
+  capturedUnits?: Record<string, number>
+  capturedToGarrison?: Record<string, number>
+  revivedUnits?: Record<string, number>
   traitTriggered?: string[]
   traitOutcomes?: Record<string, { traitId: string; name?: string; traitType?: string; ownerSide?: string; ownerGeneralId?: string; ownerPlayerId?: string; scope?: string; detail?: Record<string, unknown> }>
+  pvpAttackerGenerals?: BattleReportGeneralState[]
+  pvpDefenderGenerals?: BattleReportGeneralState[]
   pvpReinforcements?: BattleReportReinforcementState[]
   pvpReinforcementLosses?: Record<string, Record<string, number>>
-  pvpWall?: { faction: string; level: number; multiplier: number; totalDefenseBonus: number; hardness?: number }
+  pvpWall?: { faction: string; level: number; base?: number; multiplier: number; factionDefenseBonus?: number; totalDefenseBonus: number; hardness?: number; minDamagedLevelFrom20?: number; maxDamagedLevelFrom20?: number }
   read: boolean
   createdAt: string
 }

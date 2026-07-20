@@ -386,7 +386,7 @@ export const gameApi = {
 
   /** 攻击 NPC 城池 */
   attackNpc(playerId: string, npcId: string, mode: 'attack' | 'plunder', units: Record<string, number>, generalIds: string[] = []) {
-    return api.post<{ battleReport: BattleReport; resources: ResourceState; army: ArmyUnit[]; general?: General; generals?: General[]; cityGold: number; npcState?: GameState['npcState']; serverTime: string }>('/map/npc-cities/attack', {
+    return api.post<{ battleReport: BattleReport; resources: ResourceState; resourceProduction: GameState['resourceProduction']; resourceSettledAt: string; generalTraitProgress: Record<string, number>; army: ArmyUnit[]; general?: General; generals?: General[]; cityGold: number; npcState?: GameState['npcState']; serverTime: string }>('/map/npc-cities/attack', {
       playerId, npcId, mode, units, generalIds,
     })
   },
@@ -405,7 +405,7 @@ export const gameApi = {
 
   /** 侦查 NPC 城池 */
   scoutNpc(playerId: string, npcId: string) {
-    return api.post<{ success: boolean; battleReport: BattleReport; npcCity: NpcCity | null; army: ArmyUnit[]; npcState?: GameState['npcState']; serverTime: string }>('/map/npc-cities/scout', { playerId, npcId })
+    return api.post<{ success: boolean; battleReport: BattleReport; npcCity: NpcCity | null; resources: ResourceState; resourceProduction: GameState['resourceProduction']; resourceSettledAt: string; generalTraitProgress: Record<string, number>; army: ArmyUnit[]; npcState?: GameState['npcState']; serverTime: string }>('/map/npc-cities/scout', { playerId, npcId })
   },
 
   /** 获取轮回绝境配置 */

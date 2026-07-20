@@ -146,7 +146,11 @@ const GeneralPanel: FC = () => {
   const expToNext = nextLevelExp > 0 ? Math.max(nextLevelExp - general.exp, 0) : 0
   const expProgress = nextLevelExp > 0 ? Math.min(100, (currentLevelProgress / currentLevelRequired) * 100) : 100
   const expProgressText = `${expProgress.toFixed(2)}%`
-  const statEntries = STAT_ORDER.map((key) => [key, general.stats?.[key] ?? 0] as const)
+  const statEntries = STAT_ORDER.map((key) => ({
+    key,
+    allocated: general.stats?.[key] ?? 0,
+    effective: general.effectiveStats?.[key] ?? general.stats?.[key] ?? 0,
+  }))
   const availableStatPoints = general.availableStatPoints ?? 0
   const factionGenerals = state?.player.faction ? (factions?.[state.player.faction]?.generals ?? []) : []
   const changeTargets = factionGenerals.filter((item) => item.id !== general.id)
@@ -328,9 +332,9 @@ const GeneralPanel: FC = () => {
             <span className="text-[10px] font-semibold text-amber-600">可分配 {availableStatPoints.toLocaleString()} 点</span>
           </div>
           <div className="space-y-2">
-            {statEntries.map(([key, value]) => {
+            {statEntries.map(({ key, allocated, effective }) => {
               const statAttributes = getStatAttributeEntries(key)
-              const progress = Math.min(100, Math.max(0, value))
+              const progress = Math.min(100, Math.max(0, effective))
               return (
                 <div key={key} className="relative h-10 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-dim)]">
                   <div
@@ -339,7 +343,7 @@ const GeneralPanel: FC = () => {
                   />
                   <div className="relative flex h-full items-center gap-2 px-3">
                     <span className={`shrink-0 text-xs font-bold ${STAT_COLORS[key]}`} title={STAT_DESCRIPTIONS[key]}>
-                      {STAT_LABELS[key]}
+                      {STAT_LABELS[key]} {effective}
                     </span>
                     <div className="ml-auto flex min-w-0 flex-wrap justify-end gap-1 overflow-hidden">
                       {statAttributes.slice(0, 3).map(([attributeKey, attributeValue]) => (
@@ -355,7 +359,7 @@ const GeneralPanel: FC = () => {
                     <button
                       type="button"
                       onClick={() => handleAllocateStat(key, 1)}
-                      disabled={availableStatPoints <= 0 || value >= 100 || allocatingStat !== null}
+                      disabled={availableStatPoints <= 0 || allocated >= 100 || allocatingStat !== null}
                       className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-bold text-amber-600 transition-colors enabled:hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
                       title={`提升${STAT_LABELS[key]}`}
                     >
@@ -366,7 +370,7 @@ const GeneralPanel: FC = () => {
                         key={amount}
                         type="button"
                         onClick={() => handleAllocateStat(key, amount)}
-                        disabled={availableStatPoints <= 0 || value >= 100 || allocatingStat !== null}
+                        disabled={availableStatPoints <= 0 || allocated >= 100 || allocatingStat !== null}
                         className="grid h-7 w-8 flex-shrink-0 place-items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[10px] font-bold text-amber-600 transition-colors enabled:hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
                         title={`${STAT_LABELS[key]} +${amount}`}
                       >
@@ -376,7 +380,7 @@ const GeneralPanel: FC = () => {
                     <button
                       type="button"
                       onClick={() => handleAllocateStat(key, availableStatPoints)}
-                      disabled={availableStatPoints <= 0 || value >= 100 || allocatingStat !== null}
+                      disabled={availableStatPoints <= 0 || allocated >= 100 || allocatingStat !== null}
                       className="grid h-7 w-10 flex-shrink-0 place-items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[10px] font-bold text-amber-600 transition-colors enabled:hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
                       title={`${STAT_LABELS[key]}加到当前可用上限`}
                     >

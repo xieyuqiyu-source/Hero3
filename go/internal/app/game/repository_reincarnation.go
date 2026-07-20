@@ -54,23 +54,46 @@ func (r *MemoryRepository) UpdateReincarnationRunWithState(playerID string, runI
 	if err != nil {
 		return GameState{}, ReincarnationRun{}, nil, err
 	}
+	pendingGarrisons := map[string]Reinforcement{}
+	for _, report := range reports {
+		if len(report.CapturedToGarrison) == 0 {
+			continue
+		}
+		garrisonID := ObtainedGarrisonID(state.Player.ID)
+		existing := r.reinforcements[garrisonID]
+		if pending, ok := pendingGarrisons[garrisonID]; ok {
+			existing = pending
+		}
+		pendingGarrisons[garrisonID] = MergeCapturedGarrisonRecord(
+			existing, state, report.DefenderFaction,
+			report.CapturedToGarrison, firstNonEmpty(report.EventID, report.ID), updatedAt,
+		)
+	}
 	run.UpdatedAt = updatedAt
-	cloned, err := cloneGameState(state)
+	storedState, err := cloneGameState(state)
 	if err != nil {
 		return GameState{}, ReincarnationRun{}, nil, err
-	}
-	r.players[playerID] = cloned
-	r.playerUpdatedAt[playerID] = updatedAt
-	r.reincarnationRuns[run.ID] = cloneReincarnationRun(run)
-	for _, report := range reports {
-		normalized := NormalizeBattleReport(report)
-		r.reports[normalized.PlayerID] = append(r.reports[normalized.PlayerID], normalized)
 	}
 	resultState, err := cloneGameState(state)
 	if err != nil {
 		return GameState{}, ReincarnationRun{}, nil, err
 	}
-	return resultState, cloneReincarnationRun(run), append([]BattleReport(nil), reports...), nil
+	storedRun := cloneReincarnationRun(run)
+	resultRun := cloneReincarnationRun(run)
+	normalizedReports := make([]BattleReport, 0, len(reports))
+	for _, report := range reports {
+		normalizedReports = append(normalizedReports, NormalizeBattleReport(report))
+	}
+	r.players[playerID] = storedState
+	r.playerUpdatedAt[playerID] = updatedAt
+	r.reincarnationRuns[run.ID] = storedRun
+	for garrisonID, record := range pendingGarrisons {
+		r.reinforcements[garrisonID] = record
+	}
+	for _, normalized := range normalizedReports {
+		r.reports[normalized.PlayerID] = append(r.reports[normalized.PlayerID], normalized)
+	}
+	return resultState, resultRun, append([]BattleReport(nil), reports...), nil
 }
 
 // ListReincarnationRuns 查询玩家轮回实例列表。

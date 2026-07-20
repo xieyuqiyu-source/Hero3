@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"hero3/internal/app/game"
@@ -27,6 +28,48 @@ func (r *MySQLRepository) UpdateItemState(playerID string, updatedAt time.Time, 
 		return game.GameState{}, err
 	}
 	return state, nil
+}
+
+// ApplyGeneralExpEvent 在同一事务内写入援军武将经验和幂等标记。
+func (r *MySQLRepository) ApplyGeneralExpEvent(playerID string, eventKey string, updatedAt time.Time, update func(state *game.GameState) error) (bool, error) {
+	playerID = strings.TrimSpace(playerID)
+	eventKey = strings.TrimSpace(eventKey)
+	if playerID == "" || eventKey == "" {
+		return false, nil
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	result, err := tx.Exec(
+		`INSERT IGNORE INTO event_processing_records (module_id, handler_key, event_key, processed_at)
+		 VALUES (?, ?, ?, ?)`,
+		"general",
+		"reinforcement_exp",
+		eventKey,
+		updatedAt.UTC(),
+	)
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if affected == 0 {
+		if err := tx.Commit(); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+	if _, err := updateItemStateTx(tx, playerID, updatedAt, update); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // updateItemStateTx 在外部事务内更新玩家权威资产快照。

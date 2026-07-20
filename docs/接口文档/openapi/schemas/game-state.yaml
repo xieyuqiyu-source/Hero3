@@ -29,6 +29,12 @@ GameState:
       type: string
       format: date-time
       description: 资源上次由后端权威结算的时间。
+    generalTraitProgress:
+      type: object
+      description: 非战斗将领特性的后端累计小数进度；客户端只读取权威兵力，不据此自行结算。
+      additionalProperties:
+        type: number
+        format: double
     cityGold:
       type: integer
       description: 城内金币，主要用于加速和城内消费。
@@ -460,6 +466,11 @@ General:
       type: object
       additionalProperties:
         type: integer
+    effectiveStats:
+      type: object
+      description: 包含将领被动特性后的四维最终值。
+      additionalProperties:
+        type: integer
     attributes:
       type: object
       additionalProperties:
@@ -490,6 +501,18 @@ GeneralTraitInstance:
       type: string
     targetUnitType:
       type: string
+    allowedSides:
+      type: array
+      items:
+        type: string
+        enum: [attacker, defender, reinforcement]
+    allowedScenes:
+      type: array
+      items:
+        type: string
+    requiredOutcome:
+      type: string
+      enum: [win, loss]
     params:
       type: object
       additionalProperties:
@@ -616,6 +639,11 @@ BattleReport:
       type: integer
     lostUnits:
       type: object
+      additionalProperties:
+        type: integer
+    survivedUnits:
+      type: object
+      description: 战后实际存活或归队兵力；复活、最终减损和扫荡聚合场景应优先使用该值。
       additionalProperties:
         type: integer
     rewards:

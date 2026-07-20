@@ -1,7 +1,7 @@
 /** 将领特性标签集中映射后端稳定 ID，供战报等玩家页面显示中文名称。 */
 const traitLabels: Record<string, string> = {
   weiwu_haoling: '魏武号令', weiwu_tongyu: '魏武统御', yibing_touxi: '疑兵偷袭', mouding_houfa: '谋定后发',
-  meiren: '俘虏敌兵', meihuo_raozhen: '魅惑扰阵', huchi_chongzhen: '虎痴冲阵', pojun_pofang: '破敌防御',
+  meiren: '美人计', meihuo_raozhen: '魅惑扰阵', huchi_chongzhen: '虎痴冲阵', pojun_pofang: '破敌防御',
   huzhu_sizhan: '护主死战', sizhandaodi: '死战到底', jixing_benxi: '疾行奔袭', dunzhen_fangyu: '盾阵防御',
   weizhen_zhenhe: '威震震慑', weizhen_xiaoyao: '威震逍遥', shengui_zhicai: '神鬼之才', guicai_yice: '鬼才遗策',
   wangzuo_zhicai: '王佐之才', neizheng_jingying: '内政精营', rende: '仁德天下', renzhu_shouhu: '仁主守护',

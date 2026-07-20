@@ -103,6 +103,21 @@ GeneralTraitConfig:
       type: string
       description: 目标兵种或兵种分类。
       example: infantry
+    allowedSides:
+      type: array
+      description: 允许触发的战斗归属方；为空表示不限制。
+      items:
+        type: string
+        enum: [attacker, defender, reinforcement]
+    allowedScenes:
+      type: array
+      description: 允许触发的玩法场景；为空表示不限制。
+      items:
+        type: string
+    requiredOutcome:
+      type: string
+      description: 仅在归属方满足指定胜负结果时触发。
+      enum: [win, loss]
     params:
       type: object
       additionalProperties:

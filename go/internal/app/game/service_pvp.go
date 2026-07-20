@@ -301,49 +301,68 @@ func (s *Service) ScoutPvpTarget(req PvpScoutRequest) (PvpScoutResponse, error) 
 	}
 	distance := worldMapDistance(WorldCoordinate{X: attackerPosition.X, Y: attackerPosition.Y}, WorldCoordinate{X: defenderPosition.X, Y: defenderPosition.Y})
 	nowText := now.Format(resourceDateLayout)
-	attackerState, _, march, err := s.repo.CreatePvpMarchWithState(playerID, targetPlayerID, now, func(attacker *GameState, defender *GameState) (PvpMarch, error) {
-		nextState, _ := settleResources(*attacker, now)
-		*attacker = nextState
-		scoutUnitID := findScoutUnit(attacker.Player.Faction)
-		if scoutUnitID == "" {
-			return PvpMarch{}, ErrNoUnitsSelected
+	var attackerState GameState
+	var march PvpMarch
+	for attempt := 0; attempt < 3; attempt++ {
+		attackerState, _, march, err = s.repo.CreatePvpMarchWithState(playerID, targetPlayerID, now, func(attacker *GameState, defender *GameState) (PvpMarch, error) {
+			nextState, _ := settleResources(*attacker, now)
+			*attacker = nextState
+			scoutUnitID := findScoutUnit(attacker.Player.Faction)
+			if scoutUnitID == "" {
+				return PvpMarch{}, ErrNoUnitsSelected
+			}
+			scoutCount, scoutIdx := armyUnitAmountAndIndex(attacker.Army, scoutUnitID)
+			if scoutCount <= 0 {
+				return PvpMarch{}, ErrInsufficientArmy
+			}
+			troops := map[string]int{scoutUnitID: scoutCount}
+			durationSeconds, speedMultiplier, err := calculatePvpMarchTravel(distance, attacker.Player.Faction, troops, now, nil)
+			if err != nil {
+				return PvpMarch{}, err
+			}
+			durationSeconds = dispatchMarchCreateTraits(durationSeconds, PvpMarchTypeScout, attacker, nil)
+			speedMultiplier = float64(defaultPvpMarchSeconds) / float64(durationSeconds)
+			reduceArmyUnitAt(&attacker.Army, scoutIdx, scoutCount)
+			attacker.ServerTime = nowText
+			return PvpMarch{
+				ID:               "pvp_march_" + randomID(12),
+				AttackerPlayerID: attacker.Player.ID,
+				AttackerName:     attacker.Player.Nickname,
+				AttackerFaction:  attacker.Player.Faction,
+				DefenderPlayerID: defender.Player.ID,
+				DefenderName:     defender.Player.Nickname,
+				DefenderFaction:  defender.Player.Faction,
+				MarchType:        PvpMarchTypeScout,
+				Status:           PvpMarchStatusMarching,
+				AttackTroops:     troops,
+				SpeedMultiplier:  speedMultiplier,
+				DurationSeconds:  durationSeconds,
+				StartedAt:        nowText,
+				ArrivesAt:        now.Add(time.Duration(durationSeconds) * time.Second).Format(resourceDateLayout),
+				CreatedAt:        nowText,
+				UpdatedAt:        nowText,
+			}, nil
+		})
+		if err == nil {
+			break
 		}
-		scoutCount, scoutIdx := armyUnitAmountAndIndex(attacker.Army, scoutUnitID)
-		if scoutCount <= 0 {
-			return PvpMarch{}, ErrInsufficientArmy
+		if !isRetryableStorageConflict(err) || attempt == 2 {
+			return PvpScoutResponse{}, err
 		}
-		troops := map[string]int{scoutUnitID: scoutCount}
-		durationSeconds, speedMultiplier, err := calculatePvpMarchTravel(distance, attacker.Player.Faction, troops, now, nil)
-		if err != nil {
-			return PvpMarch{}, err
-		}
-		durationSeconds = dispatchMarchCreateTraits(durationSeconds, PvpMarchTypeScout, attacker, nil)
-		speedMultiplier = float64(defaultPvpMarchSeconds) / float64(durationSeconds)
-		reduceArmyUnitAt(&attacker.Army, scoutIdx, scoutCount)
-		attacker.ServerTime = nowText
-		return PvpMarch{
-			ID:               "pvp_march_" + randomID(12),
-			AttackerPlayerID: attacker.Player.ID,
-			AttackerName:     attacker.Player.Nickname,
-			AttackerFaction:  attacker.Player.Faction,
-			DefenderPlayerID: defender.Player.ID,
-			DefenderName:     defender.Player.Nickname,
-			DefenderFaction:  defender.Player.Faction,
-			MarchType:        PvpMarchTypeScout,
-			Status:           PvpMarchStatusMarching,
-			AttackTroops:     troops,
-			SpeedMultiplier:  speedMultiplier,
-			DurationSeconds:  durationSeconds,
-			StartedAt:        nowText,
-			ArrivesAt:        now.Add(time.Duration(durationSeconds) * time.Second).Format(resourceDateLayout),
-			CreatedAt:        nowText,
-			UpdatedAt:        nowText,
-		}, nil
-	})
+		time.Sleep(time.Duration(attempt+1) * 80 * time.Millisecond)
+	}
 	if err != nil {
 		return PvpScoutResponse{}, err
 	}
-	return PvpScoutResponse{March: march, Army: attackerState.Army, ServerTime: attackerState.ServerTime}, nil
+	return PvpScoutResponse{
+		March:                march,
+		Army:                 attackerState.Army,
+		Resources:            attackerState.Resources,
+		ResourceProduction:   attackerState.ResourceProduction,
+		ResourceSettledAt:    attackerState.ResourceSettledAt,
+		GeneralTraitProgress: cloneGeneralTraitProgress(attackerState.GeneralTraitProgress),
+		ServerTime:           attackerState.ServerTime,
+	}, nil
 }
 
 // armyUnitAmountAndIndex 返回指定兵种数量和位置。
@@ -411,46 +430,57 @@ func (s *Service) StartPvpAttack(req PvpAttackRequest) (PvpAttackResponse, error
 	}
 	mode := normalizePvpMarchMode(req.MarchMode)
 	nowText := now.Format(resourceDateLayout)
-	attackerState, _, march, err := s.repo.CreatePvpMarchWithState(playerID, targetPlayerID, now, func(attacker *GameState, defender *GameState) (PvpMarch, error) {
-		nextState, _ := settleResources(*attacker, now)
-		*attacker = nextState
-		EnsureGeneralRoster(attacker, now)
-		if _, err := validateAndConsumeArmy(attacker, troops); err != nil {
-			return PvpMarch{}, err
+	var attackerState GameState
+	var march PvpMarch
+	for attempt := 0; attempt < 3; attempt++ {
+		attackerState, _, march, err = s.repo.CreatePvpMarchWithState(playerID, targetPlayerID, now, func(attacker *GameState, defender *GameState) (PvpMarch, error) {
+			nextState, _ := settleResources(*attacker, now)
+			*attacker = nextState
+			EnsureGeneralRoster(attacker, now)
+			if _, err := validateAndConsumeArmy(attacker, troops); err != nil {
+				return PvpMarch{}, err
+			}
+			marchID := "pvp_march_" + randomID(12)
+			generalIDs, err := reservePvpGenerals(attacker, req.GeneralIDs, marchID, now)
+			if err != nil {
+				return PvpMarch{}, err
+			}
+			durationSeconds, speedMultiplier, err := calculatePvpMarchTravel(distance, attacker.Player.Faction, troops, now, pvpModifierSourcesForGenerals(attacker, generalIDs))
+			if err != nil {
+				return PvpMarch{}, err
+			}
+			durationSeconds = dispatchMarchCreateTraits(durationSeconds, mode, attacker, generalIDs)
+			speedMultiplier = float64(defaultPvpMarchSeconds) / float64(durationSeconds)
+			arrivesAt := now.Add(time.Duration(durationSeconds) * time.Second).Format(resourceDateLayout)
+			attacker.ServerTime = nowText
+			return PvpMarch{
+				ID:               marchID,
+				AttackerPlayerID: attacker.Player.ID,
+				AttackerName:     attacker.Player.Nickname,
+				AttackerFaction:  attacker.Player.Faction,
+				DefenderPlayerID: defender.Player.ID,
+				DefenderName:     defender.Player.Nickname,
+				DefenderFaction:  defender.Player.Faction,
+				MarchType:        mode,
+				Status:           PvpMarchStatusMarching,
+				AttackTroops:     cloneStringIntMap(troops),
+				AttackGenerals:   generalIDs,
+				SpeedMultiplier:  speedMultiplier,
+				DurationSeconds:  durationSeconds,
+				StartedAt:        nowText,
+				ArrivesAt:        arrivesAt,
+				CreatedAt:        nowText,
+				UpdatedAt:        nowText,
+			}, nil
+		})
+		if err == nil {
+			break
 		}
-		marchID := "pvp_march_" + randomID(12)
-		generalIDs, err := reservePvpGenerals(attacker, req.GeneralIDs, marchID, now)
-		if err != nil {
-			return PvpMarch{}, err
+		if !isRetryableStorageConflict(err) || attempt == 2 {
+			return PvpAttackResponse{}, err
 		}
-		durationSeconds, speedMultiplier, err := calculatePvpMarchTravel(distance, attacker.Player.Faction, troops, now, pvpModifierSourcesForGenerals(attacker, generalIDs))
-		if err != nil {
-			return PvpMarch{}, err
-		}
-		durationSeconds = dispatchMarchCreateTraits(durationSeconds, mode, attacker, generalIDs)
-		speedMultiplier = float64(defaultPvpMarchSeconds) / float64(durationSeconds)
-		arrivesAt := now.Add(time.Duration(durationSeconds) * time.Second).Format(resourceDateLayout)
-		attacker.ServerTime = nowText
-		return PvpMarch{
-			ID:               marchID,
-			AttackerPlayerID: attacker.Player.ID,
-			AttackerName:     attacker.Player.Nickname,
-			AttackerFaction:  attacker.Player.Faction,
-			DefenderPlayerID: defender.Player.ID,
-			DefenderName:     defender.Player.Nickname,
-			DefenderFaction:  defender.Player.Faction,
-			MarchType:        mode,
-			Status:           PvpMarchStatusMarching,
-			AttackTroops:     cloneStringIntMap(troops),
-			AttackGenerals:   generalIDs,
-			SpeedMultiplier:  speedMultiplier,
-			DurationSeconds:  durationSeconds,
-			StartedAt:        nowText,
-			ArrivesAt:        arrivesAt,
-			CreatedAt:        nowText,
-			UpdatedAt:        nowText,
-		}, nil
-	})
+		time.Sleep(time.Duration(attempt+1) * 80 * time.Millisecond)
+	}
 	if err != nil {
 		return PvpAttackResponse{}, err
 	}
@@ -464,11 +494,15 @@ func (s *Service) StartPvpAttack(req PvpAttackRequest) (PvpAttackResponse, error
 		return PvpAttackResponse{}, err
 	}
 	return PvpAttackResponse{
-		March:              march,
-		Army:               attackerState.Army,
-		Generals:           attackerState.Generals,
-		GeneralAssignments: attackerState.GeneralAssignments,
-		ServerTime:         attackerState.ServerTime,
+		March:                march,
+		Army:                 attackerState.Army,
+		Resources:            attackerState.Resources,
+		ResourceProduction:   attackerState.ResourceProduction,
+		ResourceSettledAt:    attackerState.ResourceSettledAt,
+		GeneralTraitProgress: cloneGeneralTraitProgress(attackerState.GeneralTraitProgress),
+		Generals:             attackerState.Generals,
+		GeneralAssignments:   attackerState.GeneralAssignments,
+		ServerTime:           attackerState.ServerTime,
 	}, nil
 }
 
@@ -702,6 +736,8 @@ func (s *Service) projectPvpBattleForPlayer(battle PvpBattle, playerID string) P
 			if !visibility.ShowEnemyGenerals {
 				battle.ReinforcementSnapshot[i].Generals = nil
 				battle.ReinforcementSnapshot[i].GeneralExpGained = 0
+				battle.ReinforcementSnapshot[i].GeneralLevelBefore = 0
+				battle.ReinforcementSnapshot[i].GeneralLevelAfter = 0
 				battle.ReinforcementSnapshot[i].Buffs = nil
 			}
 		}
@@ -1140,7 +1176,9 @@ func (s *Service) AdminCancelPvpMarch(marchID string) (PvpMarchActionResponse, e
 				addToArmy(&attacker.Army, unitType, amount)
 			}
 		}
+		settleResourcesBeforeGeneralRelease(attacker, now)
 		releasePvpGenerals(attacker, march)
+		refreshResourcesAfterGeneralRelease(attacker, now)
 		nowText := now.Format(resourceDateLayout)
 		march.Status = PvpMarchStatusCancelled
 		march.ResolvedAt = nowText
@@ -1223,7 +1261,9 @@ func (s *Service) FailInvalidPvpMarch(marchID string) (PvpMarchActionResponse, e
 		if march.Status != PvpMarchStatusMarching && march.Status != PvpMarchStatusResolving {
 			return ErrPvpMarchNotRecallable
 		}
+		settleResourcesBeforeGeneralRelease(attacker, now)
 		releasePvpGenerals(attacker, march)
+		refreshResourcesAfterGeneralRelease(attacker, now)
 		nowText := now.Format(resourceDateLayout)
 		march.Status = PvpMarchStatusFailed
 		march.ResolvedAt = nowText
@@ -1253,7 +1293,9 @@ func (s *Service) CompletePvpRecall(marchID string) (PvpMarchActionResponse, err
 				addToArmy(&attacker.Army, unitType, amount)
 			}
 		}
+		settleResourcesBeforeGeneralRelease(attacker, now)
 		releasePvpGenerals(attacker, march)
+		refreshResourcesAfterGeneralRelease(attacker, now)
 		nowText := now.Format(resourceDateLayout)
 		if strings.TrimSpace(march.AttackerReportID) != "" {
 			march.Status = PvpMarchStatusResolved
@@ -1309,6 +1351,9 @@ func (s *Service) ResolvePvpMarch(marchID string) (PvpBattle, error) {
 			} else {
 				march.Status = PvpMarchStatusResolved
 				march.ResolvedAt = nowText
+				settleResourcesBeforeGeneralRelease(attacker, now)
+				releasePvpGenerals(attacker, march)
+				refreshResourcesAfterGeneralRelease(attacker, now)
 			}
 			march.AttackerReportID = attackerReport.ID
 			march.DefenderReportID = defenderReport.ID
@@ -1332,7 +1377,9 @@ func (s *Service) ResolvePvpMarch(marchID string) (PvpBattle, error) {
 		} else {
 			march.Status = PvpMarchStatusResolved
 			march.ResolvedAt = nowText
+			settleResourcesBeforeGeneralRelease(attacker, now)
 			releasePvpGenerals(attacker, march)
+			refreshResourcesAfterGeneralRelease(attacker, now)
 		}
 		march.AttackerReportID = attackerReport.ID
 		march.DefenderReportID = defenderReport.ID
@@ -1342,12 +1389,14 @@ func (s *Service) ResolvePvpMarch(marchID string) (PvpBattle, error) {
 		defender.ServerTime = nowText
 		return result, attackerReport, defenderReport, reinforcementReports, changedReinforcements, nil
 	})
+	// 仓储读取已结算战斗时不会再次返回新战报，以此区分首次提交和幂等读取。
+	newlyResolved := attackerReport.ID != "" || defenderReport.ID != ""
 	if err == nil && battle.ID != "" {
-		if attackerReport.ID != "" || defenderReport.ID != "" {
+		if newlyResolved {
 			s.applyPvpBattleStateEffects(battle, now)
 		}
-		if rewardErr := s.applyPvpReinforcementGeneralExp(battle, now); rewardErr != nil {
-			return battle, rewardErr
+		if expErr := s.applyPvpReinforcementGeneralExp(battle, now); expErr != nil {
+			return battle, expErr
 		}
 	}
 	return battle, err
@@ -1548,15 +1597,15 @@ func (s *Service) applyPvpReinforcementGeneralExp(battle PvpBattle, now time.Tim
 		if exp <= 0 || strings.TrimSpace(record.FromPlayerID) == "" || len(record.Generals) == 0 {
 			continue
 		}
-		if err := s.applyReinforcementGeneralExp(record.ReinforcementID, record.FromPlayerID, battle.ID, record.Generals, exp, now); err != nil {
+		if err := s.applyReinforcementGeneralExp(record.ReinforcementID, record.FromPlayerID, battle.ID, record.Generals, exp, battle.Status == PvpBattleStatusResolved, now); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// applyReinforcementGeneralExp 原子发放协防经验并更新驻防记录的下一场等级计算基线。
-func (s *Service) applyReinforcementGeneralExp(reinforcementID string, playerID string, battleID string, generals []ReinforcementGeneralSnapshot, exp int, now time.Time) error {
+// applyReinforcementGeneralExp 原子发放协防经验，已结算恢复流程可在驻防记录清理后改用事件账本。
+func (s *Service) applyReinforcementGeneralExp(reinforcementID string, playerID string, battleID string, generals []ReinforcementGeneralSnapshot, exp int, allowResolvedRecovery bool, now time.Time) error {
 	if exp <= 0 || strings.TrimSpace(reinforcementID) == "" || strings.TrimSpace(playerID) == "" || strings.TrimSpace(battleID) == "" || len(generals) == 0 {
 		return nil
 	}
@@ -1592,6 +1641,14 @@ func (s *Service) applyReinforcementGeneralExp(reinforcementID string, playerID 
 		record.UpdatedAt = now.UTC().Format(resourceDateLayout)
 		return nil
 	})
+	if allowResolvedRecovery && errors.Is(err, ErrReinforcementNotFound) {
+		_, err = s.repo.ApplyGeneralExpEvent(playerID, battleID+"|"+reinforcementID, now, func(state *GameState) error {
+			EnsureGeneralRoster(state, now)
+			applyGeneralBattleExpToRoster(state, generalIDs, exp)
+			refreshGeneralDerivedState(state, now)
+			return nil
+		})
+	}
 	return err
 }
 
@@ -1675,7 +1732,7 @@ func (s *Service) applyReinforcementGeneralExpFromReports(reports []BattleReport
 		if battleID == "" {
 			battleID = strings.TrimSpace(report.ID)
 		}
-		if err := s.applyReinforcementGeneralExp(reinforcement.ReinforcementID, reinforcement.FromPlayerID, battleID, reinforcement.Generals, report.GeneralExpGained, now); err != nil {
+		if err := s.applyReinforcementGeneralExp(reinforcement.ReinforcementID, reinforcement.FromPlayerID, battleID, reinforcement.Generals, report.GeneralExpGained, false, now); err != nil {
 			return err
 		}
 	}
@@ -2368,7 +2425,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		return PvpBattle{}, BattleReport{}, BattleReport{}, nil, nil, err
 	}
 	defenderOwnTroops := armySliceToMap(defender.Army)
-	defenderUnits, sourceGroups, err := buildPvpDefenderUnits(defender, reinforcements, now)
+	defenderUnits, sourceGroups, reinforcementBeforeOutcomes, err := buildPvpDefenderUnits(defender, reinforcements, now, march.MarchType)
 	if errors.Is(err, ErrNoUnitsSelected) {
 		defenderUnits = []combat.Unit{}
 		sourceGroups = []pvpDefenseSourceGroup{}
@@ -2376,7 +2433,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		return PvpBattle{}, BattleReport{}, BattleReport{}, nil, nil, err
 	}
 	attackerArmy := buildCombatArmy(attacker.Player.Faction, attackerUnits)
-	defenderArmy := combat.Army{Faction: defender.Player.Faction, Units: defenderUnits}
+	defenderArmy := combat.Army{Faction: defender.Player.Faction, Units: append([]combat.Unit(nil), defenderUnits...)}
 	wallLevel := pvpDefenderCityWallLevel(defender)
 	wallSnapshot := buildPvpWallSnapshot(defender.Player.Faction, wallLevel)
 	attackerTraits := buildActiveTraitsForGeneralIDs(attacker, march.AttackGenerals)
@@ -2389,6 +2446,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		DefenderOwnsTrait: false,
 		IsPvP:             true,
 		SameFaction:       attacker.Player.Faction == defender.Player.Faction,
+		Scene:             march.MarchType,
 	}
 	general.Dispatch(beforeCtx, attackerTraits)
 	defenderBeforeCtx := &general.BeforeBattleContext{
@@ -2398,8 +2456,11 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		DefenderOwnsTrait: true,
 		IsPvP:             true,
 		SameFaction:       attacker.Player.Faction == defender.Player.Faction,
+		Scene:             march.MarchType,
 	}
 	general.Dispatch(defenderBeforeCtx, defenderTraits)
+	reinforcementEnemyBeforeOutcomes, reinforcementEnemyBeforeContexts := applyReinforcementEnemyBeforeBattleTraits(reinforcements, &attackerArmy, &defenderArmy, march.MarchType)
+	reinforcementBeforeOutcomes = mergeReinforcementTraitOutcomeMaps(reinforcementBeforeOutcomes, reinforcementEnemyBeforeOutcomes)
 	capturedDefenderLosses := map[string]int{}
 	capturedReinforcementLosses := map[string]map[string]int{}
 	capturedUnits := mergeTroopMaps(beforeCtx.CapturedToArmy, beforeCtx.CapturedToGarrison)
@@ -2415,6 +2476,9 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		WallLevel:   wallLevel,
 		WallFaction: defender.Player.Faction,
 	})
+	preBattleContexts := []*general.BeforeBattleContext{beforeCtx, defenderBeforeCtx}
+	preBattleContexts = append(preBattleContexts, reinforcementEnemyBeforeContexts...)
+	applyPreBattleLossesToCombatResult(&result, preBattleContexts...)
 	afterCombatCtx := &general.AfterCombatResolveContext{
 		Result:            &result,
 		Attacker:          &attackerArmy,
@@ -2422,8 +2486,11 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		AttackerOwnsTrait: true,
 		DefenderOwnsTrait: true,
 		IsAttackerOnly:    true,
+		Scene:             march.MarchType,
 	}
-	combinedAfterCombatTraits := append(withTraitOwnerSide(attackerTraits, "attacker"), withTraitOwnerSide(defenderTraits, "defender")...)
+	sharedDefenderTraits, sourceDefenderTraits := partitionMainDefenderSourceTraits(defenderTraits)
+	combinedAfterCombatTraits := append(withTraitOwnerSide(attackerTraits, "attacker"), withTraitOwnerSide(sharedDefenderTraits, "defender")...)
+	combinedAfterCombatTraits = append(combinedAfterCombatTraits, activeReinforcementEnemyTraits(reinforcements)...)
 	general.Dispatch(afterCombatCtx, combinedAfterCombatTraits)
 	attackerLosses := combatLossMap(result.AttackerLosses)
 	defenderTotalLosses := combatLossMap(result.DefenderLosses)
@@ -2441,15 +2508,31 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	}
 	march.AttackTroops = normalizePositiveTroops(attackerSurvivors)
 	defenderLosses, reinforcementLosses := allocatePvpDefenderLosses(defenderTotalLosses, sourceGroups)
+	defenderLosses = applyMainDefenderAfterCombatTraits(defenderOwnTroops, defenderLosses, defender.Player.Faction, sourceDefenderTraits, afterCombatCtx)
 	applyArmyLosses(defender, defenderLosses)
-	totalReinforcementLosses := mergeNestedStringIntMap(capturedReinforcementLosses, reinforcementLosses)
-	totalReinforcementLosses = applyReinforcementAfterBattleTraits(reinforcements, totalReinforcementLosses, result.Winner)
+	reinforcementResolution := resolveReinforcementAfterBattleTraits(reinforcements, reinforcementLosses, result.Winner, march.MarchType, afterCombatCtx.DisabledTraitSide["defender"])
+	totalReinforcementLosses := mergeNestedStringIntMap(capturedReinforcementLosses, reinforcementResolution.FinalLosses)
+	reinforcementAfterOutcomes := reinforcementResolution.Outcomes
+	reinforcementSelfAfterCombatOutcomes := reinforcementResolution.AfterCombatOutcomes
+	reinforcementAfterBattleOutcomes := reinforcementResolution.AfterBattleOutcomes
+	reinforcementSuppressedTraits := reinforcementResolution.SuppressedCount
+	if reinforcementSuppressedTraits > 0 {
+		general.RecordActualTraitSuppressions(afterCombatCtx, "defender", reinforcementSuppressedTraits)
+		afterCombatCtx.DisabledTraitSide["defender"] -= reinforcementSuppressedTraits
+	}
+	mainAfterCombatOutcomes, reinforcementEnemyAfterOutcomes := splitReinforcementTraitOutcomes(afterCombatCtx.Triggered, reinforcements)
+	afterCombatCtx.Triggered = mainAfterCombatOutcomes
+	reinforcementTraitOutcomes := mergeReinforcementTraitOutcomeMaps(nil, reinforcementBeforeOutcomes)
+	reinforcementTraitOutcomes = mergeReinforcementTraitOutcomeMaps(reinforcementTraitOutcomes, reinforcementEnemyAfterOutcomes)
+	reinforcementTraitOutcomes = mergeReinforcementTraitOutcomeMaps(reinforcementTraitOutcomes, reinforcementAfterOutcomes)
 	changedReinforcements := applyPvpReinforcementLosses(reinforcements, totalReinforcementLosses, now)
 	attackerAfterBattleCtx := &general.AfterBattleContext{
 		PlayerArmy:   attackerSurvivors,
 		PlayerLosses: attackerLosses,
 		IsAttacker:   true,
 		Won:          result.Winner == "attacker",
+		Winner:       result.Winner,
+		Scene:        march.MarchType,
 	}
 	general.Dispatch(attackerAfterBattleCtx, attackerTraits)
 	if len(attackerAfterBattleCtx.Revived) > 0 {
@@ -2462,24 +2545,30 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		PlayerLosses: defenderLosses,
 		IsAttacker:   false,
 		Won:          result.Winner == "defender",
+		Winner:       result.Winner,
+		Scene:        march.MarchType,
 	}
 	general.Dispatch(defenderAfterBattleCtx, defenderTraits)
 	if len(defenderAfterBattleCtx.Revived) > 0 {
 		defender.Army = armyMapToSlice(defenderArmyMap)
 	}
-	attackerExp := calculateGeneralBattleExpFromLosses(defender.Player.Faction, result.DefenderLosses)
+	// 参战将领快照必须冻结在经验结算前，避免本场升级后的属性伪装成本场实际战斗属性。
+	attackerGenerals := buildPvpGeneralSnapshots(attacker, march.AttackGenerals)
+	defenderGenerals := buildPvpDefenseGeneralSnapshots(defender)
+	defendingCombatLosses := combatLossesFromSources(defenderLosses, reinforcementResolution.AfterCombatLosses)
+	attackerExp := calculateGeneralBattleExpFromLosses(defender.Player.Faction, defendingCombatLosses)
 	defenderExp := calculateGeneralBattleExpFromLosses(attacker.Player.Faction, result.AttackerLosses)
 	attackerExpResult := applyGeneralBattleExpToRoster(attacker, march.AttackGenerals, attackerExp)
 	defenderExpResult := applyGeneralBattleExpToRoster(defender, defenderGeneralIDs, defenderExp)
 	reinforcementGeneralExp := pvpReinforcementGeneralExpByID(reinforcements, defenderExp)
-	defenderLossRatio := pvpDefenderLossRatio(sourceGroups, defenderTotalLosses)
+	defenderLossRatio := pvpDefenderLossRatio(sourceGroups, combatLossMap(defendingCombatLosses))
 	revealThreshold := enemyLossRevealThreshold(defender, now)
 	attackerSurvived := totalTroops(attackerSurvivors) > 0
 	attackerCanSeeDefenderRemaining := attackerSurvived || defenderLossRatio >= revealThreshold
 	plundered := map[string]int{}
 	plunderOutcomes := map[string]general.TraitOutcome{}
-	if result.Winner == "attacker" && result.SurvivingCarry > 0 {
-		plundered = calculatePvpPlunder(defender, attacker, result.SurvivingCarry)
+	if march.MarchType == PvpMarchTypePlunder && result.Winner == "attacker" && result.SurvivingCarry > 0 {
+		plundered = calculatePvpPlunder(defender, result.SurvivingCarry)
 		if next, outcomes := dispatchPlunderTraits(attacker, march.AttackGenerals, plundered, march.MarchType, "attacker"); len(outcomes) > 0 {
 			plundered = next
 			for k, v := range outcomes {
@@ -2496,6 +2585,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		} else {
 			plundered = next
 		}
+		plundered = applyPvpPlunder(defender, attacker, plundered)
 	}
 	nowText := now.Format(resourceDateLayout)
 	battleID := "pvp_battle_" + randomID(12)
@@ -2509,8 +2599,6 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	}
 	attackerPointsDelta, defenderPointsDelta := pvpPointDeltas(result.Winner)
 	reinforcementSnapshot := buildPvpReinforcementSnapshot(reinforcements, reinforcementGeneralExp)
-	attackerGenerals := buildPvpGeneralSnapshots(attacker, march.AttackGenerals)
-	defenderGenerals := buildPvpDefenseGeneralSnapshots(defender)
 	attackerReport := buildPvpBattleReport(attackerReportID, attacker, defender, march, reportResult, int(result.AttackPower), int(result.DefensePower), dispatchedTroops, attackerLosses, defenderOwnTroops, defenderLosses, plundered, nowText, march.MarchType)
 	attackerReport.EventID = battleID
 	attackerReport.ViewType = ReportViewAttack
@@ -2525,6 +2613,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	attackerReport.PvpReinforcements = reinforcementSnapshot
 	attackerReport.PvpReinforcementLosses = cloneNestedStringIntMap(totalReinforcementLosses)
 	attackerReport.PvpWall = wallSnapshot
+	attackerReport.SurvivedUnits = cloneStringIntMap(attackerSurvivors)
 	attackerReport.CapturedUnits = cloneStringIntMap(beforeCtx.CapturedToArmy)
 	attackerReport.CapturedToGarrison = cloneStringIntMap(beforeCtx.CapturedToGarrison)
 	if len(attackerAfterBattleCtx.Revived) > 0 {
@@ -2532,8 +2621,13 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	}
 	mergeTraitOutcomes(&attackerReport, beforeCtx.Triggered)
 	mergeTraitOutcomes(&attackerReport, defenderBeforeCtx.Triggered)
+	mergeTraitOutcomes(&attackerReport, flattenReinforcementTraitOutcomes(reinforcementBeforeOutcomes))
 	mergeTraitOutcomes(&attackerReport, afterCombatCtx.Triggered)
+	mergeTraitOutcomes(&attackerReport, flattenReinforcementTraitOutcomes(reinforcementEnemyAfterOutcomes))
+	mergeTraitOutcomes(&attackerReport, flattenReinforcementTraitOutcomes(reinforcementSelfAfterCombatOutcomes))
+	mergeTraitOutcomes(&attackerReport, flattenReinforcementTraitOutcomes(reinforcementAfterBattleOutcomes))
 	mergeTraitOutcomes(&attackerReport, attackerAfterBattleCtx.Triggered)
+	mergeTraitOutcomes(&attackerReport, defenderAfterBattleCtx.Triggered)
 	mergeTraitOutcomes(&attackerReport, plunderOutcomes)
 	if attackerExpResult.Gained > 0 {
 		attackerReport.GeneralExpGained = attackerExpResult.Gained
@@ -2554,22 +2648,35 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	defenderReport.PvpReinforcements = reinforcementSnapshot
 	defenderReport.PvpReinforcementLosses = cloneNestedStringIntMap(totalReinforcementLosses)
 	defenderReport.PvpWall = wallSnapshot
+	defenderReport.SurvivedUnits = cloneStringIntMap(defenderArmyMap)
 	defenderReport.CapturedUnits = cloneStringIntMap(beforeCtx.CapturedToArmy)
 	defenderReport.CapturedToGarrison = cloneStringIntMap(beforeCtx.CapturedToGarrison)
 	if len(defenderAfterBattleCtx.Revived) > 0 {
 		defenderReport.RevivedUnits = cloneStringIntMap(defenderAfterBattleCtx.Revived)
 	}
-	mergeTraitOutcomes(&defenderReport, defenderAfterBattleCtx.Triggered)
+	mergeTraitOutcomes(&defenderReport, beforeCtx.Triggered)
 	mergeTraitOutcomes(&defenderReport, defenderBeforeCtx.Triggered)
+	mergeTraitOutcomes(&defenderReport, flattenReinforcementTraitOutcomes(reinforcementBeforeOutcomes))
 	mergeTraitOutcomes(&defenderReport, afterCombatCtx.Triggered)
+	mergeTraitOutcomes(&defenderReport, flattenReinforcementTraitOutcomes(reinforcementEnemyAfterOutcomes))
+	mergeTraitOutcomes(&defenderReport, flattenReinforcementTraitOutcomes(reinforcementSelfAfterCombatOutcomes))
+	mergeTraitOutcomes(&defenderReport, flattenReinforcementTraitOutcomes(reinforcementAfterBattleOutcomes))
+	mergeTraitOutcomes(&defenderReport, attackerAfterBattleCtx.Triggered)
+	mergeTraitOutcomes(&defenderReport, defenderAfterBattleCtx.Triggered)
 	mergeTraitOutcomes(&defenderReport, plunderOutcomes)
 	if defenderExpResult.Gained > 0 {
 		defenderReport.GeneralExpGained = defenderExpResult.Gained
 		defenderReport.GeneralLevelBefore = defenderExpResult.LevelBefore
 		defenderReport.GeneralLevelAfter = defenderExpResult.LevelAfter
 	}
+	attackerReport = NormalizeBattleReport(attackerReport)
 	defenderReport = NormalizeBattleReport(defenderReport)
-	reinforcementReports := buildPvpReinforcementReports(defenderReport, attacker, defender, changedReinforcements, totalReinforcementLosses, reinforcementGeneralExp, nowText)
+	syncPvpReportFinalSurvivors(&attackerReport, attackerSurvivors, defenderArmyMap)
+	syncPvpReportFinalSurvivors(&defenderReport, attackerSurvivors, defenderArmyMap)
+	reinforcementReports := buildPvpReinforcementReportsByPhase(&defenderReport, battleID, attacker, defender, changedReinforcements, totalReinforcementLosses, reinforcementGeneralExp, reinforcementTraitReportPhases{
+		Before: reinforcementBeforeOutcomes, EnemyAfterCombat: reinforcementEnemyAfterOutcomes,
+		SelfAfterCombat: reinforcementSelfAfterCombatOutcomes, AfterBattle: reinforcementAfterBattleOutcomes, All: reinforcementTraitOutcomes,
+	}, reportResult, nowText)
 	eventReports := append([]BattleReport{attackerReport, defenderReport}, reinforcementReports...)
 	eventReports = synchronizeBattleReportGeneralResults(eventReports)
 	attackerReport = eventReports[0]
@@ -2596,6 +2703,26 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	return battle, attackerReport, defenderReport, reinforcementReports, changedReinforcements, nil
 }
 
+// syncPvpReportFinalSurvivors 用战后最终快照修正双方标准详情，且不为已隐藏的兵种补行。
+func syncPvpReportFinalSurvivors(report *BattleReport, attackerSurvivors map[string]int, defenderSurvivors map[string]int) {
+	if report == nil || report.Detail == nil {
+		return
+	}
+	sides := []*BattleReportSide{&report.Detail.PrimarySide}
+	if report.Detail.SecondarySide != nil {
+		sides = append(sides, report.Detail.SecondarySide)
+	}
+	for _, side := range sides {
+		finalUnits := defenderSurvivors
+		if side.Role == "attacker" {
+			finalUnits = attackerSurvivors
+		}
+		for index := range side.Units {
+			side.Units[index].Survived = max(0, finalUnits[side.Units[index].UnitType])
+		}
+	}
+}
+
 // pvpDefenseGeneralIDs 返回本次 PVP 防守方参战主将 ID。
 func pvpDefenseGeneralIDs(state *GameState) []string {
 	general := pvpHomeDefenseGeneral(state)
@@ -2611,7 +2738,7 @@ func pvpHomeDefenseGeneral(state *GameState) *General {
 		return nil
 	}
 	generalID := strings.TrimSpace(state.General.ID)
-	if generalID == "" || !generalAvailableForReinforcement(state.GeneralAssignments, generalID) {
+	if !generalAvailableAtHome(state.GeneralAssignments, generalID) {
 		return nil
 	}
 	if general, ok := findOwnedGeneral(state.Generals, generalID); ok {
@@ -2721,9 +2848,10 @@ type pvpDefenseSourceGroup struct {
 	Amount          int
 }
 
-func buildPvpDefenderUnits(defender *GameState, reinforcements []Reinforcement, now time.Time) ([]combat.Unit, []pvpDefenseSourceGroup, error) {
+func buildPvpDefenderUnits(defender *GameState, reinforcements []Reinforcement, now time.Time, scene string) ([]combat.Unit, []pvpDefenseSourceGroup, map[string]map[string]general.TraitOutcome, error) {
 	groups := []pvpDefenseSourceGroup{}
 	units := []combat.Unit{}
+	reinforcementOutcomes := map[string]map[string]general.TraitOutcome{}
 	for _, armyUnit := range defender.Army {
 		if armyUnit.Amount <= 0 {
 			continue
@@ -2731,7 +2859,7 @@ func buildPvpDefenderUnits(defender *GameState, reinforcements []Reinforcement, 
 		groups = append(groups, pvpDefenseSourceGroup{Key: "defender", UnitType: armyUnit.UnitType, Amount: armyUnit.Amount})
 		unitCfg, _, ok := findAnyUnitConfig(defender.Player.Faction, armyUnit.UnitType)
 		if !ok {
-			return nil, nil, ErrUnitNotFound
+			return nil, nil, nil, ErrUnitNotFound
 		}
 		units = append(units, buildCombatUnitFromConfig(armyUnit.UnitType, armyUnit.Amount, unitCfg, now, pvpModifierSourcesForHomeDefense(defender)...))
 	}
@@ -2740,6 +2868,7 @@ func buildPvpDefenderUnits(defender *GameState, reinforcements []Reinforcement, 
 		if record.Status != ReinforcementStatusStationed || !record.Rules.CanFight {
 			continue
 		}
+		recordUnits := []combat.Unit{}
 		for unitType, amount := range record.RemainingTroops {
 			if amount <= 0 {
 				continue
@@ -2747,15 +2876,17 @@ func buildPvpDefenderUnits(defender *GameState, reinforcements []Reinforcement, 
 			groups = append(groups, pvpDefenseSourceGroup{Key: "reinforcement", ReinforcementID: record.ID, UnitType: unitType, Amount: amount})
 			unitCfg, _, ok := findAnyUnitConfig(record.FromPlayerFaction, unitType)
 			if !ok {
-				return nil, nil, ErrUnitNotFound
+				return nil, nil, nil, ErrUnitNotFound
 			}
-			units = append(units, buildCombatUnitFromConfig(unitType, amount, unitCfg, now, modifierSourcesForReinforcement(record)...))
+			recordUnits = append(recordUnits, buildCombatUnitFromConfig(unitType, amount, unitCfg, now, modifierSourcesForReinforcement(record)...))
 		}
+		recordUnits, reinforcementOutcomes[record.ID] = applyReinforcementBeforeBattleTraits(record, recordUnits, scene)
+		units = append(units, recordUnits...)
 	}
 	if len(units) == 0 {
-		return nil, nil, ErrNoUnitsSelected
+		return nil, nil, nil, ErrNoUnitsSelected
 	}
-	return units, groups, nil
+	return units, groups, reinforcementOutcomes, nil
 }
 
 // modifierSourcesForReinforcement 把援军出发时保存的携带武将加成快照转换为本场守城加成来源。
@@ -2991,8 +3122,22 @@ func applyPvpReinforcementLosses(records []Reinforcement, losses map[string]map[
 	return changed
 }
 
-// buildPvpReinforcementReports 复制守城方完整快照，并为每个参战援军派出方生成独立增援视角战报。
-func buildPvpReinforcementReports(baseDefenseReport BattleReport, attacker *GameState, defender *GameState, changed []Reinforcement, losses map[string]map[string]int, expByReinforcement map[string]int, nowText string) []BattleReport {
+// reinforcementTraitReportPhases 保存援军各阶段结果，避免战报合并时丢失真实执行顺序。
+type reinforcementTraitReportPhases struct {
+	Before           map[string]map[string]general.TraitOutcome
+	EnemyAfterCombat map[string]map[string]general.TraitOutcome
+	SelfAfterCombat  map[string]map[string]general.TraitOutcome
+	AfterBattle      map[string]map[string]general.TraitOutcome
+	All              map[string]map[string]general.TraitOutcome
+}
+
+// buildPvpReinforcementReports 保留旧调用契约并按已有结果顺序生成独立增援战报。
+func buildPvpReinforcementReports(eventID string, attacker *GameState, defender *GameState, changed []Reinforcement, losses map[string]map[string]int, expByReinforcement map[string]int, traitOutcomes map[string]map[string]general.TraitOutcome, battleResult string, nowText string) []BattleReport {
+	return buildPvpReinforcementReportsByPhase(nil, eventID, attacker, defender, changed, losses, expByReinforcement, reinforcementTraitReportPhases{All: traitOutcomes}, battleResult, nowText)
+}
+
+// buildPvpReinforcementReportsByPhase 以完整防守战报为底稿，并叠加每支援军自己的分阶段结果。
+func buildPvpReinforcementReportsByPhase(baseDefenseReport *BattleReport, eventID string, attacker *GameState, defender *GameState, changed []Reinforcement, losses map[string]map[string]int, expByReinforcement map[string]int, traitPhases reinforcementTraitReportPhases, battleResult string, nowText string) []BattleReport {
 	reports := []BattleReport{}
 	for i := range changed {
 		record := &changed[i]
@@ -3006,8 +3151,34 @@ func buildPvpReinforcementReports(baseDefenseReport BattleReport, attacker *Game
 		}
 		reportID := "br_pvp_rein_" + randomID(8)
 		record.LastBattleReportID = reportID
-		report := cloneBattleReport(baseDefenseReport)
+		reinforcementSnapshot := reinforcementReportSnapshot(*record, before, expByReinforcement[record.ID])
+		var report BattleReport
+		if baseDefenseReport != nil {
+			report = cloneBattleReport(*baseDefenseReport)
+			report.DefenderLostUnits = nil
+			report.TraitTriggered = nil
+			report.TraitOutcomes = nil
+			if report.Detail != nil {
+				report.Detail.Traits = nil
+			}
+		} else {
+			report = BattleReport{
+				TargetID:         defender.Player.ID,
+				TargetName:       defender.Player.Nickname + "（驻防城）",
+				SourceType:       ReportSourcePlayerCity,
+				BattleType:       "reinforcement_battle",
+				Result:           battleResult,
+				DefenderFaction:  defender.Player.Faction,
+				DefenderRevealed: false,
+				Title:            "增援" + defender.Player.Nickname + "参战",
+				PvpReinforcements: []DefenseReinforcementUnit{
+					reinforcementSnapshot,
+				},
+				PvpReinforcementLosses: map[string]map[string]int{record.ID: unitLosses},
+			}
+		}
 		report.ID = reportID
+		report.EventID = eventID
 		report.PlayerID = record.OwnerPlayerID
 		report.OwnerPlayerID = record.OwnerPlayerID
 		report.PlayerFaction = record.FromPlayerFaction
@@ -3015,29 +3186,51 @@ func buildPvpReinforcementReports(baseDefenseReport BattleReport, attacker *Game
 		report.Type = "reinforce"
 		report.ViewType = ReportViewReinforcement
 		report.OwnerSide = ReportOwnerSideReinforcement
-		report.OwnerOutcome = inferReportOwnerOutcome(report)
 		report.DispatchedUnits = before
 		report.LostUnits = unitLosses
 		report.Rewards = map[string]int{}
-		report.GeneralExpGained = expByReinforcement[record.ID]
-		ownerGenerals := buildReinforcementGeneralBattleSnapshots(record.Generals, report.GeneralExpGained)
-		if len(ownerGenerals) > 0 {
-			if ownerGenerals[0].GeneralLevelBefore != nil {
-				report.GeneralLevelBefore = *ownerGenerals[0].GeneralLevelBefore
+		report.Summary = buildReinforcementReportSummary(record, unitLosses)
+		report.OwnerOutcome = inferReportOwnerOutcome(report)
+		ownerSnapshotFound := false
+		for index := range report.PvpReinforcements {
+			if report.PvpReinforcements[index].ReinforcementID == record.ID {
+				report.PvpReinforcements[index] = reinforcementSnapshot
+				ownerSnapshotFound = true
 			}
-			if ownerGenerals[0].GeneralLevelAfter != nil {
-				report.GeneralLevelAfter = *ownerGenerals[0].GeneralLevelAfter
-			}
+		}
+		if !ownerSnapshotFound {
+			report.PvpReinforcements = append(report.PvpReinforcements, reinforcementSnapshot)
 		}
 		report.Read = false
 		report.CreatedAt = nowText
 		report.Share = nil
-		if exp := expByReinforcement[record.ID]; exp > 0 {
-			report.GeneralExpGained = exp
+		report.GeneralExpGained = expByReinforcement[record.ID]
+		report.GeneralLevelBefore = reinforcementSnapshot.GeneralLevelBefore
+		report.GeneralLevelAfter = reinforcementSnapshot.GeneralLevelAfter
+		phaseOutcomes := []map[string]map[string]general.TraitOutcome{traitPhases.Before, traitPhases.EnemyAfterCombat, traitPhases.SelfAfterCombat, traitPhases.AfterBattle}
+		mergedByPhase := false
+		for _, outcomes := range phaseOutcomes {
+			if len(outcomes[record.ID]) == 0 {
+				continue
+			}
+			mergedByPhase = true
+			mergeTraitOutcomes(&report, outcomes[record.ID])
 		}
+		if !mergedByPhase {
+			mergeTraitOutcomes(&report, traitPhases.All[record.ID])
+		}
+		report.RevivedUnits = reinforcementReturnedUnits(traitPhases.All[record.ID])
+		report.LostUnits = reinforcementGrossLosses(before, unitLosses, report.RevivedUnits)
+		report.SurvivedUnits = calculateReportSurvivedUnits(before, report.LostUnits, report.RevivedUnits, nil)
+		if report.PvpReinforcementLosses == nil {
+			report.PvpReinforcementLosses = map[string]map[string]int{}
+		}
+		report.PvpReinforcementLosses[record.ID] = cloneStringIntMap(unitLosses)
 		if report.Detail == nil {
 			detail := BuildBattleReportDetail(report)
 			report.Detail = &detail
+		} else {
+			report.Detail.Traits = convertReportTraits(report)
 		}
 		report.Detail.ID = reportID
 		report.Detail.OwnerPlayerID = record.OwnerPlayerID
@@ -3045,18 +3238,57 @@ func buildPvpReinforcementReports(baseDefenseReport BattleReport, attacker *Game
 		report.Detail.ViewLabel = reportViewLabel(ReportViewReinforcement)
 		report.Detail.OwnerSide = ReportOwnerSideReinforcement
 		report.Detail.OwnerOutcome = report.OwnerOutcome
-		report.Detail.Rewards.GeneralExp = report.GeneralExpGained
-		report.Detail.Rewards.GeneralLevelBefore = report.GeneralLevelBefore
-		report.Detail.Rewards.GeneralLevelAfter = report.GeneralLevelAfter
+		report.Detail.Rewards = BattleReportRewards{
+			GeneralExp:         report.GeneralExpGained,
+			GeneralLevelBefore: report.GeneralLevelBefore,
+			GeneralLevelAfter:  report.GeneralLevelAfter,
+		}
 		report.Detail.Visibility = buildReportVisibility(report)
 		report.Detail.Read = false
 		report.Detail.Share = nil
 		report.Detail.Extra = mergeReportExtraMap(report.Detail.Extra, map[string]interface{}{
-			"reinforcement": buildReinforcementReportExtra(report.EventID, attacker, defender, record, before, unitLosses, expByReinforcement[record.ID], report.Result),
+			"reinforcement": buildReinforcementReportExtra(eventID, attacker, defender, record, before, unitLosses, expByReinforcement[record.ID], battleResult),
 		})
 		reports = append(reports, NormalizeBattleReport(report))
 	}
 	return reports
+}
+
+// reinforcementReturnedUnits 汇总援军战后复活和损失返还的实际兵力。
+func reinforcementReturnedUnits(outcomes map[string]general.TraitOutcome) map[string]int {
+	returned := map[string]int{}
+	for _, outcome := range outcomes {
+		for _, key := range []string{"revivedUnits", "returnedUnits"} {
+			units, ok := traitDetailIntMap(outcome.Detail[key])
+			if !ok {
+				continue
+			}
+			for unitType, amount := range units {
+				if amount > 0 {
+					returned[unitType] += amount
+				}
+			}
+		}
+	}
+	if len(returned) == 0 {
+		return nil
+	}
+	return returned
+}
+
+// reinforcementGrossLosses 由最终净损失和战后归队数还原战斗原始阵亡。
+func reinforcementGrossLosses(dispatched map[string]int, finalLosses map[string]int, returned map[string]int) map[string]int {
+	gross := cloneStringIntMap(finalLosses)
+	for unitType, amount := range returned {
+		if amount <= 0 {
+			continue
+		}
+		gross[unitType] += amount
+		if sent := dispatched[unitType]; sent >= 0 && gross[unitType] > sent {
+			gross[unitType] = sent
+		}
+	}
+	return gross
 }
 
 // buildReinforcementReportSummary 生成增援战报摘要。
@@ -3073,15 +3305,18 @@ func buildReinforcementReportSummary(record *Reinforcement, losses map[string]in
 
 // reinforcementReportSnapshot 生成增援战报中的本批队伍快照。
 func reinforcementReportSnapshot(record Reinforcement, before map[string]int, generalExp int) DefenseReinforcementUnit {
+	progress := reinforcementGeneralProgress(record.Generals, generalExp)
 	return DefenseReinforcementUnit{
-		ReinforcementID:  record.ID,
-		FromPlayerID:     record.OwnerPlayerID,
-		FromPlayerName:   record.FromPlayerName,
-		Faction:          record.FromPlayerFaction,
-		Troops:           cloneStringIntMap(before),
-		Generals:         buildReinforcementGeneralBattleSnapshots(record.Generals, generalExp),
-		GeneralExpGained: generalExp,
-		Buffs:            append([]ModifierBreakdownItem(nil), record.BuffSnapshot...),
+		ReinforcementID:    record.ID,
+		FromPlayerID:       record.OwnerPlayerID,
+		FromPlayerName:     record.FromPlayerName,
+		Faction:            record.FromPlayerFaction,
+		Troops:             cloneStringIntMap(before),
+		Generals:           buildReinforcementGeneralBattleSnapshots(record.Generals, generalExp),
+		GeneralExpGained:   generalExp,
+		GeneralLevelBefore: progress.LevelBefore,
+		GeneralLevelAfter:  progress.LevelAfter,
+		Buffs:              append([]ModifierBreakdownItem(nil), record.BuffSnapshot...),
 		SourceTags: map[string]string{
 			"source_type":      record.SourceType,
 			"source_player_id": record.OwnerPlayerID,
@@ -3143,7 +3378,8 @@ func buildReinforcementOwnerContribution(record *Reinforcement, before map[strin
 	}
 }
 
-func calculatePvpPlunder(defender *GameState, attacker *GameState, carryCapacity int) map[string]int {
+// calculatePvpPlunder 只计算受负重和保护量限制的基础掠夺，不提前修改双方资源。
+func calculatePvpPlunder(defender *GameState, carryCapacity int) map[string]int {
 	if defender.Resources.Items == nil {
 		return map[string]int{}
 	}
@@ -3182,14 +3418,35 @@ func calculatePvpPlunder(defender *GameState, attacker *GameState, carryCapacity
 			assigned++
 		}
 	}
-	for resourceType, amount := range plundered {
-		defender.Resources.Items[resourceType] -= amount
-		if defender.Resources.Items[resourceType] < 0 {
-			defender.Resources.Items[resourceType] = 0
-		}
-		_, _, _ = addResourceCapped(attacker, resourceType, amount)
-	}
 	return plundered
+}
+
+// applyPvpPlunder 按特性修正后的最终数量转移资源，并返回双方真实结算值。
+func applyPvpPlunder(defender *GameState, attacker *GameState, requested map[string]int) map[string]int {
+	settled := map[string]int{}
+	if defender == nil || attacker == nil || len(requested) == 0 {
+		return settled
+	}
+	for resourceType, amount := range requested {
+		if amount <= 0 {
+			continue
+		}
+		protected := defender.Resources.Capacity[resourceType] / 5
+		available := defender.Resources.Items[resourceType] - protected
+		if available <= 0 {
+			continue
+		}
+		if amount > available {
+			amount = available
+		}
+		granted, _, err := addResourceCapped(attacker, resourceType, amount)
+		if err != nil || granted <= 0 {
+			continue
+		}
+		defender.Resources.Items[resourceType] -= granted
+		settled[resourceType] = granted
+	}
+	return settled
 }
 
 func buildPvpBattleReport(id string, owner *GameState, target *GameState, march *PvpMarch, result string, playerPower int, enemyPower int, dispatched map[string]int, lost map[string]int, defenderUnits map[string]int, defenderLost map[string]int, rewards map[string]int, nowText string, reportType string) BattleReport {
@@ -3252,16 +3509,19 @@ func buildPvpReinforcementSnapshot(records []Reinforcement, generalExpByID map[s
 			continue
 		}
 		generalExp := generalExpByID[record.ID]
+		progress := reinforcementGeneralProgress(record.Generals, generalExp)
 		result = append(result, DefenseReinforcementUnit{
-			ReinforcementID:  record.ID,
-			FromPlayerID:     record.FromPlayerID,
-			FromPlayerName:   record.FromPlayerName,
-			Faction:          record.FromPlayerFaction,
-			Troops:           cloneStringIntMap(record.RemainingTroops),
-			Generals:         buildReinforcementGeneralBattleSnapshots(record.Generals, generalExp),
-			GeneralExpGained: generalExp,
-			Buffs:            append([]ModifierBreakdownItem(nil), record.BuffSnapshot...),
-			SourceTags:       map[string]string{"source_type": record.SourceType, "source_id": record.SourceID},
+			ReinforcementID:    record.ID,
+			FromPlayerID:       record.FromPlayerID,
+			FromPlayerName:     record.FromPlayerName,
+			Faction:            record.FromPlayerFaction,
+			Troops:             cloneStringIntMap(record.RemainingTroops),
+			Generals:           buildReinforcementGeneralBattleSnapshots(record.Generals, generalExp),
+			GeneralExpGained:   generalExp,
+			GeneralLevelBefore: progress.LevelBefore,
+			GeneralLevelAfter:  progress.LevelAfter,
+			Buffs:              append([]ModifierBreakdownItem(nil), record.BuffSnapshot...),
+			SourceTags:         map[string]string{"source_type": record.SourceType, "source_id": record.SourceID},
 		})
 	}
 	return result
@@ -3301,6 +3561,42 @@ func buildReinforcementGeneralBattleSnapshots(generals []ReinforcementGeneralSna
 	return result
 }
 
+// reinforcementGeneralProgress 根据战斗前累计经验计算援军武将本场的等级变化。
+func reinforcementGeneralProgress(generals []ReinforcementGeneralSnapshot, gained int) generalExpResult {
+	if gained <= 0 || len(generals) == 0 || strings.TrimSpace(generals[0].ID) == "" {
+		return generalExpResult{}
+	}
+	levelBefore := generals[0].Level
+	if levelBefore <= 0 {
+		levelBefore = 1
+	}
+	baseExp := maxInt(0, generals[0].Exp)
+	if minimum := generalExpRequiredForLevel(levelBefore); baseExp < minimum {
+		baseExp = minimum
+	}
+	temporary := General{Level: levelBefore, Exp: baseExp + gained}
+	promoteGeneralByExp(&temporary)
+	return generalExpResult{Gained: gained, LevelBefore: levelBefore, LevelAfter: temporary.Level}
+}
+
+// advanceReinforcementGeneralSnapshots 推进驻防记录中的经验基线，供同一援军下一场战斗继续准确结算。
+func advanceReinforcementGeneralSnapshots(records []Reinforcement, generalExpByID map[string]int) {
+	for recordIndex := range records {
+		gained := generalExpByID[records[recordIndex].ID]
+		if gained <= 0 {
+			continue
+		}
+		for generalIndex := range records[recordIndex].Generals {
+			progress := reinforcementGeneralProgress([]ReinforcementGeneralSnapshot{records[recordIndex].Generals[generalIndex]}, gained)
+			if progress.Gained <= 0 {
+				continue
+			}
+			records[recordIndex].Generals[generalIndex].Exp += gained
+			records[recordIndex].Generals[generalIndex].Level = progress.LevelAfter
+		}
+	}
+}
+
 // buildPvpGeneralSnapshots 按指定武将 ID 生成 PVP 参战武将快照。
 func buildPvpGeneralSnapshots(state *GameState, generalIDs []string) []PvpGeneralSnapshot {
 	if state == nil || len(generalIDs) == 0 {
@@ -3333,10 +3629,30 @@ func buildPvpDefenseGeneralSnapshots(state *GameState) []PvpGeneralSnapshot {
 // snapshotPvpGeneral 复制 PVP 战斗中需要展示的武将字段。
 func snapshotPvpGeneral(general General) PvpGeneralSnapshot {
 	return PvpGeneralSnapshot{
-		ID:     general.ID,
-		Name:   general.Name,
-		Level:  general.Level,
-		Buffs:  cloneFloatMap(general.Buffs),
-		Traits: append([]GeneralTraitInstance(nil), general.Traits...),
+		ID:             general.ID,
+		Name:           general.Name,
+		Level:          general.Level,
+		Stats:          cloneStringIntMap(general.Stats),
+		EffectiveStats: cloneStringIntMap(general.EffectiveStats),
+		Attributes:     cloneFloatMap(general.Attributes),
+		Buffs:          cloneFloatMap(general.Buffs),
+		Traits:         cloneGeneralTraitInstances(general.Traits),
 	}
+}
+
+// clonePvpGeneralSnapshots 深拷贝参战将领快照及其嵌套 Buff、特性字段。
+func clonePvpGeneralSnapshots(items []PvpGeneralSnapshot) []PvpGeneralSnapshot {
+	if len(items) == 0 {
+		return nil
+	}
+	cloned := make([]PvpGeneralSnapshot, len(items))
+	for index, item := range items {
+		cloned[index] = item
+		cloned[index].Stats = cloneStringIntMap(item.Stats)
+		cloned[index].EffectiveStats = cloneStringIntMap(item.EffectiveStats)
+		cloned[index].Attributes = cloneFloatMap(item.Attributes)
+		cloned[index].Buffs = cloneFloatMap(item.Buffs)
+		cloned[index].Traits = cloneGeneralTraitInstances(item.Traits)
+	}
+	return cloned
 }

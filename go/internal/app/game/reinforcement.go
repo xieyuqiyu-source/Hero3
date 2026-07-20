@@ -48,6 +48,7 @@ type ReinforcementGeneralSnapshot struct {
 	GeneralLevelBefore *int                   `json:"generalLevelBefore,omitempty"`
 	GeneralLevelAfter  *int                   `json:"generalLevelAfter,omitempty"`
 	Stats              map[string]int         `json:"stats,omitempty"`
+	EffectiveStats     map[string]int         `json:"effectiveStats,omitempty"`
 	Attributes         map[string]float64     `json:"attributes,omitempty"`
 	Buffs              map[string]float64     `json:"buffs,omitempty"`
 	Traits             []GeneralTraitInstance `json:"traits,omitempty"`
@@ -139,15 +140,17 @@ type ReinforcementListResponse struct {
 
 // DefenseReinforcementUnit 是防守战斗接入时的一批援军。
 type DefenseReinforcementUnit struct {
-	ReinforcementID  string                         `json:"reinforcementId"`
-	FromPlayerID     string                         `json:"fromPlayerId"`
-	FromPlayerName   string                         `json:"fromPlayerName,omitempty"`
-	Faction          string                         `json:"faction"`
-	Troops           map[string]int                 `json:"troops"`
-	Generals         []ReinforcementGeneralSnapshot `json:"generals,omitempty"`
-	GeneralExpGained int                            `json:"generalExpGained,omitempty"`
-	Buffs            []ModifierBreakdownItem        `json:"buffs,omitempty"`
-	SourceTags       map[string]string              `json:"sourceTags,omitempty"`
+	ReinforcementID    string                         `json:"reinforcementId"`
+	FromPlayerID       string                         `json:"fromPlayerId"`
+	FromPlayerName     string                         `json:"fromPlayerName,omitempty"`
+	Faction            string                         `json:"faction"`
+	Troops             map[string]int                 `json:"troops"`
+	Generals           []ReinforcementGeneralSnapshot `json:"generals,omitempty"`
+	GeneralExpGained   int                            `json:"generalExpGained,omitempty"`
+	GeneralLevelBefore int                            `json:"generalLevelBefore,omitempty"`
+	GeneralLevelAfter  int                            `json:"generalLevelAfter,omitempty"`
+	Buffs              []ModifierBreakdownItem        `json:"buffs,omitempty"`
+	SourceTags         map[string]string              `json:"sourceTags,omitempty"`
 }
 
 // ReinforcementLoss 记录战后某一批援军的单兵种损耗。

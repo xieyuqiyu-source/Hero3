@@ -76,6 +76,10 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
       try {
         const result = await gameApi.scoutNpc(playerId, city.id)
         useGameStore.getState().patchState({
+          resources: result.resources,
+          resourceProduction: result.resourceProduction,
+          resourceSettledAt: result.resourceSettledAt,
+          generalTraitProgress: result.generalTraitProgress,
           army: result.army,
           npcState: result.npcState,
           serverTime: result.serverTime,
@@ -97,6 +101,9 @@ const NpcCityCard: FC<NpcCityCardProps> = ({ city, selected, onClick, onBattleRe
       const result = await gameApi.attackNpc(playerId, city.id, mode, units, getNpcQuickBattleGeneralIds(state))
       useGameStore.getState().patchState({
         resources: result.resources,
+        resourceProduction: result.resourceProduction,
+        resourceSettledAt: result.resourceSettledAt,
+        generalTraitProgress: result.generalTraitProgress,
         army: result.army,
         general: result.general,
         generals: result.generals,

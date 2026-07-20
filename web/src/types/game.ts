@@ -51,6 +51,9 @@ export interface NpcSweepTask {
     failed: number
     stopped: boolean
     resources: ResourceState
+    resourceProduction: ResourceProduction
+    resourceSettledAt: string
+    generalTraitProgress: Record<string, number>
     army: ArmyUnit[]
     general?: General
     generals?: General[]
@@ -148,6 +151,9 @@ export interface MilitaryActionResult {
   army: ArmyUnit[]
   recruitQueues: RecruitQueue[]
   resources: ResourceState
+  resourceProduction: ResourceProduction
+  resourceSettledAt: string
+  generalTraitProgress: Record<string, number>
   cityGold: number
   serverTime: string
 }
@@ -285,6 +291,27 @@ export interface ReincarnationWave {
   clearedAt?: string
 }
 
+export interface ReincarnationBattle {
+  id: string
+  runId: string
+  waveId: string
+  playerId: string
+  clientActionId?: string
+  waveIndex: number
+  waveType: 'attack' | 'defense' | string
+  attackTroops: Record<string, number>
+  losses: Record<string, number>
+  revivedUnits?: Record<string, number>
+  survivedTroops?: Record<string, number>
+  enemyLosses: Record<string, number>
+  enemyCaptured?: Record<string, number>
+  enemyRemaining?: Record<string, number>
+  traitOutcomes?: BattleReport['traitOutcomes']
+  passed: boolean
+  reportId: string
+  createdAt: string
+}
+
 export interface ReincarnationRun {
   id: string
   playerId: string
@@ -300,6 +327,7 @@ export interface ReincarnationRun {
   pendingRewards: Reward[]
   rewardGrantedAt?: string
   waves: ReincarnationWave[]
+  battles?: ReincarnationBattle[]
   createdAt: string
   updatedAt: string
 }
@@ -363,6 +391,7 @@ export interface BattleReport {
   enemyPower: number
   dispatchedUnits: Record<string, number>
   lostUnits: Record<string, number>
+  survivedUnits?: Record<string, number>
   defenderFaction: string
   defenderUnits: Record<string, number>
   defenderLostUnits: Record<string, number>
@@ -377,11 +406,16 @@ export interface BattleReport {
   generalLevelAfter?: number
   capturedUnits?: Record<string, number>      // 美人计俘虏到军队
   capturedToGarrison?: Record<string, number> // 美人计俘虏到驻防
-  revivedUnits?: Record<string, number>       // 仁德复活
+  revivedUnits?: Record<string, number>       // 战后复活或最终减损返还
   traitTriggered?: string[]                   // 触发的特性 id 列表
   traitOutcomes?: Record<string, {            // 特性触发结果详情
     traitId: string
     name?: string
+    traitType?: string
+    ownerSide?: 'attacker' | 'defender' | 'reinforcement'
+    ownerGeneralId?: string
+    ownerPlayerId?: string
+    scope?: string
     detail?: Record<string, number | string | Record<string, number>>
   }>
   pvpPointsDelta?: Record<string, number>
@@ -389,6 +423,17 @@ export interface BattleReport {
   pvpDefenderGenerals?: PvpGeneralSnapshot[]
   pvpReinforcements?: DefenseReinforcementUnit[]
   pvpReinforcementLosses?: Record<string, Record<string, number>>
+  pvpWall?: {
+    faction: string
+    level: number
+    base: number
+    multiplier: number
+    factionDefenseBonus: number
+    totalDefenseBonus: number
+    hardness?: number
+    minDamagedLevelFrom20: number
+    maxDamagedLevelFrom20: number
+  }
   read: boolean
   createdAt: string
 }
@@ -549,7 +594,10 @@ export interface BattleReportGeneral {
   generalExpGained?: number
   generalLevelBefore?: number
   generalLevelAfter?: number
+  stats?: Record<string, number>
+  effectiveStats?: Record<string, number>
   attributes?: Record<string, number>
+  buffs?: Record<string, number>
   traits?: GeneralTraitInstance[]
 }
 
@@ -558,6 +606,7 @@ export interface BattleReportTrait {
   traitName?: string
   ownerSide?: string
   ownerRole?: string
+  ownerPlayerId?: string
   generalId?: string
   generalName?: string
   summary?: string
@@ -788,6 +837,10 @@ export interface UseItemResult {
 
 export interface GarrisonActionResult {
   army?: ArmyUnit[]
+  resources?: ResourceState
+  resourceProduction?: ResourceProduction
+  resourceSettledAt?: string
+  generalTraitProgress?: Record<string, number>
   generals?: General[]
   generalAssignments?: GeneralAssignment[]
   serverTime: string
@@ -797,10 +850,12 @@ export interface ReinforcementGeneralSnapshot {
   id: string
   name?: string
   level?: number
+  exp?: number
   generalExpGained?: number
   generalLevelBefore?: number
   generalLevelAfter?: number
   stats?: Record<string, number>
+  effectiveStats?: Record<string, number>
   attributes?: Record<string, number>
   buffs?: Record<string, number>
   traits?: GeneralTraitInstance[]
@@ -880,6 +935,8 @@ export interface DefenseReinforcementUnit {
   troops: Record<string, number>
   generals?: ReinforcementGeneralSnapshot[]
   generalExpGained?: number
+  generalLevelBefore?: number
+  generalLevelAfter?: number
   buffs?: ModifierBreakdownItem[]
   sourceTags?: Record<string, string>
 }
@@ -1096,6 +1153,9 @@ export interface PvpGeneralSnapshot {
   id: string
   name?: string
   level?: number
+  stats?: Record<string, number>
+  effectiveStats?: Record<string, number>
+  attributes?: Record<string, number>
   buffs?: Record<string, number>
   traits?: GeneralTraitInstance[]
 }
@@ -1176,6 +1236,10 @@ export interface PvpRankingResponse {
 export interface PvpAttackResponse {
   march: PvpMarch
   army: ArmyUnit[]
+  resources: ResourceState
+  resourceProduction: ResourceProduction
+  resourceSettledAt: string
+  generalTraitProgress: Record<string, number>
   generals?: General[]
   generalAssignments?: GeneralAssignment[]
   serverTime: string
@@ -1184,6 +1248,10 @@ export interface PvpAttackResponse {
 export interface PvpScoutResponse {
   march: PvpMarch
   army: ArmyUnit[]
+  resources: ResourceState
+  resourceProduction: ResourceProduction
+  resourceSettledAt: string
+  generalTraitProgress: Record<string, number>
   serverTime: string
 }
 
@@ -1204,6 +1272,12 @@ export interface GeneralActionResult {
 export interface GeneralTraitInstance {
   traitId: string
   name: string
+  traitType?: 'special' | 'bonus'
+  scope?: string
+  targetUnitType?: string
+  allowedSides?: Array<'attacker' | 'defender' | 'reinforcement'>
+  allowedScenes?: string[]
+  requiredOutcome?: 'win' | 'loss'
   params: Record<string, number>
 }
 
@@ -1216,6 +1290,7 @@ export interface General {
   nextLevelExp?: number
   availableStatPoints?: number
   stats?: Record<string, number>
+  effectiveStats?: Record<string, number>
   attributes?: Record<string, number>
   attributeBreakdown?: Record<string, Array<{ source: string; value: number }>>
   buffs: Record<string, number>
@@ -1239,6 +1314,8 @@ export interface GameState {
   inventorySlots?: ItemStack[]
   resourceProduction: ResourceProduction
   resourceSettledAt: string
+  /** 非战斗将领特性的后端累计进度，前端不得据此自行发兵 */
+  generalTraitProgress?: Record<string, number>
   /** 存档级城金 */
   cityGold: number
   /** 上次兑换时间（冷却用） */

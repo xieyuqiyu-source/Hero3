@@ -200,10 +200,35 @@ ReincarnationBattle:
       type: object
       additionalProperties:
         type: integer
+    revivedUnits:
+      type: object
+      description: 玩家战后由复活、减损或返兵特性实际归队的逐兵种数量。
+      additionalProperties:
+        type: integer
+    survivedTroops:
+      type: object
+      description: 本次玩家出战队伍经过阵亡、俘虏归队和战后返兵后的最终存活数量。
+      additionalProperties:
+        type: integer
     enemyLosses:
       type: object
       additionalProperties:
         type: integer
+    enemyCaptured:
+      type: object
+      description: 敌军被俘并进入玩家军队或获得驻防的逐兵种数量，不计入阵亡。
+      additionalProperties:
+        type: integer
+    enemyRemaining:
+      type: object
+      description: 本次结算后当前波敌军权威剩余兵力。
+      additionalProperties:
+        type: integer
+    traitOutcomes:
+      type: object
+      description: 本次副本战斗真实触发的将领特性结果，数值与对应战报一致。
+      additionalProperties:
+        $ref: '#/components/schemas/TraitOutcomeReport'
     passed:
       type: boolean
     reportId:

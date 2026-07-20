@@ -77,9 +77,9 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
   let marchesController: AbortController | null = null
 
   /** 将后端军事局部响应合并到完整玩家状态。 */
-  function patchMilitary(result: { army: GameStateResponse['army']; recruitQueues: GameStateResponse['recruitQueues']; resources: GameStateResponse['resources']; cityGold: number; serverTime: string; general?: GameStateResponse['general']; generals?: GameStateResponse['generals']; generalAssignments?: GameStateResponse['generalAssignments'] }) {
+  function patchMilitary(result: { army: GameStateResponse['army']; recruitQueues: GameStateResponse['recruitQueues']; resources: GameStateResponse['resources']; resourceProduction?: GameStateResponse['resourceProduction']; resourceSettledAt?: GameStateResponse['resourceSettledAt']; generalTraitProgress?: NonNullable<GameStateResponse['generalTraitProgress']>; cityGold: number; serverTime: string; general?: GameStateResponse['general']; generals?: GameStateResponse['generals']; generalAssignments?: GameStateResponse['generalAssignments'] }) {
     if (!state.data) return
-    Object.assign(state.data, { army: result.army ?? [], recruitQueues: result.recruitQueues ?? [], resources: result.resources, cityGold: result.cityGold, general: result.general === undefined ? state.data.general : result.general, generals: result.generals ?? state.data.generals, generalAssignments: result.generalAssignments ?? state.data.generalAssignments, serverTime: result.serverTime })
+    Object.assign(state.data, { army: result.army ?? [], recruitQueues: result.recruitQueues ?? [], resources: result.resources, resourceProduction: result.resourceProduction ?? state.data.resourceProduction, resourceSettledAt: result.resourceSettledAt ?? state.data.resourceSettledAt, generalTraitProgress: result.generalTraitProgress ?? state.data.generalTraitProgress, cityGold: result.cityGold, general: result.general === undefined ? state.data.general : result.general, generals: result.generals ?? state.data.generals, generalAssignments: result.generalAssignments ?? state.data.generalAssignments, serverTime: result.serverTime })
     state.receivedAt = Date.now()
   }
 
@@ -311,11 +311,11 @@ export function createGameStateService(api: GameApi, state: GameStateStore): Gam
           : await api.startPvpAttack(playerId, target, normalizedTroops, selectedGenerals, action)
       if (currentVersion !== requestVersion || state.playerId !== playerId || !state.data) return
       if ('march' in result) {
-        Object.assign(state.data, { army: result.army, generals: result.generals ?? state.data.generals, generalAssignments: result.generalAssignments ?? state.data.generalAssignments, serverTime: result.serverTime })
+        Object.assign(state.data, { army: result.army, resources: result.resources, resourceProduction: result.resourceProduction, resourceSettledAt: result.resourceSettledAt, generalTraitProgress: result.generalTraitProgress, generals: result.generals ?? state.data.generals, generalAssignments: result.generalAssignments ?? state.data.generalAssignments, serverTime: result.serverTime })
         state.marchActionMessage = `${{ attack: '攻击', plunder: '掠夺', scout: '侦查', reinforce: '增援' }[action]}队伍已出发，预计 ${result.march.arrivesAt} 到达`
       } else {
         const patch = result.patch
-        Object.assign(state.data, { army: patch?.army ?? state.data.army, generals: patch?.generals ?? state.data.generals, generalAssignments: patch?.generalAssignments ?? state.data.generalAssignments, serverTime: patch?.serverTime ?? state.data.serverTime })
+        Object.assign(state.data, { army: patch?.army ?? state.data.army, resources: patch?.resources ?? state.data.resources, resourceProduction: patch?.resourceProduction ?? state.data.resourceProduction, resourceSettledAt: patch?.resourceSettledAt ?? state.data.resourceSettledAt, generalTraitProgress: patch?.generalTraitProgress ?? state.data.generalTraitProgress, generals: patch?.generals ?? state.data.generals, generalAssignments: patch?.generalAssignments ?? state.data.generalAssignments, serverTime: patch?.serverTime ?? state.data.serverTime })
         state.marchActionMessage = `增援队伍已出发${result.reinforcement.arriveAt ? `，预计 ${result.reinforcement.arriveAt} 到达` : ''}`
       }
       state.receivedAt = Date.now()

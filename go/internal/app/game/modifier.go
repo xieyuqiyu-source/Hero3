@@ -1,3 +1,4 @@
+// 本文件归口统一 Modifier 管线及城内常驻加成来源。
 package game
 
 import (
@@ -290,6 +291,9 @@ func (s *StaticModifierSource) Modifiers(now time.Time) []Modifier {
 
 func init() {
 	_ = RegisterModifierSourceProvider("general", func(state *GameState) []ModifierSource {
+		if state == nil || state.General == nil || !generalAvailableAtHome(state.GeneralAssignments, state.General.ID) {
+			return nil
+		}
 		return []ModifierSource{&GeneralModifierSource{General: state.General}}
 	})
 	_ = RegisterModifierSourceProvider("purchase_boost", func(state *GameState) []ModifierSource {

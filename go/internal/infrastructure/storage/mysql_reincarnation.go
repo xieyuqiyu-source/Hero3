@@ -102,6 +102,15 @@ func (r *MySQLRepository) UpdateReincarnationRunWithState(playerID string, runID
 	if err != nil {
 		return game.GameState{}, game.ReincarnationRun{}, nil, err
 	}
+	for _, report := range reports {
+		sourceID := report.EventID
+		if sourceID == "" {
+			sourceID = report.ID
+		}
+		if err := upsertCapturedGarrisonTx(tx, state, report.DefenderFaction, report.CapturedToGarrison, sourceID, updatedAt); err != nil {
+			return game.GameState{}, game.ReincarnationRun{}, nil, err
+		}
+	}
 	if err := upsertReincarnationRunTx(tx, run); err != nil {
 		return game.GameState{}, game.ReincarnationRun{}, nil, err
 	}

@@ -11,7 +11,15 @@ import (
 	"time"
 
 	"hero3/internal/core/combat"
+	"hero3/internal/core/general"
 )
+
+// reincarnationCombatResolution 保存轮回模块复用核心事件管线后的阶段结果。
+type reincarnationCombatResolution struct {
+	Result      combat.CombatResult
+	Before      *general.BeforeBattleContext
+	AfterCombat *general.AfterCombatResolveContext
+}
 
 // GetReincarnationConfigForPlayer 返回轮回绝境配置。
 func (s *Service) GetReincarnationConfigForPlayer() ReincarnationConfig {
@@ -162,29 +170,49 @@ func (s *Service) AttackReincarnationWave(playerID string, waveID string, troops
 		}
 		applyReincarnationBonus(playerUnits, wave.AllyBonus)
 		enemyUnits := buildReincarnationEnemyUnits(wave.EnemyFaction, wave.EnemyRemaining, now, wave.EnemyBonus)
-		result := combat.Resolve(combat.CombatInput{
-			RuleID:   activeCombatRuleID(combat.ScenePVEAttack),
-			Attacker: combat.Army{Faction: state.Player.Faction, Units: playerUnits},
-			Defender: combat.Army{Faction: wave.EnemyFaction, Units: enemyUnits},
-		})
+		activeTraits := buildActiveTraitsForGeneralIDs(state, battleGeneralIDs)
+		resolution := resolveReincarnationTraitCombat(
+			combat.Army{Faction: state.Player.Faction, Units: playerUnits},
+			combat.Army{Faction: wave.EnemyFaction, Units: enemyUnits},
+			activeTraits, "attacker", wave.WaveType,
+		)
+		result := resolution.Result
+		capturedToArmy, routedToGarrison := splitCapturedUnitsByOwnerFaction(state.Player.Faction, resolution.Before.CapturedToArmy)
+		capturedToGarrison := mergeTroopMaps(routedToGarrison, resolution.Before.CapturedToGarrison)
+		capturedEnemyUnits := mergeTroopMaps(capturedToArmy, capturedToGarrison)
+		routeNpcCaptureTraitOutcomes(resolution.Before.Triggered, capturedToArmy, capturedToGarrison)
+		for unitType, amount := range capturedToArmy {
+			mergeIntoArmy(state, unitType, amount)
+		}
 		playerLosses, enemyLosses := lossMaps(result.AttackerLosses), lossMaps(result.DefenderLosses)
 		refundSurvivors(state, playerUnits, playerLosses)
+		subtractTroops(wave.EnemyRemaining, capturedEnemyUnits)
 		subtractTroops(wave.EnemyRemaining, enemyLosses)
 		passed := totalTroops(wave.EnemyRemaining) <= 0
 		if passed {
 			clearReincarnationWave(run, wave, now)
 		}
+		afterBattleCtx := applyReincarnationAfterBattleTraits(state, activeTraits, playerLosses, true, result.Winner, wave.WaveType)
+		generalSnapshots := buildPvpGeneralSnapshots(state, battleGeneralIDs)
 		report = buildReincarnationReport(*run, *wave, state, troops, playerLosses, enemyLosses, result, ReportViewAttack, passed, now)
+		report.CapturedUnits = cloneStringIntMap(capturedToArmy)
+		report.CapturedToGarrison = cloneStringIntMap(capturedToGarrison)
+		report.DefenderUnits = mergeTroopMaps(report.DefenderUnits, capturedEnemyUnits)
+		report.RevivedUnits = cloneStringIntMap(afterBattleCtx.Revived)
+		report.SurvivedUnits = calculateReportSurvivedUnits(troops, playerLosses, afterBattleCtx.Revived, capturedToArmy)
+		mergeTraitOutcomes(&report, resolution.Before.Triggered)
+		mergeTraitOutcomes(&report, resolution.AfterCombat.Triggered)
+		mergeTraitOutcomes(&report, afterBattleCtx.Triggered)
 		expResult := applyGeneralBattleExpToRoster(state, battleGeneralIDs, calculateGeneralBattleExpFromLosses(wave.EnemyFaction, result.DefenderLosses))
 		if expResult.Gained > 0 {
 			report.GeneralExpGained = expResult.Gained
 			report.GeneralLevelBefore = expResult.LevelBefore
 			report.GeneralLevelAfter = expResult.LevelAfter
 		}
-		report.PvpAttackerGenerals = buildPvpGeneralSnapshots(state, battleGeneralIDs)
+		report.PvpAttackerGenerals = generalSnapshots
 		report.Detail = nil
 		report = NormalizeBattleReport(report)
-		run.Battles = append(run.Battles, buildReincarnationBattle(*run, *wave, troops, playerLosses, enemyLosses, passed, report.ID, clientActionID, now))
+		run.Battles = append(run.Battles, buildReincarnationBattle(*run, *wave, troops, playerLosses, enemyLosses, passed, report, clientActionID, now))
 		return []BattleReport{report}, nil
 	})
 	if err != nil {
@@ -241,11 +269,13 @@ func (s *Service) ReadyReincarnationDefense(playerID string, waveID string, troo
 		}
 		applyReincarnationBonus(defenderUnits, wave.AllyBonus)
 		enemyUnits := buildReincarnationEnemyUnits(wave.EnemyFaction, wave.EnemyRemaining, now, wave.EnemyBonus)
-		result := combat.Resolve(combat.CombatInput{
-			RuleID:   activeCombatRuleID(combat.ScenePVEAttack),
-			Attacker: combat.Army{Faction: wave.EnemyFaction, Units: enemyUnits},
-			Defender: combat.Army{Faction: state.Player.Faction, Units: defenderUnits},
-		})
+		activeTraits := buildActiveTraitsForGeneralIDs(state, battleGeneralIDs)
+		resolution := resolveReincarnationTraitCombat(
+			combat.Army{Faction: wave.EnemyFaction, Units: enemyUnits},
+			combat.Army{Faction: state.Player.Faction, Units: defenderUnits},
+			activeTraits, "defender", wave.WaveType,
+		)
+		result := resolution.Result
 		playerLosses, enemyLosses := lossMaps(result.DefenderLosses), lossMaps(result.AttackerLosses)
 		if err := deductArmyLosses(state, playerLosses); err != nil {
 			return nil, err
@@ -261,17 +291,24 @@ func (s *Service) ReadyReincarnationDefense(playerID string, waveID string, troo
 		} else {
 			failReincarnationRun(run, wave, "defense_failed", now)
 		}
+		afterBattleCtx := applyReincarnationAfterBattleTraits(state, activeTraits, playerLosses, false, result.Winner, wave.WaveType)
+		generalSnapshots := buildPvpGeneralSnapshots(state, battleGeneralIDs)
 		report = buildReincarnationReport(*run, *wave, state, troops, playerLosses, enemyLosses, result, ReportViewDefense, passed, now)
+		report.RevivedUnits = cloneStringIntMap(afterBattleCtx.Revived)
+		report.SurvivedUnits = calculateReportSurvivedUnits(troops, playerLosses, afterBattleCtx.Revived, nil)
+		mergeTraitOutcomes(&report, resolution.Before.Triggered)
+		mergeTraitOutcomes(&report, resolution.AfterCombat.Triggered)
+		mergeTraitOutcomes(&report, afterBattleCtx.Triggered)
 		expResult := applyGeneralBattleExpToRoster(state, battleGeneralIDs, calculateGeneralBattleExpFromLosses(wave.EnemyFaction, result.AttackerLosses))
 		if expResult.Gained > 0 {
 			report.GeneralExpGained = expResult.Gained
 			report.GeneralLevelBefore = expResult.LevelBefore
 			report.GeneralLevelAfter = expResult.LevelAfter
 		}
-		report.PvpDefenderGenerals = buildPvpGeneralSnapshots(state, battleGeneralIDs)
+		report.PvpDefenderGenerals = generalSnapshots
 		report.Detail = nil
 		report = NormalizeBattleReport(report)
-		run.Battles = append(run.Battles, buildReincarnationBattle(*run, *wave, troops, playerLosses, enemyLosses, passed, report.ID, clientActionID, now))
+		run.Battles = append(run.Battles, buildReincarnationBattle(*run, *wave, troops, playerLosses, enemyLosses, passed, report, clientActionID, now))
 		return []BattleReport{report}, nil
 	})
 	if err != nil {
@@ -555,6 +592,66 @@ func buildReincarnationActionResult(run ReincarnationRun, report *BattleReport, 
 	}
 }
 
+// resolveReincarnationTraitCombat 通过标准事件管线结算轮回攻防波的战前和战斗结算后特性。
+func resolveReincarnationTraitCombat(attacker combat.Army, defender combat.Army, activeTraits []general.ActiveTrait, playerSide string, scene string) reincarnationCombatResolution {
+	playerIsAttacker := playerSide == "attacker"
+	beforeCtx := &general.BeforeBattleContext{
+		Attacker:          &attacker,
+		Defender:          &defender,
+		AttackerOwnsTrait: playerIsAttacker,
+		DefenderOwnsTrait: !playerIsAttacker,
+		IsPvP:             false,
+		SameFaction:       attacker.Faction == defender.Faction,
+		Scene:             scene,
+	}
+	ownedTraits := withTraitOwnerSide(activeTraits, playerSide)
+	general.Dispatch(beforeCtx, ownedTraits)
+	result := combat.Resolve(combat.CombatInput{
+		RuleID:   activeCombatRuleID(combat.ScenePVEAttack),
+		Attacker: attacker,
+		Defender: defender,
+	})
+	applyPreBattleLossesToCombatResult(&result, beforeCtx)
+	afterCombatCtx := &general.AfterCombatResolveContext{
+		Result:            &result,
+		Attacker:          &attacker,
+		Defender:          &defender,
+		AttackerOwnsTrait: playerIsAttacker,
+		DefenderOwnsTrait: !playerIsAttacker,
+		IsAttackerOnly:    playerIsAttacker,
+		Scene:             scene,
+	}
+	general.Dispatch(afterCombatCtx, ownedTraits)
+	return reincarnationCombatResolution{Result: result, Before: beforeCtx, AfterCombat: afterCombatCtx}
+}
+
+// applyReincarnationAfterBattleTraits 把轮回战后复活或返兵写回玩家权威兵力。
+func applyReincarnationAfterBattleTraits(state *GameState, activeTraits []general.ActiveTrait, losses map[string]int, isAttacker bool, winner string, scene string) *general.AfterBattleContext {
+	playerArmy := armySliceToMap(state.Army)
+	winner = strings.ToLower(strings.TrimSpace(winner))
+	won := winner == "attacker"
+	if !isAttacker {
+		won = winner == "defender"
+	}
+	ctx := &general.AfterBattleContext{
+		PlayerArmy:   playerArmy,
+		PlayerLosses: losses,
+		IsAttacker:   isAttacker,
+		Won:          won,
+		Winner:       winner,
+		Scene:        scene,
+	}
+	ownerSide := "defender"
+	if isAttacker {
+		ownerSide = "attacker"
+	}
+	general.Dispatch(ctx, withTraitOwnerSide(activeTraits, ownerSide))
+	if len(ctx.Revived) > 0 {
+		state.Army = armyMapToSlice(playerArmy)
+	}
+	return ctx
+}
+
 func pickReincarnationEnemyFaction(rng *mathrand.Rand) string {
 	cfg := GetReincarnationConfig()
 	if len(cfg.EnemyFactions) == 0 {
@@ -729,7 +826,7 @@ func subtractTroops(troops map[string]int, losses map[string]int) {
 	}
 }
 
-func buildReincarnationBattle(run ReincarnationRun, wave ReincarnationWave, troops map[string]int, losses map[string]int, enemyLosses map[string]int, passed bool, reportID string, clientActionID string, now time.Time) ReincarnationBattle {
+func buildReincarnationBattle(run ReincarnationRun, wave ReincarnationWave, troops map[string]int, losses map[string]int, enemyLosses map[string]int, passed bool, report BattleReport, clientActionID string, now time.Time) ReincarnationBattle {
 	return ReincarnationBattle{
 		ID:             "rab_" + randomID(8),
 		RunID:          run.ID,
@@ -740,11 +837,30 @@ func buildReincarnationBattle(run ReincarnationRun, wave ReincarnationWave, troo
 		WaveType:       wave.WaveType,
 		AttackTroops:   cloneStringIntMap(troops),
 		Losses:         cloneStringIntMap(losses),
+		RevivedUnits:   cloneStringIntMap(report.RevivedUnits),
+		SurvivedTroops: cloneStringIntMap(report.SurvivedUnits),
 		EnemyLosses:    cloneStringIntMap(enemyLosses),
+		EnemyCaptured:  mergeTroopMaps(report.CapturedUnits, report.CapturedToGarrison),
+		EnemyRemaining: cloneStringIntMap(wave.EnemyRemaining),
+		TraitOutcomes:  cloneTraitOutcomeReports(report.TraitOutcomes),
 		Passed:         passed,
-		ReportID:       reportID,
+		ReportID:       report.ID,
 		CreatedAt:      now,
 	}
+}
+
+// cloneTraitOutcomeReports 复制副本战斗记录中的特性结果，避免和战报对象共享 map。
+func cloneTraitOutcomeReports(source map[string]TraitOutcomeReport) map[string]TraitOutcomeReport {
+	if len(source) == 0 {
+		return nil
+	}
+	result := make(map[string]TraitOutcomeReport, len(source))
+	for key, outcome := range source {
+		cloned := outcome
+		cloned.Detail = cloneBattleReportDynamicMap(outcome.Detail)
+		result[key] = cloned
+	}
+	return result
 }
 
 func findReincarnationBattleByAction(run ReincarnationRun, waveID string, clientActionID string) *ReincarnationBattle {

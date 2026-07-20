@@ -29,7 +29,7 @@ func TestNpcReportKeepsBeforeAndLostCounts(t *testing.T) {
 		Winner:         "defender",
 		DefenderLosses: []combat.UnitLoss{{ID: "greedyWolf", Count: 100, Losses: 25}},
 	}
-	report := applyNpcBattleResult(&state, &npc, result, nil, "plunder", time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC))
+	report := applyNpcBattleResult(&state, &npc, result, nil, nil, nil, "plunder", time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC))
 	if !report.DefenderRevealed {
 		t.Fatal("expected defender information to be revealed at the 25% threshold")
 	}
@@ -50,7 +50,7 @@ func TestNpcReportHidesDefenderBelowThreshold(t *testing.T) {
 		Winner:         "defender",
 		DefenderLosses: []combat.UnitLoss{{ID: "greedyWolf", Count: 100, Losses: 24}},
 	}
-	report := applyNpcBattleResult(&state, &npc, result, nil, "plunder", time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC))
+	report := applyNpcBattleResult(&state, &npc, result, nil, nil, nil, "plunder", time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC))
 	if report.DefenderRevealed || len(report.DefenderUnits) != 0 || len(report.DefenderLostUnits) != 0 {
 		t.Fatalf("expected defender information hidden below threshold, got %+v", report)
 	}

@@ -58,6 +58,27 @@ export interface DungeonWave {
   clearedAt?: string
 }
 
+export interface DungeonBattle {
+  id: string
+  runId: string
+  waveId: string
+  playerId: string
+  clientActionId?: string
+  waveIndex: number
+  waveType: 'attack' | 'defense' | string
+  attackTroops: Record<string, number>
+  losses: Record<string, number>
+  revivedUnits?: Record<string, number>
+  survivedTroops?: Record<string, number>
+  enemyLosses: Record<string, number>
+  enemyCaptured?: Record<string, number>
+  enemyRemaining?: Record<string, number>
+  traitOutcomes?: BattleReportState['traitOutcomes']
+  passed: boolean
+  reportId: string
+  createdAt: string
+}
+
 export interface DungeonRun {
   id: string
   playerId: string
@@ -74,6 +95,7 @@ export interface DungeonRun {
   rewardGrantedAt?: string
   exitedAt?: string
   waves: DungeonWave[]
+  battles?: DungeonBattle[]
   createdAt: string
   updatedAt: string
 }

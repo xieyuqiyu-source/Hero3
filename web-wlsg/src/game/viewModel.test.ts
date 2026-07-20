@@ -88,9 +88,24 @@ describe('当前城池视图模型', () => {
 
   it('武将增援或出征后不再显示为本城直属武将', () => {
     const general = { id: 'g1', name: '曹操', level: 56 }
-    const atHome = toCityGameViewModel(gameState({ general, generals: [general], generalAssignments: [{ id: 'main', generalId: 'g1', slot: 'main' }] }), 0)
-    const reinforcing = toCityGameViewModel(gameState({ general, generals: [general], generalAssignments: [{ id: 'main', generalId: 'g1', slot: 'main' }, { id: 'reinforcement-r1-g1', generalId: 'g1', slot: 'reinforcement', moduleId: 'reinforcement', status: 'marching' }] }), 0)
+    const atHome = toCityGameViewModel(gameState({ general, generals: [general], resourceProduction: { wood: 53 }, generalAssignments: [{ id: 'main', generalId: 'g1', slot: 'main' }] }), 0)
+    const reinforcing = toCityGameViewModel(gameState({ general, generals: [general], resourceProduction: { wood: 50 }, generalAssignments: [{ id: 'main', generalId: 'g1', slot: 'main' }, { id: 'reinforcement-r1-g1', generalId: 'g1', slot: 'reinforcement', moduleId: 'reinforcement', status: 'marching' }] }), 0)
     expect(atHome.general?.name).toBe('曹操')
+    expect(atHome.resources[0].productionPerHour).toBe(53)
     expect(reinforcing.general).toBeNull()
+    expect(reinforcing.resources[0].productionPerHour).toBe(50)
+  })
+
+  it('魏武号令只展示后端权威兵力且不根据小数进度自行补兵', () => {
+    const model = toCityGameViewModel(gameState({
+      army: [{ unitType: 'huWei', amount: 25 }],
+      general: { id: 'caocao', name: '曹操', level: 1 },
+      generals: [{ id: 'caocao', name: '曹操', level: 1 }],
+      generalAssignments: [{ id: 'reinforcement-caocao', generalId: 'caocao', slot: 'reinforcement', status: 'returning' }],
+      generalTraitProgress: { 'caocao:weiwu_haoling:huWei': 0.999 },
+    }), 0)
+    expect(model.army).toHaveLength(1)
+    expect(model.army[0]).toMatchObject({ name: '虎卫', amount: 25 })
+    expect(model.general).toBeNull()
   })
 })
