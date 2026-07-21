@@ -99,6 +99,7 @@ const traitPercentageKeys = new Set([
 
 // 特殊场景特性使用比通用事件阶段更精确的玩家文案。
 const traitPhaseOverrides: Record<string, string> = {
+  weiwu_tongyu: '守城/增援战斗前',
   huogong: '主动进攻战斗结算后',
   meiren: '主动进攻战斗前',
   xiaobawang_zhuiji: '掠夺战结算后',

@@ -8,6 +8,7 @@ import { gameApi } from '@/api/game'
 import type { NpcCity, BattleReport } from '@/types/game'
 import BattleResultModal from './BattleResultModal'
 import ScoutResultModal from './ScoutResultModal'
+import { useProjectedArmy } from '@/hooks/useProjectedArmy'
 
 interface AttackPanelProps {
   city: NpcCity
@@ -18,7 +19,7 @@ interface AttackPanelProps {
 const AttackPanel: FC<AttackPanelProps> = ({ city, onClose, onComplete }) => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const state = useGameStore((s) => s.state)
-  const army = state?.army ?? []
+  const army = useProjectedArmy()
   const faction = state?.player.faction ?? 'wei'
   const patchState = useGameStore((s) => s.patchState)
   const units = useConfigStore((s) => s.units)

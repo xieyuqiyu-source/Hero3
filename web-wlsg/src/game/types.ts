@@ -142,7 +142,7 @@ export interface GameStateResponse {
   resources: ResourceState
   resourceProduction: Record<string, number>
   resourceSettledAt: string
-  /** 非战斗将领特性的后端累计进度，只用于兼容权威状态。 */
+  /** 非战斗将领特性的后端累计进度；前端只投影显示，不修改权威兵力。 */
   generalTraitProgress?: Record<string, number>
   capacityBoost?: number
   capacityBoostEnd?: string

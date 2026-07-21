@@ -35,6 +35,7 @@ import { FACTION_LABELS, FACTION_COLORS } from '@/utils/faction'
 import { sortArmyForDisplay } from '@/utils/armySort'
 import { canViewInternalTools } from '@/utils/accountAccess'
 import type { GameState } from '@/types/game'
+import { useProjectedArmy } from '@/hooks/useProjectedArmy'
 
 interface LayoutProps {
   children: ReactNode
@@ -48,6 +49,7 @@ const Layout: FC<LayoutProps> = ({ children }) => {
   const loading = useGameStore((store) => store.loading)
   const error = useGameStore((store) => store.error)
   const loadGameState = useGameStore((store) => store.loadGameState)
+  const loadMilitaryView = useGameStore((store) => store.loadMilitaryView)
   const navigate = useNavigate()
   const location = useLocation()
   const [popupQueue, setPopupQueue] = useState<AnnouncementSummary[]>([])
@@ -68,6 +70,17 @@ const Layout: FC<LayoutProps> = ({ children }) => {
   useEffect(() => {
     void loadGameState()
   }, [loadGameState])
+
+  useEffect(() => {
+    if (!activePlayerId) return
+    const refreshMilitary = () => void loadMilitaryView(activePlayerId)
+    const timer = window.setInterval(refreshMilitary, 60_000)
+    window.addEventListener('focus', refreshMilitary)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshMilitary)
+    }
+  }, [activePlayerId, loadMilitaryView])
 
   useEffect(() => {
     let cancelled = false
@@ -282,8 +295,9 @@ const MobileSidebarContent: FC<{
   const resources = useProjectedResources()
   const units = useConfigStore((s) => s.units)
   const factionUnits = units?.[gameState?.player.faction ?? '']
-  const visibleArmy = sortArmyForDisplay(gameState?.army, factionUnits)
-  const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
+  const projectedArmy = useProjectedArmy()
+  const visibleArmy = sortArmyForDisplay(projectedArmy, factionUnits)
+  const totalArmy = projectedArmy.reduce((sum, unit) => sum + unit.amount, 0)
   const mainGeneralBusy = Boolean(gameState?.general && gameState.generalAssignments?.some((item) => (
     item.generalId === gameState.general?.id && item.id !== 'main' && item.slot !== 'main'
   )))

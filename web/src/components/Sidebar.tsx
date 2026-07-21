@@ -28,6 +28,7 @@ import { useGameStore } from '@/store/gameStore'
 import { useAnnouncementUnread } from '@/hooks/useAnnouncementUnread'
 import { sortArmyForDisplay } from '@/utils/armySort'
 import { canViewInternalTools } from '@/utils/accountAccess'
+import { useProjectedArmy } from '@/hooks/useProjectedArmy'
 
 export interface NavItem {
   key: string
@@ -59,8 +60,9 @@ const Sidebar: FC<SidebarProps> = ({ activeKey, collapsed, gameState, onNavigate
   const resources = useProjectedResources()
   const units = useConfigStore((s) => s.units)
   const factionUnits = units?.[gameState?.player.faction ?? '']
-  const visibleArmy = sortArmyForDisplay(gameState?.army, factionUnits)
-  const totalArmy = gameState?.army.reduce((sum, unit) => sum + unit.amount, 0) ?? 0
+  const projectedArmy = useProjectedArmy()
+  const visibleArmy = sortArmyForDisplay(projectedArmy, factionUnits)
+  const totalArmy = projectedArmy.reduce((sum, unit) => sum + unit.amount, 0)
   const foodPressure = gameState?.foodPressure
   const mainGeneralBusy = Boolean(gameState?.general && gameState.generalAssignments?.some((item) => (
     item.generalId === gameState.general?.id && item.id !== 'main' && item.slot !== 'main'

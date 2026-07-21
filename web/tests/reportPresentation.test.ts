@@ -22,7 +22,7 @@ import {
   shouldShowEmptyReports,
   uniqueReportsById,
 } from '../src/pages/news/reportPresentation.ts'
-import { GENERAL_TRAITS, TRAIT_TARGET_LABELS, formatParamLabel, formatTraitOutcomeDetail, formatTraitOutcomeDetails, formatTraitTarget, getTraitMeta } from '../src/utils/traits.ts'
+import { GENERAL_TRAITS, TRAIT_TARGET_LABELS, formatTraitOutcomeDetail, formatTraitOutcomeDetails, formatTraitTarget, getTraitMeta } from '../src/utils/traits.ts'
 
 test('军情页固定展示全部、进攻、防守、增援、侦查、扫荡 Tab', () => {
 	assert.deepEqual(REPORT_VIEW_TABS.map((tab) => tab.key), ['all', 'attack', 'defense', 'reinforcement', 'scout', 'sweep'])
@@ -156,19 +156,23 @@ test('内政精营明确为留城被动且前端使用后端当前产量', () =>
 
 test('魏武号令明确为留城产兵且不伪装成战斗触发', () => {
 	const trait = getTraitMeta('weiwu_haoling')
-	assert.equal(trait.trigger, '留城资源结算时')
+	assert.equal(trait.trigger, '留城持续生效')
 	assert.match(trait.description, /留城/)
-	assert.match(trait.description, /每分钟补充 500 虎卫/)
-	assert.match(trait.description, /单次最多 3000/)
-	assert.match(trait.description, /离城期间停止产兵/)
-	assert.match(trait.description, /不会追补离城时段/)
+	assert.match(trait.description, /每分钟自动获得 300 虎卫/)
+	assert.match(trait.description, /不设产兵上限/)
+	assert.match(trait.description, /离城期间停止/)
+	assert.match(trait.description, /后端按真实经过时间权威结算/)
+	assert.match(trait.description, /前端只投影显示/)
 	assert.match(trait.description, /不作为战斗触发/)
-	assert.equal(formatParamLabel('maxGuardPerSettle'), '单次产兵上限')
 	const storeSource = readFileSync(new URL('../src/store/gameStore.ts', import.meta.url), 'utf8')
+	const projectionSource = readFileSync(new URL('../src/utils/guardProjection.ts', import.meta.url), 'utf8')
 	assert.match(storeSource, /let militaryRequestVersion = 0/)
 	assert.match(storeSource, /const requestVersion = \+\+militaryRequestVersion/)
 	assert.match(storeSource, /requestVersion !== militaryRequestVersion/)
 	assert.doesNotMatch(storeSource, /guardPerMinute|calculateGuardProduction/)
+	assert.match(projectionSource, /guardPerMinute/)
+	assert.match(projectionSource, /isCaoCaoAtHome/)
+	assert.doesNotMatch(projectionSource, /patchState|setState/)
 })
 
 test('天神下凡明确增加武将最终武力而不是战斗触发', () => {
@@ -342,9 +346,10 @@ test('全部正式随机战斗特性展示准确触发概率', () => {
 })
 
 test('兵种限定特性展示真实目标和实际修正', () => {
-	assert.match(getTraitMeta('weiwu_tongyu').description, /虎卫的攻击、步兵防御和骑兵防御各提升 10%/)
-	assert.match(getTraitMeta('weiwu_tongyu').description, /作为援军时均可生效/)
-	assert.equal(getTraitMeta('weiwu_tongyu').trigger, '战斗前')
+	assert.match(getTraitMeta('weiwu_tongyu').description, /全军防御提升 15%/)
+	assert.match(getTraitMeta('weiwu_tongyu').description, /守城或作为援军/)
+	assert.match(getTraitMeta('weiwu_tongyu').description, /主动进攻无效/)
+	assert.equal(getTraitMeta('weiwu_tongyu').trigger, '守城/增援战斗前')
 	assert.equal(formatTraitTarget('overlordRider'), '霸王骑')
 	assert.match(formatTraitOutcomeDetail('modifiedUnits', { overlordRider: 50 }), /实际攻防修正/)
 	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', { overlordRider: 50 }), '实际攻击修正: 霸王骑 +50')
@@ -1172,16 +1177,15 @@ test('荀彧双留城能力只保留拥有快照且不伪造战斗触发', () =>
 	assert.deepEqual(detail.rewards, { generalExp: 50, resources: {} })
 })
 
-test('曹操产出虎卫参战且战报只触发魏武统御', () => {
-	const options = { faction: 'wei', units: { wei: { huWei: { name: '虎卫' } } } }
+test('曹操产出虎卫主动进攻时战报不触发魏武统御', () => {
 	const detail = {
 		primarySide: {
-			role: 'attacker', power: 1100,
+			role: 'attacker', power: 1000,
 			generals: [{
 				id: 'caocao', name: '曹操', level: 1,
 				traits: [{ traitId: 'weiwu_haoling', name: '魏武号令' }, { traitId: 'weiwu_tongyu', name: '魏武统御' }],
 			}],
-			units: [{ unitType: 'huWei', unitName: '虎卫', amountBefore: 100, dispatched: 100, lost: 87, survived: 13 }],
+			units: [{ unitType: 'huWei', unitName: '虎卫', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 }],
 		},
 		secondarySide: {
 			role: 'defender', power: 1000,
@@ -1189,24 +1193,14 @@ test('曹操产出虎卫参战且战报只触发魏武统御', () => {
 			units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 }],
 		},
 		rewards: { generalExp: 100, resources: {} },
-		traits: [{
-			traitId: 'weiwu_tongyu', traitName: '魏武统御', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'caocao',
-			detail: { attackBonusRate: 0.1, defenseBonusRate: 0.1, attackModifiedUnits: { huWei: 1 }, infantryDefenseModifiedUnits: { huWei: 1 }, cavalryDefenseModifiedUnits: { huWei: 1 }, triggerChance: 1 },
-		}],
+		traits: [],
 	}
 	assert.equal(hasStandardUnitRows(detail.primarySide), true)
 	assert.equal(hasStandardUnitRows(detail.secondarySide), true)
 	assert.deepEqual(detail.primarySide.generals[0].traits.map((trait) => trait.traitId), ['weiwu_haoling', 'weiwu_tongyu'])
-	assert.deepEqual(detail.primarySide.units[0], { unitType: 'huWei', unitName: '虎卫', amountBefore: 100, dispatched: 100, lost: 87, survived: 13 })
+	assert.deepEqual(detail.primarySide.units[0], { unitType: 'huWei', unitName: '虎卫', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 })
 	assert.deepEqual(detail.secondarySide.units[0], { unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 })
-	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['weiwu_tongyu'])
-	assert.equal(detail.traits.some((trait) => trait.traitId === 'weiwu_haoling'), false)
-	assert.equal(resolveReportTraitDisplaySide({ sourceType: 'player_city', viewType: 'attack' }, detail.traits[0]), 'primary')
-	assert.equal(formatTraitOutcomeDetail('attackBonusRate', detail.traits[0].detail.attackBonusRate), '设计攻击加成: 10%')
-	assert.equal(formatTraitOutcomeDetail('defenseBonusRate', detail.traits[0].detail.defenseBonusRate), '设计防御加成: 10%')
-	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', detail.traits[0].detail.attackModifiedUnits, options), '实际攻击修正: 虎卫 +1')
-	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[0].detail.infantryDefenseModifiedUnits, options), '实际步防修正: 虎卫 +1')
-	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[0].detail.cavalryDefenseModifiedUnits, options), '实际骑防修正: 虎卫 +1')
+	assert.deepEqual(detail.traits, [])
 	assert.deepEqual(detail.rewards, { generalExp: 100, resources: {} })
 })
 
@@ -1442,9 +1436,8 @@ test('刘备多兵种大额阵亡按稳定顺序展示单场返兵上限', () =>
 	assert.equal(formatTraitOutcomeDetail('returnedUnits', detail.traits[1].detail.returnedUnits, options), '返还兵力: 蜀骑兵 +3,000、蜀步兵 +3,000')
 })
 
-test('八项战前攻击加成展示准确设计值、目标和实际修正', () => {
+test('七项战前攻击加成展示准确设计值、目标和实际修正', () => {
 	const expected = {
-		weiwu_tongyu: [/虎卫/, /10%/, /主动进攻、守城或作为援军/],
 		sizhandaodi: [/步兵/, /35%/, /仅在主动进攻/],
 		weizhen_xiaoyao: [/骑兵/, /35%/, /仅在主动进攻/],
 		wusheng_pojun: [/全军/, /20%/, /仅在主动进攻/],

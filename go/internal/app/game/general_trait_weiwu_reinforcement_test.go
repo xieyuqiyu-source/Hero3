@@ -37,9 +37,9 @@ func runWeiwuReinforcementPvpWithGenerals(t *testing.T, enabled bool, generalIDs
 func runWeiwuReinforcementPvpWithConfigChange(t *testing.T, dispatchEnabled bool, battleEnabled *bool, generalIDs []string) weiwuReinforcementResult {
 	t.Helper()
 	weiwuTrait := GeneralTraitConfig{
-		TraitID: "weiwu_tongyu", TraitType: general.TraitTypeBonus, Enabled: dispatchEnabled, Scope: "self_army", TargetUnitType: "huWei",
-		AllowedSides: []string{"attacker", "defender", "reinforcement"},
-		Params:       map[string]float64{"attackBonusRate": 0.1, "defenseBonusRate": 0.1, "triggerChance": 1},
+		TraitID: "weiwu_tongyu", TraitType: general.TraitTypeBonus, Enabled: dispatchEnabled, Scope: "self_army",
+		AllowedSides: []string{"defender", "reinforcement"},
+		Params:       map[string]float64{"defenseBonusRate": 0.15},
 	}
 	setTestFactionsAndGenerals(t, FactionsConfig{
 		"shu": {Name: "蜀国", Generals: []GeneralInfo{{ID: "liubei", Name: "刘备"}}},
@@ -165,19 +165,19 @@ func reinforcementSnapshotHasTrait(snapshot ReinforcementGeneralSnapshot, traitI
 func TestPvpWeiwuTongyuStrengthensOwnReinforcement(t *testing.T) {
 	control := runWeiwuReinforcementPvp(t, false)
 	active := runWeiwuReinforcementPvp(t, true)
-	if control.defensePower != 1010 || active.defensePower != 1110 {
-		t.Fatalf("expected real defense power 1010 -> 1110, control=%v active=%v", control.defensePower, active.defensePower)
+	if control.defensePower != 1010 || active.defensePower != 1210 {
+		t.Fatalf("expected real defense power 1010 -> 1210, control=%v active=%v", control.defensePower, active.defensePower)
 	}
 	if active.losses >= control.losses {
 		t.Fatalf("expected stronger reinforcement to lose fewer troops, control=%d active=%d", control.losses, active.losses)
 	}
 	for _, report := range active.reports {
 		outcome, ok := report.TraitOutcomes["weiwu_tongyu"]
-		attack, attackOK := outcome.Detail["attackModifiedUnits"].(map[string]int)
 		infantry, infantryOK := outcome.Detail["infantryDefenseModifiedUnits"].(map[string]int)
 		cavalry, cavalryOK := outcome.Detail["cavalryDefenseModifiedUnits"].(map[string]int)
-		if !ok || !attackOK || !infantryOK || !cavalryOK || attack["huWei"] != 1 || infantry["huWei"] != 1 || cavalry["huWei"] != 1 || outcome.OwnerSide != "reinforcement" || outcome.OwnerGeneralID != "caocao" {
-			t.Fatalf("expected reinforcement-owned HuWei deltas +1/+1/+1, got %+v", outcome)
+		_, hasAttackDelta := outcome.Detail["attackModifiedUnits"]
+		if !ok || !infantryOK || !cavalryOK || hasAttackDelta || infantry["huWei"] != 2 || cavalry["huWei"] != 1 || outcome.OwnerSide != "reinforcement" || outcome.OwnerGeneralID != "caocao" {
+			t.Fatalf("expected reinforcement-owned HuWei defense deltas +2/+1 without attack bonus, got %+v", outcome)
 		}
 		standardFound := false
 		for _, trait := range report.Detail.Traits {
@@ -195,7 +195,7 @@ func TestPvpWeiwuTongyuStrengthensOwnReinforcement(t *testing.T) {
 func TestPvpReinforcementTraitUsesDispatchConfigEverywhere(t *testing.T) {
 	t.Run("派出时开启而战前关闭", func(t *testing.T) {
 		result := runWeiwuReinforcementPvpWithConfigChange(t, true, boolPointer(false), []string{"caocao"})
-		assertWeiwuReinforcementDispatchSnapshot(t, result, true, 1110)
+		assertWeiwuReinforcementDispatchSnapshot(t, result, true, 1210)
 	})
 	t.Run("派出时关闭而战前开启", func(t *testing.T) {
 		result := runWeiwuReinforcementPvpWithConfigChange(t, false, boolPointer(true), []string{"caocao"})
@@ -228,7 +228,7 @@ func assertWeiwuReinforcementDispatchSnapshot(t *testing.T, result weiwuReinforc
 func TestYellowTurbanReinforcementTraitUsesDispatchConfigEverywhere(t *testing.T) {
 	t.Run("派出时开启而战前关闭", func(t *testing.T) {
 		result := runWeiwuYellowTurbanReinforcementWithConfigChange(t, true, false)
-		assertWeiwuYellowTurbanDispatchSnapshot(t, result, true, 1110)
+		assertWeiwuYellowTurbanDispatchSnapshot(t, result, true, 1210)
 	})
 	t.Run("派出时关闭而战前开启", func(t *testing.T) {
 		result := runWeiwuYellowTurbanReinforcementWithConfigChange(t, false, true)
@@ -247,8 +247,8 @@ func runWeiwuYellowTurbanReinforcementWithConfigChange(t *testing.T, dispatchEna
 			ID: "caocao", Name: "曹操", Faction: "wei", Enabled: true,
 			BonusTrait: GeneralTraitConfig{
 				TraitID: "weiwu_tongyu", TraitType: general.TraitTypeBonus, Enabled: dispatchEnabled,
-				Scope: "self_army", TargetUnitType: "huWei", AllowedSides: []string{"attacker", "defender", "reinforcement"},
-				Params: map[string]float64{"attackBonusRate": 0.1, "defenseBonusRate": 0.1, "triggerChance": 1},
+				Scope: "self_army", AllowedSides: []string{"defender", "reinforcement"},
+				Params: map[string]float64{"defenseBonusRate": 0.15},
 			},
 		},
 		"liubei": {ID: "liubei", Name: "刘备", Faction: "shu", Enabled: true},

@@ -143,17 +143,13 @@ func NormalizeGeneralsConfig(cfg GeneralsConfig) GeneralsConfig {
 	return cfg
 }
 
-// normalizeTraitConfigParams 迁移已经明确替代的旧参数名，避免配置语义继续产生歧义。
+// normalizeTraitConfigParams 清理魏武号令的历史上限参数，保证当前规则不限累计产兵。
 func normalizeTraitConfigParams(traitCfg *GeneralTraitConfig) {
 	if traitCfg == nil || traitCfg.TraitID != "weiwu_haoling" || traitCfg.Params == nil {
 		return
 	}
-	if _, exists := traitCfg.Params["maxGuardPerSettle"]; !exists {
-		if legacy, ok := traitCfg.Params["maxGuardPerDay"]; ok {
-			traitCfg.Params["maxGuardPerSettle"] = legacy
-		}
-	}
 	delete(traitCfg.Params, "maxGuardPerDay")
+	delete(traitCfg.Params, "maxGuardPerSettle")
 }
 
 // --- 默认配置 ---

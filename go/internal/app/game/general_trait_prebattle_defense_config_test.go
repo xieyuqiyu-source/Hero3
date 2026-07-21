@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// TestFormalPreBattleDefenseTraitConfigsMatchDesign 逐项核对九项战前防御相关特性的正式配置。
+// TestFormalPreBattleDefenseTraitConfigsMatchDesign 逐项核对十项战前防御相关特性的正式配置。
 func TestFormalPreBattleDefenseTraitConfigsMatchDesign(t *testing.T) {
 	path := filepath.Join("..", "..", "..", "config", "generals.json")
 	raw, err := os.ReadFile(path)
@@ -28,6 +28,7 @@ func TestFormalPreBattleDefenseTraitConfigsMatchDesign(t *testing.T) {
 		allowedSides []string
 		params       map[string]float64
 	}{
+		{generalID: "caocao", traitID: "weiwu_tongyu", traitType: "bonus", scope: "self_army", allowedSides: []string{"defender", "reinforcement"}, params: map[string]float64{"defenseBonusRate": 0.15}},
 		{generalID: "simayi", traitID: "mouding_houfa", traitType: "bonus", scope: "enemy_army", allowedSides: []string{"defender"}, params: map[string]float64{"effectRate": 0.1}},
 		{generalID: "zhenmi", traitID: "meihuo_raozhen", traitType: "bonus", scope: "enemy_army", allowedSides: []string{"attacker"}, params: map[string]float64{"enemyDefenseReductionRate": 0.1}},
 		{generalID: "xuchu", traitID: "huchi_chongzhen", traitType: "special", scope: "enemy_army", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.35, "enemyDefenseReductionRate": 0.2}},

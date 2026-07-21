@@ -6,6 +6,7 @@ import { toast } from '@/components/ui'
 import { useGameStore } from '@/store/gameStore'
 import { useConfigStore } from '@/store/configStore'
 import type { ArmyUnit, General, GeneralAssignment, PvpMarch, PvpTargetSummary, PvpTargetsResponse, PvpWorldPosition, Reinforcement, WorldMapTarget, WorldMapViewResponse } from '@/types/game'
+import { useProjectedArmy } from '@/hooks/useProjectedArmy'
 import WorldMapCoordinateSearch from './WorldMapCoordinateSearch'
 import WorldMapFilters from './WorldMapFilters'
 import WorldMapGrid from './WorldMapGrid'
@@ -16,7 +17,6 @@ import { buildNearestWorldMapTargets, buildWorldMapFactionCounts, buildWorldMapM
 // 共享空数组保证 Zustand selector 在存档加载前返回稳定引用，避免刷新页面时触发无限更新。
 const EMPTY_GENERALS: General[] = []
 const EMPTY_GENERAL_ASSIGNMENTS: GeneralAssignment[] = []
-const EMPTY_ARMY: ArmyUnit[] = []
 const DEFAULT_VIEW_RADIUS = WORLD_MAP_MIN_VIEW_RADIUS
 
 // WorldMapTab 展示世界地图玩家城池、筛选、坐标查找和行军状态。
@@ -24,7 +24,7 @@ const WorldMapTab: FC = () => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const generals = useGameStore((s) => s.state?.generals ?? EMPTY_GENERALS)
   const generalAssignments = useGameStore((s) => s.state?.generalAssignments ?? EMPTY_GENERAL_ASSIGNMENTS)
-  const army = useGameStore((s) => s.state?.army ?? EMPTY_ARMY)
+  const army = useProjectedArmy()
   const faction = useGameStore((s) => s.state?.player.faction ?? 'wei')
   const units = useConfigStore((s) => s.units)
   const [targets, setTargets] = useState<PvpTargetSummary[]>([])

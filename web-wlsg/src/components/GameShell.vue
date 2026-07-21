@@ -1,6 +1,6 @@
 <!-- 将 V0.3 真实游戏状态装配进已验收的 997px 公共外壳。 -->
 <script setup lang="ts">
-import { computed, ref, toRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue'
 import type { AccountInfo, BuildingBalanceConfig, PlayerSummary, UnitsConfig } from '../api/types'
 import { shellNavigation } from '../data/shellNavigation'
 import type { GameStateStore } from '../game/stateService'
@@ -13,6 +13,7 @@ import { toRecruitmentCategories, toRecruitmentQueues } from '../game/recruitmen
 import { toMilitaryWarUnitCatalog } from '../game/militaryWarAdapter'
 import { toCityGameViewModel } from '../game/viewModel'
 import { useServerClock } from '../game/useServerClock'
+import { projectGuardArmy } from '../game/guardProjection'
 import ChatDock from './ChatDock.vue'
 import CapacityBoostDialog from './CapacityBoostDialog.vue'
 import GameHeader from './GameHeader.vue'
@@ -30,8 +31,12 @@ import type { MirageGameType } from '../mirage/types'
 
 const props = withDefaults(defineProps<{ account: AccountInfo; players?: PlayerSummary[]; currentPlayerId?: string; game: GameStateStore; worldMap: WorldMapStateStore; npc: NpcStateStore; dungeon: DungeonStateStore; mirage: MirageStateStore; buildingConfigs: Record<string, BuildingBalanceConfig>; unitsConfig: UnitsConfig; cityGoldPerSecond: number }>(), { players: () => [], currentPlayerId: '' })
 const emit = defineEmits<{ logout: []; selectPlayer: [playerId: string]; retry: []; refreshMilitary: []; refreshMap: []; refreshNpc: []; loadNpc: [playerId: string]; loadDungeon: [playerId: string]; startDungeon: [level: number]; fightDungeon: [waveId: string, troops: Record<string, number>, generalIds: string[]]; resetDungeonBonus: [waveId: string]; settleDungeon: []; exitDungeon: []; loadMirage: [playerId: string]; gambleMirage: [unitType: string, amount: number, betId: string, exactNumber: number]; spinMirage: [unitType: string, amount: number]; redeemMirage: [recordId: string, amount: number]; redeemAllMirage: [gameType: MirageGameType]; refreshMarches: []; accelerateMarch: [marchId: string]; recallMarch: [marchId: string]; navigateMap: [x: number, y: number]; returnMapHome: []; dispatchMarch: [action: WorldMapMarchAction, targetPlayerId: string, troops: Record<string, number>, generalIds: string[]]; dispatchNpc: [action: NpcCommandAction, npcId: string, troops: Record<string, number>, generalIds: string[]]; upgrade: [buildingId: string]; fillResources: []; loadCapacityBoostPrices: []; purchaseCapacityBoost: [multiplier: number, hours: number]; instantBuilding: [buildingId: string]; instantAllBuildings: []; recruit: [unitId: string, amount: number]; instantRecruit: [queueId: string] }>()
-const model = computed(() => props.game.data ? toCityGameViewModel(props.game.data, props.account.gold) : null)
-const recruitmentCategories = computed(() => toRecruitmentCategories(model.value?.player.faction ?? 'wei', props.unitsConfig, props.game.data?.army ?? []))
+const serverTime = computed(() => props.game.data?.serverTime ?? '')
+const { formatted, nowMs } = useServerClock(serverTime, toRef(props.game, 'receivedAt'))
+const projectedArmy = computed(() => projectGuardArmy(props.game.data, props.game.receivedAt, nowMs.value))
+const projectedState = computed(() => props.game.data ? { ...props.game.data, army: projectedArmy.value } : null)
+const model = computed(() => projectedState.value ? toCityGameViewModel(projectedState.value, props.account.gold) : null)
+const recruitmentCategories = computed(() => toRecruitmentCategories(model.value?.player.faction ?? 'wei', props.unitsConfig, projectedArmy.value))
 const recruitmentQueues = computed(() => toRecruitmentQueues(props.game.data?.recruitQueues ?? [], recruitmentCategories.value))
 const marchUnits = computed(() => recruitmentCategories.value.flatMap((category) => category.units))
 const warUnitCatalog = computed(() => toMilitaryWarUnitCatalog(props.unitsConfig))
@@ -39,14 +44,26 @@ const warTargets = computed(() => {
   const targets = [...(props.worldMap.overview?.targets ?? []), ...(props.worldMap.data?.targets ?? [])]
   return [...new Map(targets.map((target) => [target.targetId, target])).values()]
 })
-const serverTime = computed(() => model.value?.serverTime ?? '')
-const { formatted } = useServerClock(serverTime, toRef(props.game, 'receivedAt'))
 const headerAccount = computed(() => ({ serverTime: formatted.value, currencies: [`账号金币: ${props.account.gold.toLocaleString('zh-CN')}`, `城金: ${(model.value?.cityGold ?? 0).toLocaleString('zh-CN')}`], quickLinks: [] }))
 const activePrimaryIndex = ref(1)
 const activeMilitaryIndex = ref(0)
 const intelligenceOpen = ref(false)
 const capacityBoostOpen = ref(false)
 const headerActiveIndex = computed(() => intelligenceOpen.value ? -1 : activePrimaryIndex.value)
+let militarySyncTimer: number | undefined
+
+/** 定期向后端校准权威兵力，并在用户回到页面时立即同步。 */
+function syncMilitary() { if (props.currentPlayerId) emit('refreshMilitary') }
+
+onMounted(() => {
+  militarySyncTimer = window.setInterval(syncMilitary, 60_000)
+  window.addEventListener('focus', syncMilitary)
+})
+
+onBeforeUnmount(() => {
+  if (militarySyncTimer !== undefined) window.clearInterval(militarySyncTimer)
+  window.removeEventListener('focus', syncMilitary)
+})
 
 /** 在已实现的城池、军事征兵和真实地图页之间切换。 */
 function selectPrimary(index: number) {

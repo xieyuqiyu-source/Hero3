@@ -152,7 +152,7 @@ func TestWeiwuHaolingAddsRealTroopsOnResourceSettlement(t *testing.T) {
 				SpecialTrait: GeneralTraitConfig{
 					TraitID: "weiwu_haoling", TraitType: general.TraitTypeSpecial, Enabled: true,
 					Scope: "self_city", TargetUnitType: "weiInfantry",
-					Params: map[string]float64{"guardPerMinute": 500, "maxGuardPerSettle": 3000},
+					Params: map[string]float64{"guardPerMinute": 300},
 				},
 			},
 		},
@@ -161,8 +161,8 @@ func TestWeiwuHaolingAddsRealTroopsOnResourceSettlement(t *testing.T) {
 	if changed := applyGuardPerMinuteTraits(&state, 120); !changed {
 		t.Fatal("expected guard production to change army")
 	}
-	if got := armySliceToMap(state.Army)["weiInfantry"]; got != 1000 {
-		t.Fatalf("expected 1000 produced guards after two minutes, got %d", got)
+	if got := armySliceToMap(state.Army)["weiInfantry"]; got != 600 {
+		t.Fatalf("expected 600 produced guards after two minutes, got %d", got)
 	}
 	away := GameState{
 		Player: Player{Faction: "wei"}, General: newGeneral("wei", "caocao"),

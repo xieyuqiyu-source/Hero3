@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// TestFormalAttackTraitConfigsMatchDesign 逐项核对八项攻击加成，防止数值、兵种或场景约束被误改。
+// TestFormalAttackTraitConfigsMatchDesign 逐项核对七项攻击加成，曹操防御特性不得混入进攻矩阵。
 func TestFormalAttackTraitConfigsMatchDesign(t *testing.T) {
 	path := filepath.Join("..", "..", "..", "config", "generals.json")
 	raw, err := os.ReadFile(path)
@@ -28,7 +28,6 @@ func TestFormalAttackTraitConfigsMatchDesign(t *testing.T) {
 		allowedScenes  []string
 		params         map[string]float64
 	}{
-		{generalID: "caocao", traitID: "weiwu_tongyu", targetUnitType: "huWei", allowedSides: []string{"attacker", "defender", "reinforcement"}, params: map[string]float64{"attackBonusRate": 0.1, "defenseBonusRate": 0.1}},
 		{generalID: "dianwei", traitID: "sizhandaodi", targetUnitType: "infantry", allowedSides: []string{"attacker"}, params: map[string]float64{"attackBonusRate": 0.35}},
 		{generalID: "zhangliao", traitID: "weizhen_xiaoyao", targetUnitType: "cavalry", allowedSides: []string{"attacker"}, params: map[string]float64{"attackBonusRate": 0.35}},
 		{generalID: "guanyu", traitID: "wusheng_pojun", allowedSides: []string{"attacker"}, params: map[string]float64{"attackBonusRate": 0.2}},

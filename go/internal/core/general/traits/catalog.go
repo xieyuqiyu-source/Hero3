@@ -866,8 +866,8 @@ func countField(key string, label string, def float64, max float64) general.Para
 
 func init() {
 	for _, item := range []configurableTrait{
-		{id: "weiwu_haoling", name: "魏武号令", traitType: general.TraitTypeSpecial, description: "将领留城时在资源结算中按经过时间补充虎卫，不作为战斗触发。", effect: "resource_settlement_guard", events: nil, schema: []general.ParamField{countField("guardPerMinute", "每分钟虎卫", 500, 10000), countField("maxGuardPerSettle", "单次结算上限", 3000, 100000)}},
-		{id: "weiwu_tongyu", name: "魏武统御", traitType: general.TraitTypeBonus, description: "提升曹操所带虎卫的攻击和防御，主动出征、守城或增援均可生效。", effect: "unit_attack_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("attackBonusRate", "攻击加成", 0.1, 2), rateField("defenseBonusRate", "防御加成", 0.1, 2)}},
+		{id: "weiwu_haoling", name: "魏武号令", traitType: general.TraitTypeSpecial, description: "曹操留城时每分钟自动获得 300 虎卫，按后端经过时间权威结算且不设产兵上限；离城期间停止且不作为战斗触发。", effect: "resource_settlement_guard", events: nil, schema: []general.ParamField{countField("guardPerMinute", "每分钟虎卫", 300, 10000)}},
+		{id: "weiwu_tongyu", name: "魏武统御", traitType: general.TraitTypeBonus, description: "曹操所率全军防御提升 15%，仅在守城或增援战斗前生效，主动进攻无效。", effect: "army_defense_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("defenseBonusRate", "防御加成", 0.15, 2)}},
 		{id: "yibing_touxi", name: "疑兵偷袭", traitType: general.TraitTypeSpecial, description: "战前偷袭并造成敌方真实伤亡。", effect: "pre_damage", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "伤亡比例", 0.35, 1)}},
 		{id: "mouding_houfa", name: "谋定后发", traitType: general.TraitTypeBonus, description: "防守时削弱敌方攻击。", effect: "enemy_attack_reduce", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "攻击削弱", 0.1, 0.9)}},
 		{id: "meihuo_raozhen", name: "魅惑扰阵", traitType: general.TraitTypeBonus, description: "主动进攻时降低敌方防御。", effect: "enemy_defense_reduce", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("enemyDefenseReductionRate", "敌方防御降低", 0.1, 0.9)}},

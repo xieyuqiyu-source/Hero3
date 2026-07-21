@@ -1582,36 +1582,34 @@ describe('官方战报适配', () => {
     expect(model.sides[0].traits[0]).toMatchObject({ phase: '主动进攻战斗前', detailText: '实际攻击修正：霸王骑 +50' })
   })
 
-  it('魏武统御展示虎卫三类实际修正', () => {
+  it('魏武统御仅展示守城或援军全军 15% 防御实际修正', () => {
     const source = report()
-    source.detail!.primarySide.generals = [{ id: 'caocao', name: '曹操', level: 1 }]
+    source.detail!.secondarySide!.generals = [{ id: 'caocao', name: '曹操', level: 1 }]
     source.detail!.traits = [{
-      traitId: 'weiwu_tongyu', traitName: '魏武统御', ownerSide: 'primary', generalId: 'caocao',
+      traitId: 'weiwu_tongyu', traitName: '魏武统御', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'caocao',
       detail: {
-        attackBonusRate: 0.1,
-        defenseBonusRate: 0.1,
-        attackModifiedUnits: { huWei: 1 },
-        infantryDefenseModifiedUnits: { huWei: 1 },
-        cavalryDefenseModifiedUnits: { huWei: 1 },
-        triggerChance: 1,
+        defenseBonusRate: 0.15,
+        infantryDefenseModifiedUnits: { huWei: 1, qingZhouArmy: 1 },
+        cavalryDefenseModifiedUnits: { huWei: 1, qingZhouArmy: 2 },
       },
     }]
     const model = toOfficialBattleReport(source)
-    expect(model.sides[0].traits[0]).toMatchObject({
-      phase: '战斗前',
-      detailText: '设计攻击加成：10%；设计防御加成：10%；实际攻击修正：虎卫 +1；实际步防修正：虎卫 +1；实际骑防修正：虎卫 +1；触发概率：100%',
+    expect(model.sides[1].traits[0]).toMatchObject({
+      phase: '守城/增援战斗前',
+      detailText: '设计防御加成：15%；实际步防修正：虎卫 +1、青州军 +1；实际骑防修正：虎卫 +1、青州军 +2',
     })
+    expect(model.sides[0].traits).toEqual([])
 
     const reinforcementSource = report()
     reinforcementSource.pvpReinforcements![0].generals = [{ id: 'caocao', name: '曹操', level: 1 }]
     reinforcementSource.detail!.traits = [{
       traitId: 'weiwu_tongyu', traitName: '魏武统御', ownerSide: 'reinforcement', ownerPlayerId: 'p3', generalId: 'caocao',
-      detail: { attackBonusRate: 0.1, defenseBonusRate: 0.1, attackModifiedUnits: { huWei: 1 }, infantryDefenseModifiedUnits: { huWei: 1 }, cavalryDefenseModifiedUnits: { huWei: 1 }, triggerChance: 1 },
+      detail: { defenseBonusRate: 0.15, infantryDefenseModifiedUnits: { huWei: 2 }, cavalryDefenseModifiedUnits: { huWei: 1 } },
     }]
     const reinforcementModel = toOfficialBattleReport(reinforcementSource)
     expect(reinforcementModel.sides[2].traits[0]).toMatchObject({
-      name: '魏武统御', phase: '战斗前',
-      detailText: '设计攻击加成：10%；设计防御加成：10%；实际攻击修正：虎卫 +1；实际步防修正：虎卫 +1；实际骑防修正：虎卫 +1；触发概率：100%',
+      name: '魏武统御', phase: '守城/增援战斗前',
+      detailText: '设计防御加成：15%；实际步防修正：虎卫 +2；实际骑防修正：虎卫 +1',
     })
   })
 
@@ -4585,39 +4583,33 @@ describe('官方战报适配', () => {
     expect(model.sides.flatMap((side) => side.traits)).toEqual([])
   })
 
-  it('曹操产出虎卫参战且战报只触发魏武统御', () => {
+  it('曹操产出虎卫主动进攻时战报不触发魏武统御', () => {
     const source = report()
-    source.result = 'attacker_victory'
-    source.detail!.result = 'attacker_victory'
-    source.detail!.winnerSide = 'attacker'
+    source.result = 'draw'
+    source.detail!.result = 'draw'
+    source.detail!.winnerSide = ''
     source.detail!.primarySide.faction = 'wei'
-    source.detail!.primarySide.power = 1100
+    source.detail!.primarySide.power = 1000
     source.detail!.primarySide.generals = [{
       id: 'caocao', name: '曹操', level: 1,
       traits: [{ traitId: 'weiwu_haoling', name: '魏武号令' }, { traitId: 'weiwu_tongyu', name: '魏武统御' }],
     }]
-    source.detail!.primarySide.units = [{ unitType: 'huWei', unitName: '虎卫', amountBefore: 100, dispatched: 100, lost: 87, survived: 13 }]
+    source.detail!.primarySide.units = [{ unitType: 'huWei', unitName: '虎卫', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 }]
     source.detail!.secondarySide!.faction = 'shu'
     source.detail!.secondarySide!.power = 1000
     source.detail!.secondarySide!.generals = [{ id: 'liubei', name: '刘备', level: 1 }]
     source.detail!.secondarySide!.units = [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 }]
     source.detail!.rewards.generalExp = 100
-    source.detail!.traits = [{
-      traitId: 'weiwu_tongyu', traitName: '魏武统御', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'caocao',
-      detail: { attackBonusRate: 0.1, defenseBonusRate: 0.1, attackModifiedUnits: { huWei: 1 }, infantryDefenseModifiedUnits: { huWei: 1 }, cavalryDefenseModifiedUnits: { huWei: 1 }, triggerChance: 1 },
-    }]
+    source.detail!.traits = []
     source.pvpReinforcements = []
     source.pvpReinforcementLosses = {}
     const model = toOfficialBattleReport(source)
     expect(model.sides.map((side) => side.role)).toEqual(['attacker', 'defender'])
-    expect(model.sides[0]).toMatchObject({ role: 'attacker', power: 1100, general: { id: 'caocao', name: '曹操', level: 1 }, generalExp: 100 })
+    expect(model.sides[0]).toMatchObject({ role: 'attacker', power: 1000, general: { id: 'caocao', name: '曹操', level: 1 }, generalExp: 100 })
     expect(model.sides[1]).toMatchObject({ role: 'defender', power: 1000 })
-    expect(model.sides[0].units.find((unit) => unit.key === 'huWei')).toMatchObject({ dispatched: 100, lost: 87, survived: 13 })
+    expect(model.sides[0].units.find((unit) => unit.key === 'huWei')).toMatchObject({ dispatched: 100, lost: 100, survived: 0 })
     expect(model.sides[1].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 100, lost: 100, survived: 0 })
-    expect(model.sides[0].traits).toEqual([{
-      key: 'weiwu_tongyu-0', name: '魏武统御', phase: '战斗前',
-      detailText: '设计攻击加成：10%；设计防御加成：10%；实际攻击修正：虎卫 +1；实际步防修正：虎卫 +1；实际骑防修正：虎卫 +1；触发概率：100%',
-    }])
+    expect(model.sides[0].traits).toEqual([])
     expect(model.sides[1].traits).toEqual([])
     expect(model.sides.flatMap((side) => side.traits).some((trait) => trait.name === '魏武号令')).toBe(false)
   })
@@ -4659,7 +4651,7 @@ describe('官方战报适配', () => {
     }])
   })
 
-  it('攻守双方曹操的同一战前特性分别展示真实攻防修正', () => {
+  it('历史攻守双方曹操结果仍按当前阶段名称展示实际修正', () => {
     const source = report()
     source.detail!.primarySide.faction = 'wei'
     source.detail!.primarySide.power = 1100
@@ -4689,14 +4681,14 @@ describe('官方战报适配', () => {
     expect(model.sides[0].units.find((unit) => unit.key === 'huWei')).toMatchObject({ dispatched: 100, lost: 50, survived: 50 })
     expect(model.sides[1].units.find((unit) => unit.key === 'huWei')).toMatchObject({ dispatched: 100, lost: 50, survived: 50 })
     const expectedTrait = {
-      key: 'weiwu_tongyu-0', name: '魏武统御', phase: '战斗前',
+      key: 'weiwu_tongyu-0', name: '魏武统御', phase: '守城/增援战斗前',
       detailText: '设计攻击加成：10%；设计防御加成：10%；实际攻击修正：虎卫 +1；实际步防修正：虎卫 +1；实际骑防修正：虎卫 +1；触发概率：100%',
     }
     expect(model.sides[0].traits).toEqual([expectedTrait])
     expect(model.sides[1].traits).toEqual([expectedTrait])
   })
 
-  it('曹操进攻加成与孙权防守加成交叉展示真实战力兵损和归属', () => {
+  it('历史曹操与孙权交叉结果仍保留后端实际数值和归属', () => {
     const source = report()
     source.detail!.primarySide.faction = 'wei'
     source.detail!.primarySide.power = 11000
@@ -4726,7 +4718,7 @@ describe('官方战报适配', () => {
     expect(model.sides[0].units.find((unit) => unit.key === 'huWei')).toMatchObject({ dispatched: 1000, lost: 608, survived: 392 })
     expect(model.sides[1].units.find((unit) => unit.key === 'wuInfantry')).toMatchObject({ dispatched: 1000, lost: 391, survived: 609 })
     expect(model.sides[0].traits).toEqual([{
-      key: 'weiwu_tongyu-0', name: '魏武统御', phase: '战斗前',
+      key: 'weiwu_tongyu-0', name: '魏武统御', phase: '守城/增援战斗前',
       detailText: '设计攻击加成：10%；设计防御加成：10%；实际攻击修正：虎卫 +1；实际步防修正：虎卫 +1；实际骑防修正：虎卫 +1；触发概率：100%',
     }])
     expect(model.sides[1].traits).toEqual([{

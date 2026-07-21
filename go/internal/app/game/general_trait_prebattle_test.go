@@ -10,7 +10,7 @@ import (
 	"hero3/internal/core/general"
 )
 
-// TestConfiguredUnitBonusesModifyOnlyTheirRealTarget 验证正式配置中的虎卫和霸王骑加成只修改真实目标兵种。
+// TestConfiguredUnitBonusesModifyOnlyTheirRealTarget 验证正式配置中的全军防御和指定兵种攻击加成作用于真实目标。
 func TestConfiguredUnitBonusesModifyOnlyTheirRealTarget(t *testing.T) {
 	originalGenerals := GetGeneralsConfig()
 	originalFactions := GetFactionsConfig()
@@ -47,27 +47,32 @@ func TestConfiguredUnitBonusesModifyOnlyTheirRealTarget(t *testing.T) {
 		}
 	}
 
-	t.Run("曹操只强化虎卫", func(t *testing.T) {
-		attacker := combat.Army{Units: []combat.Unit{combatUnit("wei", "huWei"), combatUnit("wei", "qingZhouArmy")}}
-		defender := combat.Army{Units: []combat.Unit{combatUnit("wu", "shadowGuard")}}
-		ctx := &general.BeforeBattleContext{Attacker: &attacker, Defender: &defender, AttackerOwnsTrait: true, Scene: "attack"}
+	t.Run("曹操守城强化全军防御且进攻无效", func(t *testing.T) {
+		attacker := combat.Army{Units: []combat.Unit{combatUnit("wu", "shadowGuard")}}
+		defender := combat.Army{Units: []combat.Unit{combatUnit("wei", "huWei"), combatUnit("wei", "qingZhouArmy")}}
+		ctx := &general.BeforeBattleContext{Attacker: &attacker, Defender: &defender, DefenderOwnsTrait: true, Scene: "attack"}
 		general.Dispatch(ctx, buildActiveTraits(newGeneral("wei", "caocao")))
 
-		if got := attacker.Units[0]; got.Attack != 15 || got.InfantryDefense != 9 || got.CavalryDefense != 6 {
-			t.Fatalf("expected huWei stats 15/9/6 after Weiwu Tongyu, got %+v", got)
+		if got := defender.Units[0]; got.Attack != 14 || got.InfantryDefense != 9 || got.CavalryDefense != 6 {
+			t.Fatalf("expected huWei defense 8/5 -> 9/6 and attack unchanged, got %+v", got)
 		}
-		if got := attacker.Units[1]; got.Attack != 8 || got.InfantryDefense != 7 || got.CavalryDefense != 10 {
-			t.Fatalf("expected another infantry unchanged, got %+v", got)
+		if got := defender.Units[1]; got.Attack != 8 || got.InfantryDefense != 8 || got.CavalryDefense != 12 {
+			t.Fatalf("expected qingZhouArmy defense 7/10 -> 8/12 and attack unchanged, got %+v", got)
 		}
-		outcome := ctx.Triggered["weiwu_tongyu"]
-		attack, attackOK := outcome.Detail["attackModifiedUnits"].(map[string]int)
+		outcome, ok := ctx.Triggered["weiwu_tongyu"]
 		infantryDefense, infantryOK := outcome.Detail["infantryDefenseModifiedUnits"].(map[string]int)
 		cavalryDefense, cavalryOK := outcome.Detail["cavalryDefenseModifiedUnits"].(map[string]int)
-		if !attackOK || !infantryOK || !cavalryOK || attack["huWei"] != 1 || infantryDefense["huWei"] != 1 || cavalryDefense["huWei"] != 1 {
-			t.Fatalf("expected report to split huWei attack/defense changes, got %+v", outcome)
+		if !ok || !infantryOK || !cavalryOK || infantryDefense["huWei"] != 1 || cavalryDefense["huWei"] != 1 || infantryDefense["qingZhouArmy"] != 1 || cavalryDefense["qingZhouArmy"] != 2 {
+			t.Fatalf("expected report to record all-army 15%% defense deltas, got %+v", outcome)
 		}
-		if _, exists := outcome.Detail["effectRate"]; exists {
-			t.Fatalf("expected no fake zero effectRate for configured attack/defense rates, got %+v", outcome.Detail)
+		if _, exists := outcome.Detail["attackModifiedUnits"]; exists {
+			t.Fatalf("expected Weiwu Tongyu not to modify attack, got %+v", outcome.Detail)
+		}
+
+		attackCtx := &general.BeforeBattleContext{Attacker: &defender, Defender: &attacker, AttackerOwnsTrait: true, Scene: "attack"}
+		general.Dispatch(attackCtx, buildActiveTraits(newGeneral("wei", "caocao")))
+		if _, triggered := attackCtx.Triggered["weiwu_tongyu"]; triggered {
+			t.Fatalf("expected Weiwu Tongyu disabled on active attack, got %+v", attackCtx.Triggered)
 		}
 	})
 

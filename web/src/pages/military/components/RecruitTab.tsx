@@ -6,7 +6,7 @@ import { useConfigStore, type UnitConfig } from '@/store/configStore'
 import UnitCard from './UnitCard'
 import RecruitModal from './RecruitModal'
 import RecruitQueuePanel from './RecruitQueuePanel'
-import type { ArmyUnit } from '@/types/game'
+import { useProjectedArmy } from '@/hooks/useProjectedArmy'
 
 type UnitCategory = 'infantry' | 'cavalry' | 'siege' | 'special'
 
@@ -17,14 +17,12 @@ const CATEGORIES = [
   { key: 'special' as const, label: '特殊', icon: Star },
 ]
 
-const EMPTY_ARMY: ArmyUnit[] = []
-
 /** 渲染征兵页签 */
 const RecruitTab: FC = () => {
   const [category, setCategory] = useState<UnitCategory>('infantry')
   const [selectedUnit, setSelectedUnit] = useState<{ id: string; config: UnitConfig } | null>(null)
   const faction = useGameStore((s) => s.state?.player.faction ?? 'wei')
-  const army = useGameStore((s) => s.state?.army ?? EMPTY_ARMY)
+  const army = useProjectedArmy()
   const units = useConfigStore((s) => s.units)
 
   // 获取当前阵营的兵种配置

@@ -2,7 +2,7 @@
 
 # Hero3 AI 项目索引
 
-最后核对：2026-07-17
+最后核对：2026-07-21
 适用分支：`main-core`
 
 ## 1. 这个索引怎么用
@@ -294,6 +294,7 @@ go/internal/transport/api/router.go
 | 测试范围 | `docs/测试/测试策略.md` |
 | 发布与回滚 | `docs/发布与回滚/发布回滚规范.md`、`docs/运维部署/服务器部署文档.md` |
 | 某个玩法 | `docs/系统设计/` 下同名文档，同时以代码核验当前完成度 |
+| 曹操特性 | `docs/系统设计/曹操特性更新开发文档.md`、`go/config/generals.json`、两端 `guardProjection.ts` |
 | 产品方向 | `docs/产品/项目最终目的.md`、`docs/产品/未来开发规划.md` |
 
 专题设计文档可能同时包含已完成事实和后续规划，读取后必须用当前代码、OpenAPI 和最近记忆核验。

@@ -6,6 +6,7 @@ import { useConfigStore } from '@/store/configStore'
 import { useGameStore } from '@/store/gameStore'
 import type { ArmyUnit, Reinforcement } from '@/types/game'
 import { sortUnitIds } from '@/utils/unitOrder'
+import { useProjectedArmy } from '@/hooks/useProjectedArmy'
 
 const ACTIVE_GARRISON_STATUSES = new Set<Reinforcement['status']>(['marching', 'stationed', 'fighting'])
 const ACTIVE_SENT_STATUSES = new Set<Reinforcement['status']>(['marching', 'stationed', 'fighting', 'returning'])
@@ -22,15 +23,13 @@ const STATUS_LABELS: Record<Reinforcement['status'], string> = {
   failed: '异常',
 }
 
-const EMPTY_ARMY: ArmyUnit[] = []
-
 /** 渲染战争页签 */
 const WarTab: FC = () => {
   const activePlayerId = useGameStore((s) => s.activePlayerId)
   const state = useGameStore((s) => s.state)
   const patchState = useGameStore((s) => s.patchState)
   const units = useConfigStore((s) => s.units)
-  const army = state?.army ?? EMPTY_ARMY
+  const army = useProjectedArmy()
   const cityGold = typeof state?.cityGold === 'number' ? state.cityGold : 0
   const [sent, setSent] = useState<Reinforcement[]>([])
   const [received, setReceived] = useState<Reinforcement[]>([])

@@ -71,15 +71,15 @@ func TestGetMilitaryViewPersistsCaoCaoGuardProduction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetMilitaryView failed: %v", err)
 	}
-	if got := armySliceToMap(view.Army)["huWei"]; got != 3000 {
-		t.Fatalf("expected military view huWei 3000, got %d army=%+v", got, view.Army)
+	if got := armySliceToMap(view.Army)["huWei"]; got != 432000 {
+		t.Fatalf("expected military view huWei 432000, got %d army=%+v", got, view.Army)
 	}
 	stored, err := repo.GetState(state.Player.ID)
 	if err != nil {
 		t.Fatalf("GetState failed: %v", err)
 	}
-	if got := armySliceToMap(stored.Army)["huWei"]; got != 3000 {
-		t.Fatalf("expected persisted huWei 3000, got %d army=%+v", got, stored.Army)
+	if got := armySliceToMap(stored.Army)["huWei"]; got != 432000 {
+		t.Fatalf("expected persisted huWei 432000, got %d army=%+v", got, stored.Army)
 	}
 	repeated, err := svc.GetMilitaryView(state.Player.ID)
 	if err != nil {
@@ -95,9 +95,9 @@ func TestGetMilitaryViewPersistsCaoCaoGuardProduction(t *testing.T) {
 		t.Fatalf("parse settlement timestamps failed: first=%v repeated=%v", firstErr, repeatedErr)
 	}
 	legitimateElapsedSeconds := int(repeatedSettledAt.Sub(firstSettledAt).Seconds())
-	wantRepeated := 3000 + int(500*float64(legitimateElapsedSeconds)/60)
+	wantRepeated := 432000 + int(300*float64(legitimateElapsedSeconds)/60)
 	if got := armySliceToMap(repeated.Army)["huWei"]; got != wantRepeated {
-		t.Fatalf("expected repeated view to add only %d whole-second guards, got %d army=%+v", wantRepeated-3000, got, repeated.Army)
+		t.Fatalf("expected repeated view to add only %d whole-second guards, got %d army=%+v", wantRepeated-432000, got, repeated.Army)
 	}
 	reports, total, err := repo.ListReports(state.Player.ID, 10, 0)
 	if err != nil || total != 0 || len(reports) != 0 {
@@ -114,11 +114,11 @@ func TestSettleResourcesDoesNotReplayFractionalSecondGuardProduction(t *testing.
 	state.ResourceSettledAt = base.Add(-24 * time.Hour).Format(resourceDateLayout)
 
 	first, _ := settleResources(state, base.Add(900*time.Millisecond))
-	if got := armySliceToMap(first.Army)["huWei"]; got != 3000 {
-		t.Fatalf("expected first settlement capped at 3000, got %d", got)
+	if got := armySliceToMap(first.Army)["huWei"]; got != 432000 {
+		t.Fatalf("expected first settlement to preserve elapsed-time production, got %d", got)
 	}
 	second, _ := settleResources(first, base.Add(950*time.Millisecond))
-	if got := armySliceToMap(second.Army)["huWei"]; got != 3000 {
+	if got := armySliceToMap(second.Army)["huWei"]; got != 432000 {
 		t.Fatalf("expected same-second settlement not to replay fractional production, got %d", got)
 	}
 }
@@ -142,19 +142,19 @@ func TestWeiwuHaolingProductionIsIndependentFromSettlementFrequency(t *testing.T
 
 	singleGuards := armySliceToMap(single.Army)["huWei"]
 	frequentGuards := armySliceToMap(frequent.Army)["huWei"]
-	if singleGuards != 25 || frequentGuards != singleGuards {
-		t.Fatalf("expected one 3-second settlement and three 1-second settlements both produce 25 guards, single=%d frequent=%d progress=%+v", singleGuards, frequentGuards, frequent.GeneralTraitProgress)
+	if singleGuards != 15 || frequentGuards != singleGuards {
+		t.Fatalf("expected one 3-second settlement and three 1-second settlements both produce 15 guards, single=%d frequent=%d progress=%+v", singleGuards, frequentGuards, frequent.GeneralTraitProgress)
 	}
 	if len(frequent.GeneralTraitProgress) != 0 {
 		t.Fatalf("expected exact three-second production to consume fractional progress, got %+v", frequent.GeneralTraitProgress)
 	}
 }
 
-// TestWeiwuHaolingSettlementCapDiscardsOverflowProgress 验证单次达到上限后不会把被截断的小数延后补发。
-func TestWeiwuHaolingSettlementCapDiscardsOverflowProgress(t *testing.T) {
-	amount, remainder := calculateGuardProduction(0.5, 500, 360*time.Second.Seconds(), 3000)
-	if amount != 3000 || remainder != 0 {
-		t.Fatalf("expected capped settlement to produce 3000 and discard overflow progress, got amount=%d remainder=%f", amount, remainder)
+// TestWeiwuHaolingSettlementHasNoProductionCap 验证长时间离线结算不会截断虎卫产量。
+func TestWeiwuHaolingSettlementHasNoProductionCap(t *testing.T) {
+	amount, remainder := calculateGuardProduction(0.5, 300, (24 * time.Hour).Seconds(), 0)
+	if amount != 432000 || remainder != 0.5 {
+		t.Fatalf("expected uncapped settlement to preserve 432000 guards and fractional progress, got amount=%d remainder=%f", amount, remainder)
 	}
 }
 

@@ -29,7 +29,7 @@ func TestFormalPassiveAndCityTraitConfigsMatchDesign(t *testing.T) {
 		allowedSides   []string
 		params         map[string]float64
 	}{
-		{generalID: "caocao", traitID: "weiwu_haoling", traitType: "special", scope: "self_city", targetUnitType: "huWei", params: map[string]float64{"guardPerMinute": 500, "maxGuardPerSettle": 3000}},
+		{generalID: "caocao", traitID: "weiwu_haoling", traitType: "special", scope: "self_city", targetUnitType: "huWei", params: map[string]float64{"guardPerMinute": 300}},
 		{generalID: "zhenmi", traitID: "meiren", traitType: "special", scope: "self_army", allowedSides: []string{"attacker"}, params: map[string]float64{"captureRate": 0.2, "captureMax": 10000, "triggerChance": 1}},
 		{generalID: "guojia", traitID: "shengui_zhicai", traitType: "special", scope: "self_city", params: map[string]float64{"resourceCostReduction": 0.5}},
 		{generalID: "xunyu", traitID: "wangzuo_zhicai", traitType: "special", scope: "self_city", params: map[string]float64{"resourceCostReduction": 0.05}},
@@ -59,21 +59,24 @@ func TestFormalPassiveAndCityTraitConfigsMatchDesign(t *testing.T) {
 	}
 }
 
-// TestNormalizeWeiwuHaolingLegacyLimitParam 验证旧的每日上限参数会迁移为真实的单次结算上限。
+// TestNormalizeWeiwuHaolingLegacyLimitParam 验证历史上限参数会被清理，避免旧配置继续限制产兵。
 func TestNormalizeWeiwuHaolingLegacyLimitParam(t *testing.T) {
 	cfg := NormalizeGeneralsConfig(GeneralsConfig{Heroes: map[string]GeneralHeroConfig{
 		"caocao": {
 			SpecialTrait: GeneralTraitConfig{
 				TraitID: "weiwu_haoling",
-				Params:  map[string]float64{"guardPerMinute": 500, "maxGuardPerDay": 3000},
+				Params:  map[string]float64{"guardPerMinute": 300, "maxGuardPerDay": 3000, "maxGuardPerSettle": 6000},
 			},
 		},
 	}})
 	params := cfg.Heroes["caocao"].SpecialTrait.Params
-	if params["maxGuardPerSettle"] != 3000 {
-		t.Fatalf("expected legacy limit to migrate to maxGuardPerSettle, got %+v", params)
+	if params["guardPerMinute"] != 300 {
+		t.Fatalf("expected production rate preserved, got %+v", params)
 	}
 	if _, exists := params["maxGuardPerDay"]; exists {
 		t.Fatalf("expected legacy maxGuardPerDay removed after normalization, got %+v", params)
+	}
+	if _, exists := params["maxGuardPerSettle"]; exists {
+		t.Fatalf("expected legacy maxGuardPerSettle removed after normalization, got %+v", params)
 	}
 }

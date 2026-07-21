@@ -43,8 +43,8 @@ const trait = (id: string, name: string, traitType: 'special' | 'bonus', descrip
 })
 
 export const TRAIT_REGISTRY: Record<string, TraitMeta> = {
-  weiwu_haoling: trait('weiwu_haoling', '魏武号令', 'special', '曹操留城时，资源结算每分钟补充 500 虎卫，单次最多 3000；离城期间停止产兵，归城时不会追补离城时段，不作为战斗触发特性。', '留城资源结算时'),
-  weiwu_tongyu: trait('weiwu_tongyu', '魏武统御', 'bonus', '曹操所带虎卫的攻击、步兵防御和骑兵防御各提升 10%，主动进攻、守城或作为援军时均可生效。', '战斗前'),
+  weiwu_haoling: trait('weiwu_haoling', '魏武号令', 'special', '曹操留城时每分钟自动获得 300 虎卫，不设产兵上限；离城期间停止，后端按真实经过时间权威结算，前端只投影显示，不作为战斗触发特性。', '留城持续生效'),
+  weiwu_tongyu: trait('weiwu_tongyu', '魏武统御', 'bonus', '曹操所率全军防御提升 15%，仅在守城或作为援军战斗前生效，主动进攻无效。', '守城/增援战斗前'),
   yibing_touxi: trait('yibing_touxi', '疑兵偷袭', 'special', '战斗前有 35% 概率使敌方 35% 兵力形成真实伤亡。', '战斗前'),
   mouding_houfa: trait('mouding_houfa', '谋定后发', 'bonus', '仅在防守时使进攻方全军攻击降低 10%。', '防守战斗前'),
   meiren: trait('meiren', '美人计', 'special', '仅在主动进攻战斗前必定触发，俘虏敌方 20% 兵力，单兵种最多 10000。', '主动进攻战斗前'),
@@ -139,7 +139,6 @@ const PARAM_LABELS: Record<string, string> = {
   maxCapturePerUnit: '单兵种俘虏上限',
   resourceCostReduction: '资源消耗降低',
   guardPerMinute: '每分钟产兵',
-  maxGuardPerSettle: '单次产兵上限',
   maxGuardPerDay: '单次产兵上限',
   attackBonusRate: '攻击加成',
   attackReductionRate: '攻击降低',

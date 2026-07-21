@@ -1314,7 +1314,7 @@ export interface GameState {
   inventorySlots?: ItemStack[]
   resourceProduction: ResourceProduction
   resourceSettledAt: string
-  /** 非战斗将领特性的后端累计进度，前端不得据此自行发兵 */
+  /** 非战斗将领特性的后端累计进度；前端只可据此投影显示，不得修改权威兵力 */
   generalTraitProgress?: Record<string, number>
   /** 存档级城金 */
   cityGold: number

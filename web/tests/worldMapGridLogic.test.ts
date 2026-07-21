@@ -1280,13 +1280,12 @@ test('世界地图空地面板显示方位和距离', () => {
   assert.match(source, /第一版暂无操作/)
 })
 
-test('世界地图存档加载前的 Zustand selector 使用稳定空数组', () => {
+test('世界地图存档加载前的 Zustand selector 与兵力投影保持稳定', () => {
   const source = readFileSync(new URL('../src/pages/map/components/WorldMapTab.tsx', import.meta.url), 'utf8')
   assert.match(source, /const EMPTY_GENERALS: General\[\] = \[\]/)
   assert.match(source, /const EMPTY_GENERAL_ASSIGNMENTS: GeneralAssignment\[\] = \[\]/)
-  assert.match(source, /const EMPTY_ARMY: ArmyUnit\[\] = \[\]/)
   assert.match(source, /s\.state\?\.generals \?\? EMPTY_GENERALS/)
   assert.match(source, /s\.state\?\.generalAssignments \?\? EMPTY_GENERAL_ASSIGNMENTS/)
-  assert.match(source, /s\.state\?\.army \?\? EMPTY_ARMY/)
+  assert.match(source, /const army = useProjectedArmy\(\)/)
   assert.doesNotMatch(source, /useGameStore\(\(s\) => s\.state\?\.(?:generals|generalAssignments|army) \?\? \[\]\)/)
 })
