@@ -446,7 +446,7 @@ func TestValidateGeneralsConfigRejectsUnsafeTraitParams(t *testing.T) {
 					TraitID:   "meiren",
 					TraitType: "special",
 					Enabled:   true,
-					Params:    map[string]float64{"captureRate": 2, "captureMax": 1000, "triggerChance": 1},
+					Params:    map[string]float64{"attackBonusRate": 3, "triggerChance": 1},
 				},
 				BonusTrait: GeneralTraitConfig{
 					TraitID:   "renzhu_shouhu",

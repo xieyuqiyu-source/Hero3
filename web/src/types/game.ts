@@ -404,8 +404,8 @@ export interface BattleReport {
   generalExpGained?: number
   generalLevelBefore?: number
   generalLevelAfter?: number
-  capturedUnits?: Record<string, number>      // 美人计俘虏到军队
-  capturedToGarrison?: Record<string, number> // 美人计俘虏到驻防
+  capturedUnits?: Record<string, number>      // 历史俘虏战报兼容字段
+  capturedToGarrison?: Record<string, number> // 历史俘虏战报兼容字段
   revivedUnits?: Record<string, number>       // 战后复活或最终减损返还
   traitTriggered?: string[]                   // 触发的特性 id 列表
   traitOutcomes?: Record<string, {            // 特性触发结果详情

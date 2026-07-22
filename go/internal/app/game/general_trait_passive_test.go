@@ -389,8 +389,8 @@ func TestPvpCaoCaoGuardProductionStopsWhileAwayAndResumesAfterReturn(t *testing.
 	if err != nil {
 		t.Fatalf("GetState away failed: %v", err)
 	}
-	if guards := armySliceToMap(away.Army)["huWei"]; guards != 3000 {
-		t.Fatalf("expected departure to settle 3000 guards before Cao Cao leaves, got %d", guards)
+	if guards := armySliceToMap(away.Army)["huWei"]; guards != 432000 {
+		t.Fatalf("expected departure to settle 432000 guards before Cao Cao leaves, got %d", guards)
 	}
 	away.ResourceSettledAt = time.Now().UTC().Add(-24 * time.Hour).Format(resourceDateLayout)
 	repo.players[attacker.Player.ID] = away
@@ -402,7 +402,7 @@ func TestPvpCaoCaoGuardProductionStopsWhileAwayAndResumesAfterReturn(t *testing.
 	if err != nil {
 		t.Fatalf("GetState returned failed: %v", err)
 	}
-	if guards := armySliceToMap(returned.Army)["huWei"]; guards != 3000 {
+	if guards := armySliceToMap(returned.Army)["huWei"]; guards != 432000 {
 		t.Fatalf("expected no guard production during PVP absence, got %d", guards)
 	}
 	if !generalAvailableAtHome(returned.GeneralAssignments, "caocao") {
@@ -414,8 +414,8 @@ func TestPvpCaoCaoGuardProductionStopsWhileAwayAndResumesAfterReturn(t *testing.
 	if err != nil {
 		t.Fatalf("GetMilitaryView after return failed: %v", err)
 	}
-	if guards := armySliceToMap(view.Army)["huWei"]; guards != 6000 {
-		t.Fatalf("expected post-return interval to resume guard production at 6000 total, got %d", guards)
+	if guards := armySliceToMap(view.Army)["huWei"]; guards != 864000 {
+		t.Fatalf("expected post-return interval to resume guard production at 864000 total, got %d", guards)
 	}
 	assertNoBattleReportsForTraitProcess(t, repo, attacker.Player.ID, "PVP guard production")
 }
@@ -439,8 +439,8 @@ func TestReinforcementCaoCaoGuardProductionStopsWhileAwayAndResumesAfterReturn(t
 	if err != nil {
 		t.Fatalf("GetState away failed: %v", err)
 	}
-	if guards := armySliceToMap(away.Army)["huWei"]; guards != 3000 {
-		t.Fatalf("expected reinforcement departure to settle 3000 guards, got %d", guards)
+	if guards := armySliceToMap(away.Army)["huWei"]; guards != 432000 {
+		t.Fatalf("expected reinforcement departure to settle 432000 guards, got %d", guards)
 	}
 	if _, err := svc.RecallReinforcement(from.Player.ID, sent.Reinforcement.ID); err != nil {
 		t.Fatalf("RecallReinforcement failed: %v", err)
@@ -456,7 +456,7 @@ func TestReinforcementCaoCaoGuardProductionStopsWhileAwayAndResumesAfterReturn(t
 	if err != nil {
 		t.Fatalf("GetState returned failed: %v", err)
 	}
-	if guards := armySliceToMap(returned.Army)["huWei"]; guards != 3000 {
+	if guards := armySliceToMap(returned.Army)["huWei"]; guards != 432000 {
 		t.Fatalf("expected no guard production during reinforcement absence, got %d", guards)
 	}
 	if !generalAvailableAtHome(returned.GeneralAssignments, "caocao") {
@@ -468,8 +468,8 @@ func TestReinforcementCaoCaoGuardProductionStopsWhileAwayAndResumesAfterReturn(t
 	if err != nil {
 		t.Fatalf("GetMilitaryView after reinforcement return failed: %v", err)
 	}
-	if guards := armySliceToMap(view.Army)["huWei"]; guards != 6000 {
-		t.Fatalf("expected post-return interval to resume guard production at 6000 total, got %d", guards)
+	if guards := armySliceToMap(view.Army)["huWei"]; guards != 864000 {
+		t.Fatalf("expected post-return interval to resume guard production at 864000 total, got %d", guards)
 	}
 	assertNoBattleReportsForTraitProcess(t, repo, from.Player.ID, "reinforcement guard production")
 }

@@ -2,6 +2,7 @@
 package game
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -320,7 +321,7 @@ func TestNpcEnemyDefenseReductionTraitsMatchPowerStateAndReports(t *testing.T) {
 		defensePower int
 		defenseDelta int
 	}{
-		{name: "魅惑扰阵", traitID: "meihuo_raozhen", traitType: general.TraitTypeBonus, generalID: "zhenmi", rate: 0.1, defensePower: 900, defenseDelta: -1},
+		{name: "魅惑扰阵", traitID: "meihuo_raozhen", traitType: general.TraitTypeBonus, generalID: "zhenmi", rate: 0.25, defensePower: 800, defenseDelta: -2},
 		{name: "虎痴冲阵", traitID: "huchi_chongzhen", traitType: general.TraitTypeSpecial, generalID: "xuchu", rate: 0.2, defensePower: 800, defenseDelta: -2},
 		{name: "破敌防御", traitID: "pojun_pofang", traitType: general.TraitTypeBonus, generalID: "xuchu", rate: 0.35, defensePower: 700, defenseDelta: -3},
 		{name: "百步穿杨", traitID: "baibu_chuanyang", traitType: general.TraitTypeSpecial, generalID: "huangzhong", rate: 0.2, defensePower: 800, defenseDelta: -2},
@@ -364,8 +365,8 @@ func TestNpcEnemyDefenseReductionTraitsMatchPowerStateAndReports(t *testing.T) {
 	}
 }
 
-// TestNpcZhenMiTraitsCaptureAndDefenseReductionReconcileState 验证甄宓先俘虏再破防时，NPC 库存、获得驻防和标准战报使用同一最终状态。
-func TestNpcZhenMiTraitsCaptureAndDefenseReductionReconcileState(t *testing.T) {
+// TestNpcZhenMiTraitsRecalculateAttackDefenseAndLosses 验证甄宓双特性先修改攻防，再由核心重算 NPC 兵损和标准战报。
+func TestNpcZhenMiTraitsRecalculateAttackDefenseAndLosses(t *testing.T) {
 	setTestCombatUnitsConfig(t)
 	unitsMu.Lock()
 	activeUnits["shu"] = FactionUnits{
@@ -383,12 +384,12 @@ func TestNpcZhenMiTraitsCaptureAndDefenseReductionReconcileState(t *testing.T) {
 			SpecialTrait: GeneralTraitConfig{
 				TraitID: "meiren", TraitType: general.TraitTypeSpecial, Enabled: true,
 				Scope: "self_army", AllowedSides: []string{"attacker"},
-				Params: map[string]float64{"captureRate": 0.2, "captureMax": 10000, "triggerChance": 1},
+				Params: map[string]float64{"attackBonusRate": 0.25, "triggerChance": 1},
 			},
 			BonusTrait: GeneralTraitConfig{
 				TraitID: "meihuo_raozhen", TraitType: general.TraitTypeBonus, Enabled: true,
 				Scope: "enemy_army", AllowedSides: []string{"attacker"},
-				Params: map[string]float64{"enemyDefenseReductionRate": 0.1},
+				Params: map[string]float64{"enemyDefenseReductionRate": 0.25, "triggerChance": 1},
 			},
 		},
 	}})
@@ -423,40 +424,39 @@ func TestNpcZhenMiTraitsCaptureAndDefenseReductionReconcileState(t *testing.T) {
 		t.Fatalf("AttackNpc failed: %v", err)
 	}
 	report := result.BattleReport
-	if report.PlayerPower != 10000 || report.EnemyPower != 7200 {
-		t.Fatalf("expected 10000 attack and 800 remaining defenders at 9 defense = 7200, got %d/%d", report.PlayerPower, report.EnemyPower)
+	if report.PlayerPower != 13000 || report.EnemyPower != 8000 {
+		t.Fatalf("expected modified attack/defense power 13000/8000, got %d/%d", report.PlayerPower, report.EnemyPower)
 	}
-	if report.CapturedToGarrison["shuInfantry"] != 200 || len(report.CapturedUnits) != 0 {
-		t.Fatalf("expected 200 cross-faction captives to obtained garrison, report=%+v", report)
+	if len(report.CapturedToGarrison) != 0 || len(report.CapturedUnits) != 0 {
+		t.Fatalf("expected removed capture behavior to produce no captives, report=%+v", report)
 	}
-	if report.DefenderUnits["shuInfantry"] != 1000 || report.DefenderLostUnits["shuInfantry"] != 800 {
-		t.Fatalf("expected original 1000 defenders, 200 captured and 800 core losses, report=%+v", report)
+	if report.DefenderUnits["shuInfantry"] != 1000 || report.DefenderLostUnits["shuInfantry"] <= 0 {
+		t.Fatalf("expected all original defenders to enter modified combat and produce real losses, report=%+v", report)
 	}
 	for _, traitID := range []string{"meiren", "meihuo_raozhen"} {
 		if _, ok := report.TraitOutcomes[traitID]; !ok || !standardReportHasTrait(report.Detail, traitID) {
 			t.Fatalf("expected %s in both report formats, outcomes=%+v detail=%+v", traitID, report.TraitOutcomes, report.Detail)
 		}
 	}
-	captured, capturedOK := report.TraitOutcomes["meiren"].Detail["capturedToGarrison"].(map[string]int)
+	attackChanged, attackOK := report.TraitOutcomes["meiren"].Detail["attackModifiedUnits"].(map[string]int)
 	infantryDefense, infantryOK := report.TraitOutcomes["meihuo_raozhen"].Detail["infantryDefenseModifiedUnits"].(map[string]int)
 	cavalryDefense, cavalryOK := report.TraitOutcomes["meihuo_raozhen"].Detail["cavalryDefenseModifiedUnits"].(map[string]int)
-	if !capturedOK || captured["shuInfantry"] != 200 || !infantryOK || !cavalryOK || infantryDefense["shuInfantry"] != -1 || cavalryDefense["shuInfantry"] != -1 {
-		t.Fatalf("expected actual capture and defense changes, outcomes=%+v", report.TraitOutcomes)
+	if !attackOK || attackChanged["weiInfantry"] != 3 || !infantryOK || !cavalryOK || infantryDefense["shuInfantry"] != -2 || cavalryDefense["shuInfantry"] != -2 {
+		t.Fatalf("expected actual attack and defense changes, outcomes=%+v", report.TraitOutcomes)
 	}
 
 	stored, err := repo.GetState(state.Player.ID)
 	if err != nil {
 		t.Fatalf("GetState failed: %v", err)
 	}
-	if got := armySliceToMap(stored.NpcState.Cities[0].Army)["shuInfantry"]; got != 0 {
-		t.Fatalf("expected captured 200 plus 800 core losses to empty NPC army, got %d", got)
+	if got, want := armySliceToMap(stored.NpcState.Cities[0].Army)["shuInfantry"], 1000-report.DefenderLostUnits["shuInfantry"]; got != want {
+		t.Fatalf("expected NPC army %d after recalculated losses, got %d", want, got)
 	}
 	if got, want := armySliceToMap(stored.Army)["weiInfantry"], 1000-report.LostUnits["weiInfantry"]; got != want {
 		t.Fatalf("expected player army and report losses to reconcile, got=%d want=%d", got, want)
 	}
-	garrison, err := repo.GetReinforcement(ObtainedGarrisonID(state.Player.ID))
-	if err != nil || garrison.RemainingTroops["shuInfantry"] != 200 {
-		t.Fatalf("expected obtained garrison with 200 captives, garrison=%+v err=%v", garrison, err)
+	if _, err := repo.GetReinforcement(ObtainedGarrisonID(state.Player.ID)); !errors.Is(err, ErrReinforcementNotFound) {
+		t.Fatalf("expected removed capture behavior not to create obtained garrison, err=%v", err)
 	}
 	if report.Detail == nil || report.Detail.SecondarySide == nil {
 		t.Fatalf("expected standard NPC defender detail, report=%+v", report)
@@ -466,8 +466,8 @@ func TestNpcZhenMiTraitsCaptureAndDefenseReductionReconcileState(t *testing.T) {
 		if unit.UnitType != "shuInfantry" {
 			continue
 		}
-		if unit.AmountBefore != 1000 || unit.Dispatched != 1000 || unit.Lost != 800 || unit.Survived != 0 {
-			t.Fatalf("expected standard defender 1000 dispatched, 800 dead, 200 captured and 0 remaining, unit=%+v", unit)
+		if unit.AmountBefore != 1000 || unit.Dispatched != 1000 || unit.Lost != report.DefenderLostUnits["shuInfantry"] || unit.Survived != 1000-report.DefenderLostUnits["shuInfantry"] {
+			t.Fatalf("expected standard defender row to match recalculated losses, unit=%+v report=%+v", unit, report)
 		}
 		foundUnit = true
 	}
@@ -777,11 +777,11 @@ func TestNpcSimaYiYibingHitAndMissExcludeDefenderTrait(t *testing.T) {
 				ID: "simayi", Name: "司马懿", Faction: "wei", Enabled: true,
 				SpecialTrait: GeneralTraitConfig{
 					TraitID: "yibing_touxi", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "enemy_army",
-					Params: map[string]float64{"triggerChance": tc.triggerChance, "effectRate": 0.35, "maxAffectedRate": 0.35},
+					Params: map[string]float64{"triggerChance": tc.triggerChance, "effectRate": 0.35},
 				},
 				BonusTrait: GeneralTraitConfig{
-					TraitID: "mouding_houfa", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "enemy_army",
-					AllowedSides: []string{"defender"}, Params: map[string]float64{"effectRate": 0.1},
+					TraitID: "mouding_houfa", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army",
+					AllowedSides: []string{"defender", "reinforcement"}, Params: map[string]float64{"defenseBonusRate": 0.35, "triggerChance": 1},
 				},
 			}
 			report, stored := resolveNpcAfterBattleHeroTest(t, "simayi_"+tc.name, hero, 200, 100)

@@ -124,14 +124,14 @@ test('孙策追击在 NPC 战报中明确显示为掠夺战胜利特性和实际
 
 test('战前真实伤亡与临时压制使用不同展示语义', () => {
 	const options = { faction: 'wei', units: { wei: { weiInfantry: { name: '魏步兵' } } } }
-	for (const [traitId, rate] of [['yibing_touxi', 0.35], ['shuiyan_qijun', 0.35]] as const) {
+	for (const [traitId, rate, trigger] of [['yibing_touxi', 0.35, '进攻/防守/增援战斗前'], ['shuiyan_qijun', 0.35, '战斗前']] as const) {
 		const trait = getTraitMeta(traitId)
-		assert.equal(trait.trigger, '战斗前')
+		assert.equal(trait.trigger, trigger)
 		assert.match(trait.description, /真实伤亡/)
 		assert.equal(formatTraitOutcomeDetail('preBattleAffected', { weiInfantry: 350 }, options), '战前真实伤亡: 魏步兵 +350')
 		assert.equal(formatTraitOutcomeDetail('effectRate', rate), '设计效果比例: 35%')
-		assert.equal(formatTraitOutcomeDetail('maxAffectedRate', rate), '设计最大影响比例: 35%')
 	}
+	assert.equal(formatTraitOutcomeDetail('maxAffectedRate', 0.35), '设计最大影响比例: 35%')
 	assert.match(formatTraitOutcomeDetail('suppressedUnits', { weiInfantry: 20 }), /本场压制兵力/)
 	for (const [traitId, rate, expected] of [['weizhen_zhenhe', 0.2, '20%'], ['zhenhe_quanjun', 0.5, '50%'], ['qimen_dunjia', 0.25, '25%']] as const) {
 		const trait = getTraitMeta(traitId)
@@ -221,53 +221,33 @@ test('征兵成功同步资源结算时点和特性进度且失败不污染权�
 	assert.doesNotMatch(catchBody, /patchMilitaryAction|patchState/)
 })
 
-test('美人计区分逐兵种俘虏归队与俘虏驻防', () => {
+test('甄宓两项特性展示当前概率、攻防比例和战前方向', () => {
 	const trait = getTraitMeta('meiren')
-	assert.equal(trait.name, '美人计')
+	const reduction = getTraitMeta('meihuo_raozhen')
+	assert.equal(trait.name, '美人心计')
 	assert.equal(trait.trigger, '主动进攻战斗前')
-	assert.match(trait.description, /必定触发/)
-	assert.match(trait.description, /20%/)
-	assert.match(trait.description, /10000/)
-	assert.equal(formatTraitOutcomeDetail('capturedUnits', { overlordRider: 10 }), '俘虏归队: 霸王骑 +10')
-	assert.equal(formatTraitOutcomeDetail('capturedToGarrison', { overlordRider: 10 }), '俘虏驻防: 霸王骑 +10')
-	assert.equal(formatTraitOutcomeDetail('captureRate', 0.2), '俘虏比例: 20%')
-	assert.equal(formatTraitOutcomeDetail('captureMax', 10000), '设计单兵种俘虏上限: 10,000')
+	assert.match(trait.description, /50%/)
+	assert.match(trait.description, /全军攻击提升 25%/)
+	assert.equal(reduction.trigger, '主动进攻战斗前')
+	assert.match(reduction.description, /50%/)
+	assert.match(reduction.description, /防御降低 25%/)
 })
 
-test('美人计单兵种上限分别约束两类真实俘虏且不计入阵亡', () => {
-	const options = {
-		faction: 'shu',
-		units: { shu: { shuInfantry: { name: '蜀步兵' }, shuCavalry: { name: '蜀骑兵' } } },
-	}
+test('甄宓两项特性可同时展示实际攻防变化且不再产生俘虏结果', () => {
 	const detail = {
-		primarySide: {
-			role: 'attacker', power: 10,
-			units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1, dispatched: 1, lost: 1, survived: 0 }],
-		},
-		secondarySide: {
-			role: 'defender', power: 342000,
-			units: [
-				{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 20000, dispatched: 20000, lost: 0, survived: 19000 },
-				{ unitType: 'shuCavalry', unitName: '蜀骑兵', amountBefore: 20000, dispatched: 20000, lost: 0, survived: 19000 },
-			],
-		},
-		rewards: { generalExp: 0, resources: {} },
-		traits: [{
-			traitId: 'meiren', traitName: '美人计', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhenmi',
-			detail: { captureRate: 0.2, captureMax: 1000, capturedToGarrison: { shuInfantry: 1000, shuCavalry: 1000 }, totalCaptured: 2000, triggerChance: 1 },
-		}],
+		traits: [
+			{ traitId: 'meiren', traitName: '美人心计', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhenmi', detail: { attackBonusRate: 0.25, attackModifiedUnits: { huWei: 3 }, triggerChance: 0.5 } },
+			{ traitId: 'meihuo_raozhen', traitName: '魅惑扰阵', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhenmi', detail: { enemyDefenseReductionRate: 0.25, infantryDefenseModifiedUnits: { greedyWolf: -2 }, cavalryDefenseModifiedUnits: { greedyWolf: -2 }, triggerChance: 0.5 } },
+		],
 	}
 	assert.equal(hasTraitEntries(detail), true)
-	assert.deepEqual(detail.secondarySide.units, [
-		{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 20000, dispatched: 20000, lost: 0, survived: 19000 },
-		{ unitType: 'shuCavalry', unitName: '蜀骑兵', amountBefore: 20000, dispatched: 20000, lost: 0, survived: 19000 },
-	])
-	const outcome = detail.traits[0]
-	assert.equal(resolveReportTraitDisplaySide({ sourceType: 'player_city', viewType: 'attack' }, outcome), 'primary')
-	assert.equal(formatTraitOutcomeDetail('captureRate', outcome.detail.captureRate), '俘虏比例: 20%')
-	assert.equal(formatTraitOutcomeDetail('captureMax', outcome.detail.captureMax), '设计单兵种俘虏上限: 1,000')
-	assert.equal(formatTraitOutcomeDetail('capturedToGarrison', outcome.detail.capturedToGarrison, options), '俘虏驻防: 蜀步兵 +1,000、蜀骑兵 +1,000')
-	assert.equal(formatTraitOutcomeDetail('totalCaptured', outcome.detail.totalCaptured), '俘虏总数: 2,000')
+	assert.deepEqual(detail.traits.map((item) => resolveReportTraitDisplaySide({ sourceType: 'player_city', viewType: 'attack' }, item)), ['primary', 'primary'])
+	assert.equal(formatTraitOutcomeDetail('attackBonusRate', detail.traits[0].detail.attackBonusRate), '设计攻击加成: 25%')
+	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', detail.traits[0].detail.attackModifiedUnits), '实际攻击修正: 虎卫 +3')
+	assert.equal(formatTraitOutcomeDetail('enemyDefenseReductionRate', detail.traits[1].detail.enemyDefenseReductionRate), '设计敌方防御降低: 25%')
+	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[1].detail.infantryDefenseModifiedUnits), '实际步防修正: 贪狼营 -2')
+	assert.equal(formatTraitOutcomeDetail('triggerChance', 0.5), '触发概率: 50%')
+	assert.equal(JSON.stringify(detail).includes('captured'), false)
 })
 
 test('火攻和仁德按正式配置明确为必定触发', () => {
@@ -305,19 +285,19 @@ test('周瑜双特性按后端时间线区分战前加攻和战后火攻', () =>
 	assert.equal(formatTraitOutcomeDetail('extraDamage', detail.traits[1].detail.extraDamage), '额外伤害: 250')
 })
 
-test('甄宓 NPC 与 PVP 双特性同时展示真实俘虏去向、防御变化和最终兵力', () => {
+test('甄宓 NPC 与 PVP 双特性同时展示真实攻防变化和最终兵力', () => {
 	const detail = {
 		secondarySide: {
 			units: [{ unitType: 'greedyWolf', unitName: '贪狼营', amountBefore: 1000, dispatched: 1000, lost: 800, survived: 0 }],
 		},
 		traits: [
 			{
-				traitId: 'meiren', traitName: '美人计', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhenmi',
-				detail: { captureRate: 0.2, captureMax: 10000, capturedToGarrison: { greedyWolf: 200 }, totalCaptured: 200, triggerChance: 1 },
+				traitId: 'meiren', traitName: '美人心计', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhenmi',
+				detail: { attackBonusRate: 0.25, attackModifiedUnits: { huWei: 3 }, triggerChance: 0.5 },
 			},
 			{
 				traitId: 'meihuo_raozhen', traitName: '魅惑扰阵', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhenmi',
-				detail: { enemyDefenseReductionRate: 0.1, infantryDefenseModifiedUnits: { greedyWolf: -1 }, cavalryDefenseModifiedUnits: { greedyWolf: -1 } },
+				detail: { enemyDefenseReductionRate: 0.25, infantryDefenseModifiedUnits: { greedyWolf: -2 }, cavalryDefenseModifiedUnits: { greedyWolf: -2 }, triggerChance: 0.5 },
 			},
 		],
 	}
@@ -327,14 +307,15 @@ test('甄宓 NPC 与 PVP 双特性同时展示真实俘虏去向、防御变化�
 	for (const sourceType of ['npc_city', 'player_city'] as const) {
 		assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide({ sourceType, viewType: 'attack' }, trait)), ['primary', 'primary'])
 	}
-	assert.equal(formatTraitOutcomeDetail('capturedToGarrison', detail.traits[0].detail.capturedToGarrison), '俘虏驻防: 贪狼营 +200')
-	assert.equal(formatTraitOutcomeDetail('enemyDefenseReductionRate', detail.traits[1].detail.enemyDefenseReductionRate), '设计敌方防御降低: 10%')
-	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[1].detail.infantryDefenseModifiedUnits), '实际步防修正: 贪狼营 -1')
-	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[1].detail.cavalryDefenseModifiedUnits), '实际骑防修正: 贪狼营 -1')
+	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', detail.traits[0].detail.attackModifiedUnits), '实际攻击修正: 虎卫 +3')
+	assert.equal(formatTraitOutcomeDetail('enemyDefenseReductionRate', detail.traits[1].detail.enemyDefenseReductionRate), '设计敌方防御降低: 25%')
+	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[1].detail.infantryDefenseModifiedUnits), '实际步防修正: 贪狼营 -2')
+	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[1].detail.cavalryDefenseModifiedUnits), '实际骑防修正: 贪狼营 -2')
 })
 
 test('全部正式随机战斗特性展示准确触发概率', () => {
 	const expected = {
+		meiren: '50%', meihuo_raozhen: '50%',
 		yibing_touxi: '35%', huchi_chongzhen: '35%', huzhu_sizhan: '35%', weizhen_zhenhe: '35%',
 		shuiyan_qijun: '35%', zhenhe_quanjun: '50%', longdan_jiuyuan: '35%', xiliang_tuji: '35%',
 		baibu_chuanyang: '35%', qibing_raohou: '35%', jiangdong_gushou: '50%', xiaobawang_zhuiji: '35%',
@@ -1317,38 +1298,38 @@ test('甄宓破防后孙权按当前整数防御加防并分别展示实际变�
 		sourceType: 'player_city', viewType: 'attack', battleType: 'plunder',
 		primarySide: {
 			role: 'attacker', power: 10000, generals: [{ id: 'zhenmi', name: '甄宓', level: 1 }],
-			units: [{ unitType: 'huWei', unitName: '虎卫', amountBefore: 1000, dispatched: 1000, lost: 617, survived: 383 }],
+			units: [{ unitType: 'huWei', unitName: '虎卫', amountBefore: 1000, dispatched: 1000, lost: 564, survived: 436 }],
 		},
 		secondarySide: {
-			role: 'defender', power: 14000, generals: [{ id: 'sunquan', name: '孙权', level: 1 }],
-			units: [{ unitType: 'wuInfantry', unitName: '吴步兵', amountBefore: 1000, dispatched: 1000, lost: 382, survived: 618 }],
+			role: 'defender', power: 12000, generals: [{ id: 'sunquan', name: '孙权', level: 1 }],
+			units: [{ unitType: 'wuInfantry', unitName: '吴步兵', amountBefore: 1000, dispatched: 1000, lost: 435, survived: 565 }],
 		},
-		rewards: { generalExp: 382, resources: {} },
+		rewards: { generalExp: 435, resources: {} },
 		traits: [
 			{
 				traitId: 'meihuo_raozhen', traitName: '魅惑扰阵', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhenmi',
-				detail: { enemyDefenseReductionRate: 0.1, infantryDefenseModifiedUnits: { wuInfantry: -1 }, cavalryDefenseModifiedUnits: { wuInfantry: -1 } },
+				detail: { enemyDefenseReductionRate: 0.25, infantryDefenseModifiedUnits: { wuInfantry: -2 }, cavalryDefenseModifiedUnits: { wuInfantry: -2 }, triggerChance: 1 },
 			},
 			{
 				traitId: 'jiangdong_gushou', traitName: '江东固守', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'sunquan',
-				detail: { defenseBonusRate: 0.5, infantryDefenseModifiedUnits: { wuInfantry: 5 }, cavalryDefenseModifiedUnits: { wuInfantry: 4 }, triggerChance: 1 },
+				detail: { defenseBonusRate: 0.5, infantryDefenseModifiedUnits: { wuInfantry: 4 }, cavalryDefenseModifiedUnits: { wuInfantry: 3 }, triggerChance: 1 },
 			},
 		],
 	}
 	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['meihuo_raozhen', 'jiangdong_gushou'])
 	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['primary', 'secondary'])
 	assert.deepEqual(detail.traits.map((trait) => getTraitMeta(trait.traitId).trigger), ['主动进攻战斗前', '防守/增援战斗前'])
-	assert.deepEqual(detail.primarySide.units[0], { unitType: 'huWei', unitName: '虎卫', amountBefore: 1000, dispatched: 1000, lost: 617, survived: 383 })
-	assert.deepEqual(detail.secondarySide.units[0], { unitType: 'wuInfantry', unitName: '吴步兵', amountBefore: 1000, dispatched: 1000, lost: 382, survived: 618 })
+	assert.deepEqual(detail.primarySide.units[0], { unitType: 'huWei', unitName: '虎卫', amountBefore: 1000, dispatched: 1000, lost: 564, survived: 436 })
+	assert.deepEqual(detail.secondarySide.units[0], { unitType: 'wuInfantry', unitName: '吴步兵', amountBefore: 1000, dispatched: 1000, lost: 435, survived: 565 })
 	assert.equal(detail.primarySide.power, 10000)
-	assert.equal(detail.secondarySide.power, 14000)
-	assert.equal(detail.rewards.generalExp, 382)
-	assert.equal(formatTraitOutcomeDetail('enemyDefenseReductionRate', detail.traits[0].detail.enemyDefenseReductionRate, options), '设计敌方防御降低: 10%')
-	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[0].detail.infantryDefenseModifiedUnits, options), '实际步防修正: 吴步兵 -1')
-	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[0].detail.cavalryDefenseModifiedUnits, options), '实际骑防修正: 吴步兵 -1')
+	assert.equal(detail.secondarySide.power, 12000)
+	assert.equal(detail.rewards.generalExp, 435)
+	assert.equal(formatTraitOutcomeDetail('enemyDefenseReductionRate', detail.traits[0].detail.enemyDefenseReductionRate, options), '设计敌方防御降低: 25%')
+	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[0].detail.infantryDefenseModifiedUnits, options), '实际步防修正: 吴步兵 -2')
+	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[0].detail.cavalryDefenseModifiedUnits, options), '实际骑防修正: 吴步兵 -2')
 	assert.equal(formatTraitOutcomeDetail('defenseBonusRate', detail.traits[1].detail.defenseBonusRate, options), '设计防御加成: 50%')
-	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[1].detail.infantryDefenseModifiedUnits, options), '实际步防修正: 吴步兵 +5')
-	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[1].detail.cavalryDefenseModifiedUnits, options), '实际骑防修正: 吴步兵 +4')
+	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[1].detail.infantryDefenseModifiedUnits, options), '实际步防修正: 吴步兵 +4')
+	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[1].detail.cavalryDefenseModifiedUnits, options), '实际骑防修正: 吴步兵 +3')
 })
 
 test('攻守双方刘备双返兵分别展示原始阵亡和最终存活', () => {
@@ -1931,17 +1912,17 @@ test('纯攻击加成特性明确限制为主动进攻并展示实际攻击变�
 	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', { overlordRider: 50 }), '实际攻击修正: 霸王骑 +50')
 })
 
-test('敌方属性削弱只在实际影响战力的方向触发', () => {
+test('战前属性特性只在实际影响战力的方向触发', () => {
 	const delayed = getTraitMeta('mouding_houfa')
-	assert.equal(delayed.trigger, '防守战斗前')
-	assert.match(delayed.description, /仅在防守/)
-	assert.match(delayed.description, /攻击降低 10%/)
+	assert.equal(delayed.trigger, '防守/增援战斗前')
+	assert.match(delayed.description, /防守或作为援军/)
+	assert.match(delayed.description, /防御提升 35%/)
 	for (const traitId of ['meihuo_raozhen', 'huchi_chongzhen', 'pojun_pofang', 'baibu_chuanyang', 'qibing_raohou']) {
 		const trait = getTraitMeta(traitId)
 		assert.equal(trait.trigger, '主动进攻战斗前')
 		assert.match(trait.description, /仅在主动进攻/)
 	}
-	assert.match(getTraitMeta('meihuo_raozhen').description, /防御降低 10%/)
+	assert.match(getTraitMeta('meihuo_raozhen').description, /防御降低 25%/)
 	assert.match(getTraitMeta('huchi_chongzhen').description, /防御降低 20%/)
 	assert.match(getTraitMeta('pojun_pofang').description, /防御降低 35%/)
 	assert.match(getTraitMeta('baibu_chuanyang').description, /防御降低 20%/)
@@ -1953,47 +1934,48 @@ test('敌方属性削弱只在实际影响战力的方向触发', () => {
 	assert.equal(formatTraitOutcomeDetail('enemyDefenseReductionRate', 0.35), '设计敌方防御降低: 35%')
 })
 
-test('司马懿守城双特性归属防守侧并分别展示真实伤亡和减攻', () => {
+test('司马懿守城双特性归属防守侧并分别展示真实伤亡和加防', () => {
 	const detail = {
 		sourceType: 'player_city', viewType: 'attack',
 		traits: [
 			{
 				traitId: 'yibing_touxi', traitName: '疑兵偷袭', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'simayi',
-				detail: { effectRate: 0.35, maxAffectedRate: 0.35, preBattleAffected: { greedyWolf: 350 }, triggerChance: 1 },
+				detail: { effectRate: 0.35, preBattleAffected: { greedyWolf: 350 }, triggerChance: 1 },
 			},
 			{
 				traitId: 'mouding_houfa', traitName: '谋定后发', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'simayi',
-				detail: { attackReductionRate: 0.1, attackModifiedUnits: { greedyWolf: -1 } },
+				detail: { defenseBonusRate: 0.35, infantryDefenseModifiedUnits: { weiInfantry: 4 }, cavalryDefenseModifiedUnits: { weiInfantry: 3 }, triggerChance: 1 },
 			},
 		],
 	}
 	assert.equal(hasTraitEntries(detail), true)
 	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['secondary', 'secondary'])
-	assert.deepEqual(detail.traits.map((trait) => getTraitMeta(trait.traitId).trigger), ['战斗前', '防守战斗前'])
+	assert.deepEqual(detail.traits.map((trait) => getTraitMeta(trait.traitId).trigger), ['进攻/防守/增援战斗前', '防守/增援战斗前'])
 	assert.equal(formatTraitOutcomeDetail('preBattleAffected', detail.traits[0].detail.preBattleAffected), '战前真实伤亡: 贪狼营 +350')
-	assert.equal(formatTraitOutcomeDetail('attackReductionRate', detail.traits[1].detail.attackReductionRate), '设计攻击降低: 10%')
-	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', detail.traits[1].detail.attackModifiedUnits), '实际攻击修正: 贪狼营 -1')
+	assert.equal(formatTraitOutcomeDetail('defenseBonusRate', detail.traits[1].detail.defenseBonusRate), '设计防御加成: 35%')
+	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[1].detail.infantryDefenseModifiedUnits), '实际步防修正: weiInfantry +4')
+	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[1].detail.cavalryDefenseModifiedUnits), '实际骑防修正: weiInfantry +3')
 })
 
-test('防守司马懿疑兵未命中时只展示谋定后发真实减攻', () => {
+test('防守司马懿疑兵未命中时只展示谋定后发真实加防', () => {
 	const detail = {
 		sourceType: 'player_city', viewType: 'defense', battleType: 'plunder', ownerSide: 'defender',
 		primarySide: {
-			role: 'attacker', power: 9000,
-			units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 537, survived: 463 }],
+			role: 'attacker', power: 10000,
+			units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 617, survived: 383 }],
 		},
 		secondarySide: {
-			role: 'defender', power: 10000,
+			role: 'defender', power: 14000,
 			generals: [{
 				id: 'simayi', name: '司马懿', level: 1,
 				traits: [{ traitId: 'yibing_touxi', name: '疑兵偷袭' }, { traitId: 'mouding_houfa', name: '谋定后发' }],
 			}],
-			units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 462, survived: 538 }],
+			units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 382, survived: 618 }],
 		},
-		rewards: { generalExp: 537, resources: {} },
+		rewards: { generalExp: 617, resources: {} },
 		traits: [{
 			traitId: 'mouding_houfa', traitName: '谋定后发', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'simayi',
-			detail: { attackReductionRate: 0.1, attackModifiedUnits: { shuInfantry: -1 } },
+			detail: { defenseBonusRate: 0.35, infantryDefenseModifiedUnits: { weiInfantry: 4 }, cavalryDefenseModifiedUnits: { weiInfantry: 3 }, triggerChance: 1 },
 		}],
 	}
 	const options = { faction: 'shu', units: { shu: { shuInfantry: { name: '蜀步兵' } }, wei: { weiInfantry: { name: '魏步兵' } } } }
@@ -2001,42 +1983,42 @@ test('防守司马懿疑兵未命中时只展示谋定后发真实减攻', () =>
 	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['mouding_houfa'])
 	assert.equal(detail.traits.some((trait) => trait.traitId === 'yibing_touxi'), false)
 	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['secondary'])
-	assert.deepEqual(detail.primarySide.units[0], { unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 537, survived: 463 })
-	assert.deepEqual(detail.secondarySide.units[0], { unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 462, survived: 538 })
-	assert.equal(formatTraitOutcomeDetail('attackReductionRate', detail.traits[0].detail.attackReductionRate, options), '设计攻击降低: 10%')
-	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', detail.traits[0].detail.attackModifiedUnits, options), '实际攻击修正: 蜀步兵 -1')
-	assert.deepEqual(detail.rewards, { generalExp: 537, resources: {} })
+	assert.deepEqual(detail.primarySide.units[0], { unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 617, survived: 383 })
+	assert.deepEqual(detail.secondarySide.units[0], { unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 382, survived: 618 })
+	assert.equal(formatTraitOutcomeDetail('defenseBonusRate', detail.traits[0].detail.defenseBonusRate, options), '设计防御加成: 35%')
+	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[0].detail.infantryDefenseModifiedUnits, options), '实际步防修正: 魏步兵 +4')
+	assert.deepEqual(detail.rewards, { generalExp: 617, resources: {} })
 })
 
-test('司马懿黄巾守城按疑兵伤亡再谋定减攻的顺序展示组合结果', () => {
+test('司马懿黄巾守城按疑兵伤亡再谋定加防的顺序展示组合结果', () => {
 	const options = { faction: 'wei', units: { wei: { weiInfantry: { name: '魏步兵' } } } }
 	const detail = {
 		sourceType: 'yellow_turban', viewType: 'defense',
 		primarySide: {
-			role: 'attacker', power: 5850,
+			role: 'attacker', power: 6500,
 			units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 1000, survived: 0 }],
 		},
 		secondarySide: {
-			role: 'defender', power: 10300,
+			role: 'defender', power: 14420,
 			generals: [{ id: 'simayi', name: '司马懿', traits: [{ traitId: 'yibing_touxi' }, { traitId: 'mouding_houfa' }] }],
-			units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 447, survived: 553 }],
+			units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 312, survived: 688 }],
 		},
 		traits: [
 			{
 				traitId: 'yibing_touxi', traitName: '疑兵偷袭', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'simayi',
-				detail: { effectRate: 0.35, maxAffectedRate: 0.35, preBattleAffected: { weiInfantry: 350 }, triggerChance: 1 },
+				detail: { effectRate: 0.35, preBattleAffected: { weiInfantry: 350 }, triggerChance: 1 },
 			},
 			{
 				traitId: 'mouding_houfa', traitName: '谋定后发', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'simayi',
-				detail: { attackReductionRate: 0.1, attackModifiedUnits: { weiInfantry: -1 } },
+				detail: { defenseBonusRate: 0.35, infantryDefenseModifiedUnits: { weiInfantry: 4 }, cavalryDefenseModifiedUnits: { weiInfantry: 3 }, triggerChance: 1 },
 			},
 		],
 	}
 	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['yibing_touxi', 'mouding_houfa'])
 	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['secondary', 'secondary'])
-	assert.equal(detail.primarySide.power, 5850)
+	assert.equal(detail.primarySide.power, 6500)
 	assert.equal(formatTraitOutcomeDetail('preBattleAffected', detail.traits[0].detail.preBattleAffected, options), '战前真实伤亡: 魏步兵 +350')
-	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', detail.traits[1].detail.attackModifiedUnits, options), '实际攻击修正: 魏步兵 -1')
+	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[1].detail.infantryDefenseModifiedUnits, options), '实际步防修正: 魏步兵 +4')
 })
 
 test('关羽、张辽与张飞黄巾守城随机战前特性命中或未命中时保持准确战报', () => {
@@ -2334,11 +2316,11 @@ test('司马懿黄巾与 NPC 疑兵命中或未命中时严格隔离谋定方向
 	const cases = [
 		{
 			id: 'simayi-yellow-miss', sourceType: 'yellow_turban', viewType: 'defense', result: 'defender_victory', winnerSide: 'defender', ownerSide: 'defender',
-			primaryPower: 9000, primaryAmount: 1000, primaryLost: 1000, primarySurvived: 0,
-			secondaryPower: 10300, secondaryAmount: 1000, secondaryLost: 825, secondarySurvived: 175, generalExp: 1000,
+			primaryPower: 10000, primaryAmount: 1000, primaryLost: 1000, primarySurvived: 0,
+			secondaryPower: 14420, secondaryAmount: 1000, secondaryLost: 594, secondarySurvived: 406, generalExp: 1000,
 			generalSide: 'secondary', traits: [{
 				traitId: 'mouding_houfa', traitName: '谋定后发', ownerSide: 'secondary', ownerRole: 'defender', ownerPlayerId: 'player_simayi', generalId: 'simayi',
-				detail: { attackReductionRate: 0.1, attackModifiedUnits: { weiInfantry: -1 }, triggerChance: 1 },
+				detail: { defenseBonusRate: 0.35, infantryDefenseModifiedUnits: { weiInfantry: 4 }, cavalryDefenseModifiedUnits: { weiInfantry: 3 }, triggerChance: 1 },
 			}],
 		},
 		{
@@ -2347,7 +2329,7 @@ test('司马懿黄巾与 NPC 疑兵命中或未命中时严格隔离谋定方向
 			secondaryPower: 650, secondaryAmount: 100, secondaryLost: 100, secondarySurvived: 0, generalExp: 100,
 			generalSide: 'primary', traits: [{
 				traitId: 'yibing_touxi', traitName: '疑兵偷袭', ownerSide: 'primary', ownerRole: 'attacker', ownerPlayerId: 'player_simayi', generalId: 'simayi',
-				detail: { effectRate: 0.35, maxAffectedRate: 0.35, preBattleAffected: { weiInfantry: 35 }, triggerChance: 1 },
+				detail: { effectRate: 0.35, preBattleAffected: { weiInfantry: 35 }, triggerChance: 1 },
 			}],
 		},
 		{
@@ -2359,7 +2341,7 @@ test('司马懿黄巾与 NPC 疑兵命中或未命中时严格隔离谋定方向
 	] as const
 
 	for (const current of cases) {
-		const general = { id: 'simayi', name: '司马懿', level: 1, traits: [{ traitId: 'yibing_touxi', name: '疑兵偷袭' }, { traitId: 'mouding_houfa', name: '谋定后发', allowedSides: ['defender'] }] }
+		const general = { id: 'simayi', name: '司马懿', level: 1, traits: [{ traitId: 'yibing_touxi', name: '疑兵偷袭' }, { traitId: 'mouding_houfa', name: '谋定后发', allowedSides: ['defender', 'reinforcement'] }] }
 		const detail = normalizeBattleReportDetail({
 			id: current.id, playerId: 'player_simayi', ownerPlayerId: 'player_simayi', viewType: current.viewType, sourceType: current.sourceType,
 			battleType: current.sourceType === 'yellow_turban' ? 'yellow_turban' : 'attack', type: current.viewType, result: current.result, rewards: {}, read: true, createdAt: '2026-07-21T02:00:00Z',
@@ -3272,7 +3254,7 @@ test('陆逊援军火烧命中或未命中时只展示实际生效的追加伤�
 	assert.equal(formatTraitOutcomeDetail('targetExtraLosses', miss.traits?.[0].detail.targetExtraLosses, options), '目标兵种追加损失: 魏步兵 +10')
 })
 
-test('司马懿援军疑兵命中或未命中时都不越权展示谋定后发', () => {
+test('司马懿援军双特性同时命中或均未命中时准确展示', () => {
 	const buildReport = (triggered: boolean) => ({
 		id: `simayi-reinforcement-${triggered ? 'hit' : 'miss'}`, playerId: 'attacker', ownerPlayerId: 'attacker', viewType: 'attack', sourceType: 'player_city',
 		battleType: 'plunder', type: 'attack', result: triggered ? 'defender_victory' : 'draw', defenderRevealed: true, rewards: {}, read: true, createdAt: '2026-07-20T18:00:00Z',
@@ -3281,7 +3263,7 @@ test('司马懿援军疑兵命中或未命中时都不越权展示谋定后发',
 			troops: { weiInfantry: 99 }, generalExpGained: triggered ? 77 : 50,
 			generals: [{
 				id: 'simayi', name: '司马懿', level: 1,
-				traits: [{ traitId: 'yibing_touxi', name: '疑兵偷袭' }, { traitId: 'mouding_houfa', name: '谋定后发', allowedSides: ['defender'] }],
+				traits: [{ traitId: 'yibing_touxi', name: '疑兵偷袭' }, { traitId: 'mouding_houfa', name: '谋定后发', allowedSides: ['defender', 'reinforcement'] }],
 			}],
 		}],
 		pvpReinforcementLosses: { rein_simayi: { weiInfantry: triggered ? 35 : 49 } },
@@ -3293,14 +3275,20 @@ test('司马懿援军疑兵命中或未命中时都不越权展示谋定后发',
 				units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 100, dispatched: 100, lost: triggered ? 77 : 50, survived: triggered ? 23 : 50 }],
 			},
 			secondarySide: {
-				role: 'defender', faction: 'wu', power: 1000, generals: [{ id: 'sunquan', name: '孙权', level: 1 }],
+				role: 'defender', faction: 'wu', power: triggered ? 1396 : 1000, generals: [{ id: 'sunquan', name: '孙权', level: 1 }],
 				units: [{ unitType: 'wuInfantry', unitName: '吴步兵', amountBefore: 1, dispatched: 1, lost: triggered ? 0 : 1, survived: triggered ? 1 : 0 }],
 			},
 			rewards: { generalExp: triggered ? 35 : 50, resources: {} },
-			traits: triggered ? [{
-				traitId: 'yibing_touxi', traitName: '疑兵偷袭', ownerSide: 'reinforcement', ownerRole: 'reinforcement', ownerPlayerId: 'helper_simayi', generalId: 'simayi',
-				detail: { effectRate: 0.35, maxAffectedRate: 0.35, preBattleAffected: { shuInfantry: 35 }, triggerChance: 1 },
-			}] : [],
+			traits: triggered ? [
+				{
+					traitId: 'yibing_touxi', traitName: '疑兵偷袭', ownerSide: 'reinforcement', ownerRole: 'reinforcement', ownerPlayerId: 'helper_simayi', generalId: 'simayi',
+					detail: { effectRate: 0.35, preBattleAffected: { shuInfantry: 35 }, triggerChance: 1 },
+				},
+				{
+					traitId: 'mouding_houfa', traitName: '谋定后发', ownerSide: 'reinforcement', ownerRole: 'reinforcement', ownerPlayerId: 'helper_simayi', generalId: 'simayi',
+					detail: { defenseBonusRate: 0.35, infantryDefenseModifiedUnits: { weiInfantry: 4 }, cavalryDefenseModifiedUnits: { weiInfantry: 3 }, triggerChance: 1 },
+				},
+			] : [],
 		},
 	})
 	const hit = normalizeBattleReportDetail(buildReport(true))
@@ -3320,11 +3308,12 @@ test('司马懿援军疑兵命中或未命中时都不越权展示谋定后发',
 	for (const pvp of [hitPvp, missPvp]) {
 		assert.deepEqual(pvp?.reinforcements[0]?.generals?.[0]?.traits?.map((trait) => trait.traitId), ['yibing_touxi', 'mouding_houfa'])
 	}
-	assert.deepEqual(hit.traits?.map((trait) => trait.traitId), ['yibing_touxi'])
+	assert.deepEqual(hit.traits?.map((trait) => trait.traitId), ['yibing_touxi', 'mouding_houfa'])
 	assert.equal(resolveReportTraitDisplaySide(hit, hit.traits?.[0]), 'reinforcement')
+	assert.equal(resolveReportTraitDisplaySide(hit, hit.traits?.[1]), 'reinforcement')
 	assert.equal(formatTraitOutcomeDetail('preBattleAffected', hit.traits?.[0].detail.preBattleAffected, options), '战前真实伤亡: 蜀步兵 +35')
+	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', hit.traits?.[1].detail.infantryDefenseModifiedUnits), '实际步防修正: weiInfantry +4')
 	assert.equal(hasTraitEntries(miss), false)
-	assert.equal([...(hit.traits ?? []), ...(miss.traits ?? [])].some((trait) => trait.traitId === 'mouding_houfa'), false)
 })
 
 test('张辽与关羽援军随机战前特性命中或未命中时保持准确兵力和方向', () => {
@@ -3645,15 +3634,15 @@ test('诸葛亮援军双压制保持真实跨阶段顺序并对齐最终兵力',
 	assert.equal(detail.traits?.some((trait) => trait.traitId === 'laodang_yizhuang'), false)
 })
 
-test('孙策固定加攻后被司马懿按当前攻击降攻并分别归属攻守侧', () => {
+test('孙策固定加攻与司马懿全军加防分别归属攻守侧', () => {
 	const detail = {
 		sourceType: 'player_city', viewType: 'attack', battleType: 'attack',
 		primarySide: {
-			role: 'attacker', power: 14000,
+			role: 'attacker', power: 16000,
 			units: [{ unitType: 'overlordRider', unitName: '霸王骑', amountBefore: 200, dispatched: 200, lost: 90, survived: 110 }],
 		},
 		secondarySide: {
-			role: 'defender', power: 8000,
+			role: 'defender', power: 14000,
 			units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 1000, survived: 0 }],
 		},
 		traits: [
@@ -3663,19 +3652,19 @@ test('孙策固定加攻后被司马懿按当前攻击降攻并分别归属攻�
 			},
 			{
 				traitId: 'mouding_houfa', traitName: '谋定后发', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'simayi',
-				detail: { attackReductionRate: 0.1, attackModifiedUnits: { overlordRider: -8 }, triggerChance: 1 },
+				detail: { defenseBonusRate: 0.35, infantryDefenseModifiedUnits: { weiInfantry: 4 }, cavalryDefenseModifiedUnits: { weiInfantry: 3 }, triggerChance: 1 },
 			},
 		],
 	}
 	const unitOptions = { faction: 'wu', units: { wu: { overlordRider: { name: '霸王骑' } }, wei: { weiInfantry: { name: '魏步兵' } } } }
 	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['xiaobawang_tieqi', 'mouding_houfa'])
 	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['primary', 'secondary'])
-	assert.deepEqual(detail.primarySide, { role: 'attacker', power: 14000, units: [{ unitType: 'overlordRider', unitName: '霸王骑', amountBefore: 200, dispatched: 200, lost: 90, survived: 110 }] })
-	assert.deepEqual(detail.secondarySide, { role: 'defender', power: 8000, units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 1000, survived: 0 }] })
+	assert.deepEqual(detail.primarySide, { role: 'attacker', power: 16000, units: [{ unitType: 'overlordRider', unitName: '霸王骑', amountBefore: 200, dispatched: 200, lost: 90, survived: 110 }] })
+	assert.deepEqual(detail.secondarySide, { role: 'defender', power: 14000, units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 1000, survived: 0 }] })
 	assert.equal(formatTraitOutcomeDetail('unitAttackFlat', detail.traits[0].detail.unitAttackFlat, unitOptions), '设计单位攻击增加: 50')
 	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', detail.traits[0].detail.attackModifiedUnits, unitOptions), '实际攻击修正: 霸王骑 +50')
-	assert.equal(formatTraitOutcomeDetail('attackReductionRate', detail.traits[1].detail.attackReductionRate, unitOptions), '设计攻击降低: 10%')
-	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', detail.traits[1].detail.attackModifiedUnits, unitOptions), '实际攻击修正: 霸王骑 -8')
+	assert.equal(formatTraitOutcomeDetail('defenseBonusRate', detail.traits[1].detail.defenseBonusRate, unitOptions), '设计防御加成: 35%')
+	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[1].detail.infantryDefenseModifiedUnits, unitOptions), '实际步防修正: 魏步兵 +4')
 })
 
 test('NPC 和黄巾战斗结算后四项追加伤害展示后端实际增量而不是配置值', () => {
@@ -3886,19 +3875,19 @@ test('来源和视角标签使用不同颜色配置', () => {
   assert.match(REPORT_SOURCE_CONFIG.dungeon.color, /purple/)
 })
 
-test('轮回副本战报按后端时间线展示真实扣兵、俘虏和复活数', () => {
+test('轮回副本战报按后端时间线展示真实扣兵、攻击修正和复活数', () => {
 	const detail = {
 		sourceType: 'dungeon', viewType: 'attack', battleType: 'dungeon_reincarnation_attack',
 		traits: [
 			{ traitId: 'shuiyan_qijun', traitName: '水淹七军', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'guanyu', detail: { effectRate: 0.35, maxAffectedRate: 0.35, preBattleAffected: { greedyWolf: 350 }, triggerChance: 1 } },
-			{ traitId: 'meiren', traitName: '美人计', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhenmi', detail: { captureRate: 0.2, captureMax: 10000, capturedToGarrison: { greedyWolf: 200 }, totalCaptured: 200, triggerChance: 1 } },
+			{ traitId: 'meiren', traitName: '美人心计', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhenmi', detail: { attackBonusRate: 0.25, attackModifiedUnits: { huWei: 3 }, triggerChance: 0.5 } },
 			{ traitId: 'rende', traitName: '仁德天下', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'liubei', detail: { effectRate: 0.5, maxReviveCount: 10000, revivedUnits: { greedyWolf: 50 }, totalRevived: 50, triggerChance: 1 } },
 		],
 	}
 	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['primary', 'primary', 'primary'])
 	assert.deepEqual(detail.traits.map((trait) => getTraitMeta(trait.traitId).trigger), ['战斗前', '主动进攻战斗前', '进攻/防守/增援战斗结束后'])
 	assert.equal(formatTraitOutcomeDetail('preBattleAffected', detail.traits[0].detail.preBattleAffected), '战前真实伤亡: 贪狼营 +350')
-	assert.equal(formatTraitOutcomeDetail('capturedToGarrison', detail.traits[1].detail.capturedToGarrison), '俘虏驻防: 贪狼营 +200')
+	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', detail.traits[1].detail.attackModifiedUnits), '实际攻击修正: 虎卫 +3')
 	assert.equal(formatTraitOutcomeDetail('revivedUnits', detail.traits[2].detail.revivedUnits), '复活兵力: 贪狼营 +50')
 })
 

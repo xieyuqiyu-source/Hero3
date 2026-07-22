@@ -147,8 +147,8 @@ func TestSendReinforcementSettlesCaoCaoGuardProductionBeforeConsume(t *testing.T
 	if err != nil {
 		t.Fatalf("GetState failed: %v", err)
 	}
-	if got := armySliceToMap(stored.Army)["huWei"]; got != 2999 {
-		t.Fatalf("expected remaining settled huWei 2999, got %d army=%+v", got, stored.Army)
+	if got := armySliceToMap(stored.Army)["huWei"]; got != 431999 {
+		t.Fatalf("expected remaining settled huWei 431999, got %d army=%+v", got, stored.Army)
 	}
 }
 

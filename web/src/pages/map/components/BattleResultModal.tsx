@@ -339,10 +339,10 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
             </div>
           )}
 
-          {/* 美人计：俘虏到军队 */}
+          {/* 兼容历史俘虏战报：俘虏到军队。 */}
           {!isSweepReport && report.capturedUnits && Object.keys(report.capturedUnits).length > 0 && (
             <div>
-              <h3 className="text-[11px] font-semibold text-pink-500 mb-1.5">🌸 美人计·俘虏归队</h3>
+              <h3 className="text-[11px] font-semibold text-pink-500 mb-1.5">历史战报·俘虏归队</h3>
               <div className="flex flex-wrap gap-1.5">
                 {sortUnitEntries(report.capturedUnits, faction, units ?? undefined).filter(([, v]) => v > 0).map(([unitType, count]) => (
                   <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-pink-500/10 text-pink-600 font-medium">
@@ -353,10 +353,10 @@ const BattleResultModal: FC<BattleResultModalProps> = ({ report, onClose }) => {
             </div>
           )}
 
-          {/* 美人计：俘虏到驻防 */}
+          {/* 兼容历史俘虏战报：俘虏到驻防。 */}
           {!isSweepReport && report.capturedToGarrison && Object.keys(report.capturedToGarrison).length > 0 && (
             <div>
-              <h3 className="text-[11px] font-semibold text-pink-500 mb-1.5">🌸 美人计·俘虏驻防</h3>
+              <h3 className="text-[11px] font-semibold text-pink-500 mb-1.5">历史战报·俘虏驻防</h3>
               <div className="flex flex-wrap gap-1.5">
                 {sortUnitEntries(report.capturedToGarrison, faction, units ?? undefined).filter(([, v]) => v > 0).map(([unitType, count]) => (
                   <span key={unitType} className="text-[10px] px-2 py-1 rounded-lg bg-pink-500/10 text-pink-600 font-medium">

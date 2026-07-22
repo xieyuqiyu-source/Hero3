@@ -105,7 +105,7 @@ const traitPhaseOverrides: Record<string, string> = {
   xiaobawang_zhuiji: '掠夺战结算后',
   jinfan_qixi: '掠夺战战斗前',
   qibing_raohou: '主动进攻战斗前',
-  mouding_houfa: '防守战斗前',
+  mouding_houfa: '防守/增援战斗前',
   meihuo_raozhen: '主动进攻战斗前',
   huchi_chongzhen: '主动进攻战斗前',
   pojun_pofang: '主动进攻战斗前',

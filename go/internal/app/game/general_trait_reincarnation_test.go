@@ -187,41 +187,40 @@ func TestReincarnationAttackAppliesAfterBattleRecovery(t *testing.T) {
 	}
 }
 
-// TestReincarnationAttackCaptureIsAtomicAndIdempotent 验证美人计跨阵营俘虏原子进入获得驻防且重复动作不重复加兵。
-func TestReincarnationAttackCaptureIsAtomicAndIdempotent(t *testing.T) {
+// TestReincarnationAttackZhenMiTraitsModifyPowerWithoutCapture 验证轮回进攻使用甄宓修改后的攻防，且旧俘虏效果彻底失效。
+func TestReincarnationAttackZhenMiTraitsModifyPowerWithoutCapture(t *testing.T) {
 	hero := GeneralHeroConfig{
 		ID: "zhenmi", Name: "甄宓", Faction: "wei", Enabled: true,
-		SpecialTrait: GeneralTraitConfig{TraitID: "meiren", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army", AllowedSides: []string{"attacker"}, Params: map[string]float64{"captureRate": 0.2, "captureMax": 10000, "triggerChance": 1}},
+		SpecialTrait: GeneralTraitConfig{TraitID: "meiren", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army", AllowedSides: []string{"attacker"}, Params: map[string]float64{"attackBonusRate": 0.25, "triggerChance": 1}},
+		BonusTrait:   GeneralTraitConfig{TraitID: "meihuo_raozhen", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "enemy_army", AllowedSides: []string{"attacker"}, Params: map[string]float64{"enemyDefenseReductionRate": 0.25, "triggerChance": 1}},
 	}
-	fixture := newReincarnationTraitFixture(t, "zhenmi_capture", hero, "shu", ReincarnationWaveAttack, 500, 1000)
-	result := fightReincarnationTraitFixture(t, fixture, 100, hero.ID, "zhenmi-capture-once")
+	fixture := newReincarnationTraitFixture(t, "zhenmi_stats", hero, "shu", ReincarnationWaveAttack, 500, 1000)
+	result := fightReincarnationTraitFixture(t, fixture, 100, hero.ID, "zhenmi-stats-once")
 	report := result.BattleReport
-	if report.CapturedToGarrison[fixture.enemyUnit] != 200 || len(report.CapturedUnits) != 0 {
-		t.Fatalf("expected 200 cross-faction captures in garrison, report=%+v", report)
+	if report.PlayerPower != 1300 || report.EnemyPower != 8000 || len(report.TraitOutcomes) != 2 {
+		t.Fatalf("expected modified reincarnation power 1300/8000 and two outcomes, report=%+v", report)
 	}
-	garrison, err := fixture.repo.GetReinforcement(ObtainedGarrisonID(fixture.playerID))
-	if err != nil || garrison.RemainingTroops[fixture.enemyUnit] != 200 {
-		t.Fatalf("expected persisted captured garrison 200, garrison=%+v err=%v", garrison, err)
+	if len(report.CapturedToGarrison) != 0 || len(report.CapturedUnits) != 0 {
+		t.Fatalf("expected removed capture behavior to stay empty, report=%+v", report)
 	}
 	remaining := result.Run.Waves[0].EnemyRemaining[fixture.enemyUnit]
-	if remaining != 1000-report.DefenderLostUnits[fixture.enemyUnit]-200 {
-		t.Fatalf("expected enemy state to deduct deaths and captures, remaining=%d report=%+v", remaining, report)
+	if remaining != 1000-report.DefenderLostUnits[fixture.enemyUnit] {
+		t.Fatalf("expected enemy state to deduct only recalculated deaths, remaining=%d report=%+v", remaining, report)
 	}
 	if report.Detail == nil || report.Detail.SecondarySide == nil {
 		t.Fatalf("expected complete standard report sides, detail=%+v", report.Detail)
 	}
 	assertStandardUnitRow(t, report.ID, *report.Detail.SecondarySide, fixture.enemyUnit, 1000, report.DefenderLostUnits[fixture.enemyUnit], remaining)
 	storedBattle := result.Run.Battles[0]
-	if storedBattle.EnemyCaptured[fixture.enemyUnit] != 200 || storedBattle.EnemyRemaining[fixture.enemyUnit] != remaining || storedBattle.TraitOutcomes["meiren"].TraitID != "meiren" {
-		t.Fatalf("expected captured troops in battle record, battle=%+v", storedBattle)
+	if len(storedBattle.EnemyCaptured) != 0 || storedBattle.EnemyRemaining[fixture.enemyUnit] != remaining || storedBattle.TraitOutcomes["meiren"].TraitID != "meiren" || storedBattle.TraitOutcomes["meihuo_raozhen"].TraitID != "meihuo_raozhen" {
+		t.Fatalf("expected current stat traits without captures in battle record, battle=%+v", storedBattle)
 	}
-	repeated := fightReincarnationTraitFixture(t, fixture, 100, hero.ID, "zhenmi-capture-once")
+	repeated := fightReincarnationTraitFixture(t, fixture, 100, hero.ID, "zhenmi-stats-once")
 	if repeated.BattleReport.ID != report.ID {
 		t.Fatalf("expected duplicate action to reuse report %s, got %s", report.ID, repeated.BattleReport.ID)
 	}
-	garrison, err = fixture.repo.GetReinforcement(ObtainedGarrisonID(fixture.playerID))
-	if err != nil || garrison.RemainingTroops[fixture.enemyUnit] != 200 || len(repeated.Run.Battles) != 1 {
-		t.Fatalf("expected duplicate action not to add capture or battle, garrison=%+v run=%+v err=%v", garrison, repeated.Run, err)
+	if len(repeated.Run.Battles) != 1 {
+		t.Fatalf("expected duplicate action not to add a second battle, run=%+v", repeated.Run)
 	}
 }
 
@@ -369,8 +368,8 @@ func TestReincarnationWithoutGeneralDoesNotBorrowHomeGeneral(t *testing.T) {
 		},
 		BonusTrait: GeneralTraitConfig{
 			TraitID: "weiwu_tongyu", TraitType: general.TraitTypeBonus, Enabled: true,
-			Scope: "self_army", TargetUnitType: "huWei", AllowedSides: []string{"attacker", "defender", "reinforcement"},
-			Params: map[string]float64{"attackBonusRate": 0.1, "defenseBonusRate": 0.1, "triggerChance": 1},
+			Scope: "self_army", TargetUnitType: "huWei", AllowedSides: []string{"defender", "reinforcement"},
+			Params: map[string]float64{"defenseBonusRate": 0.15, "triggerChance": 1},
 		},
 	}
 	for _, waveType := range []string{ReincarnationWaveAttack, ReincarnationWaveDefense} {
@@ -440,10 +439,10 @@ func formalReincarnationTraitCases(t *testing.T, cfg GeneralsConfig) []reincarna
 	}
 	defenderOnly := map[string]bool{
 		"mouding_houfa": true, "dunzhen_fangyu": true, "longdan_jiuyuan": true,
-		"gushou_hanzhong": true, "jiangdong_gushou": true,
+		"gushou_hanzhong": true, "jiangdong_gushou": true, "weiwu_tongyu": true,
 	}
 	bothSides := map[string]bool{
-		"weiwu_tongyu": true, "yibing_touxi": true, "huzhu_sizhan": true, "weizhen_zhenhe": true,
+		"yibing_touxi": true, "huzhu_sizhan": true, "weizhen_zhenhe": true,
 		"guicai_yice": true, "rende": true, "renzhu_shouhu": true, "shuiyan_qijun": true,
 		"zhenhe_quanjun": true, "qimen_dunjia": true, "wolong_mouzhi": true, "xiliang_tuji": true,
 		"laodang_yizhuang": true, "huoshao_lianying": true, "lianying_zengshang": true,

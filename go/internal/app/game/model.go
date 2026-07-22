@@ -213,8 +213,8 @@ type BattleReport struct {
 	GeneralExpGained         int                           `json:"generalExpGained,omitempty"`       // 本次战斗获得将领经验
 	GeneralLevelBefore       int                           `json:"generalLevelBefore,omitempty"`     // 战斗前将领等级
 	GeneralLevelAfter        int                           `json:"generalLevelAfter,omitempty"`      // 战斗后将领等级
-	CapturedUnits            map[string]int                `json:"capturedUnits,omitempty"`          // 美人计俘虏到军队
-	CapturedToGarrison       map[string]int                `json:"capturedToGarrison,omitempty"`     // 美人计俘虏到驻防
+	CapturedUnits            map[string]int                `json:"capturedUnits,omitempty"`          // 历史俘虏战报兼容字段
+	CapturedToGarrison       map[string]int                `json:"capturedToGarrison,omitempty"`     // 历史俘虏战报兼容字段
 	RevivedUnits             map[string]int                `json:"revivedUnits,omitempty"`           // 战后复活或最终减损返还
 	TraitTriggered           []string                      `json:"traitTriggered,omitempty"`         // 触发了哪些特性（前端展示）
 	TraitOutcomes            map[string]TraitOutcomeReport `json:"traitOutcomes,omitempty"`          // 每个触发特性的具体结果

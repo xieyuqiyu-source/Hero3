@@ -319,21 +319,20 @@ func TestYellowTurbanLossReductionTraitsRespectOutcome(t *testing.T) {
 // TestYellowTurbanDefensivePreBattleTraitsMatchPowerStateAndReports 验证四项守城战前特性真实改变黄巾战力并与最终状态、双方格式战报一致。
 func TestYellowTurbanDefensivePreBattleTraitsMatchPowerStateAndReports(t *testing.T) {
 	cases := []struct {
-		name               string
-		traitID            string
-		traitType          string
-		params             map[string]float64
-		designKey          string
-		designValue        float64
-		attackChange       int
-		infantryChange     int
-		cavalryChange      int
-		expectAttackReduce bool
+		name           string
+		traitID        string
+		traitType      string
+		params         map[string]float64
+		designKey      string
+		designValue    float64
+		attackChange   int
+		infantryChange int
+		cavalryChange  int
 	}{
 		{
 			name: "谋定后发", traitID: "mouding_houfa", traitType: general.TraitTypeBonus,
-			params:    map[string]float64{"effectRate": 0.1, "triggerChance": 1},
-			designKey: "attackReductionRate", designValue: 0.1, attackChange: -1, expectAttackReduce: true,
+			params:    map[string]float64{"defenseBonusRate": 0.35, "triggerChance": 1},
+			designKey: "defenseBonusRate", designValue: 0.35, infantryChange: 4, cavalryChange: 3,
 		},
 		{
 			name: "盾阵防御", traitID: "dunzhen_fangyu", traitType: general.TraitTypeBonus,
@@ -359,17 +358,9 @@ func TestYellowTurbanDefensivePreBattleTraitsMatchPowerStateAndReports(t *testin
 				TraitID: tc.traitID, TraitType: tc.traitType, Enabled: true, Scope: "self_army",
 				AllowedSides: []string{"defender", "reinforcement"}, Params: tc.params,
 			}
-			if tc.expectAttackReduce {
-				traitCfg.Scope = "enemy_army"
-				traitCfg.AllowedSides = []string{"defender"}
-			}
 			report, stored := resolveYellowTurbanTraitTest(t, traitCfg, 100, 100, "pre_trait_"+string(rune('a'+index)))
 
-			if tc.expectAttackReduce {
-				if report.EnemyPower >= baseline.EnemyPower || report.PlayerPower != baseline.PlayerPower {
-					t.Fatalf("expected %s to reduce only yellow turban attack power, baseline=%d/%d actual=%d/%d", tc.traitID, baseline.EnemyPower, baseline.PlayerPower, report.EnemyPower, report.PlayerPower)
-				}
-			} else if report.PlayerPower <= baseline.PlayerPower || report.EnemyPower != baseline.EnemyPower {
+			if report.PlayerPower <= baseline.PlayerPower || report.EnemyPower != baseline.EnemyPower {
 				t.Fatalf("expected %s to increase only city defense power, baseline=%d/%d actual=%d/%d", tc.traitID, baseline.EnemyPower, baseline.PlayerPower, report.EnemyPower, report.PlayerPower)
 			}
 
@@ -776,30 +767,31 @@ func resolveYellowTurbanSunQuanTest(t *testing.T, suffix string, defenseEnabled 
 	return report, stored
 }
 
-// TestYellowTurbanSimaYiStacksPreDamageBeforeAttackReduction 验证黄巾战力使用疑兵伤亡后的兵力和谋定减攻后的属性。
-func TestYellowTurbanSimaYiStacksPreDamageBeforeAttackReduction(t *testing.T) {
+// TestYellowTurbanSimaYiStacksPreDamageBeforeDefenseBonus 验证黄巾战力使用疑兵伤亡后的兵力和谋定加防后的属性。
+func TestYellowTurbanSimaYiStacksPreDamageBeforeDefenseBonus(t *testing.T) {
 	buildHero := func(enabled bool) GeneralHeroConfig {
 		return GeneralHeroConfig{
 			ID: "simayi", Name: "司马懿", Faction: "wei", Enabled: true,
 			SpecialTrait: GeneralTraitConfig{
 				TraitID: "yibing_touxi", TraitType: general.TraitTypeSpecial, Enabled: enabled, Scope: "enemy_army",
-				Params: map[string]float64{"triggerChance": 1, "effectRate": 0.35, "maxAffectedRate": 0.35},
+				Params: map[string]float64{"triggerChance": 1, "effectRate": 0.35},
 			},
 			BonusTrait: GeneralTraitConfig{
-				TraitID: "mouding_houfa", TraitType: general.TraitTypeBonus, Enabled: enabled, Scope: "enemy_army",
-				AllowedSides: []string{"defender"}, Params: map[string]float64{"effectRate": 0.1},
+				TraitID: "mouding_houfa", TraitType: general.TraitTypeBonus, Enabled: enabled, Scope: "self_army",
+				AllowedSides: []string{"defender", "reinforcement"}, Params: map[string]float64{"defenseBonusRate": 0.35, "triggerChance": 1},
 			},
 		}
 	}
 	baseline, _ := resolveYellowTurbanHeroTest(t, buildHero(false), 1000, 1000, "simayi_baseline")
 	report, stored := resolveYellowTurbanHeroTest(t, buildHero(true), 1000, 1000, "simayi_traits")
-	if baseline.EnemyPower != 10000 || report.EnemyPower != 5850 || baseline.PlayerPower != 10300 || report.PlayerPower != baseline.PlayerPower {
-		t.Fatalf("expected 1000x10 -> 650x9 attack with unchanged wall defense, baseline=%d/%d actual=%d/%d", baseline.EnemyPower, baseline.PlayerPower, report.EnemyPower, report.PlayerPower)
+	if baseline.EnemyPower != 10000 || report.EnemyPower != 6500 || baseline.PlayerPower != 10300 || report.PlayerPower != 14420 {
+		t.Fatalf("expected 35%% direct enemy losses and 35%% owned defense bonus with wall, baseline=%d/%d actual=%d/%d", baseline.EnemyPower, baseline.PlayerPower, report.EnemyPower, report.PlayerPower)
 	}
 	preDamage, preDamageOK := report.TraitOutcomes["yibing_touxi"].Detail["preBattleAffected"].(map[string]int)
-	attackModified, attackModifiedOK := report.TraitOutcomes["mouding_houfa"].Detail["attackModifiedUnits"].(map[string]int)
-	if !preDamageOK || preDamage["weiInfantry"] != 350 || !attackModifiedOK || attackModified["weiInfantry"] != -1 || report.TraitOutcomes["mouding_houfa"].Detail["attackReductionRate"] != 0.1 {
-		t.Fatalf("expected 350 real pre-damage then -1 attack, outcomes=%+v", report.TraitOutcomes)
+	infantryModified, infantryOK := report.TraitOutcomes["mouding_houfa"].Detail["infantryDefenseModifiedUnits"].(map[string]int)
+	cavalryModified, cavalryOK := report.TraitOutcomes["mouding_houfa"].Detail["cavalryDefenseModifiedUnits"].(map[string]int)
+	if !preDamageOK || preDamage["weiInfantry"] != 350 || !infantryOK || !cavalryOK || infantryModified["weiInfantry"] != 4 || cavalryModified["weiInfantry"] != 3 || report.TraitOutcomes["mouding_houfa"].Detail["defenseBonusRate"] != 0.35 {
+		t.Fatalf("expected 350 real pre-damage then +4/+3 owned defense, outcomes=%+v", report.TraitOutcomes)
 	}
 	wantTimeline := []string{"yibing_touxi", "mouding_houfa"}
 	if len(report.TraitTriggered) != len(wantTimeline) || report.TraitTriggered[0] != wantTimeline[0] || report.TraitTriggered[1] != wantTimeline[1] || report.Detail == nil || len(report.Detail.Traits) != len(wantTimeline) {
@@ -812,15 +804,15 @@ func TestYellowTurbanSimaYiStacksPreDamageBeforeAttackReduction(t *testing.T) {
 		}
 	}
 	attackerLost := report.DefenderLostUnits["weiInfantry"]
-	if attackerLost != 1000 || report.LostUnits["weiInfantry"] != 447 || report.SurvivedUnits["weiInfantry"] != 553 || report.GeneralExpGained != 1000 || pvpTestGeneralExp(stored, "simayi") != 1000 {
-		t.Fatalf("expected exact Sima Yi hit losses 1000/447, survivors 0/553 and exp 1000, report=%+v storedExp=%d", report, pvpTestGeneralExp(stored, "simayi"))
+	if attackerLost != 1000 || report.LostUnits["weiInfantry"] <= 0 || report.LostUnits["weiInfantry"] >= 1000 || report.SurvivedUnits["weiInfantry"] != 1000-report.LostUnits["weiInfantry"] || report.GeneralExpGained != 1000 || pvpTestGeneralExp(stored, "simayi") != 1000 {
+		t.Fatalf("expected exact enemy elimination and reconciled boosted defenders, report=%+v storedExp=%d", report, pvpTestGeneralExp(stored, "simayi"))
 	}
 	attackerUnit := attackDefenseCrossReportUnit(t, report.Detail.PrimarySide, "weiInfantry")
 	if attackerUnit.AmountBefore != 1000 || attackerUnit.Lost != attackerLost || attackerUnit.Survived != 1000-attackerLost {
 		t.Fatalf("expected standard yellow turban losses to match actual enemy losses, unit=%+v", attackerUnit)
 	}
 	remaining := armySliceToMap(stored.Army)["weiInfantry"]
-	if remaining != 553 || remaining != report.SurvivedUnits["weiInfantry"] || yellowTurbanStandardDefenderSurvived(report, "weiInfantry") != remaining {
+	if remaining != report.SurvivedUnits["weiInfantry"] || yellowTurbanStandardDefenderSurvived(report, "weiInfantry") != remaining {
 		t.Fatalf("expected defender army and both report formats to agree, army=%d report=%+v detail=%+v", remaining, report.SurvivedUnits, report.Detail)
 	}
 	if report.Detail.SecondarySide == nil || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "simayi", "yibing_touxi") || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "simayi", "mouding_houfa") {
@@ -834,22 +826,22 @@ func TestYellowTurbanSimaYiYibingLegalMissKeepsMouding(t *testing.T) {
 		ID: "simayi", Name: "司马懿", Faction: "wei", Enabled: true,
 		SpecialTrait: GeneralTraitConfig{
 			TraitID: "yibing_touxi", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "enemy_army",
-			Params: map[string]float64{"triggerChance": 0, "effectRate": 0.35, "maxAffectedRate": 0.35},
+			Params: map[string]float64{"triggerChance": 0, "effectRate": 0.35},
 		},
 		BonusTrait: GeneralTraitConfig{
-			TraitID: "mouding_houfa", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "enemy_army",
-			AllowedSides: []string{"defender"}, Params: map[string]float64{"effectRate": 0.1},
+			TraitID: "mouding_houfa", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army",
+			AllowedSides: []string{"defender", "reinforcement"}, Params: map[string]float64{"defenseBonusRate": 0.35, "triggerChance": 1},
 		},
 	}
 	report, stored := resolveYellowTurbanHeroTest(t, hero, 1000, 1000, "simayi_yibing_miss")
-	if report.Result != "defender_victory" || report.EnemyPower != 9000 || report.PlayerPower != 10300 {
-		t.Fatalf("expected Sima Yi miss to keep only 9000/10300 Mouding power, report=%+v", report)
+	if report.Result != "defender_victory" || report.EnemyPower != 10000 || report.PlayerPower != 14420 {
+		t.Fatalf("expected Sima Yi miss to keep only 10000/14420 Mouding defense power, report=%+v", report)
 	}
-	if report.DefenderLostUnits["weiInfantry"] != 1000 || report.LostUnits["weiInfantry"] != 825 || report.SurvivedUnits["weiInfantry"] != 175 || report.GeneralExpGained != 1000 {
+	if report.DefenderLostUnits["weiInfantry"] != 1000 || report.LostUnits["weiInfantry"] != 594 || report.SurvivedUnits["weiInfantry"] != 406 || report.GeneralExpGained != 1000 {
 		t.Fatalf("expected exact Sima Yi miss losses/survivors/exp, report=%+v", report)
 	}
-	if armySliceToMap(stored.Army)["weiInfantry"] != 175 || yellowTurbanStandardDefenderSurvived(report, "weiInfantry") != 175 {
-		t.Fatalf("expected Sima Yi miss state and standard report to keep 175 defenders, stored=%+v detail=%+v", stored.Army, report.Detail)
+	if armySliceToMap(stored.Army)["weiInfantry"] != 406 || yellowTurbanStandardDefenderSurvived(report, "weiInfantry") != 406 {
+		t.Fatalf("expected Sima Yi miss state and standard report to keep 406 defenders, stored=%+v detail=%+v", stored.Army, report.Detail)
 	}
 	if report.Detail == nil || report.Detail.SecondarySide == nil || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "simayi", "yibing_touxi") || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "simayi", "mouding_houfa") {
 		t.Fatalf("expected Sima Yi miss snapshot to preserve both traits, detail=%+v", report.Detail)
@@ -857,9 +849,9 @@ func TestYellowTurbanSimaYiYibingLegalMissKeepsMouding(t *testing.T) {
 	if len(report.TraitTriggered) != 1 || report.TraitTriggered[0] != "mouding_houfa" || len(report.TraitOutcomes) != 1 || len(report.Detail.Traits) != 1 || standardReportHasTrait(report.Detail, "yibing_touxi") {
 		t.Fatalf("expected only Mouding after legal Yibing miss, report=%+v", report)
 	}
-	modified, ok := report.TraitOutcomes["mouding_houfa"].Detail["attackModifiedUnits"].(map[string]int)
-	if !ok || modified["weiInfantry"] != -1 {
-		t.Fatalf("expected Mouding to reduce current enemy attack by 1, outcome=%+v", report.TraitOutcomes["mouding_houfa"])
+	modified, ok := report.TraitOutcomes["mouding_houfa"].Detail["infantryDefenseModifiedUnits"].(map[string]int)
+	if !ok || modified["weiInfantry"] != 4 {
+		t.Fatalf("expected Mouding to increase owned infantry defense by 4, outcome=%+v", report.TraitOutcomes["mouding_houfa"])
 	}
 }
 

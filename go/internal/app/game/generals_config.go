@@ -143,13 +143,44 @@ func NormalizeGeneralsConfig(cfg GeneralsConfig) GeneralsConfig {
 	return cfg
 }
 
-// normalizeTraitConfigParams 清理魏武号令的历史上限参数，保证当前规则不限累计产兵。
+// normalizeTraitConfigParams 清理已经废止的历史特性参数，避免旧配置继续影响当前规则。
 func normalizeTraitConfigParams(traitCfg *GeneralTraitConfig) {
-	if traitCfg == nil || traitCfg.TraitID != "weiwu_haoling" || traitCfg.Params == nil {
+	if traitCfg == nil || traitCfg.Params == nil {
 		return
 	}
-	delete(traitCfg.Params, "maxGuardPerDay")
-	delete(traitCfg.Params, "maxGuardPerSettle")
+	switch traitCfg.TraitID {
+	case "weiwu_haoling":
+		delete(traitCfg.Params, "maxGuardPerDay")
+		delete(traitCfg.Params, "maxGuardPerSettle")
+	case "meiren":
+		_, hadCaptureRate := traitCfg.Params["captureRate"]
+		_, hadCaptureMax := traitCfg.Params["captureMax"]
+		_, hadMaxCapturePerUnit := traitCfg.Params["maxCapturePerUnit"]
+		delete(traitCfg.Params, "captureRate")
+		delete(traitCfg.Params, "captureMax")
+		delete(traitCfg.Params, "maxCapturePerUnit")
+		if hadCaptureRate || hadCaptureMax || hadMaxCapturePerUnit {
+			traitCfg.Params["attackBonusRate"] = 0.25
+			traitCfg.Params["triggerChance"] = 0.5
+		}
+	case "yibing_touxi":
+		// 旧上限与伤亡比例重复，移除后由 GM 的 effectRate 直接决定真实减员。
+		delete(traitCfg.Params, "maxAffectedRate")
+		traitCfg.Scope = "enemy_army"
+		traitCfg.AllowedSides = nil
+	case "mouding_houfa":
+		// 旧版必定减攻 10% 自动迁移为新版概率全军加防，避免历史 GM 配置校验失败。
+		delete(traitCfg.Params, "effectRate")
+		delete(traitCfg.Params, "attackReductionRate")
+		if _, ok := traitCfg.Params["defenseBonusRate"]; !ok {
+			traitCfg.Params["defenseBonusRate"] = 0.35
+		}
+		if _, ok := traitCfg.Params["triggerChance"]; !ok {
+			traitCfg.Params["triggerChance"] = 0.35
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.AllowedSides = []string{"defender", "reinforcement"}
+	}
 }
 
 // --- 默认配置 ---
@@ -170,12 +201,13 @@ func defaultGeneralsConfig() GeneralsConfig {
 		Heroes: map[string]GeneralHeroConfig{
 			"zhenmi": {
 				ID: "zhenmi", Name: "甄宓", Faction: "wei", Title: "美人", Rarity: "epic", Enabled: true,
-				Buffs: map[string]float64{"productionBonus": 0.10},
-				Traits: []GeneralTraitConfig{
-					{
-						TraitID: "meiren", Enabled: true,
-						Params: map[string]float64{"captureRate": 0.1, "captureMax": 1000, "triggerChance": 1.0},
-					},
+				SpecialTrait: GeneralTraitConfig{
+					TraitID: "meiren", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army", AllowedSides: []string{"attacker"},
+					Params: map[string]float64{"attackBonusRate": 0.25, "triggerChance": 0.5},
+				},
+				BonusTrait: GeneralTraitConfig{
+					TraitID: "meihuo_raozhen", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "enemy_army", AllowedSides: []string{"attacker"},
+					Params: map[string]float64{"enemyDefenseReductionRate": 0.25, "triggerChance": 0.5},
 				},
 			},
 			"zhouyu": {

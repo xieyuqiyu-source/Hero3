@@ -128,7 +128,7 @@ type EventSubscription struct {
 
 // ParamField 参数 schema（GM 后台动态渲染表单用）
 type ParamField struct {
-	Key         string  `json:"key"`         // 参数键，如 "captureRate"
+	Key         string  `json:"key"`         // 参数键，如 "attackBonusRate"
 	Label       string  `json:"label"`       // 中文显示，如 "俘虏比例"
 	Description string  `json:"description"` // 帮助文字
 	Default     float64 `json:"default"`     // 默认值

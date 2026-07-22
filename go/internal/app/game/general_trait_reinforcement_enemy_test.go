@@ -495,20 +495,22 @@ func TestPvpLuxunReinforcementHuoshaoHitAndMissKeepRealTraitOrder(t *testing.T) 
 	}
 }
 
-// TestPvpSimayiReinforcementYibingHitAndMissExcludeMouding 验证司马懿援军疑兵命中或未命中都不会越权触发主守将专属谋定。
-func TestPvpSimayiReinforcementYibingHitAndMissExcludeMouding(t *testing.T) {
+// TestPvpSimayiReinforcementTraitsIndependentCombinations 验证司马懿援军两项战前特性独立判定并进入真实结算。
+func TestPvpSimayiReinforcementTraitsIndependentCombinations(t *testing.T) {
 	cases := []struct {
-		name                    string
-		triggerChance           float64
-		wantAttackerPower       float64
-		wantAttackerLosses      int
-		wantDefendingLosses     int
-		wantMainDefenderLosses  int
-		wantReinforcementLosses int
-		wantTrait               bool
+		name              string
+		yibingChance      float64
+		moudingChance     float64
+		wantAttackerPower float64
+		wantDefensePower  float64
+		wantWinner        string
+		wantYibing        bool
+		wantMouding       bool
 	}{
-		{name: "疑兵命中先扣兵再进入核心", triggerChance: 1, wantAttackerPower: 650, wantAttackerLosses: 77, wantDefendingLosses: 35, wantMainDefenderLosses: 0, wantReinforcementLosses: 35, wantTrait: true},
-		{name: "疑兵未命中保持基础平局", triggerChance: 0, wantAttackerPower: 1000, wantAttackerLosses: 50, wantDefendingLosses: 50, wantMainDefenderLosses: 1, wantReinforcementLosses: 49},
+		{name: "两项同时命中", yibingChance: 1, moudingChance: 1, wantAttackerPower: 650, wantDefensePower: 1396, wantWinner: "defender", wantYibing: true, wantMouding: true},
+		{name: "仅疑兵命中", yibingChance: 1, moudingChance: 0, wantAttackerPower: 650, wantDefensePower: 1000, wantWinner: "defender", wantYibing: true},
+		{name: "仅谋定命中", yibingChance: 0, moudingChance: 1, wantAttackerPower: 1000, wantDefensePower: 1396, wantWinner: "defender", wantMouding: true},
+		{name: "两项均未命中", yibingChance: 0, moudingChance: 0, wantAttackerPower: 1000, wantDefensePower: 1000, wantWinner: "draw"},
 	}
 	for index, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -520,55 +522,67 @@ func TestPvpSimayiReinforcementYibingHitAndMissExcludeMouding(t *testing.T) {
 				defenderFaction: "wu", defenderGeneral: "sunquan", defenderName: "孙权",
 				helperSpecial: GeneralTraitConfig{
 					TraitID: "yibing_touxi", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "enemy_army",
-					Params: map[string]float64{"triggerChance": tc.triggerChance, "effectRate": 0.35, "maxAffectedRate": 0.35},
+					Params: map[string]float64{"triggerChance": tc.yibingChance, "effectRate": 0.35},
 				},
 				helperBonus: GeneralTraitConfig{
-					TraitID: "mouding_houfa", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "enemy_army", AllowedSides: []string{"defender"},
-					Params: map[string]float64{"effectRate": 0.1},
+					TraitID: "mouding_houfa", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", AllowedSides: []string{"defender", "reinforcement"},
+					Params: map[string]float64{"defenseBonusRate": 0.35, "triggerChance": tc.moudingChance},
 				},
 			})
-			wantWinner := "draw"
-			if tc.wantTrait {
-				wantWinner = "defender"
+			if result.battle.Result["winner"] != tc.wantWinner || result.battle.Result["attackerPower"] != tc.wantAttackerPower || result.battle.Result["defensePower"] != tc.wantDefensePower {
+				t.Fatalf("expected exact winner and power %s %.0f/%.0f, result=%+v", tc.wantWinner, tc.wantAttackerPower, tc.wantDefensePower, result.battle.Result)
 			}
-			if result.battle.Result["winner"] != wantWinner || result.battle.Result["attackerPower"] != tc.wantAttackerPower || result.battle.Result["defensePower"] != float64(1000) {
-				t.Fatalf("expected exact winner and power %s %.0f/1000, result=%+v", wantWinner, tc.wantAttackerPower, result.battle.Result)
+			mainLosses := result.defenderReport.LostUnits["wuInfantry"]
+			reinforcementLosses := result.storedReinforcement.Losses["weiInfantry"]
+			if result.attackerLosses <= 0 || result.defendingLosses <= 0 || result.defendingLosses != mainLosses+reinforcementLosses {
+				t.Fatalf("expected positive reconciled coalition losses, battle=%+v main=%+v reinforcement=%+v", result.battle.Losses, result.defenderReport.LostUnits, result.storedReinforcement)
 			}
-			if result.attackerLosses != tc.wantAttackerLosses || result.defendingLosses != tc.wantDefendingLosses || result.defenderReport.LostUnits["wuInfantry"] != tc.wantMainDefenderLosses || result.storedReinforcement.Losses["weiInfantry"] != tc.wantReinforcementLosses {
-				t.Fatalf("expected attacker/main/reinforcement losses %d/%d/%d, battle=%+v main=%+v reinforcement=%+v", tc.wantAttackerLosses, tc.wantMainDefenderLosses, tc.wantReinforcementLosses, result.battle.Losses, result.defenderReport.LostUnits, result.storedReinforcement)
+			if result.attackerReport.SurvivedUnits["shuInfantry"] != 100-result.attackerLosses || armySliceToMap(result.defenderState.Army)["wuInfantry"] != 1-mainLosses || result.storedReinforcement.RemainingTroops["weiInfantry"] != 99-reinforcementLosses {
+				t.Fatalf("expected authoritative state to match battle losses, attacker=%+v defender=%+v reinforcement=%+v", result.attackerReport.SurvivedUnits, result.defenderState.Army, result.storedReinforcement)
 			}
-			if result.attackerReport.SurvivedUnits["shuInfantry"] != 100-tc.wantAttackerLosses || armySliceToMap(result.defenderState.Army)["wuInfantry"] != 1-tc.wantMainDefenderLosses || result.storedReinforcement.RemainingTroops["weiInfantry"] != 99-tc.wantReinforcementLosses {
-				t.Fatalf("expected authoritative attacker/main/reinforcement survivors %d/%d/%d, attacker=%+v defender=%+v reinforcement=%+v", 100-tc.wantAttackerLosses, 1-tc.wantMainDefenderLosses, 99-tc.wantReinforcementLosses, result.attackerReport.SurvivedUnits, result.defenderState.Army, result.storedReinforcement)
-			}
-			if result.attackerReport.GeneralExpGained != tc.wantDefendingLosses || result.defenderReport.GeneralExpGained != tc.wantAttackerLosses || result.reinforcementReport.GeneralExpGained != tc.wantAttackerLosses || pvpTestGeneralExp(result.helperState, "simayi") != tc.wantAttackerLosses {
-				t.Fatalf("expected attacker/main/helper exp %d/%d/%d, reports=%d/%d/%d helper=%+v", tc.wantDefendingLosses, tc.wantAttackerLosses, tc.wantAttackerLosses, result.attackerReport.GeneralExpGained, result.defenderReport.GeneralExpGained, result.reinforcementReport.GeneralExpGained, result.helperState.Generals)
+			if result.attackerReport.GeneralExpGained != result.defendingLosses || result.defenderReport.GeneralExpGained != result.attackerLosses || result.reinforcementReport.GeneralExpGained != result.attackerLosses || pvpTestGeneralExp(result.helperState, "simayi") != result.attackerLosses {
+				t.Fatalf("expected report and general exp to follow real losses, reports=%d/%d/%d helper=%+v", result.attackerReport.GeneralExpGained, result.defenderReport.GeneralExpGained, result.reinforcementReport.GeneralExpGained, result.helperState.Generals)
 			}
 
 			for _, report := range []BattleReport{result.attackerReport, result.defenderReport, result.reinforcementReport} {
 				if len(report.PvpReinforcements) != 1 || len(report.PvpReinforcements[0].Generals) != 1 || !reinforcementSnapshotHasTrait(report.PvpReinforcements[0].Generals[0], "yibing_touxi") || !reinforcementSnapshotHasTrait(report.PvpReinforcements[0].Generals[0], "mouding_houfa") {
 					t.Fatalf("expected reinforcement snapshot to retain both owned traits, report=%s snapshots=%+v", report.ID, report.PvpReinforcements)
 				}
-				if _, exists := reinforcementOutcome(report, "mouding_houfa", "player_enemy_"+id); exists || standardReportHasTrait(report.Detail, "mouding_houfa") {
-					t.Fatalf("expected defender-only Mouding excluded for reinforcement, report=%+v", report)
+				wantTraitCount := 0
+				if tc.wantYibing {
+					wantTraitCount++
 				}
-				if !tc.wantTrait {
-					if len(report.TraitTriggered) != 0 || len(report.TraitOutcomes) != 0 || len(report.Detail.Traits) != 0 {
-						t.Fatalf("expected missed Yibing and excluded Mouding to leave empty timelines, report=%+v", report)
+				if tc.wantMouding {
+					wantTraitCount++
+				}
+				if len(report.TraitTriggered) != wantTraitCount || len(report.TraitOutcomes) != wantTraitCount || len(report.Detail.Traits) != wantTraitCount {
+					t.Fatalf("expected %d independently triggered traits, report=%+v", wantTraitCount, report)
+				}
+				yibing, yibingTriggered := reinforcementOutcome(report, "yibing_touxi", "player_enemy_"+id)
+				if yibingTriggered != tc.wantYibing || standardReportHasTrait(report.Detail, "yibing_touxi") != tc.wantYibing {
+					t.Fatalf("expected Yibing triggered=%v, report=%+v", tc.wantYibing, report)
+				}
+				if tc.wantYibing {
+					preBattleAffected, detailOK := yibing.Detail["preBattleAffected"].(map[string]int)
+					if !detailOK || preBattleAffected["shuInfantry"] != 35 || yibing.OwnerSide != "reinforcement" || yibing.OwnerGeneralID != "simayi" {
+						t.Fatalf("expected reinforcement-owned Yibing to remove 35 original troops, report=%s outcome=%+v", report.ID, yibing)
 					}
-					continue
 				}
-				if len(report.TraitTriggered) != 1 || len(report.TraitOutcomes) != 1 || len(report.Detail.Traits) != 1 {
-					t.Fatalf("expected exactly one real Yibing outcome, report=%+v", report)
+				mouding, moudingTriggered := reinforcementOutcome(report, "mouding_houfa", "player_enemy_"+id)
+				if moudingTriggered != tc.wantMouding || standardReportHasTrait(report.Detail, "mouding_houfa") != tc.wantMouding {
+					t.Fatalf("expected Mouding triggered=%v, report=%+v", tc.wantMouding, report)
 				}
-				outcome, triggered := reinforcementOutcome(report, "yibing_touxi", "player_enemy_"+id)
-				preBattleAffected, detailOK := outcome.Detail["preBattleAffected"].(map[string]int)
-				if !triggered || !detailOK || preBattleAffected["shuInfantry"] != 35 || outcome.OwnerSide != "reinforcement" || outcome.OwnerGeneralID != "simayi" {
-					t.Fatalf("expected reinforcement-owned Yibing actual pre-battle loss 35, report=%s outcome=%+v", report.ID, outcome)
+				if tc.wantMouding {
+					infantry, infantryOK := mouding.Detail["infantryDefenseModifiedUnits"].(map[string]int)
+					cavalry, cavalryOK := mouding.Detail["cavalryDefenseModifiedUnits"].(map[string]int)
+					if !infantryOK || !cavalryOK || infantry["weiInfantry"] != 4 || cavalry["weiInfantry"] != 3 || mouding.Detail["defenseBonusRate"] != 0.35 || mouding.OwnerSide != "reinforcement" {
+						t.Fatalf("expected reinforcement-owned Mouding +4/+3 defense, report=%s outcome=%+v", report.ID, mouding)
+					}
 				}
-				trait := report.Detail.Traits[0]
-				standardAffected, standardOK := trait.Detail["preBattleAffected"].(map[string]int)
-				if trait.TraitID != "yibing_touxi" || trait.OwnerRole != "reinforcement" || trait.OwnerPlayerID != "player_enemy_"+id || !standardOK || standardAffected["shuInfantry"] != 35 {
-					t.Fatalf("expected one standard reinforcement Yibing timeline with actual loss 35, report=%s trait=%+v", report.ID, trait)
+				for _, trait := range report.Detail.Traits {
+					if trait.OwnerRole != "reinforcement" || trait.OwnerPlayerID != "player_enemy_"+id || trait.GeneralID != "simayi" {
+						t.Fatalf("expected standard timeline ownership to remain on Sima Yi reinforcement, report=%s trait=%+v", report.ID, trait)
+					}
 				}
 			}
 		})
@@ -1056,7 +1070,7 @@ func TestFormalReinforcementEnemyTraitRoleMatrix(t *testing.T) {
 		"huoshao_lianying": true, "lianying_zengshang": true, "kurouji": true, "kurou_fanji": true,
 	}
 	excluded := map[string]bool{
-		"mouding_houfa": true, "meihuo_raozhen": true, "huchi_chongzhen": true,
+		"meihuo_raozhen": true, "huchi_chongzhen": true,
 		"pojun_pofang": true, "baibu_chuanyang": true, "qibing_raohou": true, "huogong": true,
 	}
 	seen := map[string]bool{}

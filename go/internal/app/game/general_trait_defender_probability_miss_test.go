@@ -108,8 +108,8 @@ func TestPvpDefenderKuroujiMissKeepsBothFollowUpDamageTraits(t *testing.T) {
 	}
 }
 
-// TestPvpDefenderYibingMissKeepsMoudingAttackReduction 验证防守司马懿疑兵未命中后谋定仍独立减攻。
-func TestPvpDefenderYibingMissKeepsMoudingAttackReduction(t *testing.T) {
+// TestPvpDefenderYibingMissKeepsMoudingDefenseBonus 验证防守司马懿疑兵未命中后谋定仍独立加防。
+func TestPvpDefenderYibingMissKeepsMoudingDefenseBonus(t *testing.T) {
 	setTestFactionsAndGenerals(t, FactionsConfig{
 		"shu": {Name: "蜀国", Generals: []GeneralInfo{{ID: "liubei", Name: "刘备"}}},
 		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "simayi", Name: "司马懿"}}},
@@ -119,11 +119,11 @@ func TestPvpDefenderYibingMissKeepsMoudingAttackReduction(t *testing.T) {
 			ID: "simayi", Name: "司马懿", Faction: "wei", Enabled: true,
 			SpecialTrait: GeneralTraitConfig{
 				TraitID: "yibing_touxi", TraitType: general.TraitTypeSpecial, Enabled: true,
-				Scope: "enemy_army", Params: map[string]float64{"triggerChance": 0, "effectRate": 0.35, "maxAffectedRate": 0.35},
+				Scope: "enemy_army", Params: map[string]float64{"triggerChance": 0, "effectRate": 0.35},
 			},
 			BonusTrait: GeneralTraitConfig{
 				TraitID: "mouding_houfa", TraitType: general.TraitTypeBonus, Enabled: true,
-				Scope: "enemy_army", AllowedSides: []string{"defender"}, Params: map[string]float64{"effectRate": 0.1},
+				Scope: "self_army", AllowedSides: []string{"defender", "reinforcement"}, Params: map[string]float64{"defenseBonusRate": 0.35, "triggerChance": 1},
 			},
 		},
 	}})
@@ -148,8 +148,8 @@ func TestPvpDefenderYibingMissKeepsMoudingAttackReduction(t *testing.T) {
 	}
 	attackerLosses := pvpTestLossesFromBattle(t, battle, "attacker")
 	defenderLosses := pvpTestLossesFromBattle(t, battle, "defender")
-	if battle.Result["winner"] != "defender" || battle.Result["attackerPower"] != float64(9000) || battle.Result["defensePower"] != float64(10000) || attackerLosses["shuInfantry"] != 537 || defenderLosses["weiInfantry"] != 462 {
-		t.Fatalf("expected missed ambush plus active defender attack reduction to produce exact result, battle=%+v", battle)
+	if battle.Result["winner"] != "defender" || battle.Result["attackerPower"] != float64(10000) || battle.Result["defensePower"] != float64(14000) || attackerLosses["shuInfantry"] != 617 || defenderLosses["weiInfantry"] != 382 {
+		t.Fatalf("expected missed ambush plus active 35%% defender defense bonus to produce exact result, battle=%+v", battle)
 	}
 
 	attackerReports, _, err := repo.ListReports(attacker.Player.ID, 10, 0)
@@ -168,9 +168,10 @@ func TestPvpDefenderYibingMissKeepsMoudingAttackReduction(t *testing.T) {
 			t.Fatalf("expected missed defender Yibing absent from trigger timeline, report=%+v", report)
 		}
 		outcome := report.TraitOutcomes["mouding_houfa"]
-		modified, ok := outcome.Detail["attackModifiedUnits"].(map[string]int)
-		if !ok || outcome.OwnerSide != "defender" || outcome.Detail["attackReductionRate"] != 0.1 || modified["shuInfantry"] != -1 {
-			t.Fatalf("expected exact defender attack reduction, report=%s outcome=%+v", report.ID, outcome)
+		infantry, infantryOK := outcome.Detail["infantryDefenseModifiedUnits"].(map[string]int)
+		cavalry, cavalryOK := outcome.Detail["cavalryDefenseModifiedUnits"].(map[string]int)
+		if !infantryOK || !cavalryOK || outcome.OwnerSide != "defender" || outcome.Detail["defenseBonusRate"] != 0.35 || infantry["weiInfantry"] != 4 || cavalry["weiInfantry"] != 3 {
+			t.Fatalf("expected exact defender defense bonus, report=%s outcome=%+v", report.ID, outcome)
 		}
 		if report.Detail == nil || report.Detail.SecondarySide == nil || len(report.Detail.Traits) != 1 || report.Detail.Traits[0].TraitID != "mouding_houfa" || report.Detail.Traits[0].OwnerRole != "defender" {
 			t.Fatalf("expected one defender standard timeline entry, report=%s detail=%+v", report.ID, report.Detail)
@@ -180,8 +181,8 @@ func TestPvpDefenderYibingMissKeepsMoudingAttackReduction(t *testing.T) {
 		}
 		attackerUnit := attackDefenseCrossReportUnit(t, report.Detail.PrimarySide, "shuInfantry")
 		defenderUnit := attackDefenseCrossReportUnit(t, *report.Detail.SecondarySide, "weiInfantry")
-		if attackerUnit.AmountBefore != 1000 || attackerUnit.Lost != 537 || attackerUnit.Survived != 463 || defenderUnit.AmountBefore != 1000 || defenderUnit.Lost != 462 || defenderUnit.Survived != 538 {
-			t.Fatalf("expected exact standard rows after defender reduction, report=%s rows=%+v/%+v", report.ID, attackerUnit, defenderUnit)
+		if attackerUnit.AmountBefore != 1000 || attackerUnit.Lost != 617 || attackerUnit.Survived != 383 || defenderUnit.AmountBefore != 1000 || defenderUnit.Lost != 382 || defenderUnit.Survived != 618 {
+			t.Fatalf("expected exact standard rows after defender bonus, report=%s rows=%+v/%+v", report.ID, attackerUnit, defenderUnit)
 		}
 	}
 
@@ -191,10 +192,10 @@ func TestPvpDefenderYibingMissKeepsMoudingAttackReduction(t *testing.T) {
 	if marchErr != nil || attackerErr != nil || defenderErr != nil {
 		t.Fatalf("expected stored battle state, march=%v attacker=%v defender=%v", marchErr, attackerErr, defenderErr)
 	}
-	if storedMarch.AttackTroops["shuInfantry"] != 463 || armySliceToMap(storedDefender.Army)["weiInfantry"] != 538 {
-		t.Fatalf("expected authoritative survivors 463/538, march=%+v defender=%+v", storedMarch, storedDefender.Army)
+	if storedMarch.AttackTroops["shuInfantry"] != 383 || armySliceToMap(storedDefender.Army)["weiInfantry"] != 618 {
+		t.Fatalf("expected authoritative survivors 383/618, march=%+v defender=%+v", storedMarch, storedDefender.Army)
 	}
-	if pvpTestGeneralExp(storedAttacker, "liubei") != 462 || attackerReports[0].GeneralExpGained != 462 || pvpTestGeneralExp(storedDefender, "simayi") != 537 || defenderReports[0].GeneralExpGained != 537 {
+	if pvpTestGeneralExp(storedAttacker, "liubei") != 382 || attackerReports[0].GeneralExpGained != 382 || pvpTestGeneralExp(storedDefender, "simayi") != 617 || defenderReports[0].GeneralExpGained != 617 {
 		t.Fatalf("expected generals to gain exact real-death experience, states=%+v/%+v reports=%+v/%+v", storedAttacker.Generals, storedDefender.Generals, attackerReports[0], defenderReports[0])
 	}
 }

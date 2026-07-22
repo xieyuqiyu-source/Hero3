@@ -14,13 +14,14 @@ import (
 
 // configurableTrait 用统一模板承载可配置将领特性，避免玩法代码硬编码具体将领。
 type configurableTrait struct {
-	id          string
-	name        string
-	traitType   string
-	description string
-	effect      string
-	events      []string
-	schema      []general.ParamField
+	id                   string
+	name                 string
+	traitType            string
+	description          string
+	effect               string
+	events               []string
+	schema               []general.ParamField
+	defaultTriggerChance float64
 }
 
 // registerConfigurableTrait 注册一条配置化特性。
@@ -43,7 +44,12 @@ func (t *configurableTrait) Description(params general.Params) string { return t
 // ParamSchema 返回 GM 可配置参数 schema。
 func (t *configurableTrait) ParamSchema() []general.ParamField {
 	out := append([]general.ParamField(nil), t.schema...)
-	out = append(out, commonScopeFields()...)
+	for _, field := range commonScopeFields(t.triggerChanceDefault()) {
+		if t.id == "yibing_touxi" && (field.Key == "maxAffectedRate" || field.Key == "maxAffectedCount") {
+			continue
+		}
+		out = append(out, field)
+	}
 	return out
 }
 
@@ -65,7 +71,7 @@ func (t *configurableTrait) Subscribe() []general.EventSubscription {
 
 // handle 根据事件类型执行模板效果。
 func (t *configurableTrait) handle(ctx general.EventContext, params general.Params) {
-	if !triggered(params) {
+	if !triggeredWithDefault(params, t.triggerChanceDefault()) {
 		return
 	}
 	switch c := ctx.(type) {
@@ -91,16 +97,18 @@ func (t *configurableTrait) handleBeforeBattle(c *general.BeforeBattleContext, p
 	}
 	switch t.effect {
 	case "pre_damage":
-		affected := reduceArmyUnits(actorEnemyArmy(c), params, "effectRate", c.Actor.TargetUnitType)
+		effectParams := params
+		if t.id == "yibing_touxi" {
+			// 疑兵真实伤亡只由 effectRate 决定，不接受历史通用上限截断。
+			effectParams = general.Params{"effectRate": params.FloatWithBounds("effectRate", 0, 0, 1)}
+		}
+		affected := reduceArmyUnits(actorEnemyArmy(c), effectParams, "effectRate", c.Actor.TargetUnitType)
 		recordPreBattleLosses(c, affected)
 		t.recordBefore(c, params, affected, "preBattleAffected")
 	case "suppress":
 		affected := reduceArmyUnits(actorEnemyArmy(c), params, "effectRate", c.Actor.TargetUnitType)
 		recordSuppressedUnits(c, affected)
 		t.recordBefore(c, params, affected, "suppressedUnits")
-	case "capture":
-		affected := captureArmyUnits(c, params)
-		t.recordBefore(c, params, affected, "capturedUnits")
 	case "unit_attack_bonus", "unit_defense_bonus", "army_attack_bonus", "army_defense_bonus", "enemy_defense_reduce", "enemy_attack_reduce", "general_attack_flat", "general_defense_flat", "unit_attack_flat":
 		changed := applyBattleStatBonus(c, params, t.effect)
 		t.recordBeforeStatChanges(c, params, changed)
@@ -337,33 +345,6 @@ func reduceArmyUnits(army *combat.Army, params general.Params, rateKey string, t
 		if maxCount > 0 && total >= maxCount {
 			break
 		}
-	}
-	return affected
-}
-
-// captureArmyUnits 处理俘虏类战前效果。
-func captureArmyUnits(c *general.BeforeBattleContext, params general.Params) map[string]int {
-	rate := params.FloatWithBounds("captureRate", params.FloatOr("effectRate", 0), 0, 1)
-	maxPerUnit := params.IntWithBounds("maxCapturePerUnit", params.IntOr("captureMax", 10000), 0, 1000000)
-	if rate <= 0 || c.Defender == nil {
-		return nil
-	}
-	if c.CapturedToArmy == nil {
-		c.CapturedToArmy = map[string]int{}
-	}
-	affected := map[string]int{}
-	for i := range c.Defender.Units {
-		unit := &c.Defender.Units[i]
-		count := int(math.Floor(float64(unit.Count) * rate))
-		if count > maxPerUnit {
-			count = maxPerUnit
-		}
-		if count <= 0 {
-			continue
-		}
-		unit.Count -= count
-		c.CapturedToArmy[unit.ID] += count
-		affected[unit.ID] += count
 	}
 	return affected
 }
@@ -786,13 +767,13 @@ func sameTraitOutcomeOwner(left general.TraitOutcome, right general.TraitOutcome
 
 // outcome 生成标准战报特性结果。
 func (t *configurableTrait) outcome(actor general.TraitActor, params general.Params, detail map[string]interface{}) general.TraitOutcome {
-	detail["triggerChance"] = params.FloatOr("triggerChance", 1)
+	detail["triggerChance"] = params.FloatWithBounds("triggerChance", t.triggerChanceDefault(), 0, 1)
 	if t.effect == "enemy_attack_reduce" {
 		detail["attackReductionRate"] = params.FloatWithBounds("attackReductionRate", params.FloatOr("effectRate", 0), 0, 0.9)
 	} else if effectRate, configured := params["effectRate"]; configured {
 		detail["effectRate"] = effectRate
 	}
-	if maxAffectedRate, configured := params["maxAffectedRate"]; configured {
+	if maxAffectedRate, configured := params["maxAffectedRate"]; configured && t.id != "yibing_touxi" {
 		detail["maxAffectedRate"] = params.FloatWithBounds("maxAffectedRate", maxAffectedRate, 0, 1)
 	}
 	if attackBonusRate, configured := params["attackBonusRate"]; configured {
@@ -845,10 +826,18 @@ func traitPriority(event string, effect string) int {
 	return 40
 }
 
+// triggerChanceDefault 返回特性的默认触发概率，未单独指定时保持历史默认必定触发。
+func (t *configurableTrait) triggerChanceDefault() float64 {
+	if t.defaultTriggerChance > 0 && t.defaultTriggerChance <= 1 {
+		return t.defaultTriggerChance
+	}
+	return 1
+}
+
 // commonScopeFields 返回所有特性共享的安全边界字段。
-func commonScopeFields() []general.ParamField {
+func commonScopeFields(defaultTriggerChance float64) []general.ParamField {
 	return []general.ParamField{
-		{Key: "triggerChance", Label: "触发概率", Description: "1 表示必定触发，0.5 表示 50% 概率", Default: 1, Min: 0, Max: 1, Step: 0.01},
+		{Key: "triggerChance", Label: "触发概率", Description: "1 表示必定触发，0.5 表示 50% 概率", Default: defaultTriggerChance, Min: 0, Max: 1, Step: 0.01},
 		{Key: "maxAffectedRate", Label: "最大影响比例", Description: "限制强效果最多影响的兵力比例", Default: 1, Min: 0, Max: 1, Step: 0.01},
 		{Key: "maxAffectedCount", Label: "最大影响数量", Description: "限制强效果最多影响的士兵数量", Default: 1000000, Min: 0, Max: 100000000, Step: 100},
 	}
@@ -868,9 +857,10 @@ func init() {
 	for _, item := range []configurableTrait{
 		{id: "weiwu_haoling", name: "魏武号令", traitType: general.TraitTypeSpecial, description: "曹操留城时每分钟自动获得 300 虎卫，按后端经过时间权威结算且不设产兵上限；离城期间停止且不作为战斗触发。", effect: "resource_settlement_guard", events: nil, schema: []general.ParamField{countField("guardPerMinute", "每分钟虎卫", 300, 10000)}},
 		{id: "weiwu_tongyu", name: "魏武统御", traitType: general.TraitTypeBonus, description: "曹操所率全军防御提升 15%，仅在守城或增援战斗前生效，主动进攻无效。", effect: "army_defense_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("defenseBonusRate", "防御加成", 0.15, 2)}},
-		{id: "yibing_touxi", name: "疑兵偷袭", traitType: general.TraitTypeSpecial, description: "战前偷袭并造成敌方真实伤亡。", effect: "pre_damage", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "伤亡比例", 0.35, 1)}},
-		{id: "mouding_houfa", name: "谋定后发", traitType: general.TraitTypeBonus, description: "防守时削弱敌方攻击。", effect: "enemy_attack_reduce", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "攻击削弱", 0.1, 0.9)}},
-		{id: "meihuo_raozhen", name: "魅惑扰阵", traitType: general.TraitTypeBonus, description: "主动进攻时降低敌方防御。", effect: "enemy_defense_reduce", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("enemyDefenseReductionRate", "敌方防御降低", 0.1, 0.9)}},
+		{id: "yibing_touxi", name: "疑兵偷袭", traitType: general.TraitTypeSpecial, description: "进攻、防守或增援战斗前概率使敌方全军直接形成真实伤亡，剩余兵力再进入正常攻防计算。", effect: "pre_damage", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "真实伤亡比例", 0.35, 1)}, defaultTriggerChance: 0.35},
+		{id: "mouding_houfa", name: "谋定后发", traitType: general.TraitTypeBonus, description: "防守或增援战斗前概率提升所率全军防御，主动进攻无效。", effect: "army_defense_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("defenseBonusRate", "全军防御提升", 0.35, 2)}, defaultTriggerChance: 0.35},
+		{id: "meiren", name: "美人心计", traitType: general.TraitTypeSpecial, description: "主动进攻战斗前概率提升所率全军攻击 25%，防守和增援无效。", effect: "army_attack_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("attackBonusRate", "全军攻击提升", 0.25, 2)}, defaultTriggerChance: 0.5},
+		{id: "meihuo_raozhen", name: "魅惑扰阵", traitType: general.TraitTypeBonus, description: "主动进攻战斗前概率降低敌方全军防御 25%，防守和增援无效。", effect: "enemy_defense_reduce", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("enemyDefenseReductionRate", "敌方防御降低", 0.25, 0.9)}, defaultTriggerChance: 0.5},
 		{id: "huchi_chongzhen", name: "虎痴冲阵", traitType: general.TraitTypeSpecial, description: "主动进攻时概率突破敌方防御。", effect: "enemy_defense_reduce", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("enemyDefenseReductionRate", "突破防御比例", 0.2, 0.9)}},
 		{id: "pojun_pofang", name: "破敌防御", traitType: general.TraitTypeBonus, description: "主动进攻时降低敌方防御。", effect: "enemy_defense_reduce", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("enemyDefenseReductionRate", "敌方防御降低", 0.35, 0.9)}},
 		{id: "huzhu_sizhan", name: "护主死战", traitType: general.TraitTypeSpecial, description: "濒临失败时降低最终损失。", effect: "reduce_final_losses", events: []string{general.EventAfterBattle}, schema: []general.ParamField{rateField("lossReductionRate", "最终减损", 0.15, 0.8), countField("maxReturnCount", "返还上限", 10000, 1000000)}},

@@ -29,8 +29,8 @@ func TestFormalPreBattleDefenseTraitConfigsMatchDesign(t *testing.T) {
 		params       map[string]float64
 	}{
 		{generalID: "caocao", traitID: "weiwu_tongyu", traitType: "bonus", scope: "self_army", allowedSides: []string{"defender", "reinforcement"}, params: map[string]float64{"defenseBonusRate": 0.15}},
-		{generalID: "simayi", traitID: "mouding_houfa", traitType: "bonus", scope: "enemy_army", allowedSides: []string{"defender"}, params: map[string]float64{"effectRate": 0.1}},
-		{generalID: "zhenmi", traitID: "meihuo_raozhen", traitType: "bonus", scope: "enemy_army", allowedSides: []string{"attacker"}, params: map[string]float64{"enemyDefenseReductionRate": 0.1}},
+		{generalID: "simayi", traitID: "mouding_houfa", traitType: "bonus", scope: "self_army", allowedSides: []string{"defender", "reinforcement"}, params: map[string]float64{"defenseBonusRate": 0.35, "triggerChance": 0.35}},
+		{generalID: "zhenmi", traitID: "meihuo_raozhen", traitType: "bonus", scope: "enemy_army", allowedSides: []string{"attacker"}, params: map[string]float64{"enemyDefenseReductionRate": 0.25, "triggerChance": 0.5}},
 		{generalID: "xuchu", traitID: "huchi_chongzhen", traitType: "special", scope: "enemy_army", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.35, "enemyDefenseReductionRate": 0.2}},
 		{generalID: "xuchu", traitID: "pojun_pofang", traitType: "bonus", scope: "enemy_army", allowedSides: []string{"attacker"}, params: map[string]float64{"enemyDefenseReductionRate": 0.35}},
 		{generalID: "xiahouyuan", traitID: "dunzhen_fangyu", traitType: "bonus", scope: "self_army", allowedSides: []string{"defender", "reinforcement"}, params: map[string]float64{"defenseBonusRate": 0.35}},

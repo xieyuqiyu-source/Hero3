@@ -647,6 +647,13 @@ button { font: inherit; }
 .auth-card form > button:disabled { opacity: .55; cursor: not-allowed; }
 .auth-hint { margin-top: 18px; font-size: 11px; }
 .form-error { margin: 0; color: #ee9178; font-size: 12px; line-height: 1.5; }
+
+@media (max-width: 600px) {
+  html:has(.auth-page), body:has(.auth-page), #app:has(.auth-page) { min-width: 0; }
+  body:has(.auth-page) { overflow-x: hidden; }
+  .auth-page { box-sizing: border-box; width: 100vw; min-width: 0; padding: 16px; }
+  .auth-card { box-sizing: border-box; width: 100%; max-width: 412px; padding: 24px 20px; }
+}
 .status-card { width: 380px; padding: 35px; text-align: center; }
 .status-card > button { width: 150px; margin-top: 20px; }
 .loading-mark { display: inline-block; width: 28px; height: 28px; border: 3px solid #584631; border-top-color: #d79a42; border-radius: 50%; animation: spin 1s linear infinite; }

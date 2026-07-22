@@ -75,12 +75,12 @@ func TestPvpSameTraitFromBothSidesKeepsIndependentRealOutcomes(t *testing.T) {
 	}
 }
 
-// TestPvpSamePreBattleTraitFromBothSidesKeepsPowerAndReportOwnership 验证双方曹操的魏武统御分别强化己方虎卫并保留独立结果。
+// TestPvpSamePreBattleTraitFromBothSidesKeepsPowerAndReportOwnership 验证双方携带同 ID 战前特性时分别强化己方虎卫并保留独立结果。
 func TestPvpSamePreBattleTraitFromBothSidesKeepsPowerAndReportOwnership(t *testing.T) {
 	trait := GeneralTraitConfig{
 		TraitID: "weiwu_tongyu", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", TargetUnitType: "huWei",
 		AllowedSides: []string{"attacker", "defender", "reinforcement"},
-		Params:       map[string]float64{"attackBonusRate": 0.1, "defenseBonusRate": 0.1, "triggerChance": 1},
+		Params:       map[string]float64{"defenseBonusRate": 0.15, "triggerChance": 1},
 	}
 	setTestFactionsAndGenerals(t, FactionsConfig{
 		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "caocao", Name: "曹操"}}},
@@ -115,13 +115,13 @@ func TestPvpSamePreBattleTraitFromBothSidesKeepsPowerAndReportOwnership(t *testi
 	if err != nil {
 		t.Fatalf("ResolvePvpMarch failed: %v", err)
 	}
-	if battle.Result["attackerPower"] != float64(1100) || battle.Result["defensePower"] != float64(1100) {
-		t.Fatalf("expected both Cao Cao traits to produce equal powers 1100/1100, got %v/%v", battle.Result["attackerPower"], battle.Result["defensePower"])
+	if battle.Result["attackerPower"] != float64(1000) || battle.Result["defensePower"] != float64(1200) {
+		t.Fatalf("expected attacker defense buff not to alter attack power and defender defense to reach 1200, got %v/%v", battle.Result["attackerPower"], battle.Result["defensePower"])
 	}
 	attackerLosses := pvpTestLossesFromBattle(t, battle, "attacker")
 	defenderLosses := pvpTestLossesFromBattle(t, battle, "defender")
-	if attackerLosses["huWei"] != 50 || defenderLosses["huWei"] != 50 {
-		t.Fatalf("expected equal plunder losses 50/50 after both buffs, got attacker=%+v defender=%+v", attackerLosses, defenderLosses)
+	if attackerLosses["huWei"] != 56 || defenderLosses["huWei"] != 43 {
+		t.Fatalf("expected recalculated plunder losses 56/43, got attacker=%+v defender=%+v", attackerLosses, defenderLosses)
 	}
 
 	attackerReports, _, err := repo.ListReports(attacker.Player.ID, 10, 0)
@@ -137,16 +137,16 @@ func TestPvpSamePreBattleTraitFromBothSidesKeepsPowerAndReportOwnership(t *testi
 	}
 
 	storedMarch, err := repo.GetPvpMarch(started.March.ID)
-	if err != nil || storedMarch.Status != PvpMarchStatusReturning || storedMarch.AttackTroops["huWei"] != 50 {
-		t.Fatalf("expected 50 surviving attackers in return march, march=%+v err=%v", storedMarch, err)
+	if err != nil || storedMarch.Status != PvpMarchStatusReturning || storedMarch.AttackTroops["huWei"] != 44 {
+		t.Fatalf("expected 44 surviving attackers in return march, march=%+v err=%v", storedMarch, err)
 	}
 	storedAttacker, err := repo.GetState(attacker.Player.ID)
-	if err != nil || pvpTestGeneralExp(storedAttacker, "caocao") != 50 {
-		t.Fatalf("expected attacker Cao Cao exp 50, state=%+v err=%v", storedAttacker.Generals, err)
+	if err != nil || pvpTestGeneralExp(storedAttacker, "caocao") != 43 {
+		t.Fatalf("expected attacker Cao Cao exp 43, state=%+v err=%v", storedAttacker.Generals, err)
 	}
 	storedDefender, err := repo.GetState(defender.Player.ID)
-	if err != nil || armySliceToMap(storedDefender.Army)["huWei"] != 50 || pvpTestGeneralExp(storedDefender, "caocao") != 50 {
-		t.Fatalf("expected defender army 50 and Cao Cao exp 50, state=%+v err=%v", storedDefender, err)
+	if err != nil || armySliceToMap(storedDefender.Army)["huWei"] != 57 || pvpTestGeneralExp(storedDefender, "caocao") != 56 {
+		t.Fatalf("expected defender army 57 and Cao Cao exp 56, state=%+v err=%v", storedDefender, err)
 	}
 }
 
@@ -178,9 +178,8 @@ func assertSameWeiwuBothSidesReport(t *testing.T, report BattleReport) {
 	if !legacySides["attacker"] || !legacySides["defender"] || !standardSides["attacker"] || !standardSides["defender"] {
 		t.Fatalf("expected independent attacker and defender Weiwu ownership, report=%s legacy=%+v standard=%+v", report.ID, report.TraitOutcomes, report.Detail.Traits)
 	}
-	if report.LostUnits["huWei"] != 50 || report.DefenderLostUnits["huWei"] != 50 || report.GeneralExpGained != 50 {
-		t.Fatalf("expected report losses and owner exp all equal 50, report=%+v", report)
-	}
+	seenPowers := map[int]bool{}
+	seenLosses := map[int]bool{}
 	for _, side := range []BattleReportSide{report.Detail.PrimarySide, *report.Detail.SecondarySide} {
 		var huWei *BattleReportUnit
 		for index := range side.Units {
@@ -189,20 +188,24 @@ func assertSameWeiwuBothSidesReport(t *testing.T, report BattleReport) {
 				break
 			}
 		}
-		if side.Power != 1100 || huWei == nil || huWei.AmountBefore != 100 || huWei.Lost != 50 || huWei.Survived != 50 {
-			t.Fatalf("expected each standard side power/units 1100 and 100/50/50, report=%s side=%+v", report.ID, side)
+		if huWei == nil || huWei.AmountBefore != 100 || huWei.Lost+huWei.Survived != 100 {
+			t.Fatalf("expected each standard side row to reconcile 100 dispatched troops, report=%s side=%+v", report.ID, side)
 		}
+		seenPowers[side.Power] = true
+		seenLosses[huWei.Lost] = true
+	}
+	if !seenPowers[1000] || !seenPowers[1200] || !seenLosses[56] || !seenLosses[43] {
+		t.Fatalf("expected both power and loss views in standard report, report=%+v", report.Detail)
 	}
 }
 
-// assertWeiwuActualDeltas 核对魏武统御记录的是应用后的真实整数变化而非仅保存配置比例。
+// assertWeiwuActualDeltas 核对魏武统御记录的是应用后的真实防御整数变化而非仅保存配置比例。
 func assertWeiwuActualDeltas(t *testing.T, reportID string, detail map[string]any) {
 	t.Helper()
-	attack, attackOK := detail["attackModifiedUnits"].(map[string]int)
 	infantry, infantryOK := detail["infantryDefenseModifiedUnits"].(map[string]int)
 	cavalry, cavalryOK := detail["cavalryDefenseModifiedUnits"].(map[string]int)
-	if !attackOK || !infantryOK || !cavalryOK || detail["attackBonusRate"] != 0.1 || detail["defenseBonusRate"] != 0.1 || attack["huWei"] != 1 || infantry["huWei"] != 1 || cavalry["huWei"] != 1 {
-		t.Fatalf("expected actual HuWei deltas +1/+1/+1, report=%s detail=%+v", reportID, detail)
+	if !infantryOK || !cavalryOK || detail["defenseBonusRate"] != 0.15 || infantry["huWei"] != 2 || cavalry["huWei"] != 1 {
+		t.Fatalf("expected actual HuWei defense deltas +2/+1, report=%s detail=%+v", reportID, detail)
 	}
 }
 

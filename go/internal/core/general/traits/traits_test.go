@@ -21,14 +21,79 @@ func TestTriggerProbabilityBoundaries(t *testing.T) {
 	}
 }
 
-// TestIndependentTraitsRespectZeroTriggerChance 验证三个独立实现不会在零概率时改状态或写触发结果。
+// TestZhenMiTraitSchemasExposeCurrentGmParameters 验证 GM 只看到当前攻防比例和独立概率，不再出现旧俘虏参数。
+func TestZhenMiTraitSchemasExposeCurrentGmParameters(t *testing.T) {
+	tests := []struct {
+		traitID string
+		rateKey string
+	}{
+		{traitID: "meiren", rateKey: "attackBonusRate"},
+		{traitID: "meihuo_raozhen", rateKey: "enemyDefenseReductionRate"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.traitID, func(t *testing.T) {
+			trait, ok := general.Get(tc.traitID)
+			if !ok {
+				t.Fatalf("expected trait %s registered", tc.traitID)
+			}
+			fields := map[string]general.ParamField{}
+			for _, field := range trait.ParamSchema() {
+				fields[field.Key] = field
+			}
+			if fields[tc.rateKey].Default != 0.25 || fields["triggerChance"].Default != 0.5 {
+				t.Fatalf("expected rate 25%% and chance 50%% defaults, fields=%+v", fields)
+			}
+			for _, legacyKey := range []string{"captureRate", "captureMax", "maxCapturePerUnit"} {
+				if _, exists := fields[legacyKey]; exists {
+					t.Fatalf("expected legacy field %s removed, fields=%+v", legacyKey, fields)
+				}
+			}
+		})
+	}
+}
+
+// TestSimaYiTraitSchemasExposeCurrentGmParameters 验证 GM 只看到司马懿当前概率和效果参数。
+func TestSimaYiTraitSchemasExposeCurrentGmParameters(t *testing.T) {
+	tests := []struct {
+		traitID string
+		rateKey string
+	}{
+		{traitID: "yibing_touxi", rateKey: "effectRate"},
+		{traitID: "mouding_houfa", rateKey: "defenseBonusRate"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.traitID, func(t *testing.T) {
+			trait, ok := general.Get(tc.traitID)
+			if !ok {
+				t.Fatalf("expected trait %s registered", tc.traitID)
+			}
+			fields := map[string]general.ParamField{}
+			for _, field := range trait.ParamSchema() {
+				fields[field.Key] = field
+			}
+			if fields[tc.rateKey].Default != 0.35 || fields["triggerChance"].Default != 0.35 {
+				t.Fatalf("expected rate and chance 35%% defaults, fields=%+v", fields)
+			}
+			if tc.traitID == "yibing_touxi" {
+				for _, legacyKey := range []string{"maxAffectedRate", "maxAffectedCount"} {
+					if _, exists := fields[legacyKey]; exists {
+						t.Fatalf("expected legacy cap %s removed from Yibing GM schema, fields=%+v", legacyKey, fields)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestIndependentTraitsRespectZeroTriggerChance 验证独立实现和配置化特性不会在零概率时改状态或写触发结果。
 func TestIndependentTraitsRespectZeroTriggerChance(t *testing.T) {
-	t.Run("美人计", func(t *testing.T) {
-		defender := combat.Army{Units: []combat.Unit{{ID: "infantry", Count: 100}}}
-		ctx := &general.BeforeBattleContext{Attacker: &combat.Army{}, Defender: &defender, AttackerOwnsTrait: true, IsPvP: true}
-		general.Dispatch(ctx, []general.ActiveTrait{{TraitID: "meiren", Params: general.Params{"captureRate": 0.2, "triggerChance": 0}}})
-		if defender.Units[0].Count != 100 || len(ctx.CapturedToArmy) != 0 || len(ctx.CapturedToGarrison) != 0 || len(ctx.Triggered) != 0 {
-			t.Fatalf("expected zero chance Meiren to leave state untouched, ctx=%+v defender=%+v", ctx, defender)
+	t.Run("美人心计", func(t *testing.T) {
+		attacker := combat.Army{Units: []combat.Unit{{ID: "infantry", Count: 100, Attack: 10}}}
+		defender := combat.Army{Units: []combat.Unit{{ID: "infantry", Count: 100, InfantryDefense: 10, CavalryDefense: 8}}}
+		ctx := &general.BeforeBattleContext{Attacker: &attacker, Defender: &defender}
+		general.Dispatch(ctx, []general.ActiveTrait{{TraitID: "meiren", OwnerSide: "attacker", Params: general.Params{"attackBonusRate": 0.25, "triggerChance": 0}}})
+		if attacker.Units[0].Attack != 10 || len(ctx.Triggered) != 0 {
+			t.Fatalf("expected zero chance Meiren Xinji to leave attack untouched, ctx=%+v attacker=%+v", ctx, attacker)
 		}
 	})
 	t.Run("火攻", func(t *testing.T) {
@@ -133,109 +198,52 @@ func TestAllConfigurableRandomCombatTraitsRespectZeroTriggerChance(t *testing.T)
 	})
 }
 
-// 美人计：俘虏 10% 敌方，归我方军队
-func TestMeiren_BasicCapture(t *testing.T) {
-	rand.Seed(1)
-
-	defender := combat.Army{
-		Faction: "shu",
-		Units: []combat.Unit{
-			{ID: "infantry", Count: 100},
-			{ID: "cavalry", Count: 50},
-		},
+// TestZhenMiBeforeBattleTraitsCanTriggerTogether 验证甄宓两项独立概率特性可在同一战前阶段同时修改真实攻防。
+func TestZhenMiBeforeBattleTraitsCanTriggerTogether(t *testing.T) {
+	attacker := combat.Army{Units: []combat.Unit{
+		{ID: "infantry", Category: "infantry", Count: 100, Attack: 10},
+		{ID: "cavalry", Category: "cavalry", Count: 100, Attack: 12},
+	}}
+	defender := combat.Army{Units: []combat.Unit{
+		{ID: "guard", Category: "infantry", Count: 100, InfantryDefense: 10, CavalryDefense: 8},
+	}}
+	ctx := &general.BeforeBattleContext{Attacker: &attacker, Defender: &defender}
+	general.Dispatch(ctx, []general.ActiveTrait{
+		{TraitID: "meiren", OwnerSide: "attacker", AllowedSides: []string{"attacker"}, Params: general.Params{"attackBonusRate": 0.25, "triggerChance": 1}},
+		{TraitID: "meihuo_raozhen", OwnerSide: "attacker", AllowedSides: []string{"attacker"}, Params: general.Params{"enemyDefenseReductionRate": 0.25, "triggerChance": 1}},
+	})
+	if attacker.Units[0].Attack != 13 || attacker.Units[1].Attack != 15 {
+		t.Fatalf("expected all attacks 10/12 -> 13/15, got %+v", attacker.Units)
 	}
-	ctx := &general.BeforeBattleContext{
-		Attacker:          &combat.Army{Faction: "wei"},
-		Defender:          &defender,
-		AttackerOwnsTrait: true,
-		IsPvP:             false,
-		SameFaction:       true, // PvE
+	if defender.Units[0].InfantryDefense != 8 || defender.Units[0].CavalryDefense != 6 {
+		t.Fatalf("expected enemy defenses 10/8 -> 8/6, got %+v", defender.Units)
 	}
-
-	activeTraits := []general.ActiveTrait{
-		{TraitID: "meiren", Params: general.Params{
-			"captureRate":   0.1,
-			"captureMax":    1000,
-			"triggerChance": 1.0,
-		}},
+	attackChanged := ctx.Triggered["meiren"].Detail["attackModifiedUnits"].(map[string]int)
+	infantryDefenseChanged := ctx.Triggered["meihuo_raozhen"].Detail["infantryDefenseModifiedUnits"].(map[string]int)
+	cavalryDefenseChanged := ctx.Triggered["meihuo_raozhen"].Detail["cavalryDefenseModifiedUnits"].(map[string]int)
+	if attackChanged["infantry"] != 3 || attackChanged["cavalry"] != 3 || infantryDefenseChanged["guard"] != -2 || cavalryDefenseChanged["guard"] != -2 {
+		t.Fatalf("expected exact Zhen Mi stat deltas, outcomes=%+v", ctx.Triggered)
 	}
-	general.Dispatch(ctx, activeTraits)
-
-	if ctx.CapturedToArmy["infantry"] != 10 {
-		t.Errorf("expected 10 infantry captured, got %d", ctx.CapturedToArmy["infantry"])
-	}
-	if ctx.CapturedToArmy["cavalry"] != 5 {
-		t.Errorf("expected 5 cavalry captured, got %d", ctx.CapturedToArmy["cavalry"])
-	}
-	// 敌方剩余兵
-	if defender.Units[0].Count != 90 {
-		t.Errorf("expected 90 infantry remaining, got %d", defender.Units[0].Count)
-	}
-	if defender.Units[1].Count != 45 {
-		t.Errorf("expected 45 cavalry remaining, got %d", defender.Units[1].Count)
-	}
-	if outcome := ctx.Triggered["meiren"]; outcome.Detail["captureRate"] != 0.1 || outcome.Detail["captureMax"] != 1000 || outcome.Detail["triggerChance"] != 1.0 {
-		t.Fatalf("expected real Meiren outcome to include rate 0.1, cap 1000 and chance 1, got %+v", outcome)
+	if ctx.Triggered["meiren"].Name != "美人心计" || ctx.Triggered["meiren"].Detail["attackBonusRate"] != 0.25 || ctx.Triggered["meihuo_raozhen"].Detail["enemyDefenseReductionRate"] != 0.25 {
+		t.Fatalf("expected current names and design rates, outcomes=%+v", ctx.Triggered)
 	}
 }
 
-// 美人计：跨阵营进驻防
-func TestMeiren_CrossFactionGoesToGarrison(t *testing.T) {
-	rand.Seed(1)
-
-	defender := combat.Army{Units: []combat.Unit{{ID: "infantry", Count: 100}}}
-	ctx := &general.BeforeBattleContext{
-		Attacker:          &combat.Army{},
-		Defender:          &defender,
-		AttackerOwnsTrait: true,
-		IsPvP:             true,
-		SameFaction:       false, // 跨阵营
-	}
-	general.Dispatch(ctx, []general.ActiveTrait{
-		{TraitID: "meiren", Params: general.Params{"captureRate": 0.1, "captureMax": 1000, "triggerChance": 1.0}},
-	})
-
-	if ctx.CapturedToGarrison["infantry"] != 10 {
-		t.Errorf("expected 10 captured to garrison, got %d", ctx.CapturedToGarrison["infantry"])
-	}
-	if len(ctx.CapturedToArmy) != 0 {
-		t.Errorf("expected no army captures, got %v", ctx.CapturedToArmy)
-	}
-}
-
-// 美人计：单兵种上限
-func TestMeiren_CaptureMax(t *testing.T) {
-	defender := combat.Army{Units: []combat.Unit{{ID: "infantry", Count: 10000}}}
-	ctx := &general.BeforeBattleContext{
-		Attacker:          &combat.Army{},
-		Defender:          &defender,
-		AttackerOwnsTrait: true,
-		SameFaction:       true,
-	}
-	general.Dispatch(ctx, []general.ActiveTrait{
-		{TraitID: "meiren", Params: general.Params{"captureRate": 0.5, "captureMax": 100, "triggerChance": 1.0}},
-	})
-	// 50% × 10000 = 5000，但 max=100，应该被限制到 100
-	if ctx.CapturedToArmy["infantry"] != 100 {
-		t.Errorf("expected 100 captured (max), got %d", ctx.CapturedToArmy["infantry"])
-	}
-}
-
-// 美人计：防守方拥有特性时不触发
-func TestMeiren_DefenderOwnsTraitDoesNothing(t *testing.T) {
-	defender := combat.Army{Units: []combat.Unit{{ID: "infantry", Count: 100}}}
-	ctx := &general.BeforeBattleContext{
-		Attacker:          &combat.Army{},
-		Defender:          &defender,
-		AttackerOwnsTrait: false,
-		DefenderOwnsTrait: true,
-		SameFaction:       true,
-	}
-	general.Dispatch(ctx, []general.ActiveTrait{
-		{TraitID: "meiren", Params: general.Params{"captureRate": 0.1, "captureMax": 1000, "triggerChance": 1.0}},
-	})
-	if len(ctx.CapturedToArmy) != 0 {
-		t.Errorf("expected no captures when only defender has trait")
+// TestZhenMiBeforeBattleTraitsRespectAttackDirection 验证两项特性在防守和增援方向都没有资格触发。
+func TestZhenMiBeforeBattleTraitsRespectAttackDirection(t *testing.T) {
+	for _, side := range []string{"defender", "reinforcement"} {
+		t.Run(side, func(t *testing.T) {
+			attacker := combat.Army{Units: []combat.Unit{{ID: "attacker", Count: 100, Attack: 10}}}
+			defender := combat.Army{Units: []combat.Unit{{ID: "defender", Count: 100, Attack: 10, InfantryDefense: 10, CavalryDefense: 8}}}
+			ctx := &general.BeforeBattleContext{Attacker: &attacker, Defender: &defender, Scene: "reinforcement_defense"}
+			general.Dispatch(ctx, []general.ActiveTrait{
+				{TraitID: "meiren", OwnerSide: side, AllowedSides: []string{"attacker"}, Params: general.Params{"attackBonusRate": 0.25, "triggerChance": 1}},
+				{TraitID: "meihuo_raozhen", OwnerSide: side, AllowedSides: []string{"attacker"}, Params: general.Params{"enemyDefenseReductionRate": 0.25, "triggerChance": 1}},
+			})
+			if attacker.Units[0].Attack != 10 || defender.Units[0].Attack != 10 || defender.Units[0].InfantryDefense != 10 || len(ctx.Triggered) != 0 {
+				t.Fatalf("expected side %s to keep base stats without outcomes, ctx=%+v", side, ctx)
+			}
+		})
 	}
 }
 
@@ -505,22 +513,49 @@ func TestSameTraitFromBothSidesKeepsBothOutcomes(t *testing.T) {
 	}
 }
 
-// TestMoudingHoufaReducesEnemyAttack 验证谋定后发确实降低敌方攻击，而不是只注册不生效。
-func TestMoudingHoufaReducesEnemyAttack(t *testing.T) {
+// TestMoudingHoufaRaisesOwnedArmyDefense 验证谋定后发提升所属部队两类防御，并记录实际整数变化。
+func TestMoudingHoufaRaisesOwnedArmyDefense(t *testing.T) {
 	attacker := combat.Army{Units: []combat.Unit{{ID: "infantry", Attack: 100, Count: 100}}}
-	defender := combat.Army{Units: []combat.Unit{{ID: "cavalry", Attack: 100, Count: 100}}}
+	defender := combat.Army{Units: []combat.Unit{{ID: "cavalry", InfantryDefense: 10, CavalryDefense: 8, Count: 100}}}
+	ctx := &general.BeforeBattleContext{Attacker: &attacker, Defender: &defender, DefenderOwnsTrait: true, Scene: "attack"}
+
+	general.Dispatch(ctx, []general.ActiveTrait{{
+		TraitID: "mouding_houfa", OwnerSide: "defender",
+		Params: general.Params{"defenseBonusRate": 0.35, "triggerChance": 1},
+	}})
+
+	if defender.Units[0].InfantryDefense != 14 || defender.Units[0].CavalryDefense != 11 {
+		t.Fatalf("expected owned defense 10/8 -> 14/11, got %+v", defender.Units[0])
+	}
+	outcome, ok := ctx.Triggered["mouding_houfa"]
+	infantry, infantryOK := outcome.Detail["infantryDefenseModifiedUnits"].(map[string]int)
+	cavalry, cavalryOK := outcome.Detail["cavalryDefenseModifiedUnits"].(map[string]int)
+	if !ok || !infantryOK || !cavalryOK || infantry["cavalry"] != 4 || cavalry["cavalry"] != 3 || outcome.Detail["defenseBonusRate"] != 0.35 {
+		t.Fatalf("expected exact mouding_houfa defense outcome, got %+v", ctx.Triggered)
+	}
+}
+
+// TestYibingTouxiIgnoresLegacyCaps 验证疑兵真实伤亡只由 GM 配置的伤亡比例决定。
+func TestYibingTouxiIgnoresLegacyCaps(t *testing.T) {
+	attacker := combat.Army{Units: []combat.Unit{{ID: "infantry", Count: 1000, Attack: 10}}}
+	defender := combat.Army{Units: []combat.Unit{{ID: "infantry", Count: 1000, InfantryDefense: 10, CavalryDefense: 8}}}
 	ctx := &general.BeforeBattleContext{Attacker: &attacker, Defender: &defender, AttackerOwnsTrait: true, Scene: "attack"}
 
 	general.Dispatch(ctx, []general.ActiveTrait{{
-		TraitID: "mouding_houfa", OwnerSide: "attacker",
-		Params: general.Params{"effectRate": 0.1, "triggerChance": 1},
+		TraitID: "yibing_touxi", OwnerSide: "attacker", OwnerGeneralID: "simayi",
+		Params: general.Params{"effectRate": 0.35, "triggerChance": 1, "maxAffectedRate": 0.1, "maxAffectedCount": 20},
 	}})
 
-	if defender.Units[0].Attack != 90 {
-		t.Fatalf("expected enemy attack reduced to 90, got %d", defender.Units[0].Attack)
+	if defender.Units[0].Count != 650 {
+		t.Fatalf("expected legacy caps ignored and exact 35%% real losses applied, got %+v", defender.Units[0])
 	}
-	if _, ok := ctx.Triggered["mouding_houfa"]; !ok {
-		t.Fatalf("expected mouding_houfa outcome, got %+v", ctx.Triggered)
+	outcome := ctx.Triggered["yibing_touxi"]
+	affected, ok := outcome.Detail["preBattleAffected"].(map[string]int)
+	if !ok || affected["infantry"] != 350 || outcome.Detail["effectRate"] != 0.35 {
+		t.Fatalf("expected exact Yibing real-loss outcome, got %+v", outcome)
+	}
+	if _, exists := outcome.Detail["maxAffectedRate"]; exists {
+		t.Fatalf("expected legacy maxAffectedRate absent from current report, got %+v", outcome.Detail)
 	}
 }
 
@@ -716,9 +751,9 @@ func TestRemainingBeforeBattleTraitIDsModifyRealStats(t *testing.T) {
 				t.Fatalf("expected own defense 135, got %+v", attacker.Units)
 			}
 		}},
-		{traitID: "meihuo_raozhen", params: general.Params{"enemyDefenseReductionRate": 0.1, "triggerChance": 1}, outcomeKey: "infantryDefenseModifiedUnits", check: func(t *testing.T, _ combat.Army, defender combat.Army) {
-			if defender.Units[0].InfantryDefense != 90 {
-				t.Fatalf("expected enemy defense 90, got %+v", defender.Units)
+		{traitID: "meihuo_raozhen", params: general.Params{"enemyDefenseReductionRate": 0.25, "triggerChance": 1}, outcomeKey: "infantryDefenseModifiedUnits", check: func(t *testing.T, _ combat.Army, defender combat.Army) {
+			if defender.Units[0].InfantryDefense != 75 {
+				t.Fatalf("expected enemy defense 75, got %+v", defender.Units)
 			}
 		}},
 		{traitID: "meizhoulang_junlue", params: general.Params{"attackBonusRate": 0.05, "triggerChance": 1}, outcomeKey: "attackModifiedUnits", check: func(t *testing.T, attacker combat.Army, _ combat.Army) {

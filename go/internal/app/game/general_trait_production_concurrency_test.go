@@ -45,8 +45,8 @@ func TestWeiwuHaolingConcurrentSettlementIsSerialized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetState failed: %v", err)
 	}
-	if got := armySliceToMap(stored.Army)["huWei"]; got != 25 {
-		t.Fatalf("expected 3 seconds to produce exactly 25 guards once, got %d army=%+v", got, stored.Army)
+	if got := armySliceToMap(stored.Army)["huWei"]; got != 15 {
+		t.Fatalf("expected 3 seconds at 300 per minute to produce exactly 15 guards once, got %d army=%+v", got, stored.Army)
 	}
 	if stored.ResourceSettledAt != now.Format(resourceDateLayout) {
 		t.Fatalf("expected settlement timestamp %s, got %s", now.Format(resourceDateLayout), stored.ResourceSettledAt)

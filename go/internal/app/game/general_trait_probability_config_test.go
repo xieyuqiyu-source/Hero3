@@ -20,8 +20,8 @@ func TestFormalTraitTriggerChancesMatchDesign(t *testing.T) {
 		t.Fatalf("decode formal generals config failed: %v", err)
 	}
 	want := map[string]map[string]float64{
-		"simayi":     {"yibing_touxi": 0.35},
-		"zhenmi":     {"meiren": 1},
+		"simayi":     {"yibing_touxi": 0.35, "mouding_houfa": 0.35},
+		"zhenmi":     {"meiren": 0.5, "meihuo_raozhen": 0.5},
 		"xuchu":      {"huchi_chongzhen": 0.35},
 		"dianwei":    {"huzhu_sizhan": 0.35},
 		"zhangliao":  {"weizhen_zhenhe": 0.35},

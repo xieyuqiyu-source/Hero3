@@ -20,7 +20,7 @@ func TestPvpRandomTraitMissesLeaveNoBattleOrReportEffects(t *testing.T) {
 				ID: "simayi", Name: "司马懿", Faction: "wei", Enabled: true,
 				SpecialTrait: GeneralTraitConfig{
 					TraitID: "yibing_touxi", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "enemy_army",
-					Params: map[string]float64{"triggerChance": 0, "effectRate": 0.35, "maxAffectedRate": 0.35},
+					Params: map[string]float64{"triggerChance": 0, "effectRate": 0.35},
 				},
 			},
 			"liubei": {ID: "liubei", Name: "刘备", Faction: "shu", Enabled: true},

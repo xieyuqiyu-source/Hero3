@@ -299,7 +299,7 @@ func (r *MySQLRepository) ResolvePvpBattleTransaction(marchID string, updatedAt 
 	return attacker, defender, march, battle, attackerReport, defenderReport, nil
 }
 
-// upsertCapturedGarrisonTx 在玩法主事务内保存美人计获得的跨阵营驻防兵力。
+// upsertCapturedGarrisonTx 为历史俘虏战报及兼容玩法保存跨阵营驻防兵力。
 func upsertCapturedGarrisonTx(tx *sql.Tx, owner game.GameState, sourceFaction string, troops map[string]int, sourceID string, updatedAt time.Time) error {
 	if len(troops) == 0 {
 		return nil
