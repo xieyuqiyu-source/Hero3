@@ -32,6 +32,7 @@ const (
 
 const (
 	EventBeforeBattle       = "before_battle"
+	EventBattleTraitControl = "battle_trait_control"
 	EventAfterCombatResolve = "after_combat_resolve"
 	EventAfterBattle        = "after_battle"
 	EventIncomingAttack     = "incoming_attack"

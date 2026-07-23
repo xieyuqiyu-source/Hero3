@@ -176,13 +176,25 @@ function sideTriggeredEffectText(
   }).join('；')
 }
 
-// sidePassiveEffectText 从参战快照展示真实生效的兵种永久被动，不混入触发时间线。
+// sidePassiveEffectText 从参战快照展示真实生效的永久被动，不混入触发时间线。
 function sidePassiveEffectText(side: BattleReportSide): string {
   const definitions: Record<string, { name: string; unitName: string }> = {
     jixing_benxi: { name: '疾行奔袭', unitName: '骁骑营' },
     huhu_shengwei: { name: '虎虎生威', unitName: '虎豹骑' },
   }
   const lines = (side.generals ?? []).flatMap((general) => general.traits ?? []).flatMap((trait) => {
+    if (trait.traitId === 'shengui_zhicai') {
+      const politics = Number(trait.params?.politicsBonus ?? 0)
+      const intelligence = Number(trait.params?.intelligenceBonus ?? 0)
+      if (politics <= 0 && intelligence <= 0) return []
+      return [`神鬼之才 · 内政 +${politics.toLocaleString()}，智谋 +${intelligence.toLocaleString()}`]
+    }
+    if (trait.traitId === 'rende') {
+      const politics = Number(trait.params?.politicsBonus ?? 0)
+      const command = Number(trait.params?.commandBonus ?? 0)
+      if (politics <= 0 && command <= 0) return []
+      return [`仁德天下 · 内政 +${politics.toLocaleString()}，统率 +${command.toLocaleString()}`]
+    }
     const definition = definitions[trait.traitId]
     if (!definition) return []
     const attack = Number(trait.params?.unitAttackFlat ?? 0)

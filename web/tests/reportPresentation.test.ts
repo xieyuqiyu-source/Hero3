@@ -135,10 +135,10 @@ test('战前真实伤亡与临时压制使用不同展示语义', () => {
 	assert.match(formatTraitOutcomeDetail('suppressedUnits', { weiInfantry: 20 }), /本场压制兵力/)
 	for (const [traitId, rate, expected] of [['zhenhe_quanjun', 0.5, '50%'], ['qimen_dunjia', 0.25, '25%']] as const) {
 		const trait = getTraitMeta(traitId)
-		assert.equal(trait.trigger, '战斗前')
-		assert.match(trait.description, /仅本场不参战，战后保留/)
+		assert.equal(trait.trigger, traitId === 'qimen_dunjia' ? '进攻/防守/增援战斗前' : '战斗前')
+		assert.match(trait.description, /仅本场.*参战.*战后.*保留/)
 		assert.equal(formatTraitOutcomeDetail('effectRate', rate), `设计效果比例: ${expected}`)
-		assert.equal(formatTraitOutcomeDetail('maxAffectedRate', rate), `设计最大影响比例: ${expected}`)
+		if (traitId !== 'qimen_dunjia') assert.equal(formatTraitOutcomeDetail('maxAffectedRate', rate), `设计最大影响比例: ${expected}`)
 	}
 	const zhangLiao = getTraitMeta('weizhen_zhenhe')
 	assert.equal(zhangLiao.name, '震慑全军')
@@ -148,7 +148,7 @@ test('战前真实伤亡与临时压制使用不同展示语义', () => {
 	assert.match(zhangLiao.description, /不计死亡，战后完整返回/)
 	assert.equal(formatTraitOutcomeDetail('effectRate', 0.25), '设计效果比例: 25%')
 	assert.equal(formatTraitOutcomeDetails({ suppressedUnits: { weiInfantry: 25 }, fledUnits: { weiInfantry: 25 }, returnedUnits: { weiInfantry: 25 } }, options), '本场溃逃兵力: 魏步兵 +25；战后返回兵力: 魏步兵 +25')
-	assert.match(getTraitMeta('qimen_dunjia').description, /必定/)
+	assert.match(getTraitMeta('qimen_dunjia').description, /GM 配置/)
 	assert.match(getTraitMeta('qimen_dunjia').description, /25%/)
 })
 
@@ -199,13 +199,14 @@ test('王佐之才明确为留城征兵减耗且不伪装成战斗触发', () =>
 	assert.match(trait.description, /不作为战斗触发/)
 })
 
-test('神鬼之才和内政精营明确正式比例、留城条件与非战斗边界', () => {
-	const recruit = getTraitMeta('shengui_zhicai')
+test('神鬼之才和内政精营明确永久属性、留城条件与非战斗边界', () => {
+	const passive = getTraitMeta('shengui_zhicai')
 	const production = getTraitMeta('neizheng_jingying')
-	assert.equal(recruit.trigger, '留城征兵消耗时')
-	assert.match(recruit.description, /50%/)
-	assert.match(recruit.description, /离城失效/)
-	assert.match(recruit.description, /不作为战斗触发/)
+	assert.equal(passive.trigger, '永久被动')
+	assert.match(passive.description, /10 点内政/)
+	assert.match(passive.description, /10 点智谋/)
+	assert.match(passive.description, /最终四维/)
+	assert.match(passive.description, /不作为战斗触发/)
 	assert.equal(production.trigger, '留城被动生效')
 	assert.match(production.description, /5%/)
 	assert.match(production.description, /离城失效/)
@@ -258,7 +259,7 @@ test('甄宓两项特性可同时展示实际攻防变化且不再产生俘虏�
 	assert.equal(JSON.stringify(detail).includes('captured'), false)
 })
 
-test('火攻和仁德按正式配置明确为必定触发', () => {
+test('火攻按正式配置必定触发且仁德为永久属性被动', () => {
 	const fire = getTraitMeta('huogong')
 	const rende = getTraitMeta('rende')
 	assert.equal(fire.trigger, '主动进攻战斗结算后')
@@ -266,9 +267,10 @@ test('火攻和仁德按正式配置明确为必定触发', () => {
 	assert.match(fire.description, /25%/)
 	assert.match(fire.description, /各兵种战前人数尝试追加 25%/)
 	assert.equal(formatTraitOutcomeDetail('targetExtraLosses', { weiInfantry: 25 }, { faction: 'wei', units: { wei: { weiInfantry: { name: '魏步兵' } } } }), '目标兵种追加损失: 魏步兵 +25')
-	assert.equal(rende.trigger, '进攻/防守/增援战斗结束后')
-	assert.match(rende.description, /必定触发/)
-	assert.match(rende.description, /50%/)
+	assert.equal(rende.trigger, '永久被动')
+	assert.match(rende.description, /固定增加 10 点内政/)
+	assert.match(rende.description, /12 点统率/)
+	assert.doesNotMatch(rende.description, /触发概率|复活/)
 })
 
 test('周瑜双特性按后端时间线区分战前加攻和战后火攻', () => {
@@ -1105,16 +1107,17 @@ test('赵云龙胆合法未命中时保留加速快照但援军承担完整损�
 	assert.deepEqual(detail.rewards, { generalExp: 97, resources: {} })
 })
 
-test('郭嘉征兵减耗只留在拥有快照且鬼才遗策对齐战败返兵', () => {
+test('郭嘉永久四维只留在被动区且鬼才遗策展示真实阵亡和复活', () => {
 	const options = { faction: 'wei', units: { wei: { weiInfantry: { name: '魏步兵' } } } }
 	const detail = {
 		primarySide: {
 			role: 'attacker', power: 1000,
 			generals: [{
 				id: 'guojia', name: '郭嘉', level: 1,
-				traits: [{ traitId: 'shengui_zhicai', name: '神鬼之才' }, { traitId: 'guicai_yice', name: '鬼才遗策' }],
+				stats: { intelligence: 0, politics: 0 }, effectiveStats: { intelligence: 10, politics: 10 },
+				traits: [{ traitId: 'shengui_zhicai', name: '神鬼之才', params: { politicsBonus: 10, intelligenceBonus: 10 } }, { traitId: 'guicai_yice', name: '鬼才遗策' }],
 			}],
-			units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 10 }],
+			units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 22 }],
 		},
 		secondarySide: {
 			role: 'defender', power: 10000,
@@ -1124,20 +1127,21 @@ test('郭嘉征兵减耗只留在拥有快照且鬼才遗策对齐战败返兵',
 		rewards: { generalExp: 37, resources: {} },
 		traits: [{
 			traitId: 'guicai_yice', traitName: '鬼才遗策', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'guojia',
-			detail: { lossReductionRate: 0.1, maxReturnCount: 10000, returnedUnits: { weiInfantry: 10 }, triggerChance: 1 },
+			detail: { effectRate: 0.22, actualLostUnits: { weiInfantry: 100 }, revivedUnits: { weiInfantry: 22 }, totalRevived: 22, triggerChance: 1 },
 		}],
 	}
 	assert.equal(hasStandardUnitRows(detail.primarySide), true)
-	assert.deepEqual(detail.primarySide.units[0], { unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 10 })
+	assert.deepEqual(detail.primarySide.units[0], { unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 22 })
 	assert.deepEqual(detail.primarySide.generals[0].traits.map((trait) => trait.traitId), ['shengui_zhicai', 'guicai_yice'])
 	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['guicai_yice'])
 	assert.equal(detail.traits.some((trait) => trait.traitId === 'shengui_zhicai'), false)
-	assert.equal(getTraitMeta('shengui_zhicai').trigger, '留城征兵消耗时')
-	assert.equal(getTraitMeta('guicai_yice').trigger, '进攻/防守/增援战败后')
+	assert.equal(getTraitMeta('shengui_zhicai').trigger, '永久被动')
+	assert.equal(getTraitMeta('guicai_yice').trigger, '进攻/防守/增援战斗结束后')
 	assert.equal(resolveReportTraitDisplaySide({ sourceType: 'player_city', viewType: 'attack' }, detail.traits[0]), 'primary')
-	assert.equal(formatTraitOutcomeDetail('lossReductionRate', detail.traits[0].detail.lossReductionRate), '设计减损比例: 10%')
-	assert.equal(formatTraitOutcomeDetail('maxReturnCount', detail.traits[0].detail.maxReturnCount), '设计返还上限: 10,000')
-	assert.equal(formatTraitOutcomeDetail('returnedUnits', detail.traits[0].detail.returnedUnits, options), '返还兵力: 魏步兵 +10')
+	assert.equal(formatTraitOutcomeDetail('effectRate', detail.traits[0].detail.effectRate), '设计效果比例: 22%')
+	assert.equal(formatTraitOutcomeDetail('actualLostUnits', detail.traits[0].detail.actualLostUnits, options), '本场真实阵亡: 魏步兵 +100')
+	assert.equal(formatTraitOutcomeDetail('revivedUnits', detail.traits[0].detail.revivedUnits, options), '复活兵力: 魏步兵 +22')
+	assert.equal(formatTraitOutcomeDetail('totalRevived', detail.traits[0].detail.totalRevived), '复活总数: 22')
 	assert.deepEqual(detail.rewards, { generalExp: 37, resources: {} })
 })
 
@@ -1344,60 +1348,49 @@ test('甄宓破防后孙权按当前整数防御加防并分别展示实际变�
 	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[1].detail.cavalryDefenseModifiedUnits, options), '实际骑防修正: 吴步兵 +3')
 })
 
-test('攻守双方刘备双返兵分别展示原始阵亡和最终存活', () => {
+test('攻守双方刘备仁主守护分别展示原始阵亡和最终存活', () => {
 	const options = { faction: 'shu', units: { shu: { shuInfantry: { name: '蜀步兵' } } } }
 	const detail = {
 		primarySide: {
 			role: 'attacker', power: 10000,
 			generals: [{ id: 'liubei', name: '刘备', level: 1 }],
-			units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 800 }],
+			units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 675 }],
 		},
 		secondarySide: {
 			role: 'defender', power: 10000,
 			generals: [{ id: 'liubei', name: '刘备', level: 1 }],
-			units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 800 }],
+			units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 675 }],
 		},
 		traits: [
 			{
-				traitId: 'rende', traitName: '仁德天下', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'liubei',
-				detail: { effectRate: 0.5, maxReviveCount: 10000, revivedUnits: { shuInfantry: 250 }, triggerChance: 1 },
-			},
-			{
 				traitId: 'renzhu_shouhu', traitName: '仁主守护', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'liubei',
-				detail: { lossReductionRate: 0.1, maxReturnCount: 10000, returnedUnits: { shuInfantry: 50 }, triggerChance: 1 },
-			},
-			{
-				traitId: 'rende', traitName: '仁德天下', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'liubei',
-				detail: { effectRate: 0.5, maxReviveCount: 10000, revivedUnits: { shuInfantry: 250 }, triggerChance: 1 },
+				detail: { effectRate: 0.35, revivedUnits: { shuInfantry: 175 }, triggerChance: 0.6 },
 			},
 			{
 				traitId: 'renzhu_shouhu', traitName: '仁主守护', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'liubei',
-				detail: { lossReductionRate: 0.1, maxReturnCount: 10000, returnedUnits: { shuInfantry: 50 }, triggerChance: 1 },
+				detail: { effectRate: 0.35, revivedUnits: { shuInfantry: 175 }, triggerChance: 0.6 },
 			},
 		],
 	}
-	assert.deepEqual(detail.primarySide.units[0], { unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 800 })
-	assert.deepEqual(detail.secondarySide.units[0], { unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 800 })
-	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['rende', 'renzhu_shouhu', 'rende', 'renzhu_shouhu'])
-	assert.equal(new Set(detail.traits.map((trait) => `${trait.ownerSide}:${trait.traitId}`)).size, 4)
-	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide({ sourceType: 'player_city', viewType: 'attack' }, trait)), ['primary', 'primary', 'secondary', 'secondary'])
-	for (const trait of detail.traits.filter((item) => item.traitId === 'rende')) {
-		assert.equal(formatTraitOutcomeDetail('revivedUnits', trait.detail.revivedUnits, options), '复活兵力: 蜀步兵 +250')
-	}
-	for (const trait of detail.traits.filter((item) => item.traitId === 'renzhu_shouhu')) {
-		assert.equal(formatTraitOutcomeDetail('returnedUnits', trait.detail.returnedUnits, options), '返还兵力: 蜀步兵 +50')
+	assert.deepEqual(detail.primarySide.units[0], { unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 675 })
+	assert.deepEqual(detail.secondarySide.units[0], { unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 675 })
+	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['renzhu_shouhu', 'renzhu_shouhu'])
+	assert.equal(new Set(detail.traits.map((trait) => `${trait.ownerSide}:${trait.traitId}`)).size, 2)
+	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide({ sourceType: 'player_city', viewType: 'attack' }, trait)), ['primary', 'secondary'])
+	for (const trait of detail.traits) {
+		assert.equal(formatTraitOutcomeDetail('revivedUnits', trait.detail.revivedUnits, options), '复活兵力: 蜀步兵 +175')
 	}
 })
 
-test('刘备多兵种大额阵亡按稳定顺序展示单场返兵上限', () => {
+test('刘备多兵种大额阵亡逐兵种按百分比复活且不设人数上限', () => {
 	const options = { faction: 'shu', units: { shu: { shuCavalry: { name: '蜀骑兵' }, shuInfantry: { name: '蜀步兵' } } } }
 	const detail = {
 		primarySide: {
 			role: 'attacker', power: 720000,
 			generals: [{ id: 'liubei', name: '刘备', level: 1 }],
 			units: [
-				{ unitType: 'shuCavalry', unitName: '蜀骑兵', amountBefore: 30000, dispatched: 30000, lost: 30000, survived: 13000 },
-				{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 30000, dispatched: 30000, lost: 30000, survived: 3000 },
+				{ unitType: 'shuCavalry', unitName: '蜀骑兵', amountBefore: 30000, dispatched: 30000, lost: 30000, survived: 10500 },
+				{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 30000, dispatched: 30000, lost: 30000, survived: 10500 },
 			],
 		},
 		secondarySide: {
@@ -1408,25 +1401,19 @@ test('刘备多兵种大额阵亡按稳定顺序展示单场返兵上限', () =>
 		rewards: { generalExp: 28296, resources: {} },
 		traits: [
 			{
-				traitId: 'rende', traitName: '仁德天下', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'liubei',
-				detail: { effectRate: 0.5, maxReviveCount: 10000, revivedUnits: { shuCavalry: 10000 }, totalRevived: 10000, triggerChance: 1 },
-			},
-			{
 				traitId: 'renzhu_shouhu', traitName: '仁主守护', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'liubei',
-				detail: { lossReductionRate: 0.1, maxReturnCount: 10000, returnedUnits: { shuCavalry: 3000, shuInfantry: 3000 }, triggerChance: 1 },
+				detail: { effectRate: 0.35, revivedUnits: { shuCavalry: 10500, shuInfantry: 10500 }, totalRevived: 21000, triggerChance: 0.6 },
 			},
 		],
 	}
 	assert.deepEqual(detail.primarySide.units, [
-		{ unitType: 'shuCavalry', unitName: '蜀骑兵', amountBefore: 30000, dispatched: 30000, lost: 30000, survived: 13000 },
-		{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 30000, dispatched: 30000, lost: 30000, survived: 3000 },
+		{ unitType: 'shuCavalry', unitName: '蜀骑兵', amountBefore: 30000, dispatched: 30000, lost: 30000, survived: 10500 },
+		{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 30000, dispatched: 30000, lost: 30000, survived: 10500 },
 	])
-	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide({ sourceType: 'player_city', viewType: 'attack' }, trait)), ['primary', 'primary'])
-	assert.equal(formatTraitOutcomeDetail('maxReviveCount', detail.traits[0].detail.maxReviveCount), '设计复活上限: 10,000')
-	assert.equal(formatTraitOutcomeDetail('revivedUnits', detail.traits[0].detail.revivedUnits, options), '复活兵力: 蜀骑兵 +10,000')
-	assert.equal(formatTraitOutcomeDetail('totalRevived', detail.traits[0].detail.totalRevived), '复活总数: 10,000')
-	assert.equal(formatTraitOutcomeDetail('maxReturnCount', detail.traits[1].detail.maxReturnCount), '设计返还上限: 10,000')
-	assert.equal(formatTraitOutcomeDetail('returnedUnits', detail.traits[1].detail.returnedUnits, options), '返还兵力: 蜀骑兵 +3,000、蜀步兵 +3,000')
+	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide({ sourceType: 'player_city', viewType: 'attack' }, trait)), ['primary'])
+	assert.equal(formatTraitOutcomeDetail('effectRate', detail.traits[0].detail.effectRate), '设计效果比例: 35%')
+	assert.equal(formatTraitOutcomeDetail('revivedUnits', detail.traits[0].detail.revivedUnits, options), '复活兵力: 蜀骑兵 +10,500、蜀步兵 +10,500')
+	assert.equal(formatTraitOutcomeDetail('totalRevived', detail.traits[0].detail.totalRevived), '复活总数: 21,000')
 })
 
 test('七项战前攻击加成展示准确设计值、目标和实际修正', () => {
@@ -1605,7 +1592,7 @@ test('主城赵云龙胆合法未命中时主守军和同兵种援军都承担�
 	assert.equal(pvp?.reinforcements[0]?.generalExpGained, 500)
 })
 
-test('主城刘备只返还主守军且同兵种援军保持原始阵亡', () => {
+test('主城刘备只复活主守军且同兵种援军保持原始阵亡', () => {
 	const report = {
 		id: 'main-liubei-source-isolation', playerId: 'attacker', ownerPlayerId: 'attacker', viewType: 'attack', sourceType: 'player_city',
 		battleType: 'plunder', type: 'attack', result: 'draw', defenderRevealed: true, rewards: {}, read: true, createdAt: '2026-07-20T14:00:00Z',
@@ -1622,17 +1609,13 @@ test('主城刘备只返还主守军且同兵种援军保持原始阵亡', () =>
 			},
 			secondarySide: {
 				role: 'defender', power: 10000, generals: [{ id: 'liubei', name: '刘备', level: 1 }],
-				units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 500, dispatched: 500, lost: 250, survived: 400 }],
+				units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 500, dispatched: 500, lost: 250, survived: 337 }],
 			},
 			rewards: { generalExp: 500, resources: {} },
 			traits: [
 				{
-					traitId: 'rende', traitName: '仁德天下', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'liubei',
-					detail: { effectRate: 0.5, maxReviveCount: 10000, revivedUnits: { shuInfantry: 125 }, triggerChance: 1 },
-				},
-				{
 					traitId: 'renzhu_shouhu', traitName: '仁主守护', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'liubei',
-					detail: { lossReductionRate: 0.1, maxReturnCount: 10000, returnedUnits: { shuInfantry: 25 }, triggerChance: 1 },
+					detail: { effectRate: 0.35, revivedUnits: { shuInfantry: 87 }, triggerChance: 0.6 },
 				},
 			],
 		},
@@ -1643,119 +1626,98 @@ test('主城刘备只返还主守军且同兵种援军保持原始阵亡', () =>
 	const options = { faction: 'shu', units: { shu: { shuInfantry: { name: '蜀步兵' } } } }
 
 	assert.deepEqual(detail.primarySide.units[0], { unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 500 })
-	assert.deepEqual(detail.secondarySide?.units[0], { unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 500, dispatched: 500, lost: 250, survived: 400 })
+	assert.deepEqual(detail.secondarySide?.units[0], { unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 500, dispatched: 500, lost: 250, survived: 337 })
 	assert.equal(detail.rewards?.generalExp, 500)
 	assert.deepEqual(reinforcement?.troops, { shuInfantry: 500 })
 	assert.equal(reinforcement?.generalExpGained, 500)
 	assert.deepEqual(pvp?.reinforcementLosses, { rein_guanyu: { shuInfantry: 250 } })
-	assert.deepEqual(detail.traits?.map((trait) => trait.traitId), ['rende', 'renzhu_shouhu'])
-	assert.deepEqual(detail.traits?.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['secondary', 'secondary'])
-	assert.equal(formatTraitOutcomeDetail('revivedUnits', detail.traits?.[0].detail.revivedUnits, options), '复活兵力: 蜀步兵 +125')
-	assert.equal(formatTraitOutcomeDetail('returnedUnits', detail.traits?.[1].detail.returnedUnits, options), '返还兵力: 蜀步兵 +25')
+	assert.deepEqual(detail.traits?.map((trait) => trait.traitId), ['renzhu_shouhu'])
+	assert.deepEqual(detail.traits?.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['secondary'])
+	assert.equal(formatTraitOutcomeDetail('revivedUnits', detail.traits?.[0].detail.revivedUnits, options), '复活兵力: 蜀步兵 +87')
 })
 
-test('刘备双特性区分复活与返还并约束累计归队上限', () => {
+test('刘备被动属性与概率复活使用独立时间线和当前参数', () => {
 	const options = { faction: 'shu', units: { shu: { shuInfantry: { name: '蜀步兵' } } } }
 	const rende = getTraitMeta('rende')
 	const guard = getTraitMeta('renzhu_shouhu')
-	assert.equal(rende.trigger, '进攻/防守/增援战斗结束后')
+	assert.equal(rende.trigger, '永久被动')
 	assert.equal(guard.trigger, '进攻/防守/增援战斗结束后')
-	assert.match(rende.description, /作为援军/)
-	assert.match(rende.description, /50%/)
-	assert.match(rende.description, /最多复活 10000/)
-	assert.match(guard.description, /10%/)
-	assert.match(guard.description, /最多返还 10000/)
-	assert.match(guard.description, /累计不超过本场阵亡/)
-	assert.equal(formatTraitOutcomeDetail('maxReviveCount', 10000), '设计复活上限: 10,000')
-	assert.equal(formatTraitOutcomeDetail('maxReturnCount', 10000), '设计返还上限: 10,000')
-	assert.equal(formatTraitOutcomeDetail('revivedUnits', { shuInfantry: 50 }, options), '复活兵力: 蜀步兵 +50')
-	assert.equal(formatTraitOutcomeDetail('returnedUnits', { shuInfantry: 10 }, options), '返还兵力: 蜀步兵 +10')
+	assert.match(rende.description, /固定增加 10 点内政/)
+	assert.match(rende.description, /12 点统率/)
+	assert.match(guard.description, /60%/)
+	assert.match(guard.description, /真实阵亡/)
+	assert.match(guard.description, /35%/)
+	assert.doesNotMatch(guard.description, /上限|返还/)
+	assert.equal(formatTraitOutcomeDetail('triggerChance', 0.6), '触发概率: 60%')
+	assert.equal(formatTraitOutcomeDetail('revivedUnits', { shuInfantry: 35 }, options), '复活兵力: 蜀步兵 +35')
 })
 
-test('郭嘉只在进攻、防守或增援战败后降低最终实际损失', () => {
-	for (const [traitId, rate, amount] of [['guicai_yice', '10%', 10]] as const) {
-		const trait = getTraitMeta(traitId)
-		assert.equal(trait.trigger, '进攻/防守/增援战败后')
-		assert.match(trait.description, /作为援军战败后/)
-		assert.match(trait.description, new RegExp(rate))
-		assert.match(trait.description, /最多返还 10000/)
-		assert.match(trait.description, /最终实际损失/)
-		assert.equal(formatTraitOutcomeDetail('returnedUnits', { weiInfantry: amount }), `返还兵力: weiInfantry +${amount}`)
-	}
+test('郭嘉在进攻、防守或增援战后按真实阵亡复活', () => {
+	const trait = getTraitMeta('guicai_yice')
+	assert.equal(trait.trigger, '进攻/防守/增援战斗结束后')
+	assert.match(trait.description, /本场真实阵亡/)
+	assert.match(trait.description, /22%/)
+	assert.match(trait.description, /逐兵种复活/)
+	assert.equal(formatTraitOutcomeDetail('actualLostUnits', { weiInfantry: 100 }), '本场真实阵亡: weiInfantry +100')
+	assert.equal(formatTraitOutcomeDetail('revivedUnits', { weiInfantry: 22 }), '复活兵力: weiInfantry +22')
 })
 
-test('郭嘉在平局时拥有返兵特性但不会触发或改变兵力', () => {
-	for (const [generalId, generalName, traitId, traitName] of [
-		['guojia', '郭嘉', 'guicai_yice', '鬼才遗策'],
-	] as const) {
-		const report = {
-			id: `draw-${generalId}`, playerId: 'attacker', ownerPlayerId: 'attacker', viewType: 'attack', sourceType: 'player_city',
-			battleType: 'plunder', type: 'attack', result: 'draw', defenderRevealed: true, rewards: {}, read: true, createdAt: '2026-07-20T15:00:00Z',
-			detail: {
-				id: `draw-${generalId}`, sourceType: 'player_city', viewType: 'attack', battleType: 'plunder', result: 'draw', winnerSide: 'none',
-				primarySide: {
-					role: 'attacker', faction: 'wei', power: 10000,
-					generals: [{ id: generalId, name: generalName, level: 1, traits: [{ traitId, name: traitName, requiredOutcome: 'loss' }] }],
-					units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 500 }],
-				},
-				secondarySide: {
-					role: 'defender', faction: 'shu', power: 10000,
-					units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 500 }],
-				},
-				rewards: { generalExp: 500, resources: {} }, traits: [],
-			},
-		}
-		const detail = normalizeBattleReportDetail(report)
-		assert.equal(detail.primarySide.generals?.[0].traits?.[0].traitId, traitId)
-		assert.equal(hasTraitEntries(detail), false)
-		assert.deepEqual(detail.primarySide.units[0], { unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 500 })
-		assert.deepEqual(detail.secondarySide?.units[0], { unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 500 })
-		assert.equal(detail.rewards?.generalExp, 500)
-	}
-})
-
-test('郭嘉在 NPC 与黄巾平局中按场景真实全损且不返兵', () => {
-	for (const [generalId, generalName, traitId, traitName] of [
-		['guojia', '郭嘉', 'guicai_yice', '鬼才遗策'],
-	] as const) {
-		const ownedGeneral = {
-			id: generalId, name: generalName, level: 1,
-			traits: [{ traitId, name: traitName, requiredOutcome: 'loss' }],
-		}
-		const npcDetail = {
-			sourceType: 'player_city', viewType: 'attack', battleType: 'attack', result: 'draw', winnerSide: 'none',
+test('郭嘉在 PVP 平局中的真实阵亡、复活和最终兵力完整展示', () => {
+	const report = {
+		id: 'draw-guojia', playerId: 'attacker', ownerPlayerId: 'attacker', viewType: 'attack', sourceType: 'player_city',
+		battleType: 'plunder', type: 'attack', result: 'draw', defenderRevealed: true, rewards: {}, read: true, createdAt: '2026-07-20T15:00:00Z',
+		detail: {
+			id: 'draw-guojia', sourceType: 'player_city', viewType: 'attack', battleType: 'plunder', result: 'draw', winnerSide: 'none',
 			primarySide: {
-				role: 'attacker', faction: 'wei', power: 1000, generals: [ownedGeneral],
-				units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 }],
+				role: 'attacker', faction: 'wei', power: 10000,
+				generals: [{ id: 'guojia', name: '郭嘉', level: 1, traits: [{ traitId: 'guicai_yice', name: '鬼才遗策' }] }],
+				units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 610 }],
+			},
+			secondarySide: {
+				role: 'defender', faction: 'shu', power: 10000,
+				units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 500 }],
+			},
+			rewards: { generalExp: 500, resources: {} },
+			traits: [{
+				traitId: 'guicai_yice', traitName: '鬼才遗策', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'guojia',
+				detail: { effectRate: 0.22, actualLostUnits: { weiInfantry: 500 }, revivedUnits: { weiInfantry: 110 }, totalRevived: 110, triggerChance: 1 },
+			}],
+		},
+	}
+	const detail = normalizeBattleReportDetail(report)
+	assert.equal(detail.primarySide.generals?.[0].traits?.[0].traitId, 'guicai_yice')
+	assert.equal(hasTraitEntries(detail), true)
+	assert.deepEqual(detail.primarySide.units[0], { unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 610 })
+	assert.equal(formatTraitOutcomeDetail('actualLostUnits', detail.traits[0].detail.actualLostUnits), '本场真实阵亡: weiInfantry +500')
+	assert.equal(formatTraitOutcomeDetail('revivedUnits', detail.traits[0].detail.revivedUnits), '复活兵力: weiInfantry +110')
+	assert.equal(detail.rewards?.generalExp, 500)
+})
+
+test('郭嘉在 NPC 与黄巾平局中都展示战后复活', () => {
+	for (const sourceType of ['npc_city', 'yellow_turban']) {
+		const detail = {
+			sourceType, viewType: sourceType === 'yellow_turban' ? 'defense' : 'attack', battleType: sourceType, result: 'draw', winnerSide: 'none',
+			primarySide: {
+				role: 'attacker', faction: 'wei', power: 1000,
+				units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: sourceType === 'npc_city' ? 22 : 0 }],
 			},
 			secondarySide: {
 				role: 'defender', faction: 'wei', power: 1000,
-				units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 }],
+				generals: sourceType === 'yellow_turban' ? [{ id: 'guojia', name: '郭嘉', level: 1 }] : [],
+				units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: sourceType === 'yellow_turban' ? 22 : 0 }],
 			},
-			rewards: { generalExp: 100, resources: {} }, traits: [],
+			rewards: { generalExp: 100, resources: {} },
+			traits: [{
+				traitId: 'guicai_yice', traitName: '鬼才遗策',
+				ownerSide: sourceType === 'yellow_turban' ? 'secondary' : 'primary',
+				ownerRole: sourceType === 'yellow_turban' ? 'defender' : 'attacker',
+				generalId: 'guojia',
+				detail: { effectRate: 0.22, actualLostUnits: { weiInfantry: 100 }, revivedUnits: { weiInfantry: 22 }, totalRevived: 22 },
+			}],
 		}
-		const yellowDetail = {
-			sourceType: 'yellow_turban', viewType: 'defense', battleType: 'yellow_turban', result: 'draw', winnerSide: 'none', ownerSide: 'defender',
-			primarySide: {
-				role: 'attacker', faction: 'wei', power: 1030,
-				units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 103, dispatched: 103, lost: 103, survived: 0 }],
-			},
-			secondarySide: {
-				role: 'defender', faction: 'wei', power: 1030, generals: [ownedGeneral],
-				units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 }],
-			},
-			rewards: { generalExp: 103, resources: {} }, traits: [],
-		}
-
-		assert.equal(npcDetail.primarySide.generals[0].traits[0].traitId, traitId)
-		assert.equal(yellowDetail.secondarySide.generals[0].traits[0].traitId, traitId)
-		assert.equal(hasTraitEntries(npcDetail), false)
-		assert.equal(hasTraitEntries(yellowDetail), false)
-		assert.deepEqual(npcDetail.primarySide.units[0], { unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 })
-		assert.deepEqual(yellowDetail.primarySide.units[0], { unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 103, dispatched: 103, lost: 103, survived: 0 })
-		assert.deepEqual(yellowDetail.secondarySide.units[0], { unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 })
-		assert.equal(npcDetail.rewards.generalExp, 100)
-		assert.equal(yellowDetail.rewards.generalExp, 103)
+		assert.equal(hasTraitEntries(detail), true)
+		assert.equal(detail.traits[0].detail.revivedUnits.weiInfantry, 22)
+		assert.equal(detail.rewards.generalExp, 100)
 	}
 })
 
@@ -3560,7 +3522,7 @@ test('马超援军西凉突击只追加骑兵损失且被动武力不进入时�
 	assert.equal([...(hit.traits ?? []), ...(miss.traits ?? [])].some((trait) => trait.traitId === 'tianshen_xiafan'), false)
 })
 
-test('诸葛亮援军双压制保持真实跨阶段顺序并对齐最终兵力', () => {
+test('诸葛亮援军战前困兵与全体封禁保持真实归属并对齐最终兵力', () => {
 	const report = {
 		id: 'zhugeliang-reinforcement-active', playerId: 'attacker', ownerPlayerId: 'attacker', viewType: 'attack', sourceType: 'player_city',
 		battleType: 'plunder', type: 'attack', result: 'defender_victory', defenderRevealed: true, rewards: {}, read: true, createdAt: '2026-07-20T22:00:00Z',
@@ -3569,7 +3531,7 @@ test('诸葛亮援军双压制保持真实跨阶段顺序并对齐最终兵力',
 			troops: { shuInfantry: 99 }, generalExpGained: 45,
 			generals: [{
 				id: 'zhugeliang', name: '诸葛亮', level: 1,
-				traits: [{ traitId: 'qimen_dunjia', name: '奇门遁甲' }, { traitId: 'wolong_mouzhi', name: '卧龙谋制' }],
+				traits: [{ traitId: 'qimen_dunjia', name: '奇门遁甲' }, { traitId: 'wolong_mouzhi', name: '卧龙奇谋' }],
 			}],
 		}],
 		pvpReinforcementLosses: { rein_zhugeliang: { shuInfantry: 39 } },
@@ -3587,11 +3549,11 @@ test('诸葛亮援军双压制保持真实跨阶段顺序并对齐最终兵力',
 			traits: [
 				{
 					traitId: 'qimen_dunjia', traitName: '奇门遁甲', ownerSide: 'reinforcement', ownerRole: 'reinforcement', ownerPlayerId: 'helper_zhugeliang', generalId: 'zhugeliang',
-					detail: { effectRate: 0.25, maxAffectedRate: 0.25, suppressedUnits: { shuInfantry: 25 }, triggerChance: 1 },
+					detail: { effectRate: 0.25, suppressedUnits: { shuInfantry: 25 }, triggerChance: 1 },
 				},
 				{
-					traitId: 'wolong_mouzhi', traitName: '卧龙谋制', ownerSide: 'reinforcement', ownerRole: 'reinforcement', ownerPlayerId: 'helper_zhugeliang', generalId: 'zhugeliang',
-					detail: { disableTraitCount: 1, disabledTraitCount: 1, triggerChance: 1 },
+					traitId: 'wolong_mouzhi', traitName: '卧龙奇谋', ownerSide: 'reinforcement', ownerRole: 'reinforcement', ownerPlayerId: 'helper_zhugeliang', generalId: 'zhugeliang',
+					detail: { disabledGeneralCount: 1, disabledTraitCount: 1, triggerChance: 1 },
 				},
 			],
 		},
@@ -3609,6 +3571,7 @@ test('诸葛亮援军双压制保持真实跨阶段顺序并对齐最终兵力',
 	assert.deepEqual(detail.traits?.map((trait) => trait.traitId), ['qimen_dunjia', 'wolong_mouzhi'])
 	assert.deepEqual(detail.traits?.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['reinforcement', 'reinforcement'])
 	assert.equal(formatTraitOutcomeDetail('suppressedUnits', detail.traits?.[0].detail.suppressedUnits, options), '本场压制兵力: 蜀步兵 +25')
+	assert.equal(formatTraitOutcomeDetail('disabledGeneralCount', detail.traits?.[1].detail.disabledGeneralCount, options), '封禁将领数: 1')
 	assert.equal(formatTraitOutcomeDetail('disabledTraitCount', detail.traits?.[1].detail.disabledTraitCount, options), '实际压制特性数: 1')
 	assert.equal(detail.traits?.some((trait) => trait.traitId === 'laodang_yizhuang'), false)
 })
@@ -3774,53 +3737,58 @@ test('西凉突击在 NPC 战报中只展示敌方骑兵实际追加损失', () 
 	assert.equal(formatTraitOutcomeDetail('targetExtraLosses', { weiCavalry: 60 }, options), '目标兵种追加损失: 魏骑兵 +60')
 })
 
-test('双方压制特性使用玩家可读的真实压制数量', () => {
-	for (const traitId of ['wolong_mouzhi', 'kurouji']) {
-		const trait = getTraitMeta(traitId)
-		assert.equal(trait.trigger, '战斗结算后')
-		assert.match(trait.description, /拦截敌方 1 项后续特性/)
-		assert.match(trait.description, /实际压制数为 0/)
-	}
-	assert.match(getTraitMeta('wolong_mouzhi').description, /必定/)
-	assert.match(getTraitMeta('kurouji').description, /35%/)
+test('卧龙全体封禁与苦肉单项压制使用各自准确语义', () => {
+	const wolong = getTraitMeta('wolong_mouzhi')
+	assert.equal(wolong.name, '卧龙奇谋')
+	assert.equal(wolong.trigger, '进攻/防守/增援战斗前')
+	assert.match(wolong.description, /60% 概率/)
+	assert.match(wolong.description, /所有参战将领/)
+	assert.match(wolong.description, /不影响永久被动/)
+	assert.match(wolong.description, /双方都有诸葛亮.*均失效/)
+	const kurou = getTraitMeta('kurouji')
+	assert.equal(kurou.trigger, '战斗结算后')
+	assert.match(kurou.description, /拦截敌方 1 项后续特性/)
+	assert.match(kurou.description, /实际压制数为 0/)
+	assert.match(kurou.description, /35%/)
 	assert.equal(formatTraitOutcomeDetail('disableTraitCount', 1), '设计压制特性数: 1')
+	assert.equal(formatTraitOutcomeDetail('disabledGeneralCount', 2), '封禁将领数: 2')
 	assert.equal(formatTraitOutcomeDetail('disabledTraitCount', 1), '实际压制特性数: 1')
 	assert.equal(formatTraitOutcomeDetail('disabledTraitCount', 0), '实际压制特性数: 0')
+	assert.equal(formatTraitOutcomeDetail('status', '特性已失效'), '状态: 特性已失效')
+	assert.equal(formatTraitOutcomeDetail('invalidReason', '双方均有诸葛亮'), '失效原因: 双方均有诸葛亮')
 	assert.equal(formatTraitOutcomeDetail('disabledTraits', { disabledTraitCount: 1 }), '压制特性: 实际压制特性数 +1')
 	const noTargetDetail = {
 		sourceType: 'player_city', viewType: 'attack',
 		traits: [
-			{ traitId: 'wolong_mouzhi', ownerSide: 'primary', detail: { disableTraitCount: 1, disabledTraitCount: 0 } },
 			{ traitId: 'kurouji', ownerSide: 'secondary', detail: { disableTraitCount: 1, disabledTraitCount: 0 } },
 		],
 	}
 	assert.equal(hasTraitEntries(noTargetDetail), true)
 	assert.deepEqual(noTargetDetail.traits.map((trait) => formatTraitOutcomeDetail('disabledTraitCount', trait.detail.disabledTraitCount)), [
 		'实际压制特性数: 0',
-		'实际压制特性数: 0',
 	])
 })
 
-test('诸葛亮双压制按后端时间线区分临时压兵和特性拦截', () => {
+test('诸葛亮双特性按后端时间线区分临时压兵和战前全体封禁', () => {
 	const detail = {
 		sourceType: 'player_city', viewType: 'attack',
 		traits: [
 			{
 				traitId: 'qimen_dunjia', traitName: '奇门遁甲', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhugeliang',
-				detail: { effectRate: 0.25, maxAffectedRate: 0.25, suppressedUnits: { greedyWolf: 25 }, triggerChance: 1 },
+				detail: { effectRate: 0.25, suppressedUnits: { greedyWolf: 25 }, triggerChance: 1 },
 			},
 			{
-				traitId: 'wolong_mouzhi', traitName: '卧龙谋制', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhugeliang',
-				detail: { disableTraitCount: 1, disabledTraitCount: 1, triggerChance: 1 },
+				traitId: 'wolong_mouzhi', traitName: '卧龙奇谋', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhugeliang',
+				detail: { disabledGeneralCount: 1, disabledTraitCount: 2, triggerChance: 1 },
 			},
 		],
 	}
 	assert.equal(hasTraitEntries(detail), true)
 	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['qimen_dunjia', 'wolong_mouzhi'])
-	assert.deepEqual(detail.traits.map((trait) => getTraitMeta(trait.traitId).trigger), ['战斗前', '战斗结算后'])
+	assert.deepEqual(detail.traits.map((trait) => getTraitMeta(trait.traitId).trigger), ['进攻/防守/增援战斗前', '进攻/防守/增援战斗前'])
 	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['primary', 'primary'])
 	assert.equal(formatTraitOutcomeDetail('suppressedUnits', detail.traits[0].detail.suppressedUnits), '本场压制兵力: 贪狼营 +25')
-	assert.equal(formatTraitOutcomeDetail('disabledTraitCount', detail.traits[1].detail.disabledTraitCount), '实际压制特性数: 1')
+	assert.equal(formatTraitOutcomeDetails(detail.traits[1].detail), '封禁将领数: 1；实际压制特性数: 2；触发概率: 100%')
 	assert.equal(detail.traits.some((trait) => trait.traitId === 'laodang_yizhuang'), false)
 })
 
@@ -3854,40 +3822,40 @@ test('来源和视角标签使用不同颜色配置', () => {
   assert.match(REPORT_SOURCE_CONFIG.dungeon.color, /purple/)
 })
 
-test('轮回副本战报按后端时间线展示真实扣兵、攻击修正和复活数', () => {
+test('轮回副本战报按后端时间线展示真实扣兵、攻击修正和仁主复活数', () => {
 	const detail = {
 		sourceType: 'dungeon', viewType: 'attack', battleType: 'dungeon_reincarnation_attack',
 		traits: [
 			{ traitId: 'shuiyan_qijun', traitName: '水淹七军', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'guanyu', detail: { effectRate: 0.35, maxAffectedRate: 0.35, preBattleAffected: { greedyWolf: 350 }, triggerChance: 1 } },
 			{ traitId: 'meiren', traitName: '美人心计', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhenmi', detail: { attackBonusRate: 0.25, attackModifiedUnits: { huWei: 3 }, triggerChance: 0.5 } },
-			{ traitId: 'rende', traitName: '仁德天下', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'liubei', detail: { effectRate: 0.5, maxReviveCount: 10000, revivedUnits: { greedyWolf: 50 }, totalRevived: 50, triggerChance: 1 } },
+			{ traitId: 'renzhu_shouhu', traitName: '仁主守护', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'liubei', detail: { effectRate: 0.35, revivedUnits: { greedyWolf: 35 }, totalRevived: 35, triggerChance: 0.6 } },
 		],
 	}
 	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['primary', 'primary', 'primary'])
 	assert.deepEqual(detail.traits.map((trait) => getTraitMeta(trait.traitId).trigger), ['战斗前', '主动进攻战斗前', '进攻/防守/增援战斗结束后'])
 	assert.equal(formatTraitOutcomeDetail('preBattleAffected', detail.traits[0].detail.preBattleAffected), '战前真实伤亡: 贪狼营 +350')
 	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', detail.traits[1].detail.attackModifiedUnits), '实际攻击修正: 虎卫 +3')
-	assert.equal(formatTraitOutcomeDetail('revivedUnits', detail.traits[2].detail.revivedUnits), '复活兵力: 贪狼营 +50')
+	assert.equal(formatTraitOutcomeDetail('revivedUnits', detail.traits[2].detail.revivedUnits), '复活兵力: 贪狼营 +35')
 })
 
 test('轮回副本全正式特性矩阵只展示后端实际触发项', () => {
-	const bothSides = 'weiwu_tongyu yibing_touxi guicai_yice rende renzhu_shouhu shuiyan_qijun zhenhe_quanjun qimen_dunjia wolong_mouzhi xiliang_tuji laodang_yizhuang huoshao_lianying lianying_zengshang kurouji kurou_fanji'.split(' ')
+	const bothSides = 'weiwu_tongyu yibing_touxi guicai_yice renzhu_shouhu shuiyan_qijun zhenhe_quanjun qimen_dunjia wolong_mouzhi xiliang_tuji laodang_yizhuang huoshao_lianying lianying_zengshang kurouji kurou_fanji'.split(' ')
 	const attackerOnly = 'meiren meihuo_raozhen huchi_chongzhen sizhandaodi weizhen_zhenhe weizhen_xiaoyao wusheng_pojun wanren_nuhou baibu_chuanyang qibing_raohou xiaobawang_tieqi huogong meizhoulang_junlue'.split(' ')
 	const defenderOnly = 'mouding_houfa huzhu_xuezhan dunzhen_fangyu longdan_jiuyuan gushou_hanzhong jiangdong_gushou'.split(' ')
-	const nonBattle = 'weiwu_haoling jixing_benxi huhu_shengwei shengui_zhicai wangzuo_zhicai neizheng_jingying qijin_qichu tianshen_xiafan jiangdong_haoling xiaobawang_zhuiji baiyi_dujiang baiyi_jixing kuairu_shandian xinyi_yonglie jinfan_jielue jinfan_qixi'.split(' ')
+	const nonBattle = 'weiwu_haoling jixing_benxi huhu_shengwei shengui_zhicai rende wangzuo_zhicai neizheng_jingying qijin_qichu tianshen_xiafan jiangdong_haoling xiaobawang_zhuiji baiyi_dujiang baiyi_jixing kuairu_shandian xinyi_yonglie jinfan_jielue jinfan_qixi'.split(' ')
 	const allTraitIds = [...bothSides, ...attackerOnly, ...defenderOnly, ...nonBattle]
 	assert.equal(new Set(allTraitIds).size, 50)
 
 	const attackTraits = [...bothSides, ...attackerOnly].map((traitId) => ({ traitId, ownerSide: 'primary', ownerRole: 'attacker', generalId: 'g1' }))
 	const attackDetail = { sourceType: 'dungeon', viewType: 'attack', battleType: 'dungeon_reincarnation_attack', traits: attackTraits }
-	assert.equal(attackTraits.length, 28)
-	assert.deepEqual(attackTraits.map((trait) => resolveReportTraitDisplaySide(attackDetail, trait)), Array(28).fill('primary'))
+	assert.equal(attackTraits.length, 27)
+	assert.deepEqual(attackTraits.map((trait) => resolveReportTraitDisplaySide(attackDetail, trait)), Array(27).fill('primary'))
 	assert.equal(attackTraits.every((trait) => getTraitMeta(trait.traitId).name !== trait.traitId && getTraitMeta(trait.traitId).trigger.length > 0), true)
 
 	const defenseTraits = [...bothSides, ...defenderOnly].map((traitId) => ({ traitId, ownerSide: 'secondary', ownerRole: 'defender', generalId: 'g2' }))
 	const defenseDetail = { sourceType: 'dungeon', viewType: 'defense', battleType: 'dungeon_reincarnation_defense', traits: defenseTraits }
-	assert.equal(defenseTraits.length, 21)
-	assert.deepEqual(defenseTraits.map((trait) => resolveReportTraitDisplaySide(defenseDetail, trait)), Array(21).fill('secondary'))
+	assert.equal(defenseTraits.length, 20)
+	assert.deepEqual(defenseTraits.map((trait) => resolveReportTraitDisplaySide(defenseDetail, trait)), Array(20).fill('secondary'))
 
 	const snapshotOnly = {
 		sourceType: 'dungeon', viewType: 'attack', traits: [],
@@ -3913,15 +3881,15 @@ test('轮回攻防无将领时不从城内主将快照补造特性', () => {
 	}
 })
 
-test('郭嘉在轮回攻防平局中按后端全损结果展示且不返兵', () => {
+test('郭嘉在轮回攻防平局中展示真实阵亡和复活结果', () => {
 	for (const [generalId, generalName, traitId, traitName] of [
 		['guojia', '郭嘉', 'guicai_yice', '鬼才遗策'],
 	] as const) {
 		for (const viewType of ['attack', 'defense'] as const) {
 			const playerSide = {
 				role: viewType === 'attack' ? 'attacker' : 'defender', faction: 'wei', power: 1000,
-				generals: [{ id: generalId, name: generalName, level: 1, traits: [{ traitId, name: traitName, requiredOutcome: 'loss' }] }],
-				units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 }],
+				generals: [{ id: generalId, name: generalName, level: 1, traits: [{ traitId, name: traitName }] }],
+				units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 22 }],
 			}
 			const enemySide = {
 				role: viewType === 'attack' ? 'defender' : 'attacker', faction: 'shu', power: 1000,
@@ -3939,18 +3907,25 @@ test('郭嘉在轮回攻防平局中按后端全损结果展示且不返兵', ()
 					result: 'draw', winnerSide: 'draw', ownerSide: viewType === 'attack' ? 'attacker' : 'defender',
 					primarySide: viewType === 'attack' ? playerSide : enemySide,
 					secondarySide: viewType === 'attack' ? enemySide : playerSide,
-					rewards: { generalExp: 100, resources: {} }, traits: [],
+					rewards: { generalExp: 100, resources: {} },
+					traits: [{
+						traitId, traitName, generalId,
+						ownerSide: viewType === 'attack' ? 'primary' : 'secondary',
+						ownerRole: viewType === 'attack' ? 'attacker' : 'defender',
+						detail: { effectRate: 0.22, actualLostUnits: { weiInfantry: 100 }, revivedUnits: { weiInfantry: 22 }, totalRevived: 22 },
+					}],
 				},
 			})
 			const ownedSide = viewType === 'attack' ? detail.primarySide : detail.secondarySide
 			assert.equal(ownedSide?.generals?.[0].traits?.[0].traitId, traitId)
 			assert.deepEqual(ownedSide?.units[0], {
-				unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0,
+				unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 22,
 			})
 			assert.equal(detail.primarySide.power, 1000)
 			assert.equal(detail.secondarySide?.power, 1000)
 			assert.equal(detail.rewards?.generalExp, 100)
-			assert.equal(hasTraitEntries(detail), false)
+			assert.equal(hasTraitEntries(detail), true)
+			assert.equal(detail.traits[0].detail.revivedUnits.weiInfantry, 22)
 		}
 	}
 })

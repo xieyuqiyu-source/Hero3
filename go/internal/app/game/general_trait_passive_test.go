@@ -718,7 +718,7 @@ func TestMarchTraitsStackIntoFinalDuration(t *testing.T) {
 	}
 }
 
-// TestRecruitCostTraitsUseOnlyHomeGeneral 验证两项正式征兵减耗特性留城生效、离城失效。
+// TestRecruitCostTraitsUseOnlyHomeGeneral 验证当前正式征兵减耗特性留城生效、离城失效。
 func TestRecruitCostTraitsUseOnlyHomeGeneral(t *testing.T) {
 	for _, traitCase := range []struct {
 		generalID   string
@@ -727,7 +727,6 @@ func TestRecruitCostTraitsUseOnlyHomeGeneral(t *testing.T) {
 		rate        float64
 		wantHome    int
 	}{
-		{generalID: "guojia", generalName: "郭嘉", traitID: "shengui_zhicai", rate: 0.5, wantHome: 1100},
 		{generalID: "xunyu", generalName: "荀彧", traitID: "wangzuo_zhicai", rate: 0.05, wantHome: 1010},
 	} {
 		t.Run(traitCase.generalName+traitCase.traitID, func(t *testing.T) {

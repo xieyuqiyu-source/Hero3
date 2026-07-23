@@ -1,4 +1,4 @@
-// 本文件锁定正式将领配置中的后续特性压制数量、概率和作用范围。
+// 本文件锁定正式将领配置中的全体封禁与后续单项压制参数和作用范围。
 package game
 
 import (
@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// TestFormalTraitSuppressionConfigsMatchDesign 逐项核对卧龙谋制与苦肉计的正式配置。
+// TestFormalTraitSuppressionConfigsMatchDesign 逐项核对卧龙奇谋与苦肉计的正式配置。
 func TestFormalTraitSuppressionConfigsMatchDesign(t *testing.T) {
 	path := filepath.Join("..", "..", "..", "config", "generals.json")
 	raw, err := os.ReadFile(path)
@@ -25,8 +25,9 @@ func TestFormalTraitSuppressionConfigsMatchDesign(t *testing.T) {
 		traitID   string
 		traitType string
 		params    map[string]float64
+		sides     []string
 	}{
-		{generalID: "zhugeliang", traitID: "wolong_mouzhi", traitType: "bonus", params: map[string]float64{"disableTraitCount": 1}},
+		{generalID: "zhugeliang", traitID: "wolong_mouzhi", traitType: "bonus", params: map[string]float64{"triggerChance": 0.6}, sides: []string{"attacker", "defender", "reinforcement"}},
 		{generalID: "huanggai", traitID: "kurouji", traitType: "special", params: map[string]float64{"triggerChance": 0.35, "disableTraitCount": 1}},
 	}
 	for _, tc := range tests {
@@ -42,7 +43,7 @@ func TestFormalTraitSuppressionConfigsMatchDesign(t *testing.T) {
 			if !trait.Enabled || trait.TraitID != tc.traitID || trait.TraitType != tc.traitType || trait.Scope != "enemy_traits" {
 				t.Fatalf("unexpected formal trait identity: %+v", trait)
 			}
-			if len(trait.AllowedSides) != 0 || len(trait.AllowedScenes) != 0 || trait.RequiredOutcome != "" || trait.TargetUnitType != "" {
+			if !reflect.DeepEqual(trait.AllowedSides, tc.sides) || len(trait.AllowedScenes) != 0 || trait.RequiredOutcome != "" || trait.TargetUnitType != "" {
 				t.Fatalf("unexpected battle constraints: %+v", trait)
 			}
 			if !reflect.DeepEqual(trait.Params, tc.params) {

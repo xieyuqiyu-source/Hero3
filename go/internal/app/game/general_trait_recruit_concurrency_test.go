@@ -19,7 +19,6 @@ func TestRecruitCostTraitsSerializeConcurrentRequests(t *testing.T) {
 		rate        float64
 		available   int
 	}{
-		{generalID: "guojia", generalName: "郭嘉", traitID: "shengui_zhicai", rate: 0.5, available: 100},
 		{generalID: "xunyu", generalName: "荀彧", traitID: "wangzuo_zhicai", rate: 0.05, available: 190},
 	} {
 		t.Run(traitCase.generalName+traitCase.traitID, func(t *testing.T) {

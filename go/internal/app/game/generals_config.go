@@ -300,6 +300,110 @@ func normalizeTraitConfigParams(traitCfg *GeneralTraitConfig) {
 		traitCfg.Scope = "self_army"
 		traitCfg.TargetUnitType = "cavalry"
 		traitCfg.AllowedSides = []string{"attacker"}
+	case "shengui_zhicai":
+		// 旧征兵减耗能力废止；当前 GM 固定四维值保留，旧配置迁移为默认内政与智谋。
+		_, hadOldRecruitReduction := traitCfg.Params["resourceCostReduction"]
+		delete(traitCfg.Params, "resourceCostReduction")
+		delete(traitCfg.Params, "triggerChance")
+		if _, ok := traitCfg.Params["politicsBonus"]; !ok || hadOldRecruitReduction {
+			traitCfg.Params["politicsBonus"] = 10
+		}
+		if _, ok := traitCfg.Params["intelligenceBonus"]; !ok || hadOldRecruitReduction {
+			traitCfg.Params["intelligenceBonus"] = 10
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = ""
+		traitCfg.AllowedSides = nil
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "guicai_yice":
+		// 旧战败返兵能力迁移为全方向战后复活，并保留当前 GM 已配置的新比例与概率。
+		_, hadOldLossReduction := traitCfg.Params["lossReductionRate"]
+		_, hadOldReturnCap := traitCfg.Params["maxReturnCount"]
+		delete(traitCfg.Params, "lossReductionRate")
+		delete(traitCfg.Params, "maxReturnCount")
+		if _, ok := traitCfg.Params["effectRate"]; !ok || hadOldLossReduction || hadOldReturnCap {
+			traitCfg.Params["effectRate"] = 0.22
+		}
+		if _, ok := traitCfg.Params["triggerChance"]; !ok {
+			traitCfg.Params["triggerChance"] = 1
+		}
+		delete(traitCfg.Params, "maxReviveCount")
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = ""
+		traitCfg.AllowedSides = []string{"attacker", "defender", "reinforcement"}
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "rende":
+		// 旧战后复活能力废止；当前 GM 固定四维值保留，旧配置迁移为默认内政与统率。
+		_, hadOldEffectRate := traitCfg.Params["effectRate"]
+		_, hadOldReviveRate := traitCfg.Params["reviveRate"]
+		_, hadOldReviveCap := traitCfg.Params["maxReviveCount"]
+		delete(traitCfg.Params, "effectRate")
+		delete(traitCfg.Params, "reviveRate")
+		delete(traitCfg.Params, "maxReviveCount")
+		delete(traitCfg.Params, "triggerChance")
+		if _, ok := traitCfg.Params["politicsBonus"]; !ok || hadOldEffectRate || hadOldReviveRate || hadOldReviveCap {
+			traitCfg.Params["politicsBonus"] = 10
+		}
+		if _, ok := traitCfg.Params["commandBonus"]; !ok || hadOldEffectRate || hadOldReviveRate || hadOldReviveCap {
+			traitCfg.Params["commandBonus"] = 12
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = ""
+		traitCfg.AllowedSides = nil
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "renzhu_shouhu":
+		// 旧固定返兵迁移为全方向概率复活，并保留当前 GM 已配置的新比例与概率。
+		_, hadOldLossReduction := traitCfg.Params["lossReductionRate"]
+		_, hadOldReturnCap := traitCfg.Params["maxReturnCount"]
+		delete(traitCfg.Params, "lossReductionRate")
+		delete(traitCfg.Params, "maxReturnCount")
+		delete(traitCfg.Params, "maxReviveCount")
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		if _, ok := traitCfg.Params["effectRate"]; !ok || hadOldLossReduction || hadOldReturnCap {
+			traitCfg.Params["effectRate"] = 0.35
+		}
+		if _, ok := traitCfg.Params["triggerChance"]; !ok {
+			traitCfg.Params["triggerChance"] = 0.6
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = ""
+		traitCfg.AllowedSides = []string{"attacker", "defender", "reinforcement"}
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "qimen_dunjia":
+		// 奇门遁甲清除旧通用上限，统一为全方向战前临时困兵。
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		if _, ok := traitCfg.Params["effectRate"]; !ok {
+			traitCfg.Params["effectRate"] = 0.25
+		}
+		if _, ok := traitCfg.Params["triggerChance"]; !ok {
+			traitCfg.Params["triggerChance"] = 1
+		}
+		traitCfg.Scope = "enemy_army"
+		traitCfg.TargetUnitType = ""
+		traitCfg.AllowedSides = []string{"attacker", "defender", "reinforcement"}
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "wolong_mouzhi":
+		// 旧战后单项压制迁移为战前概率封禁敌方全部战斗触发型特性。
+		delete(traitCfg.Params, "disableTraitCount")
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		if _, ok := traitCfg.Params["triggerChance"]; !ok {
+			traitCfg.Params["triggerChance"] = 0.6
+		}
+		traitCfg.Scope = "enemy_traits"
+		traitCfg.TargetUnitType = ""
+		traitCfg.AllowedSides = []string{"attacker", "defender", "reinforcement"}
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
 	}
 }
 
@@ -342,12 +446,14 @@ func defaultGeneralsConfig() GeneralsConfig {
 			},
 			"liubei": {
 				ID: "liubei", Name: "刘备", Faction: "shu", Title: "仁主", Rarity: "epic", Enabled: true,
-				Buffs: map[string]float64{"defenseBonus": 0.10, "productionBonus": 0.05},
-				Traits: []GeneralTraitConfig{
-					{
-						TraitID: "rende", Enabled: true,
-						Params: map[string]float64{"reviveRate": 0.2, "triggerChance": 0.5},
-					},
+				SpecialTrait: GeneralTraitConfig{
+					TraitID: "rende", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army",
+					Params: map[string]float64{"politicsBonus": 10, "commandBonus": 12},
+				},
+				BonusTrait: GeneralTraitConfig{
+					TraitID: "renzhu_shouhu", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army",
+					AllowedSides: []string{"attacker", "defender", "reinforcement"},
+					Params:       map[string]float64{"effectRate": 0.35, "triggerChance": 0.6},
 				},
 			},
 		},

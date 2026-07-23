@@ -187,7 +187,7 @@ func TestReinforcementLossReductionMatchesIndependentReport(t *testing.T) {
 	}
 }
 
-// TestReinforcementResolutionSeparatesCombatReductionAndAfterBattleReturns 验证经验口径保留结算减损，但不被战斗结束后的复活倒扣。
+// TestReinforcementResolutionSeparatesCombatLossesAndAfterBattleRevival 验证经验口径保留真实阵亡，但不被战斗结束后的复活倒扣。
 func TestReinforcementResolutionSeparatesCombatReductionAndAfterBattleReturns(t *testing.T) {
 	record := Reinforcement{
 		ID: "rein_liubei", FromPlayerID: "owner_liubei", FromPlayerFaction: "shu",
@@ -195,22 +195,22 @@ func TestReinforcementResolutionSeparatesCombatReductionAndAfterBattleReturns(t 
 		Generals: []ReinforcementGeneralSnapshot{{ID: "liubei", Traits: []GeneralTraitInstance{
 			{
 				TraitID: "rende", TraitType: "special", Scope: "self_army",
-				Params: map[string]float64{"triggerChance": 1, "reviveRate": 0.5, "maxReviveCount": 10000},
+				Params: map[string]float64{"politicsBonus": 10, "commandBonus": 12},
 			},
 			{
 				TraitID: "renzhu_shouhu", TraitType: "bonus", Scope: "self_army",
-				Params: map[string]float64{"lossReductionRate": 0.1, "maxReturnCount": 10000},
+				Params: map[string]float64{"effectRate": 0.35, "triggerChance": 1},
 			},
 		}}},
 	}
 	resolution := resolveReinforcementAfterBattleTraits(
 		[]Reinforcement{record}, map[string]map[string]int{record.ID: {"shuInfantry": 100}}, "attacker", "plunder", 0,
 	)
-	if resolution.AfterCombatLosses[record.ID]["shuInfantry"] != 100 || resolution.FinalLosses[record.ID]["shuInfantry"] != 40 {
-		t.Fatalf("expected combat losses 100 and final losses 40 after 50 revival plus 10 return, resolution=%+v", resolution)
+	if resolution.AfterCombatLosses[record.ID]["shuInfantry"] != 100 || resolution.FinalLosses[record.ID]["shuInfantry"] != 65 {
+		t.Fatalf("expected combat losses 100 and final losses 65 after 35 revival, resolution=%+v", resolution)
 	}
-	if resolution.Outcomes[record.ID]["rende"].TraitID != "rende" || resolution.Outcomes[record.ID]["renzhu_shouhu"].TraitID != "renzhu_shouhu" {
-		t.Fatalf("expected both after-battle outcomes, outcomes=%+v", resolution.Outcomes)
+	if _, exists := resolution.Outcomes[record.ID]["rende"]; exists || resolution.Outcomes[record.ID]["renzhu_shouhu"].TraitID != "renzhu_shouhu" {
+		t.Fatalf("expected only Renzhu Shouhu after-battle outcome, outcomes=%+v", resolution.Outcomes)
 	}
 }
 
@@ -232,7 +232,7 @@ func TestReinforcementLossReductionConsumesMainBattleSuppressionOnce(t *testing.
 		Result: &combat.CombatResult{}, AttackerOwnsTrait: true, DefenderOwnsTrait: true,
 	}
 	general.Dispatch(suppressionCtx, []general.ActiveTrait{{
-		TraitID: "wolong_mouzhi", OwnerSide: "attacker", OwnerGeneralID: "zhugeliang",
+		TraitID: "kurouji", OwnerSide: "attacker", OwnerGeneralID: "huanggai",
 		Params: general.Params{"disableTraitCount": 1, "triggerChance": 1},
 	}})
 	losses, outcomes, suppressedCount := applyReinforcementAfterBattleTraits(
@@ -244,7 +244,7 @@ func TestReinforcementLossReductionConsumesMainBattleSuppressionOnce(t *testing.
 		t.Fatalf("expected one consumed suppression, got %d", suppressedCount)
 	}
 	general.RecordActualTraitSuppressions(suppressionCtx, "defender", suppressedCount)
-	if suppressionCtx.Triggered["wolong_mouzhi"].Detail["disabledTraitCount"] != 1 {
+	if suppressionCtx.Triggered["kurouji"].Detail["disabledTraitCount"] != 1 {
 		t.Fatalf("expected reinforcement interception to update the main suppression report, got %+v", suppressionCtx.Triggered)
 	}
 
@@ -418,7 +418,7 @@ func TestNpcSweepAggregatesRealRepeatedFireDamage(t *testing.T) {
 	}
 }
 
-// TestNpcSweepLossReductionTraitsMatchReturnedArmy 验证典韦和郭嘉只在真实扫荡战败后返兵，且聚合结果不再伪报胜利。
+// TestNpcSweepLossReductionTraitsMatchReturnedArmy 验证鬼才遗策在真实扫荡后复活并写入聚合状态。
 func TestNpcSweepLossReductionTraitsMatchReturnedArmy(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -431,8 +431,9 @@ func TestNpcSweepLossReductionTraitsMatchReturnedArmy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			setTestCombatUnitsConfig(t)
 			traitCfg := GeneralTraitConfig{
-				TraitID: tc.traitID, TraitType: tc.traitType, Enabled: true, Scope: "self_army", RequiredOutcome: "loss",
-				Params: map[string]float64{"lossReductionRate": 0.5, "maxReturnCount": 10000, "triggerChance": 1},
+				TraitID: tc.traitID, TraitType: tc.traitType, Enabled: true, Scope: "self_army",
+				AllowedSides: []string{"attacker", "defender", "reinforcement"},
+				Params:       map[string]float64{"effectRate": 0.22, "triggerChance": 1},
 			}
 			hero := GeneralHeroConfig{ID: "test_general", Name: "测试将领", Faction: "wei", Enabled: true}
 			if tc.traitType == general.TraitTypeSpecial {
@@ -467,19 +468,28 @@ func TestNpcSweepLossReductionTraitsMatchReturnedArmy(t *testing.T) {
 				t.Fatalf("SweepNpc failed: %v", err)
 			}
 			report := response.BattleReport
-			if report.Result != "defender_victory" || report.LostUnits["weiInfantry"] != 100 || report.RevivedUnits["weiInfantry"] != 50 || report.SurvivedUnits["weiInfantry"] != 50 {
-				t.Fatalf("expected real loss with 50 returned troops, got result=%s lost=%+v returned=%+v survived=%+v", report.Result, report.LostUnits, report.RevivedUnits, report.SurvivedUnits)
+			if report.Result != "defender_victory" || report.LostUnits["weiInfantry"] != 100 || report.RevivedUnits["weiInfantry"] != 22 || report.SurvivedUnits["weiInfantry"] != 22 {
+				t.Fatalf("expected real loss with 22 revived troops, got result=%s lost=%+v revived=%+v survived=%+v", report.Result, report.LostUnits, report.RevivedUnits, report.SurvivedUnits)
 			}
-			returned, ok := report.TraitOutcomes[tc.traitID].Detail["returnedUnits"].(map[string]int)
-			if !ok || returned["weiInfantry"] != 50 {
-				t.Fatalf("expected %s to report 50 returned troops, got %+v", tc.traitID, report.TraitOutcomes[tc.traitID])
+			revived, ok := report.TraitOutcomes[tc.traitID].Detail["revivedUnits"].(map[string]int)
+			if !ok || revived["weiInfantry"] != 22 {
+				t.Fatalf("expected %s to report 22 revived troops, got %+v", tc.traitID, report.TraitOutcomes[tc.traitID])
 			}
 			stored, err := repo.GetState(state.Player.ID)
 			if err != nil {
 				t.Fatalf("get state: %v", err)
 			}
-			if armySliceToMap(stored.Army)["weiInfantry"] != 50 || report.Detail == nil || report.Detail.PrimarySide.Units[0].Survived != 50 {
-				t.Fatalf("expected real army and standard report to keep 50 troops, army=%+v detail=%+v", stored.Army, report.Detail)
+			if armySliceToMap(stored.Army)["weiInfantry"] != 22 || report.Detail == nil {
+				t.Fatalf("expected real army and standard report to keep 22 troops, army=%+v detail=%+v", stored.Army, report.Detail)
+			}
+			unitMatched := false
+			for _, unit := range report.Detail.PrimarySide.Units {
+				if unit.UnitType == "weiInfantry" && unit.Survived == 22 {
+					unitMatched = true
+				}
+			}
+			if !unitMatched {
+				t.Fatalf("expected standard report to keep 22 troops, detail=%+v", report.Detail)
 			}
 			if report.Summary == "" || !strings.Contains(report.Summary, "负 1") {
 				t.Fatalf("expected sweep summary to disclose one defeat, got %q", report.Summary)

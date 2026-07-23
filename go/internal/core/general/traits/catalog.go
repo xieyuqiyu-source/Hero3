@@ -44,11 +44,12 @@ func (t *configurableTrait) Description(params general.Params) string { return t
 // ParamSchema 返回 GM 可配置参数 schema。
 func (t *configurableTrait) ParamSchema() []general.ParamField {
 	out := append([]general.ParamField(nil), t.schema...)
-	if t.effect == "passive_unit_stats" {
+	if t.effect == "passive_unit_stats" || t.effect == "passive_stat" {
 		return out
 	}
 	for _, field := range commonScopeFields(t.triggerChanceDefault()) {
-		if t.id == "yibing_touxi" && (field.Key == "maxAffectedRate" || field.Key == "maxAffectedCount") {
+		if (t.id == "yibing_touxi" || t.id == "guicai_yice" || t.id == "renzhu_shouhu" || t.id == "qimen_dunjia" || t.effect == "disable_all_combat_traits") &&
+			(field.Key == "maxAffectedRate" || field.Key == "maxAffectedCount") {
 			continue
 		}
 		out = append(out, field)
@@ -80,6 +81,8 @@ func (t *configurableTrait) handle(ctx general.EventContext, params general.Para
 	switch c := ctx.(type) {
 	case *general.BeforeBattleContext:
 		t.handleBeforeBattle(c, params)
+	case *general.BattleTraitControlContext:
+		t.handleBattleTraitControl(c, params)
 	case *general.AfterCombatResolveContext:
 		t.handleAfterCombat(c, params)
 	case *general.AfterBattleContext:
@@ -91,6 +94,28 @@ func (t *configurableTrait) handle(ctx general.EventContext, params general.Para
 	case *general.PlunderResolveContext:
 		t.handlePlunder(c, params)
 	}
+}
+
+// handleBattleTraitControl 在所有战斗触发阶段前封禁敌方触发型特性。
+func (t *configurableTrait) handleBattleTraitControl(c *general.BattleTraitControlContext, params general.Params) {
+	if c == nil || t.effect != "disable_all_combat_traits" {
+		return
+	}
+	side := enemySide(c.Actor.Side)
+	if side == "" {
+		return
+	}
+	if c.DisabledCombatTraitSides == nil {
+		c.DisabledCombatTraitSides = map[string]bool{}
+	}
+	c.DisabledCombatTraitSides[side] = true
+	if c.Triggered == nil {
+		c.Triggered = map[string]general.TraitOutcome{}
+	}
+	storeTraitOutcome(c.Triggered, t.outcome(c.Actor, params, map[string]interface{}{
+		"disabledGeneralCount": c.CombatGeneralCounts[side],
+		"disabledTraitCount":   c.CombatTraitCounts[side],
+	}))
 }
 
 // handleBeforeBattle 处理战斗前削弱、震慑和加成。
@@ -239,12 +264,34 @@ func (t *configurableTrait) handleAfterBattle(c *general.AfterBattleContext, par
 	}
 	switch t.effect {
 	case "revive":
-		revived := reviveLosses(c, params)
-		t.recordAfterBattle(c, params, revived, "revivedUnits")
+		reviveParams := params
+		if t.id == "guicai_yice" || t.id == "renzhu_shouhu" {
+			reviveParams = cloneParams(params)
+			reviveParams["maxReviveCount"] = 0
+		}
+		revived := reviveLosses(c, reviveParams)
+		totalRevived := 0
+		for _, amount := range revived {
+			totalRevived += amount
+		}
+		t.recordAfterBattleDetail(c, params, map[string]interface{}{
+			"actualLostUnits": clonePositiveUnitCounts(c.PlayerLosses),
+			"revivedUnits":    revived,
+			"totalRevived":    totalRevived,
+		})
 	case "reduce_final_losses":
 		reduced := reduceFinalLosses(c, params)
 		t.recordAfterBattle(c, params, reduced, "returnedUnits")
 	}
+}
+
+// cloneParams 复制特性参数，供单个正式特性补充内部结算约束。
+func cloneParams(params general.Params) general.Params {
+	cloned := make(general.Params, len(params)+1)
+	for key, value := range params {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 // handleMarchCreate 处理行军创建时的速度特性。
@@ -679,6 +726,17 @@ func reviveLosses(c *general.AfterBattleContext, params general.Params) map[stri
 	return revived
 }
 
+// clonePositiveUnitCounts 复制正数兵力明细，避免战报结果持有可变上下文。
+func clonePositiveUnitCounts(source map[string]int) map[string]int {
+	result := map[string]int{}
+	for unitType, amount := range source {
+		if amount > 0 {
+			result[unitType] = amount
+		}
+	}
+	return result
+}
+
 // reduceFinalLosses 在战斗结束后返还一部分损失。
 func reduceFinalLosses(c *general.AfterBattleContext, params general.Params) map[string]int {
 	return reviveLosses(c, general.Params{"effectRate": params.FloatWithBounds("lossReductionRate", params.FloatOr("effectRate", 0), 0, 0.8), "maxReviveCount": params.FloatOr("maxReturnCount", 10000)})
@@ -769,6 +827,17 @@ func (t *configurableTrait) recordAfterBattle(c *general.AfterBattleContext, par
 		c.Triggered = map[string]general.TraitOutcome{}
 	}
 	storeTraitOutcome(c.Triggered, t.outcome(c.Actor, params, map[string]interface{}{key: values}))
+}
+
+// recordAfterBattleDetail 写入包含多项真实结果的战斗结束特性明细。
+func (t *configurableTrait) recordAfterBattleDetail(c *general.AfterBattleContext, params general.Params, detail map[string]interface{}) {
+	if len(detail) == 0 {
+		return
+	}
+	if c.Triggered == nil {
+		c.Triggered = map[string]general.TraitOutcome{}
+	}
+	storeTraitOutcome(c.Triggered, t.outcome(c.Actor, params, detail))
 }
 
 // recordMarch 写入行军特性结果。
@@ -876,6 +945,9 @@ func (t *configurableTrait) outcome(actor general.TraitActor, params general.Par
 
 // traitPriority 根据事件和效果返回执行优先级。
 func traitPriority(event string, effect string) int {
+	if event == general.EventBattleTraitControl && effect == "disable_all_combat_traits" {
+		return 100
+	}
 	if event == general.EventAfterCombatResolve && effect == "disable_traits" {
 		return 90
 	}
@@ -928,17 +1000,18 @@ func init() {
 		{id: "dunzhen_fangyu", name: "盾阵防御", traitType: general.TraitTypeBonus, description: "防守或增援战斗前概率提升所率全军防御。", effect: "army_defense_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("defenseBonusRate", "全军防御提升", 0.3, 2)}, defaultTriggerChance: 0.6},
 		{id: "weizhen_zhenhe", name: "震慑全军", traitType: general.TraitTypeSpecial, description: "主动进攻战斗前概率使敌方部分兵力溃逃；溃逃兵不参与本次攻防、不计死亡，战后完整返回敌方部队。", effect: "suppress", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "溃逃比例", 0.25, 1)}, defaultTriggerChance: 0.35},
 		{id: "weizhen_xiaoyao", name: "威震逍遥", traitType: general.TraitTypeBonus, description: "主动进攻战斗前概率提升所率骑兵攻击。", effect: "unit_attack_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("attackBonusRate", "骑兵攻击提升", 0.35, 2)}, defaultTriggerChance: 0.6},
-		{id: "shengui_zhicai", name: "神鬼之才", traitType: general.TraitTypeSpecial, description: "征兵资源消耗降低。", effect: "recruit_cost_reduce", events: []string{general.EventRecruitCost}, schema: []general.ParamField{rateField("resourceCostReduction", "征兵消耗降低", 0.5, 0.8)}},
-		{id: "guicai_yice", name: "鬼才遗策", traitType: general.TraitTypeBonus, description: "战败时最终损失降低。", effect: "reduce_final_losses", events: []string{general.EventAfterBattle}, schema: []general.ParamField{rateField("lossReductionRate", "最终减损", 0.1, 0.8), countField("maxReturnCount", "返还上限", 10000, 1000000)}},
+		{id: "shengui_zhicai", name: "神鬼之才", traitType: general.TraitTypeSpecial, description: "全天候被动增加郭嘉的内政和智谋，不作为战斗触发特性。", effect: "passive_stat", events: nil, schema: []general.ParamField{countField("politicsBonus", "内政增加", 10, 100), countField("intelligenceBonus", "智谋增加", 10, 100)}},
+		{id: "guicai_yice", name: "鬼才遗策", traitType: general.TraitTypeBonus, description: "进攻、防守或增援战斗结束后，按所率部队本场真实阵亡复活士兵。", effect: "revive", events: []string{general.EventAfterBattle}, schema: []general.ParamField{rateField("effectRate", "真实阵亡复活比例", 0.22, 1)}},
 		{id: "wangzuo_zhicai", name: "王佐之才", traitType: general.TraitTypeSpecial, description: "将领留城时降低征兵资源消耗，离城后失效。", effect: "recruit_cost_reduce", events: []string{general.EventRecruitCost}, schema: []general.ParamField{rateField("resourceCostReduction", "征兵消耗降低", 0.05, 0.8)}},
 		{id: "neizheng_jingying", name: "内政精营", traitType: general.TraitTypeBonus, description: "被动提升资源产量。", effect: "passive_modifier", events: nil, schema: []general.ParamField{rateField("productionBonusRate", "资源产量提升", 0.05, 0.5)}},
-		{id: "renzhu_shouhu", name: "仁主守护", traitType: general.TraitTypeBonus, description: "己方最终损失降低。", effect: "reduce_final_losses", events: []string{general.EventAfterBattle}, schema: []general.ParamField{rateField("lossReductionRate", "最终减损", 0.1, 0.8), countField("maxReturnCount", "返还上限", 10000, 1000000)}},
+		{id: "rende", name: "仁德天下", traitType: general.TraitTypeSpecial, description: "全天候被动增加刘备的内政和统率，不作为战斗触发特性。", effect: "passive_stat", events: nil, schema: []general.ParamField{countField("politicsBonus", "内政增加", 10, 100), countField("commandBonus", "统率增加", 12, 100)}},
+		{id: "renzhu_shouhu", name: "仁主守护", traitType: general.TraitTypeBonus, description: "进攻、防守或增援战斗结束后，概率按所率部队本场真实阵亡复活士兵。", effect: "revive", events: []string{general.EventAfterBattle}, schema: []general.ParamField{rateField("effectRate", "真实阵亡复活比例", 0.35, 1)}, defaultTriggerChance: 0.6},
 		{id: "shuiyan_qijun", name: "水淹七军", traitType: general.TraitTypeSpecial, description: "战前水淹并造成敌军真实伤亡。", effect: "pre_damage", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "水淹伤亡比例", 0.35, 1)}},
 		{id: "wusheng_pojun", name: "武圣破军", traitType: general.TraitTypeBonus, description: "主动进攻时提升全军攻击。", effect: "army_attack_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("attackBonusRate", "攻击提升", 0.2, 2)}},
 		{id: "zhenhe_quanjun", name: "震慑全军", traitType: general.TraitTypeSpecial, description: "概率让敌军部分兵仅本场不参战，战后保留。", effect: "suppress", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "震慑比例", 0.5, 1)}},
 		{id: "wanren_nuhou", name: "万人怒吼", traitType: general.TraitTypeBonus, description: "主动进攻时提升步兵攻击。", effect: "unit_attack_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("attackBonusRate", "步兵攻击提升", 0.2, 2)}},
-		{id: "qimen_dunjia", name: "奇门遁甲", traitType: general.TraitTypeSpecial, description: "困住敌军，部分兵仅本场不参战，战后保留。", effect: "suppress", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "困敌比例", 0.25, 1)}},
-		{id: "wolong_mouzhi", name: "卧龙谋制", traitType: general.TraitTypeBonus, description: "压制敌方一定数量的后续特性。", effect: "disable_traits", events: []string{general.EventAfterCombatResolve}, schema: []general.ParamField{countField("disableTraitCount", "压制数量", 1, 24)}},
+		{id: "qimen_dunjia", name: "奇门遁甲", traitType: general.TraitTypeSpecial, description: "进攻、防守或增援战斗前使敌方部分兵力仅本场不参战，战后完整保留。", effect: "suppress", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "困敌比例", 0.25, 1)}},
+		{id: "wolong_mouzhi", name: "卧龙奇谋", traitType: general.TraitTypeBonus, description: "进攻、防守或增援战斗前概率封禁敌方所有参战将领的战斗触发型特性，不影响被动特性。", effect: "disable_all_combat_traits", events: []string{general.EventBattleTraitControl}, defaultTriggerChance: 0.6},
 		{id: "longdan_jiuyuan", name: "龙胆救援", traitType: general.TraitTypeSpecial, description: "增援或防守时保护己方损失。", effect: "reduce_own_losses", events: []string{general.EventAfterCombatResolve}, schema: []general.ParamField{rateField("lossReductionRate", "减损比例", 0.2, 0.8)}},
 		{id: "qijin_qichu", name: "七进七出", traitType: general.TraitTypeBonus, description: "主动出征或增援创建时缩短全军行军时间，不作为战斗触发特性。", effect: "march_speed", events: []string{general.EventMarchCreate}, schema: []general.ParamField{rateField("speedBonusRate", "速度提升", 1, 10), countField("minMarchSeconds", "最短行军秒数", 60, 86400)}},
 		{id: "xiliang_tuji", name: "西凉突击", traitType: general.TraitTypeSpecial, description: "进攻、守城或作为援军时只对敌方骑兵追加冲锋损失。", effect: "target_unit_damage", events: []string{general.EventAfterCombatResolve}, schema: []general.ParamField{rateField("effectRate", "冲锋伤害", 0.12, 1)}},

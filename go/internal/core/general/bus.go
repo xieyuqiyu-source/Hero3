@@ -131,6 +131,8 @@ func traitContextSideAndScene(ctx EventContext) (string, string) {
 	switch c := ctx.(type) {
 	case *BeforeBattleContext:
 		return c.Actor.Side, c.Scene
+	case *BattleTraitControlContext:
+		return c.Actor.Side, c.Scene
 	case *AfterCombatResolveContext:
 		return c.Actor.Side, c.Scene
 	case *AfterBattleContext:
@@ -194,6 +196,11 @@ func applyActor(ctx EventContext, at ActiveTrait) {
 			if c.DefenderOwnsTrait && !c.AttackerOwnsTrait {
 				actor.Side = "defender"
 			}
+		}
+		c.Actor = actor
+	case *BattleTraitControlContext:
+		if at.OwnerSide != "" {
+			actor.Side = at.OwnerSide
 		}
 		c.Actor = actor
 	case *AfterCombatResolveContext:

@@ -106,12 +106,12 @@ func TestIndependentTraitsRespectZeroTriggerChance(t *testing.T) {
 			t.Fatalf("expected zero chance Huogong to leave losses untouched, result=%+v outcomes=%+v", result, ctx.Triggered)
 		}
 	})
-	t.Run("仁德", func(t *testing.T) {
+	t.Run("仁主守护", func(t *testing.T) {
 		army := map[string]int{}
 		ctx := &general.AfterBattleContext{PlayerArmy: army, PlayerLosses: map[string]int{"infantry": 100}}
-		general.Dispatch(ctx, []general.ActiveTrait{{TraitID: "rende", Params: general.Params{"effectRate": 0.5, "triggerChance": 0}}})
+		general.Dispatch(ctx, []general.ActiveTrait{{TraitID: "renzhu_shouhu", Params: general.Params{"effectRate": 0.35, "triggerChance": 0}}})
 		if len(army) != 0 || len(ctx.Revived) != 0 || len(ctx.Triggered) != 0 {
-			t.Fatalf("expected zero chance Rende to leave army untouched, army=%+v ctx=%+v", army, ctx)
+			t.Fatalf("expected zero chance Renzhu Shouhu to leave army untouched, army=%+v ctx=%+v", army, ctx)
 		}
 	})
 }
@@ -313,8 +313,8 @@ func TestHuogongDefenderDoesNothing(t *testing.T) {
 	}
 }
 
-// 仁德：复活损失的兵
-func TestRende_RevivesLosses(t *testing.T) {
+// 仁主守护：概率命中后按真实阵亡复活。
+func TestRenzhuShouhuRevivesLosses(t *testing.T) {
 	rand.Seed(1)
 	playerArmy := map[string]int{"infantry": 80, "cavalry": 30}
 	playerLosses := map[string]int{"infantry": 20, "cavalry": 10}
@@ -326,26 +326,24 @@ func TestRende_RevivesLosses(t *testing.T) {
 		Won:          true,
 	}
 	general.Dispatch(ctx, []general.ActiveTrait{
-		{TraitID: "rende", Params: general.Params{"reviveRate": 0.5, "triggerChance": 1.0}},
+		{TraitID: "renzhu_shouhu", Params: general.Params{"effectRate": 0.35, "triggerChance": 1.0}},
 	})
-	// 20 × 0.5 = 10 复活，80 + 10 = 90
-	if playerArmy["infantry"] != 90 {
-		t.Errorf("expected 90 infantry after revive, got %d", playerArmy["infantry"])
+	if playerArmy["infantry"] != 87 {
+		t.Errorf("expected 87 infantry after revive, got %d", playerArmy["infantry"])
 	}
-	// 10 × 0.5 = 5 复活，30 + 5 = 35
-	if playerArmy["cavalry"] != 35 {
-		t.Errorf("expected 35 cavalry after revive, got %d", playerArmy["cavalry"])
+	if playerArmy["cavalry"] != 33 {
+		t.Errorf("expected 33 cavalry after revive, got %d", playerArmy["cavalry"])
 	}
-	if ctx.Revived["infantry"] != 10 || ctx.Revived["cavalry"] != 5 {
-		t.Errorf("expected revived map {infantry:10, cavalry:5}, got %v", ctx.Revived)
+	if ctx.Revived["infantry"] != 7 || ctx.Revived["cavalry"] != 3 {
+		t.Errorf("expected revived map {infantry:7, cavalry:3}, got %v", ctx.Revived)
 	}
-	if outcome := ctx.Triggered["rende"]; outcome.Detail["effectRate"] != 0.5 || outcome.Detail["triggerChance"] != 1.0 {
-		t.Fatalf("expected real Rende outcome to include rate 0.5 and chance 1, got %+v", outcome)
+	if outcome := ctx.Triggered["renzhu_shouhu"]; outcome.Detail["effectRate"] != 0.35 || outcome.Detail["triggerChance"] != 1.0 {
+		t.Fatalf("expected Renzhu outcome to include rate 0.35 and chance 1, got %+v", outcome)
 	}
 }
 
-// 仁德：失败也能触发
-func TestRende_TriggersOnLoss(t *testing.T) {
+// 仁主守护：战败时同样按真实阵亡复活。
+func TestRenzhuShouhuTriggersOnLoss(t *testing.T) {
 	rand.Seed(1)
 	playerArmy := map[string]int{"infantry": 0}
 	playerLosses := map[string]int{"infantry": 100}
@@ -355,10 +353,10 @@ func TestRende_TriggersOnLoss(t *testing.T) {
 		IsAttacker: true, Won: false, // 失败
 	}
 	general.Dispatch(ctx, []general.ActiveTrait{
-		{TraitID: "rende", Params: general.Params{"reviveRate": 0.3, "triggerChance": 1.0}},
+		{TraitID: "renzhu_shouhu", Params: general.Params{"effectRate": 0.35, "triggerChance": 1.0}},
 	})
-	if playerArmy["infantry"] != 30 {
-		t.Errorf("expected 30 infantry revived on loss, got %d", playerArmy["infantry"])
+	if playerArmy["infantry"] != 35 {
+		t.Errorf("expected 35 infantry revived on loss, got %d", playerArmy["infantry"])
 	}
 }
 
@@ -450,7 +448,7 @@ func TestDisableTraitsAtSamePriorityResolveSimultaneously(t *testing.T) {
 
 	general.Dispatch(ctx, []general.ActiveTrait{
 		{TraitID: "kurouji", OwnerSide: "attacker", Params: general.Params{"disableTraitCount": 1, "triggerChance": 1}},
-		{TraitID: "wolong_mouzhi", OwnerSide: "defender", Params: general.Params{"disableTraitCount": 1, "triggerChance": 1}},
+		{TraitID: "kurouji", OwnerSide: "defender", Params: general.Params{"disableTraitCount": 1, "triggerChance": 1}},
 		{TraitID: "kurou_fanji", OwnerSide: "attacker", Params: general.Params{"effectRate": 0.1, "triggerChance": 1}},
 		{TraitID: "laodang_yizhuang", OwnerSide: "defender", Params: general.Params{"effectRate": 0.1, "triggerChance": 1}},
 	})
@@ -461,17 +459,20 @@ func TestDisableTraitsAtSamePriorityResolveSimultaneously(t *testing.T) {
 	if _, ok := ctx.Triggered["kurouji"]; !ok {
 		t.Fatalf("expected attacker suppression outcome, got %+v", ctx.Triggered)
 	}
-	if _, ok := ctx.Triggered["wolong_mouzhi"]; !ok {
-		t.Fatalf("expected defender suppression outcome, got %+v", ctx.Triggered)
-	}
 	if _, ok := ctx.Triggered["kurou_fanji"]; ok {
 		t.Fatalf("expected attacker damage trait suppressed, got %+v", ctx.Triggered)
 	}
 	if _, ok := ctx.Triggered["laodang_yizhuang"]; ok {
 		t.Fatalf("expected defender damage trait suppressed, got %+v", ctx.Triggered)
 	}
-	if ctx.Triggered["kurouji"].Detail["disabledTraitCount"] != 1 || ctx.Triggered["wolong_mouzhi"].Detail["disabledTraitCount"] != 1 {
-		t.Fatalf("expected both suppression outcomes to record one real interception, got %+v", ctx.Triggered)
+	suppressionOutcomes := 0
+	for _, outcome := range ctx.Triggered {
+		if outcome.TraitID == "kurouji" && outcome.Detail["disabledTraitCount"] == 1 {
+			suppressionOutcomes++
+		}
+	}
+	if suppressionOutcomes != 2 {
+		t.Fatalf("expected both Huang Gai suppression outcomes to record one real interception, got %+v", ctx.Triggered)
 	}
 }
 
@@ -481,9 +482,9 @@ func TestDisableTraitsWithoutEnemyFollowupReportsZeroActual(t *testing.T) {
 		Result: &combat.CombatResult{}, AttackerOwnsTrait: true, DefenderOwnsTrait: true,
 	}
 	general.Dispatch(ctx, []general.ActiveTrait{
-		{TraitID: "wolong_mouzhi", OwnerSide: "attacker", Params: general.Params{"disableTraitCount": 1, "triggerChance": 1}},
+		{TraitID: "kurouji", OwnerSide: "attacker", Params: general.Params{"disableTraitCount": 1, "triggerChance": 1}},
 	})
-	outcome := ctx.Triggered["wolong_mouzhi"]
+	outcome := ctx.Triggered["kurouji"]
 	if outcome.Detail["disableTraitCount"] != 1 || outcome.Detail["disabledTraitCount"] != 0 {
 		t.Fatalf("expected design count 1 and actual count 0 without enemy follow-up, got %+v", outcome)
 	}
@@ -700,14 +701,13 @@ func TestMarchSpeedTraitsRespectMinimumAndProbability(t *testing.T) {
 	}
 }
 
-// TestAllRecruitCostTraitsModifyActualCost 验证郭嘉和荀彧的征兵减耗特性分别修改真实资源消耗。
+// TestAllRecruitCostTraitsModifyActualCost 验证当前征兵减耗特性修改真实资源消耗。
 func TestAllRecruitCostTraitsModifyActualCost(t *testing.T) {
 	for _, tc := range []struct {
 		traitID string
 		rate    float64
 		want    int
 	}{
-		{traitID: "shengui_zhicai", rate: 0.5, want: 51},
 		{traitID: "wangzuo_zhicai", rate: 0.05, want: 96},
 	} {
 		t.Run(tc.traitID, func(t *testing.T) {
@@ -855,7 +855,7 @@ func TestZhangLiaoSuppressionUsesExactMixedArmyTotal(t *testing.T) {
 	}
 }
 
-// TestRemainingAfterCombatTraitIDsModifyResult 验证黄盖反击、陆逊增伤和诸葛亮压制都进入战后结果。
+// TestRemainingAfterCombatTraitIDsModifyResult 验证黄盖反击、陆逊增伤和诸葛亮战前控制都进入正确阶段。
 func TestRemainingAfterCombatTraitIDsModifyResult(t *testing.T) {
 	t.Run("kurou_fanji", func(t *testing.T) {
 		result := &combat.CombatResult{DefenderLosses: []combat.UnitLoss{{ID: "shadowGuard", Count: 100, Losses: 10}}}
@@ -875,14 +875,17 @@ func TestRemainingAfterCombatTraitIDsModifyResult(t *testing.T) {
 		}
 	})
 	t.Run("wolong_mouzhi", func(t *testing.T) {
-		result := &combat.CombatResult{AttackerLosses: []combat.UnitLoss{{ID: "huWei", Count: 100, Losses: 10}}, DefenderLosses: []combat.UnitLoss{{ID: "shadowGuard", Count: 100, Losses: 10}}}
-		ctx := &general.AfterCombatResolveContext{Result: result, AttackerOwnsTrait: true, DefenderOwnsTrait: true, Scene: "attack"}
+		ctx := &general.BattleTraitControlContext{
+			Scene:               "attack",
+			CombatGeneralCounts: map[string]int{"defender": 2},
+			CombatTraitCounts:   map[string]int{"defender": 4},
+		}
 		general.Dispatch(ctx, []general.ActiveTrait{
-			{TraitID: "wolong_mouzhi", OwnerSide: "attacker", Params: general.Params{"disableTraitCount": 1, "triggerChance": 1}},
-			{TraitID: "kurou_fanji", OwnerSide: "defender", Params: general.Params{"effectRate": 0.1, "triggerChance": 1}},
+			{TraitID: "wolong_mouzhi", OwnerSide: "attacker", Params: general.Params{"triggerChance": 1}},
 		})
-		if result.AttackerLosses[0].Losses != 10 || ctx.Triggered["wolong_mouzhi"].Detail["disableTraitCount"] != 1 || ctx.Triggered["wolong_mouzhi"].Detail["disabledTraitCount"] != 1 {
-			t.Fatalf("expected Wolong to suppress defender counter, result=%+v outcomes=%+v", result, ctx.Triggered)
+		outcome := ctx.Triggered["wolong_mouzhi"]
+		if !ctx.DisabledCombatTraitSides["defender"] || outcome.Name != "卧龙奇谋" || outcome.Detail["disabledGeneralCount"] != 2 || outcome.Detail["disabledTraitCount"] != 4 {
+			t.Fatalf("expected Wolong to disable all defender combat traits before battle, context=%+v outcomes=%+v", ctx, ctx.Triggered)
 		}
 	})
 }
@@ -988,11 +991,34 @@ func TestAfterBattleRequiredLossRejectsDraw(t *testing.T) {
 		Scene:        "plunder",
 	}
 	general.Dispatch(ctx, []general.ActiveTrait{{
-		TraitID: "guicai_yice", OwnerSide: "attacker", RequiredOutcome: "loss",
-		Params: general.Params{"lossReductionRate": 0.1, "maxReturnCount": 10000, "triggerChance": 1},
+		TraitID: "renzhu_shouhu", OwnerSide: "attacker", RequiredOutcome: "loss",
+		Params: general.Params{"effectRate": 0.35, "triggerChance": 1},
 	}})
 	if ctx.PlayerArmy["infantry"] != 50 || len(ctx.Revived) != 0 || len(ctx.Triggered) != 0 {
 		t.Fatalf("expected draw to reject loss-only after-battle trait, ctx=%+v", ctx)
+	}
+}
+
+// TestGuicaiYiceRevivesActualLossesOnDraw 验证鬼才遗策不限制胜负并按真实阵亡复活。
+func TestGuicaiYiceRevivesActualLossesOnDraw(t *testing.T) {
+	ctx := &general.AfterBattleContext{
+		PlayerArmy:   map[string]int{"infantry": 50, "cavalry": 10},
+		PlayerLosses: map[string]int{"infantry": 50, "cavalry": 10},
+		IsAttacker:   true,
+		Winner:       "draw",
+		Scene:        "plunder",
+	}
+	general.Dispatch(ctx, []general.ActiveTrait{{
+		TraitID: "guicai_yice", OwnerSide: "attacker",
+		Params: general.Params{"effectRate": 0.22, "maxReviveCount": 0, "triggerChance": 1},
+	}})
+	outcome, ok := ctx.Triggered["guicai_yice"]
+	actualLost, actualOK := outcome.Detail["actualLostUnits"].(map[string]int)
+	revived, revivedOK := outcome.Detail["revivedUnits"].(map[string]int)
+	if !ok || !actualOK || !revivedOK || actualLost["infantry"] != 50 || actualLost["cavalry"] != 10 ||
+		revived["infantry"] != 11 || revived["cavalry"] != 2 || outcome.Detail["totalRevived"] != 13 ||
+		ctx.PlayerArmy["infantry"] != 61 || ctx.PlayerArmy["cavalry"] != 12 {
+		t.Fatalf("expected Guicai to revive 22%% of each unit's actual losses on draw, ctx=%+v outcome=%+v", ctx, outcome)
 	}
 }
 

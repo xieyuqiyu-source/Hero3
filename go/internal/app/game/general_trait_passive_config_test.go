@@ -33,9 +33,10 @@ func TestFormalPassiveAndCityTraitConfigsMatchDesign(t *testing.T) {
 	}{
 		{generalID: "caocao", traitID: "weiwu_haoling", traitType: "special", scope: "self_city", targetUnitType: "huWei", params: map[string]float64{"guardPerMinute": 300}},
 		{generalID: "zhenmi", traitID: "meiren", traitType: "special", scope: "self_army", allowedSides: []string{"attacker"}, params: map[string]float64{"attackBonusRate": 0.25, "triggerChance": 0.5}},
-		{generalID: "guojia", traitID: "shengui_zhicai", traitType: "special", scope: "self_city", params: map[string]float64{"resourceCostReduction": 0.5}},
+		{generalID: "guojia", traitID: "shengui_zhicai", traitType: "special", scope: "self_army", params: map[string]float64{"politicsBonus": 10, "intelligenceBonus": 10}},
 		{generalID: "xunyu", traitID: "wangzuo_zhicai", traitType: "special", scope: "self_city", params: map[string]float64{"resourceCostReduction": 0.05}},
 		{generalID: "xunyu", traitID: "neizheng_jingying", traitType: "bonus", scope: "self_city", params: map[string]float64{"productionBonusRate": 0.05}},
+		{generalID: "liubei", traitID: "rende", traitType: "special", scope: "self_army", params: map[string]float64{"politicsBonus": 10, "commandBonus": 12}},
 		{generalID: "machao", traitID: "tianshen_xiafan", traitType: "bonus", scope: "self_army", params: map[string]float64{"forceBonus": 20}},
 		{generalID: "xiahouyuan", traitID: "jixing_benxi", traitType: "special", scope: "self_army", targetUnitType: "qiQiYing", params: map[string]float64{"unitAttackFlat": 18, "unitSpeedFlat": 5}},
 		{generalID: "xuchu", traitID: "huhu_shengwei", traitType: "bonus", scope: "self_army", targetUnitType: "huBaoQi", params: map[string]float64{"unitAttackFlat": 12, "unitSpeedFlat": 5}},

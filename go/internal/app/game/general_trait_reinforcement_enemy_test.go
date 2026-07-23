@@ -885,14 +885,14 @@ func TestAttackerAfterCombatDamageAggregatesMainAndReinforcementLosses(t *testin
 	}
 }
 
-// TestReinforcementTraitSuppressionSharesDefenderCoalitionBudget 验证诸葛亮援军优先压制进攻主将的一项后续特性。
+// TestReinforcementTraitSuppressionSharesDefenderCoalitionBudget 验证诸葛亮援军在战前封禁进攻主将的全部触发型特性。
 func TestReinforcementTraitSuppressionSharesDefenderCoalitionBudget(t *testing.T) {
 	base := reinforcementEnemyPvpConfig{
 		id: "wolong_control", helperFaction: "shu", helperGeneralID: "zhugeliang", helperName: "诸葛亮", helperTroops: 200,
 		attackerFaction: "shu", attackerGeneral: "huangzhong", attackerName: "黄忠",
 		defenderFaction: "wu", defenderGeneral: "sunquan", defenderName: "孙权",
 		attackerBonus: GeneralTraitConfig{TraitID: "laodang_yizhuang", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "enemy_army", Params: map[string]float64{"effectRate": 0.1, "triggerChance": 1}},
-		helperBonus:   GeneralTraitConfig{TraitID: "wolong_mouzhi", TraitType: general.TraitTypeBonus, Enabled: false, Scope: "enemy_traits", Params: map[string]float64{"disableTraitCount": 1, "triggerChance": 1}},
+		helperBonus:   GeneralTraitConfig{TraitID: "wolong_mouzhi", TraitType: general.TraitTypeBonus, Enabled: false, Scope: "enemy_traits", Params: map[string]float64{"triggerChance": 1}},
 	}
 	withoutDamage := base
 	withoutDamage.id = "wolong_baseline"
@@ -917,7 +917,7 @@ func TestReinforcementTraitSuppressionSharesDefenderCoalitionBudget(t *testing.T
 	}
 }
 
-// TestPvpZhugeLiangReinforcementQimenAndWolongKeepCrossPhaseOrder 验证诸葛亮援军临时困兵与后续特性压制独立生效并保持跨阶段顺序。
+// TestPvpZhugeLiangReinforcementQimenAndWolongKeepCrossPhaseOrder 验证诸葛亮援军战前全体封禁与临时困兵独立生效。
 func TestPvpZhugeLiangReinforcementQimenAndWolongKeepCrossPhaseOrder(t *testing.T) {
 	run := func(id string, wolongEnabled bool) reinforcementEnemyPvpResult {
 		return runReinforcementEnemyPvp(t, reinforcementEnemyPvpConfig{
@@ -931,11 +931,11 @@ func TestPvpZhugeLiangReinforcementQimenAndWolongKeepCrossPhaseOrder(t *testing.
 			},
 			helperSpecial: GeneralTraitConfig{
 				TraitID: "qimen_dunjia", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "enemy_army",
-				Params: map[string]float64{"effectRate": 0.25, "maxAffectedRate": 0.25, "triggerChance": 1},
+				Params: map[string]float64{"effectRate": 0.25, "triggerChance": 1},
 			},
 			helperBonus: GeneralTraitConfig{
 				TraitID: "wolong_mouzhi", TraitType: general.TraitTypeBonus, Enabled: wolongEnabled, Scope: "enemy_traits",
-				Params: map[string]float64{"disableTraitCount": 1, "triggerChance": 1},
+				Params: map[string]float64{"triggerChance": 1},
 			},
 		})
 	}
@@ -1089,16 +1089,16 @@ func TestAttackerSuppressionConsumesReinforcementEnemyTrait(t *testing.T) {
 		AttackerOwnsTrait: true, DefenderOwnsTrait: true, Scene: "attack",
 	}
 	active := []general.ActiveTrait{{
-		TraitID: "wolong_mouzhi", TraitType: general.TraitTypeBonus, OwnerSide: "attacker", OwnerGeneralID: "zhugeliang",
+		TraitID: "kurouji", TraitType: general.TraitTypeSpecial, OwnerSide: "attacker", OwnerGeneralID: "huanggai",
 		Scope: "enemy_traits", Params: general.Params{"disableTraitCount": 1, "triggerChance": 1},
 	}}
-	active = append(active, activeReinforcementEnemyTraits([]Reinforcement{record})...)
+	active = append(active, activeReinforcementEnemyTraits([]Reinforcement{record}, false)...)
 	general.Dispatch(ctx, active)
 	mainOutcomes, reinforcementOutcomes := splitReinforcementTraitOutcomes(ctx.Triggered, []Reinforcement{record})
 	if result.AttackerLosses[0].Losses != 50 || len(reinforcementOutcomes[record.ID]) != 0 {
 		t.Fatalf("expected reinforcement extra damage suppressed without changing attacker losses, result=%+v outcomes=%+v", result, reinforcementOutcomes)
 	}
-	outcome := mainOutcomes["wolong_mouzhi"]
+	outcome := mainOutcomes["kurouji"]
 	if actual, ok := outcome.Detail["disabledTraitCount"].(int); !ok || actual != 1 {
 		t.Fatalf("expected attacker suppression to record one actual interception, outcome=%+v", outcome)
 	}

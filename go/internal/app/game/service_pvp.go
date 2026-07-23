@@ -2425,8 +2425,14 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	if err != nil {
 		return PvpBattle{}, BattleReport{}, BattleReport{}, nil, nil, err
 	}
+	attackerTraits := buildActiveTraitsForGeneralIDs(attacker, march.AttackGenerals)
+	defenderGeneralIDs := pvpDefenseGeneralIDs(defender)
+	defenderTraits := buildActiveTraitsForGeneralIDs(defender, defenderGeneralIDs)
+	traitControl := resolveBattleTraitControl(attackerTraits, defenderTraits, reinforcements, march.MarchType)
+	attackerTraits = filterDisabledCombatTraits(attackerTraits, traitControl.DisabledSides["attacker"])
+	defenderTraits = filterDisabledCombatTraits(defenderTraits, traitControl.DisabledSides["defender"])
 	defenderOwnTroops := armySliceToMap(defender.Army)
-	defenderUnits, sourceGroups, reinforcementBeforeOutcomes, err := buildPvpDefenderUnits(defender, reinforcements, now, march.MarchType)
+	defenderUnits, sourceGroups, reinforcementBeforeOutcomes, err := buildPvpDefenderUnits(defender, reinforcements, now, march.MarchType, traitControl.DisabledSides["defender"])
 	if errors.Is(err, ErrNoUnitsSelected) {
 		defenderUnits = []combat.Unit{}
 		sourceGroups = []pvpDefenseSourceGroup{}
@@ -2437,9 +2443,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	defenderArmy := combat.Army{Faction: defender.Player.Faction, Units: append([]combat.Unit(nil), defenderUnits...)}
 	wallLevel := pvpDefenderCityWallLevel(defender)
 	wallSnapshot := buildPvpWallSnapshot(defender.Player.Faction, wallLevel)
-	attackerTraits := buildActiveTraitsForGeneralIDs(attacker, march.AttackGenerals)
-	defenderGeneralIDs := pvpDefenseGeneralIDs(defender)
-	defenderTraits := buildActiveTraitsForGeneralIDs(defender, defenderGeneralIDs)
+	reinforcementBeforeOutcomes = mergeReinforcementTraitOutcomeMaps(reinforcementBeforeOutcomes, traitControl.ReinforcementOutcomes)
 	beforeCtx := &general.BeforeBattleContext{
 		Attacker:          &attackerArmy,
 		Defender:          &defenderArmy,
@@ -2460,7 +2464,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		Scene:             march.MarchType,
 	}
 	general.Dispatch(defenderBeforeCtx, defenderTraits)
-	reinforcementEnemyBeforeOutcomes, reinforcementEnemyBeforeContexts := applyReinforcementEnemyBeforeBattleTraits(reinforcements, &attackerArmy, &defenderArmy, march.MarchType)
+	reinforcementEnemyBeforeOutcomes, reinforcementEnemyBeforeContexts := applyReinforcementEnemyBeforeBattleTraits(reinforcements, &attackerArmy, &defenderArmy, march.MarchType, traitControl.DisabledSides["defender"])
 	reinforcementBeforeOutcomes = mergeReinforcementTraitOutcomeMaps(reinforcementBeforeOutcomes, reinforcementEnemyBeforeOutcomes)
 	capturedDefenderLosses := map[string]int{}
 	capturedReinforcementLosses := map[string]map[string]int{}
@@ -2491,7 +2495,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	}
 	sharedDefenderTraits, sourceDefenderTraits := partitionMainDefenderSourceTraits(defenderTraits)
 	combinedAfterCombatTraits := append(withTraitOwnerSide(attackerTraits, "attacker"), withTraitOwnerSide(sharedDefenderTraits, "defender")...)
-	combinedAfterCombatTraits = append(combinedAfterCombatTraits, activeReinforcementEnemyTraits(reinforcements)...)
+	combinedAfterCombatTraits = append(combinedAfterCombatTraits, activeReinforcementEnemyTraits(reinforcements, traitControl.DisabledSides["defender"])...)
 	general.Dispatch(afterCombatCtx, combinedAfterCombatTraits)
 	attackerLosses := combatLossMap(result.AttackerLosses)
 	defenderTotalLosses := combatLossMap(result.DefenderLosses)
@@ -2511,7 +2515,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	defenderLosses, reinforcementLosses := allocatePvpDefenderLosses(defenderTotalLosses, sourceGroups)
 	defenderLosses = applyMainDefenderAfterCombatTraits(defenderOwnTroops, defenderLosses, defender.Player.Faction, sourceDefenderTraits, afterCombatCtx)
 	applyArmyLosses(defender, defenderLosses)
-	reinforcementResolution := resolveReinforcementAfterBattleTraits(reinforcements, reinforcementLosses, result.Winner, march.MarchType, afterCombatCtx.DisabledTraitSide["defender"])
+	reinforcementResolution := resolveReinforcementAfterBattleTraits(reinforcements, reinforcementLosses, result.Winner, march.MarchType, afterCombatCtx.DisabledTraitSide["defender"], traitControl.DisabledSides["defender"])
 	totalReinforcementLosses := mergeNestedStringIntMap(capturedReinforcementLosses, reinforcementResolution.FinalLosses)
 	reinforcementAfterOutcomes := reinforcementResolution.Outcomes
 	reinforcementSelfAfterCombatOutcomes := reinforcementResolution.AfterCombatOutcomes
@@ -2570,7 +2574,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	plunderOutcomes := map[string]general.TraitOutcome{}
 	if march.MarchType == PvpMarchTypePlunder && result.Winner == "attacker" && result.SurvivingCarry > 0 {
 		plundered = calculatePvpPlunder(defender, result.SurvivingCarry)
-		if next, outcomes := dispatchPlunderTraits(attacker, march.AttackGenerals, plundered, march.MarchType, "attacker"); len(outcomes) > 0 {
+		if next, outcomes := dispatchPlunderTraits(attacker, march.AttackGenerals, plundered, march.MarchType, "attacker", traitControl.DisabledSides["attacker"]); len(outcomes) > 0 {
 			plundered = next
 			for k, v := range outcomes {
 				plunderOutcomes[k] = v
@@ -2578,7 +2582,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		} else {
 			plundered = next
 		}
-		if next, outcomes := dispatchPlunderTraits(defender, defenderGeneralIDs, plundered, march.MarchType, "defender"); len(outcomes) > 0 {
+		if next, outcomes := dispatchPlunderTraits(defender, defenderGeneralIDs, plundered, march.MarchType, "defender", traitControl.DisabledSides["defender"]); len(outcomes) > 0 {
 			plundered = next
 			for k, v := range outcomes {
 				plunderOutcomes[k] = v
@@ -2620,6 +2624,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	if len(attackerAfterBattleCtx.Revived) > 0 {
 		attackerReport.RevivedUnits = cloneStringIntMap(attackerAfterBattleCtx.Revived)
 	}
+	mergeTraitOutcomes(&attackerReport, traitControl.MainOutcomes)
 	mergeTraitOutcomes(&attackerReport, beforeCtx.Triggered)
 	mergeTraitOutcomes(&attackerReport, defenderBeforeCtx.Triggered)
 	mergeTraitOutcomes(&attackerReport, flattenReinforcementTraitOutcomes(reinforcementBeforeOutcomes))
@@ -2655,6 +2660,7 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	if len(defenderAfterBattleCtx.Revived) > 0 {
 		defenderReport.RevivedUnits = cloneStringIntMap(defenderAfterBattleCtx.Revived)
 	}
+	mergeTraitOutcomes(&defenderReport, traitControl.MainOutcomes)
 	mergeTraitOutcomes(&defenderReport, beforeCtx.Triggered)
 	mergeTraitOutcomes(&defenderReport, defenderBeforeCtx.Triggered)
 	mergeTraitOutcomes(&defenderReport, flattenReinforcementTraitOutcomes(reinforcementBeforeOutcomes))
@@ -2849,7 +2855,7 @@ type pvpDefenseSourceGroup struct {
 	Amount          int
 }
 
-func buildPvpDefenderUnits(defender *GameState, reinforcements []Reinforcement, now time.Time, scene string) ([]combat.Unit, []pvpDefenseSourceGroup, map[string]map[string]general.TraitOutcome, error) {
+func buildPvpDefenderUnits(defender *GameState, reinforcements []Reinforcement, now time.Time, scene string, combatTraitsDisabled ...bool) ([]combat.Unit, []pvpDefenseSourceGroup, map[string]map[string]general.TraitOutcome, error) {
 	groups := []pvpDefenseSourceGroup{}
 	units := []combat.Unit{}
 	reinforcementOutcomes := map[string]map[string]general.TraitOutcome{}
@@ -2881,7 +2887,7 @@ func buildPvpDefenderUnits(defender *GameState, reinforcements []Reinforcement, 
 			}
 			recordUnits = append(recordUnits, buildCombatUnitFromConfig(unitType, amount, unitCfg, now, modifierSourcesForReinforcement(record)...))
 		}
-		recordUnits, reinforcementOutcomes[record.ID] = applyReinforcementBeforeBattleTraits(record, recordUnits, scene)
+		recordUnits, reinforcementOutcomes[record.ID] = applyReinforcementBeforeBattleTraits(record, recordUnits, scene, len(combatTraitsDisabled) > 0 && combatTraitsDisabled[0])
 		units = append(units, recordUnits...)
 	}
 	if len(units) == 0 {

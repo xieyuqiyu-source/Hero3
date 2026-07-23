@@ -1,4 +1,4 @@
-// 本文件验证刘备、典韦和郭嘉的战后返兵特性进入真实援军状态与三方战报。
+// 本文件验证刘备和郭嘉的战后复活特性进入真实援军状态与三方战报。
 package game
 
 import (
@@ -19,6 +19,9 @@ type reinforcementReturnCase struct {
 	expected     map[string]struct {
 		detailKey string
 		rate      float64
+		rateKey   string
+		capKey    string
+		cap       int
 	}
 	requiresLoss bool
 }
@@ -139,22 +142,34 @@ func runReinforcementReturnPvp(t *testing.T, tc reinforcementReturnCase, enabled
 func formalReinforcementReturnCases() []reinforcementReturnCase {
 	return []reinforcementReturnCase{
 		{
-			name: "刘备仁德与仁主守护", faction: "shu", generalID: "liubei", generalName: "刘备",
-			specialTrait: GeneralTraitConfig{TraitID: "rende", TraitType: general.TraitTypeSpecial, Scope: "self_army", Params: map[string]float64{"effectRate": 0.5, "reviveRate": 0.5, "maxReviveCount": 10000, "triggerChance": 1}},
-			bonusTrait:   GeneralTraitConfig{TraitID: "renzhu_shouhu", TraitType: general.TraitTypeBonus, Scope: "self_army", Params: map[string]float64{"lossReductionRate": 0.1, "maxReturnCount": 10000, "triggerChance": 1}},
+			name: "刘备仁主守护", faction: "shu", generalID: "liubei", generalName: "刘备",
+			specialTrait: GeneralTraitConfig{TraitID: "rende", TraitType: general.TraitTypeSpecial, Scope: "self_army", Params: map[string]float64{"politicsBonus": 10, "commandBonus": 12}},
+			bonusTrait:   GeneralTraitConfig{TraitID: "renzhu_shouhu", TraitType: general.TraitTypeBonus, Scope: "self_army", Params: map[string]float64{"effectRate": 0.35, "triggerChance": 1}},
 			expected: map[string]struct {
 				detailKey string
 				rate      float64
-			}{"rende": {detailKey: "revivedUnits", rate: 0.5}, "renzhu_shouhu": {detailKey: "returnedUnits", rate: 0.1}},
+				rateKey   string
+				capKey    string
+				cap       int
+			}{
+				"renzhu_shouhu": {detailKey: "revivedUnits", rate: 0.35, rateKey: "effectRate"},
+			},
 		},
 		{
-			name: "郭嘉鬼才遗策", faction: "wei", generalID: "guojia", generalName: "郭嘉", requiresLoss: true,
-			specialTrait: GeneralTraitConfig{TraitID: "shengui_zhicai", TraitType: general.TraitTypeSpecial, Scope: "self_city", Enabled: false},
-			bonusTrait:   GeneralTraitConfig{TraitID: "guicai_yice", TraitType: general.TraitTypeBonus, Scope: "self_army", RequiredOutcome: "loss", Params: map[string]float64{"lossReductionRate": 0.1, "maxReturnCount": 10000, "triggerChance": 1}},
+			name: "郭嘉鬼才遗策", faction: "wei", generalID: "guojia", generalName: "郭嘉",
+			specialTrait: GeneralTraitConfig{TraitID: "shengui_zhicai", TraitType: general.TraitTypeSpecial, Scope: "self_army", Enabled: false},
+			bonusTrait: GeneralTraitConfig{
+				TraitID: "guicai_yice", TraitType: general.TraitTypeBonus, Scope: "self_army",
+				AllowedSides: []string{"attacker", "defender", "reinforcement"},
+				Params:       map[string]float64{"effectRate": 0.22, "triggerChance": 1},
+			},
 			expected: map[string]struct {
 				detailKey string
 				rate      float64
-			}{"guicai_yice": {detailKey: "returnedUnits", rate: 0.1}},
+				rateKey   string
+				capKey    string
+				cap       int
+			}{"guicai_yice": {detailKey: "revivedUnits", rate: 0.22, rateKey: "effectRate"}},
 		},
 	}
 }
@@ -165,38 +180,38 @@ func TestFormalReinforcementReturnTraitsMatchStateAndReports(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			control := runReinforcementReturnPvp(t, tc, false, 110)
 			active := runReinforcementReturnPvp(t, tc, true, 110)
-			if control.winner != "attacker" || active.winner != "attacker" || control.losses <= 0 {
-				t.Fatalf("expected reinforcement side to lose with real losses, control=%+v active=%+v", control, active)
+			helperReport := active.reports[2]
+			grossLosses := helperReport.LostUnits[tc.faction+"Infantry"]
+			if control.losses <= 0 || grossLosses <= 0 {
+				t.Fatalf("expected reinforcement side to take real losses, control=%+v active=%+v", control, active)
 			}
 			totalReturned := 0
 			for _, expectation := range tc.expected {
-				totalReturned += int(math.Floor(float64(control.losses) * expectation.rate))
+				totalReturned += int(math.Floor(float64(grossLosses) * expectation.rate))
 			}
-			if active.losses != control.losses-totalReturned || active.record.RemainingTroops[tc.faction+"Infantry"] != 100-active.losses {
-				t.Fatalf("expected losses %d - returned %d = %d, active=%+v", control.losses, totalReturned, control.losses-totalReturned, active)
+			if active.losses != grossLosses-totalReturned || active.record.RemainingTroops[tc.faction+"Infantry"] != 100-active.losses {
+				t.Fatalf("expected losses %d - returned %d = %d, active=%+v", grossLosses, totalReturned, grossLosses-totalReturned, active)
 			}
 			for _, report := range active.reports {
 				for traitID, expectation := range tc.expected {
 					outcome, ok := report.TraitOutcomes[traitID]
 					byUnit, detailOK := outcome.Detail[expectation.detailKey].(map[string]int)
-					want := int(math.Floor(float64(control.losses) * expectation.rate))
+					want := int(math.Floor(float64(grossLosses) * expectation.rate))
 					if !ok || !detailOK || byUnit[tc.faction+"Infantry"] != want || outcome.OwnerSide != "reinforcement" || outcome.OwnerPlayerID != active.record.OwnerPlayerID || outcome.OwnerGeneralID != tc.generalID {
 						t.Fatalf("expected %s reinforcement return %d, got %+v", traitID, want, outcome)
 					}
-					rateKey, capKey := "lossReductionRate", "maxReturnCount"
-					if traitID == "rende" {
-						rateKey, capKey = "effectRate", "maxReviveCount"
-					}
-					if outcome.Detail[rateKey] != expectation.rate || outcome.Detail[capKey] != 10000 {
-						t.Fatalf("expected %s design rate %.2f and cap 10000, got %+v", traitID, expectation.rate, outcome.Detail)
+					if outcome.Detail[expectation.rateKey] != expectation.rate ||
+						(expectation.capKey != "" && outcome.Detail[expectation.capKey] != expectation.cap) {
+						t.Fatalf("expected %s design rate %.2f and configured cap, got %+v", traitID, expectation.rate, outcome.Detail)
 					}
 					standardMatched := false
 					for _, trait := range report.Detail.Traits {
 						if trait.TraitID != traitID || trait.OwnerPlayerID != active.record.OwnerPlayerID || trait.GeneralID != tc.generalID {
 							continue
 						}
-						if trait.Detail[rateKey] != expectation.rate || trait.Detail[capKey] != 10000 {
-							t.Fatalf("expected standard %s design rate %.2f and cap 10000, got %+v", traitID, expectation.rate, trait.Detail)
+						if trait.Detail[expectation.rateKey] != expectation.rate ||
+							(expectation.capKey != "" && trait.Detail[expectation.capKey] != expectation.cap) {
+							t.Fatalf("expected standard %s design rate %.2f and configured cap, got %+v", traitID, expectation.rate, trait.Detail)
 						}
 						standardMatched = true
 					}
@@ -205,18 +220,17 @@ func TestFormalReinforcementReturnTraitsMatchStateAndReports(t *testing.T) {
 					}
 				}
 			}
-			helperReport := active.reports[2]
 			if helperReport.RevivedUnits[tc.faction+"Infantry"] != totalReturned {
 				t.Fatalf("expected reinforcement report revivedUnits %d, got %+v", totalReturned, helperReport.RevivedUnits)
 			}
-			if helperReport.LostUnits[tc.faction+"Infantry"] != control.losses || helperReport.SurvivedUnits[tc.faction+"Infantry"] != 100-active.losses {
-				t.Fatalf("expected gross loss %d and final survivors %d, report=%+v", control.losses, 100-active.losses, helperReport)
+			if helperReport.LostUnits[tc.faction+"Infantry"] != grossLosses || helperReport.SurvivedUnits[tc.faction+"Infantry"] != 100-active.losses {
+				t.Fatalf("expected gross loss %d and final survivors %d, report=%+v", grossLosses, 100-active.losses, helperReport)
 			}
 		})
 	}
 }
 
-// TestConditionalReinforcementReturnTraitsDoNotTriggerAfterDefenseWin 验证典韦和郭嘉在援军一方获胜时不返兵。
+// TestConditionalReinforcementReturnTraitsDoNotTriggerAfterDefenseWin 验证仅战败生效的援军恢复特性不会在获胜时误触发。
 func TestConditionalReinforcementReturnTraitsDoNotTriggerAfterDefenseWin(t *testing.T) {
 	for _, tc := range formalReinforcementReturnCases() {
 		if !tc.requiresLoss {

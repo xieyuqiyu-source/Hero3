@@ -271,7 +271,7 @@ func TestNpcFormalPreBattleTraitsMatchRealStateAndBothReports(t *testing.T) {
 			outcome, ok := report.TraitOutcomes[tc.traitID]
 			affected, detailOK := outcome.Detail[tc.detailKey].(map[string]int)
 			maxRateValid := outcome.Detail["maxAffectedRate"] == tc.rate
-			if tc.traitID == "yibing_touxi" || tc.traitID == "weizhen_zhenhe" {
+			if tc.traitID == "yibing_touxi" || tc.traitID == "weizhen_zhenhe" || tc.traitID == "qimen_dunjia" {
 				_, maxRateExists := outcome.Detail["maxAffectedRate"]
 				maxRateValid = !maxRateExists
 			}
@@ -791,7 +791,7 @@ func TestPvpFormalSuppressionTraitsMatchBothReportsAndPreserveState(t *testing.T
 	}{
 		{traitID: "weizhen_zhenhe", traitName: "震慑全军", generalID: "zhangliao", generalName: "张辽", faction: "wei", rate: 0.25, ownerSides: []string{"attacker"}, noMaxField: true},
 		{traitID: "zhenhe_quanjun", traitName: "震慑全军", generalID: "zhangfei", generalName: "张飞", faction: "shu", rate: 0.5},
-		{traitID: "qimen_dunjia", traitName: "奇门遁甲", generalID: "zhugeliang", generalName: "诸葛亮", faction: "shu", rate: 0.25},
+		{traitID: "qimen_dunjia", traitName: "奇门遁甲", generalID: "zhugeliang", generalName: "诸葛亮", faction: "shu", rate: 0.25, noMaxField: true},
 	}
 
 	for _, traitCase := range traits {

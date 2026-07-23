@@ -1178,14 +1178,8 @@ func TestPvpGuanYuAttackTraitsStackBeforeBattle(t *testing.T) {
 		if report.Detail == nil || report.Detail.SecondarySide == nil || report.Detail.PrimarySide.Role != "attacker" || report.Detail.SecondarySide.Role != "defender" {
 			t.Fatalf("expected objective attacker and defender sides in both standard reports, report=%s detail=%+v", report.ID, report.Detail)
 		}
-		attackerUnit := report.Detail.PrimarySide.Units[0]
-		defenderUnit := report.Detail.SecondarySide.Units[0]
-		if attackerUnit.UnitType != "shuInfantry" || attackerUnit.AmountBefore != 1000 || attackerUnit.Lost != 436 || attackerUnit.Survived != 564 {
-			t.Fatalf("expected standard attacker row 1000/436/564, report=%s unit=%+v", report.ID, attackerUnit)
-		}
-		if defenderUnit.UnitType != "weiInfantry" || defenderUnit.AmountBefore != 1000 || defenderUnit.Lost != 1000 || defenderUnit.Survived != 0 {
-			t.Fatalf("expected standard defender row 1000/1000/0, report=%s unit=%+v", report.ID, defenderUnit)
-		}
+		assertStandardUnitRow(t, report.ID, report.Detail.PrimarySide, "shuInfantry", 1000, 436, 564)
+		assertStandardUnitRow(t, report.ID, *report.Detail.SecondarySide, "weiInfantry", 1000, 1000, 0)
 	}
 }
 
@@ -1297,14 +1291,8 @@ func TestPvpZhangFeiAttackTraitsKeepSuppressedTroops(t *testing.T) {
 		if report.Detail == nil || report.Detail.SecondarySide == nil {
 			t.Fatalf("expected standard two-sided report, report=%s detail=%+v", report.ID, report.Detail)
 		}
-		attackerUnit := report.Detail.PrimarySide.Units[0]
-		defenderUnit := report.Detail.SecondarySide.Units[0]
-		if attackerUnit.AmountBefore != 1000 || attackerUnit.Lost != 300 || attackerUnit.Survived != 700 {
-			t.Fatalf("expected standard attacker row 1000/300/700, report=%s unit=%+v", report.ID, attackerUnit)
-		}
-		if defenderUnit.AmountBefore != 1000 || defenderUnit.Lost != 500 || defenderUnit.Survived != 500 {
-			t.Fatalf("expected standard defender row 1000/500/500, report=%s unit=%+v", report.ID, defenderUnit)
-		}
+		assertStandardUnitRow(t, report.ID, report.Detail.PrimarySide, "shuInfantry", 1000, 300, 700)
+		assertStandardUnitRow(t, report.ID, *report.Detail.SecondarySide, "weiInfantry", 1000, 500, 500)
 	}
 }
 
@@ -1554,14 +1542,8 @@ func TestPvpHuangZhongDefenseBreakAndExtraDamageReconcilePlunder(t *testing.T) {
 		if report.Detail == nil || report.Detail.SecondarySide == nil {
 			t.Fatalf("expected standard two-sided report, report=%s detail=%+v", report.ID, report.Detail)
 		}
-		attackerUnit := report.Detail.PrimarySide.Units[0]
-		defenderUnit := report.Detail.SecondarySide.Units[0]
-		if attackerUnit.UnitType != "shuInfantry" || attackerUnit.AmountBefore != 1000 || attackerUnit.Lost != 421 || attackerUnit.Survived != 579 {
-			t.Fatalf("expected standard attacker row 1000/421/579, report=%s unit=%+v", report.ID, attackerUnit)
-		}
-		if defenderUnit.UnitType != "weiInfantry" || defenderUnit.AmountBefore != 1000 || defenderUnit.Lost != 678 || defenderUnit.Survived != 322 {
-			t.Fatalf("expected standard defender row 1000/678/322, report=%s unit=%+v", report.ID, defenderUnit)
-		}
+		assertStandardUnitRow(t, report.ID, report.Detail.PrimarySide, "shuInfantry", 1000, 421, 579)
+		assertStandardUnitRow(t, report.ID, *report.Detail.SecondarySide, "weiInfantry", 1000, 678, 322)
 	}
 }
 
@@ -1705,7 +1687,7 @@ func TestPvpSunCeCavalryAndPursuitTraitsReconcilePlunder(t *testing.T) {
 	}
 }
 
-// TestPvpZhugeLiangSuppressionTraitsKeepSeparateSemantics 验证诸葛亮的临时兵力压制与后续特性压制分别改变正确口径。
+// TestPvpZhugeLiangSuppressionTraitsKeepSeparateSemantics 验证诸葛亮的临时兵力压制与战前全体特性封禁分别改变正确口径。
 func TestPvpZhugeLiangSuppressionTraitsKeepSeparateSemantics(t *testing.T) {
 	type runResult struct {
 		battle           PvpBattle
@@ -1732,7 +1714,7 @@ func TestPvpZhugeLiangSuppressionTraitsKeepSeparateSemantics(t *testing.T) {
 				BonusTrait: GeneralTraitConfig{
 					TraitID: "wolong_mouzhi", TraitType: general.TraitTypeBonus, Enabled: true,
 					Scope:  "enemy_traits",
-					Params: map[string]float64{"disableTraitCount": 1, "triggerChance": wolongChance},
+					Params: map[string]float64{"triggerChance": wolongChance},
 				},
 			},
 			"damage_general": {
@@ -1819,8 +1801,8 @@ func TestPvpZhugeLiangSuppressionTraitsKeepSeparateSemantics(t *testing.T) {
 			t.Fatalf("expected disabled enemy damage trait absent from both report formats, report=%s outcomes=%+v", report.ID, report.TraitOutcomes)
 		}
 		outcome, ok := report.TraitOutcomes["wolong_mouzhi"]
-		if !ok || outcome.Detail["disableTraitCount"] != 1 || outcome.Detail["disabledTraitCount"] != 1 {
-			t.Fatalf("expected one actually disabled trait, report=%s outcome=%+v", report.ID, outcome)
+		if !ok || outcome.Detail["disabledGeneralCount"] != 1 || outcome.Detail["disabledTraitCount"] != 1 || outcome.Detail["triggerChance"] != float64(1) {
+			t.Fatalf("expected all trigger traits of one enemy general disabled before battle, report=%s outcome=%+v", report.ID, outcome)
 		}
 		if !standardReportHasTrait(report.Detail, "qimen_dunjia") || !standardReportHasTrait(report.Detail, "wolong_mouzhi") {
 			t.Fatalf("expected standard timeline to retain both distinct suppressions, report=%s detail=%+v", report.ID, report.Detail)
@@ -2407,8 +2389,8 @@ func standardReportHasTrait(detail *BattleReportDetail, traitID string) bool {
 	return false
 }
 
-// TestPvpRendeReportMatchesReturningTroops 验证仁德复活数、行军返回兵力和最终主城兵力一致。
-func TestPvpRendeReportMatchesReturningTroops(t *testing.T) {
+// TestPvpRenzhuReportMatchesReturningTroops 验证仁主守护复活数、行军返回兵力和最终主城兵力一致。
+func TestPvpRenzhuReportMatchesReturningTroops(t *testing.T) {
 	setTestFactionsAndGenerals(t, FactionsConfig{
 		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "caocao", Name: "曹操"}}},
 		"shu": {Name: "蜀国", Generals: []GeneralInfo{{ID: "liubei", Name: "刘备"}}},
@@ -2417,7 +2399,11 @@ func TestPvpRendeReportMatchesReturningTroops(t *testing.T) {
 		Heroes: map[string]GeneralHeroConfig{
 			"caocao": {
 				ID: "caocao", Name: "曹操", Faction: "wei", Enabled: true,
-				SpecialTrait: GeneralTraitConfig{TraitID: "rende", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army", Params: map[string]float64{"reviveRate": 0.5, "maxReviveCount": 10000, "triggerChance": 1}},
+				BonusTrait: GeneralTraitConfig{
+					TraitID: "renzhu_shouhu", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army",
+					AllowedSides: []string{"attacker", "defender", "reinforcement"},
+					Params:       map[string]float64{"effectRate": 0.35, "triggerChance": 1},
+				},
 			},
 			"liubei": {ID: "liubei", Name: "刘备", Faction: "shu", Enabled: true},
 		},
@@ -2447,10 +2433,10 @@ func TestPvpRendeReportMatchesReturningTroops(t *testing.T) {
 	report := reports[0]
 	lost := report.LostUnits["weiInfantry"]
 	revived := report.RevivedUnits["weiInfantry"]
-	if lost <= 0 || revived != lost/2 {
-		t.Fatalf("expected report to revive half of real losses, lost=%d revived=%d outcomes=%+v", lost, revived, report.TraitOutcomes)
+	if lost <= 0 || revived != int(math.Floor(float64(lost)*0.35)) {
+		t.Fatalf("expected report to revive 35%% of real losses, lost=%d revived=%d outcomes=%+v", lost, revived, report.TraitOutcomes)
 	}
-	outcome := report.TraitOutcomes["rende"]
+	outcome := report.TraitOutcomes["renzhu_shouhu"]
 	revivedDetail, ok := outcome.Detail["revivedUnits"].(map[string]int)
 	if !ok || revivedDetail["weiInfantry"] != revived {
 		t.Fatalf("expected trait detail to match report revived units, outcome=%+v report=%+v", outcome, report.RevivedUnits)
@@ -2481,8 +2467,8 @@ func TestPvpRendeReportMatchesReturningTroops(t *testing.T) {
 	}
 }
 
-// TestPvpGuicaiYiceReturnsLossesOnlyAfterDefeat 验证鬼才遗策在战败后返兵并进入真实返回队列与战报。
-func TestPvpGuicaiYiceReturnsLossesOnlyAfterDefeat(t *testing.T) {
+// TestPvpGuicaiYiceRevivesConfiguredShareAfterDefeat 验证鬼才遗策在战败后按 GM 比例复活并进入真实返回队列与战报。
+func TestPvpGuicaiYiceRevivesConfiguredShareAfterDefeat(t *testing.T) {
 	setTestFactionsAndGenerals(t, FactionsConfig{
 		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "caocao", Name: "曹操"}}},
 		"shu": {Name: "蜀国", Generals: []GeneralInfo{{ID: "liubei", Name: "刘备"}}},
@@ -2491,7 +2477,7 @@ func TestPvpGuicaiYiceReturnsLossesOnlyAfterDefeat(t *testing.T) {
 		Heroes: map[string]GeneralHeroConfig{
 			"caocao": {
 				ID: "caocao", Name: "曹操", Faction: "wei", Enabled: true,
-				BonusTrait: GeneralTraitConfig{TraitID: "guicai_yice", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", RequiredOutcome: "loss", Params: map[string]float64{"lossReductionRate": 0.5, "maxReturnCount": 10000, "triggerChance": 1}},
+				BonusTrait: GeneralTraitConfig{TraitID: "guicai_yice", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", AllowedSides: []string{"attacker", "defender", "reinforcement"}, Params: map[string]float64{"effectRate": 0.5, "triggerChance": 1}},
 			},
 			"liubei": {ID: "liubei", Name: "刘备", Faction: "shu", Enabled: true},
 		},
@@ -2520,17 +2506,18 @@ func TestPvpGuicaiYiceReturnsLossesOnlyAfterDefeat(t *testing.T) {
 	}
 	report := reports[0]
 	if report.OwnerOutcome != ReportOwnerOutcomeDefeat {
-		t.Fatalf("expected attacker defeat to satisfy requiredOutcome, got %+v", report)
+		t.Fatalf("expected attacker defeat, got %+v", report)
 	}
 	lost := report.LostUnits["weiInfantry"]
 	returned := report.RevivedUnits["weiInfantry"]
 	if lost <= 0 || returned != lost/2 {
-		t.Fatalf("expected Guicai Yice to return half of defeated losses, lost=%d returned=%d", lost, returned)
+		t.Fatalf("expected Guicai Yice to revive half of actual losses, lost=%d revived=%d", lost, returned)
 	}
 	outcome := report.TraitOutcomes["guicai_yice"]
-	returnedUnits, ok := outcome.Detail["returnedUnits"].(map[string]int)
-	if !ok || returnedUnits["weiInfantry"] != returned {
-		t.Fatalf("expected returnedUnits detail to match report, got %+v", outcome)
+	actualLost, lostOK := outcome.Detail["actualLostUnits"].(map[string]int)
+	revivedUnits, revivedOK := outcome.Detail["revivedUnits"].(map[string]int)
+	if !lostOK || !revivedOK || actualLost["weiInfantry"] != lost || revivedUnits["weiInfantry"] != returned || outcome.Detail["effectRate"] != 0.5 {
+		t.Fatalf("expected actual loss and revived detail to match report, got %+v", outcome)
 	}
 	expectedSurvived := 100 - lost + returned
 	march, err := repo.GetPvpMarch(started.March.ID)
@@ -2542,8 +2529,8 @@ func TestPvpGuicaiYiceReturnsLossesOnlyAfterDefeat(t *testing.T) {
 	}
 }
 
-// TestPvpGuicaiYiceDoesNotTriggerAfterVictory 验证鬼才遗策在获胜时不返兵，也不生成误导性特性战报。
-func TestPvpGuicaiYiceDoesNotTriggerAfterVictory(t *testing.T) {
+// TestPvpGuicaiYiceAlsoRevivesAfterVictory 验证鬼才遗策不再受战败条件限制。
+func TestPvpGuicaiYiceAlsoRevivesAfterVictory(t *testing.T) {
 	setTestFactionsAndGenerals(t, FactionsConfig{
 		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "caocao", Name: "曹操"}}},
 		"shu": {Name: "蜀国", Generals: []GeneralInfo{{ID: "liubei", Name: "刘备"}}},
@@ -2552,14 +2539,14 @@ func TestPvpGuicaiYiceDoesNotTriggerAfterVictory(t *testing.T) {
 		Heroes: map[string]GeneralHeroConfig{
 			"caocao": {
 				ID: "caocao", Name: "曹操", Faction: "wei", Enabled: true,
-				BonusTrait: GeneralTraitConfig{TraitID: "guicai_yice", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", RequiredOutcome: "loss", Params: map[string]float64{"lossReductionRate": 0.5, "maxReturnCount": 10000, "triggerChance": 1}},
+				BonusTrait: GeneralTraitConfig{TraitID: "guicai_yice", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", AllowedSides: []string{"attacker", "defender", "reinforcement"}, Params: map[string]float64{"effectRate": 0.5, "triggerChance": 1}},
 			},
 			"liubei": {ID: "liubei", Name: "刘备", Faction: "shu", Enabled: true},
 		},
 	})
 	svc, repo, attacker, defender := newPvpTestService(t)
 	attacker.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 1000}}
-	defender.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 1}}
+	defender.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 900}}
 	repo.players[attacker.Player.ID] = attacker
 	repo.players[defender.Player.ID] = defender
 
@@ -2581,18 +2568,22 @@ func TestPvpGuicaiYiceDoesNotTriggerAfterVictory(t *testing.T) {
 	}
 	report := reports[0]
 	if report.OwnerOutcome != ReportOwnerOutcomeVictory {
-		t.Fatalf("expected attacker victory to reject requiredOutcome=loss, got %+v", report)
+		t.Fatalf("expected attacker victory, got %+v", report)
 	}
-	if _, ok := report.TraitOutcomes["guicai_yice"]; ok || totalTroops(report.RevivedUnits) != 0 {
-		t.Fatalf("expected no Guicai outcome or returned troops after victory, outcomes=%+v returned=%+v", report.TraitOutcomes, report.RevivedUnits)
+	lost := report.LostUnits["weiInfantry"]
+	revived := report.RevivedUnits["weiInfantry"]
+	outcome, ok := report.TraitOutcomes["guicai_yice"]
+	revivedUnits, revivedOK := outcome.Detail["revivedUnits"].(map[string]int)
+	if lost <= 0 || !ok || !revivedOK || revived != lost/2 || revivedUnits["weiInfantry"] != revived {
+		t.Fatalf("expected Guicai to revive half of actual losses after victory, lost=%d revived=%d outcome=%+v", lost, revived, outcome)
 	}
-	expectedSurvived := 1000 - report.LostUnits["weiInfantry"]
+	expectedSurvived := 1000 - lost + revived
 	march, err := repo.GetPvpMarch(started.March.ID)
 	if err != nil {
 		t.Fatalf("GetPvpMarch failed: %v", err)
 	}
 	if march.AttackTroops["weiInfantry"] != expectedSurvived || report.SurvivedUnits["weiInfantry"] != expectedSurvived {
-		t.Fatalf("expected survivors without返兵 %d, march=%+v report=%+v", expectedSurvived, march.AttackTroops, report.SurvivedUnits)
+		t.Fatalf("expected survivors including revival %d, march=%+v report=%+v", expectedSurvived, march.AttackTroops, report.SurvivedUnits)
 	}
 	for _, unit := range report.Detail.PrimarySide.Units {
 		if unit.UnitType == "weiInfantry" && unit.Survived != expectedSurvived {
@@ -3269,7 +3260,7 @@ func TestPvpWeiwuTongyuProvidesRealPowerOnBothMainSides(t *testing.T) {
 	}
 }
 
-// TestPvpFormalTraitSuppressorsPreventRealEnemyDamage 验证卧龙谋制和苦肉计在攻守双方都真实阻止一个后续敌方特性，而不只写压制战报。
+// TestPvpFormalTraitSuppressorsPreventRealEnemyDamage 验证卧龙奇谋和苦肉计在攻守双方都真实阻止敌方特性，而不只写压制战报。
 func TestPvpFormalTraitSuppressorsPreventRealEnemyDamage(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -3279,7 +3270,7 @@ func TestPvpFormalTraitSuppressorsPreventRealEnemyDamage(t *testing.T) {
 		traitID     string
 		traitType   string
 	}{
-		{name: "诸葛亮卧龙谋制", generalID: "zhugeliang", generalName: "诸葛亮", faction: "shu", traitID: "wolong_mouzhi", traitType: general.TraitTypeBonus},
+		{name: "诸葛亮卧龙奇谋", generalID: "zhugeliang", generalName: "诸葛亮", faction: "shu", traitID: "wolong_mouzhi", traitType: general.TraitTypeBonus},
 		{name: "黄盖苦肉计", generalID: "huanggai", generalName: "黄盖", faction: "wu", traitID: "kurouji", traitType: general.TraitTypeSpecial},
 	}
 	type runResult struct {
@@ -3411,8 +3402,12 @@ func TestPvpFormalTraitSuppressorsPreventRealEnemyDamage(t *testing.T) {
 						if !ok || outcome.OwnerSide != ownerSide || outcome.OwnerGeneralID != tc.generalID {
 							t.Fatalf("expected %s owned by %s/%s, got %+v", tc.traitID, ownerSide, tc.generalID, report.TraitOutcomes)
 						}
-						if outcome.Detail["disableTraitCount"] != 1 || outcome.Detail["disabledTraitCount"] != 1 || outcome.Detail["triggerChance"] != float64(1) {
-							t.Fatalf("expected one disabled trait, got %+v", outcome)
+						if tc.traitID == "wolong_mouzhi" {
+							if outcome.Detail["disabledGeneralCount"] != 1 || outcome.Detail["disabledTraitCount"] != 1 || outcome.Detail["triggerChance"] != float64(1) {
+								t.Fatalf("expected Wolong to disable all trigger traits of one enemy general, got %+v", outcome)
+							}
+						} else if outcome.Detail["disableTraitCount"] != 1 || outcome.Detail["disabledTraitCount"] != 1 || outcome.Detail["triggerChance"] != float64(1) {
+							t.Fatalf("expected one disabled follow-up trait, got %+v", outcome)
 						}
 						standardFound := false
 						for _, trait := range report.Detail.Traits {
@@ -3420,8 +3415,12 @@ func TestPvpFormalTraitSuppressorsPreventRealEnemyDamage(t *testing.T) {
 								t.Fatalf("expected standard report to omit suppressed damage, got %+v", report.Detail.Traits)
 							}
 							if trait.TraitID == tc.traitID && trait.GeneralID == tc.generalID && trait.OwnerRole == ownerSide {
-								if trait.Detail["disableTraitCount"] != 1 || trait.Detail["disabledTraitCount"] != 1 || trait.Detail["triggerChance"] != float64(1) {
-									t.Fatalf("expected standard report one disabled trait, got %+v", trait.Detail)
+								if tc.traitID == "wolong_mouzhi" {
+									if trait.Detail["disabledGeneralCount"] != 1 || trait.Detail["disabledTraitCount"] != 1 || trait.Detail["triggerChance"] != float64(1) {
+										t.Fatalf("expected standard report all enemy trigger traits disabled, got %+v", trait.Detail)
+									}
+								} else if trait.Detail["disableTraitCount"] != 1 || trait.Detail["disabledTraitCount"] != 1 || trait.Detail["triggerChance"] != float64(1) {
+									t.Fatalf("expected standard report one disabled follow-up trait, got %+v", trait.Detail)
 								}
 								standardFound = true
 							}
@@ -4065,14 +4064,8 @@ func TestPvpJinfanQixiOnlyBoostsRealPlunderBattle(t *testing.T) {
 				if report.Detail == nil || report.Detail.SecondarySide == nil {
 					t.Fatalf("expected standard two-sided report, report=%s detail=%+v", report.ID, report.Detail)
 				}
-				attackerUnit := report.Detail.PrimarySide.Units[0]
-				defenderUnit := report.Detail.SecondarySide.Units[0]
-				if attackerUnit.UnitType != "wuInfantry" || attackerUnit.AmountBefore != 100 || attackerUnit.Lost != 48 || attackerUnit.Survived != 52 {
-					t.Fatalf("expected standard attacker row 100/48/52, report=%s unit=%+v", report.ID, attackerUnit)
-				}
-				if defenderUnit.UnitType != "weiInfantry" || defenderUnit.AmountBefore != 105 || defenderUnit.Lost != 54 || defenderUnit.Survived != 51 {
-					t.Fatalf("expected standard defender row 105/54/51, report=%s unit=%+v", report.ID, defenderUnit)
-				}
+				assertStandardUnitRow(t, report.ID, report.Detail.PrimarySide, "wuInfantry", 100, 48, 52)
+				assertStandardUnitRow(t, report.ID, *report.Detail.SecondarySide, "weiInfantry", 105, 54, 51)
 			}
 		})
 	}

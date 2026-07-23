@@ -596,29 +596,29 @@ describe('官方战报适配', () => {
     expect(model.sides[1].units.find((unit) => unit.key === 'qingZhouArmy')).toMatchObject({ dispatched: 500, lost: 109, survived: 391 })
   })
 
-  it('轮回副本按后端时间线展示战前扣兵、攻击修正和战后复活', () => {
+  it('轮回副本按后端时间线展示战前扣兵、攻击修正和仁主复活', () => {
     const source = report()
     source.detail!.sourceType = 'dungeon'
     source.detail!.battleType = 'dungeon_reincarnation_attack'
     source.detail!.traits = [
       { traitId: 'shuiyan_qijun', traitName: '水淹七军', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'g1', detail: { effectRate: 0.35, maxAffectedRate: 0.35, preBattleAffected: { greedyWolf: 350 }, triggerChance: 1 } },
       { traitId: 'meiren', traitName: '美人心计', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'g1', detail: { attackBonusRate: 0.25, attackModifiedUnits: { huWei: 3 }, triggerChance: 0.5 } },
-      { traitId: 'rende', traitName: '仁德天下', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'g1', detail: { effectRate: 0.5, maxReviveCount: 10000, revivedUnits: { huWei: 50 }, totalRevived: 50, triggerChance: 1 } },
+      { traitId: 'renzhu_shouhu', traitName: '仁主守护', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'g1', detail: { effectRate: 0.35, revivedUnits: { huWei: 35 }, totalRevived: 35, triggerChance: 0.6 } },
     ]
     const model = toOfficialBattleReport(source)
     expect(model.sides[0].traits).toEqual([
       { key: 'shuiyan_qijun-0', name: '水淹七军', phase: '战斗前', detailText: '设计效果比例：35%；设计最大影响比例：35%；战前真实伤亡：贪狼营 +350；触发概率：100%' },
       { key: 'meiren-1', name: '美人心计', phase: '主动进攻战斗前', detailText: '设计攻击加成：25%；实际攻击修正：虎卫 +3；触发概率：50%' },
-      { key: 'rende-2', name: '仁德天下', phase: '进攻/防守/增援战斗结束后', detailText: '设计效果比例：50%；设计复活上限：10,000；复活兵力：虎卫 +50；复活总数：50；触发概率：100%' },
+      { key: 'renzhu_shouhu-2', name: '仁主守护', phase: '进攻/防守/增援战斗结束后', detailText: '设计效果比例：35%；复活兵力：虎卫 +35；复活总数：35；触发概率：60%' },
     ])
     expect(model.sides[1].traits).toEqual([])
   })
 
   it('轮回副本全正式特性矩阵只消费后端实际触发时间线', () => {
-    const bothSides = 'weiwu_tongyu yibing_touxi weizhen_zhenhe guicai_yice rende renzhu_shouhu shuiyan_qijun zhenhe_quanjun qimen_dunjia wolong_mouzhi xiliang_tuji laodang_yizhuang huoshao_lianying lianying_zengshang kurouji kurou_fanji'.split(' ')
+    const bothSides = 'weiwu_tongyu yibing_touxi weizhen_zhenhe guicai_yice renzhu_shouhu shuiyan_qijun zhenhe_quanjun qimen_dunjia wolong_mouzhi xiliang_tuji laodang_yizhuang huoshao_lianying lianying_zengshang kurouji kurou_fanji'.split(' ')
     const attackerOnly = 'meiren meihuo_raozhen huchi_chongzhen sizhandaodi weizhen_xiaoyao wusheng_pojun wanren_nuhou baibu_chuanyang qibing_raohou xiaobawang_tieqi huogong meizhoulang_junlue'.split(' ')
     const defenderOnly = 'mouding_houfa dunzhen_fangyu huzhu_xuezhan longdan_jiuyuan gushou_hanzhong jiangdong_gushou'.split(' ')
-    const nonBattle = 'weiwu_haoling jixing_benxi huhu_shengwei shengui_zhicai wangzuo_zhicai neizheng_jingying qijin_qichu tianshen_xiafan jiangdong_haoling xiaobawang_zhuiji baiyi_dujiang baiyi_jixing kuairu_shandian xinyi_yonglie jinfan_jielue jinfan_qixi'.split(' ')
+    const nonBattle = 'weiwu_haoling jixing_benxi huhu_shengwei shengui_zhicai rende wangzuo_zhicai neizheng_jingying qijin_qichu tianshen_xiafan jiangdong_haoling xiaobawang_zhuiji baiyi_dujiang baiyi_jixing kuairu_shandian xinyi_yonglie jinfan_jielue jinfan_qixi'.split(' ')
     const allTraitIds = [...bothSides, ...attackerOnly, ...defenderOnly, ...nonBattle]
     expect(new Set(allTraitIds).size).toBe(50)
 
@@ -629,7 +629,7 @@ describe('官方战报适配', () => {
       traitId, traitName: traitLabel(traitId), ownerSide: 'primary', ownerRole: 'attacker', generalId: 'g1',
     }))
     const attackModel = toOfficialBattleReport(attackSource)
-    expect(attackModel.sides[0].traits).toHaveLength(28)
+    expect(attackModel.sides[0].traits).toHaveLength(27)
     expect(attackModel.sides[0].traits.map((trait) => trait.name)).toEqual([...bothSides, ...attackerOnly].map((traitId) => traitLabel(traitId)))
     expect(attackModel.sides[1].traits).toEqual([])
 
@@ -641,7 +641,7 @@ describe('官方战报适配', () => {
     }))
     const defenseModel = toOfficialBattleReport(defenseSource)
     expect(defenseModel.sides[0].traits).toEqual([])
-    expect(defenseModel.sides[1].traits).toHaveLength(22)
+    expect(defenseModel.sides[1].traits).toHaveLength(21)
     expect(defenseModel.sides[1].traits.map((trait) => trait.name)).toEqual([...bothSides, ...defenderOnly].map((traitId) => traitLabel(traitId)))
 
     const snapshotSource = report()
@@ -681,7 +681,7 @@ describe('官方战报适配', () => {
     }
   })
 
-  it('郭嘉在轮回攻防平局中展示后端全损且不生成返兵特性', () => {
+  it('郭嘉在轮回攻防平局中展示后端真实阵亡与复活', () => {
     for (const [generalId, generalName, traitId, traitName] of [
       ['guojia', '郭嘉', 'guicai_yice', '鬼才遗策'],
     ] as const) {
@@ -698,8 +698,8 @@ describe('官方战报适配', () => {
         source.detail!.ownerSide = viewType === 'attack' ? 'attacker' : 'defender'
         const playerSide = {
           role: viewType === 'attack' ? 'attacker' as const : 'defender' as const, faction: 'wei', power: 1000,
-          generals: [{ id: generalId, name: generalName, level: 1, traits: [{ traitId, name: traitName, requiredOutcome: 'loss' as const }] }],
-          units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 }],
+          generals: [{ id: generalId, name: generalName, level: 1, traits: [{ traitId, name: traitName }] }],
+          units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 22 }],
         }
         const enemySide = {
           role: viewType === 'attack' ? 'defender' as const : 'attacker' as const, faction: 'shu', power: 1000, generals: [],
@@ -708,15 +708,24 @@ describe('官方战报适配', () => {
         source.detail!.primarySide = viewType === 'attack' ? playerSide : enemySide
         source.detail!.secondarySide = viewType === 'attack' ? enemySide : playerSide
         source.detail!.rewards = { generalExp: 100, generalLevelBefore: 1, generalLevelAfter: 1 }
-        source.detail!.traits = []
+        source.detail!.traits = [{
+          traitId, traitName, generalId,
+          ownerSide: viewType === 'attack' ? 'primary' : 'secondary',
+          ownerRole: viewType === 'attack' ? 'attacker' : 'defender',
+          detail: { effectRate: 0.22, actualLostUnits: { weiInfantry: 100 }, revivedUnits: { weiInfantry: 22 }, totalRevived: 22 },
+        }]
 
         const model = toOfficialBattleReport(source)
         const ownedSide = model.sides.find((side) => side.role === (viewType === 'attack' ? 'attacker' : 'defender'))
         const enemySideModel = model.sides.find((side) => side.role === (viewType === 'attack' ? 'defender' : 'attacker'))
         expect(ownedSide).toMatchObject({ power: 1000, general: { id: generalId }, generalExp: 100 })
-        expect(ownedSide?.units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 100, lost: 100, survived: 0 })
+        expect(ownedSide?.units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 100, lost: 100, survived: 22 })
         expect(enemySideModel?.units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 100, lost: 100, survived: 0 })
-        expect(model.sides.flatMap((side) => side.traits)).toEqual([])
+        expect(ownedSide?.traits[0]).toMatchObject({
+          name: '鬼才遗策',
+          phase: '进攻/防守/增援战斗结束后',
+          detailText: '设计效果比例：22%；本场真实阵亡：魏步兵 +100；复活兵力：魏步兵 +22；复活总数：22',
+        })
       }
     }
   })
@@ -998,24 +1007,19 @@ describe('官方战报适配', () => {
     expect(npcModel.sides[1].traits).toEqual([])
   })
 
-  it('NPC 刘备双特性分别展示真实复活和返还兵力', () => {
+  it('NPC 刘备只在时间线展示仁主守护真实复活兵力', () => {
     const source = report()
     source.detail!.sourceType = 'npc_city'
     source.detail!.primarySide.generals = [{ id: 'liubei', name: '刘备', level: 1 }]
     source.detail!.traits = [
       {
-        traitId: 'rende', traitName: '仁德天下', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'liubei',
-        detail: { revivedUnits: { greedyWolf: 50 }, totalRevived: 50, effectRate: 0.5, maxReviveCount: 10000, triggerChance: 1 },
-      },
-      {
         traitId: 'renzhu_shouhu', traitName: '仁主守护', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'liubei',
-        detail: { returnedUnits: { greedyWolf: 10 }, lossReductionRate: 0.1, maxReturnCount: 10000 },
+        detail: { revivedUnits: { greedyWolf: 35 }, totalRevived: 35, effectRate: 0.35, triggerChance: 0.6 },
       },
     ]
     const model = toOfficialBattleReport(source)
     expect(model.sides[0].traits).toEqual([
-      { key: 'rende-0', name: '仁德天下', phase: '进攻/防守/增援战斗结束后', detailText: '设计效果比例：50%；设计复活上限：10,000；复活兵力：贪狼营 +50；复活总数：50；触发概率：100%' },
-      { key: 'renzhu_shouhu-1', name: '仁主守护', phase: '进攻/防守/增援战斗结束后', detailText: '设计减损比例：10%；设计返还上限：10,000；返还兵力：贪狼营 +10' },
+      { key: 'renzhu_shouhu-0', name: '仁主守护', phase: '进攻/防守/增援战斗结束后', detailText: '设计效果比例：35%；复活兵力：贪狼营 +35；复活总数：35；触发概率：60%' },
     ])
     expect(model.sides[1].traits).toEqual([])
   })
@@ -1050,19 +1054,18 @@ describe('官方战报适配', () => {
     for (const key of Object.keys(runtimeDetail)) expect(text).not.toContain(key)
   })
 
-  it('独立援军战报保留原始损失、最终存活和援军返兵明细', () => {
+  it('独立援军战报保留原始损失、最终存活和仁主复活明细', () => {
     const source = report()
     source.detail!.viewType = 'reinforcement'
     source.detail!.winnerSide = 'attacker'
     source.detail!.primarySide = {
       role: 'reinforcement', playerId: 'p3', cityName: '刘备援军', faction: 'shu', power: 1000,
       generals: [{ id: 'liubei', name: '刘备', level: 18 }],
-      units: [{ unitType: 'greedyWolf', unitName: '贪狼营', amountBefore: 100, dispatched: 100, lost: 100, survived: 60 }],
+      units: [{ unitType: 'greedyWolf', unitName: '贪狼营', amountBefore: 100, dispatched: 100, lost: 100, survived: 35 }],
     }
     source.detail!.secondarySide = null
     source.detail!.traits = [
-      { traitId: 'rende', traitName: '仁德天下', ownerSide: 'reinforcement', generalId: 'liubei', detail: { effectRate: 0.5, maxReviveCount: 10000, revivedUnits: { greedyWolf: 50 } } },
-      { traitId: 'renzhu_shouhu', traitName: '仁主守护', ownerSide: 'reinforcement', generalId: 'liubei', detail: { lossReductionRate: 0.1, maxReturnCount: 10000, returnedUnits: { greedyWolf: 10 } } },
+      { traitId: 'renzhu_shouhu', traitName: '仁主守护', ownerSide: 'reinforcement', generalId: 'liubei', detail: { effectRate: 0.35, revivedUnits: { greedyWolf: 35 }, triggerChance: 0.6 } },
     ]
     source.pvpReinforcements = []
     source.pvpReinforcementLosses = {}
@@ -1070,23 +1073,22 @@ describe('官方战报适配', () => {
     const model = toOfficialBattleReport(source)
     expect(model.sides).toHaveLength(1)
     expect(model.sides[0]).toMatchObject({ role: 'reinforcement', result: 'defeat' })
-    expect(model.sides[0].units.find((unit) => unit.key === 'greedyWolf')).toMatchObject({ dispatched: 100, lost: 100, survived: 60 })
+    expect(model.sides[0].units.find((unit) => unit.key === 'greedyWolf')).toMatchObject({ dispatched: 100, lost: 100, survived: 35 })
     expect(model.sides[0].traits.map((trait) => trait.detailText)).toEqual([
-      '设计效果比例：50%；设计复活上限：10,000；复活兵力：贪狼营 +50',
-      '设计减损比例：10%；设计返还上限：10,000；返还兵力：贪狼营 +10',
+      '设计效果比例：35%；复活兵力：贪狼营 +35；触发概率：60%',
     ])
   })
 
-  it('NPC 郭嘉返兵战报明确只在战败后触发', () => {
-    for (const [traitId, traitName, generalId, generalName, amount] of [['guicai_yice', '鬼才遗策', 'guojia', '郭嘉', 10]] as const) {
+  it('NPC 郭嘉复活战报展示真实阵亡和实际复活', () => {
+    for (const [traitId, traitName, generalId, generalName, amount] of [['guicai_yice', '鬼才遗策', 'guojia', '郭嘉', 22]] as const) {
       const source = report()
       source.detail!.sourceType = 'npc_city'
       source.detail!.primarySide.generals = [{ id: generalId, name: generalName, level: 1 }]
       const rate = amount / 100
-      source.detail!.traits = [{ traitId, traitName, ownerSide: 'primary', ownerRole: 'attacker', generalId, detail: { lossReductionRate: rate, maxReturnCount: 10000, returnedUnits: { huWei: amount } } }]
+      source.detail!.traits = [{ traitId, traitName, ownerSide: 'primary', ownerRole: 'attacker', generalId, detail: { effectRate: rate, actualLostUnits: { huWei: 100 }, revivedUnits: { huWei: amount }, totalRevived: amount } }]
       const model = toOfficialBattleReport(source)
       expect(model.sides[0].traits[0]).toMatchObject({
-        name: traitName, phase: '进攻/防守/增援战败后', detailText: `设计减损比例：${amount}%；设计返还上限：10,000；返还兵力：虎卫 +${amount}`,
+        name: traitName, phase: '进攻/防守/增援战斗结束后', detailText: `设计效果比例：${amount}%；本场真实阵亡：虎卫 +100；复活兵力：虎卫 +${amount}；复活总数：${amount}`,
       })
       expect(model.sides[1].traits).toEqual([])
     }
@@ -1116,13 +1118,20 @@ describe('官方战报适配', () => {
       const source = report()
       source.detail!.sourceType = 'npc_city'
       source.detail!.primarySide.generals = [{ id: generalId, name: generalName, level: 1 }]
+      const detail = traitId === 'qimen_dunjia'
+        ? { effectRate: rate, suppressedUnits: { greedyWolf: affected }, triggerChance: 1 }
+        : { effectRate: rate, maxAffectedRate: rate, suppressedUnits: { greedyWolf: affected }, triggerChance: 1 }
       source.detail!.traits = [{
         traitId, traitName, ownerSide: 'primary', ownerRole: 'attacker', generalId,
-        detail: { effectRate: rate, maxAffectedRate: rate, suppressedUnits: { greedyWolf: affected }, triggerChance: 1 },
+        detail,
       }]
       const model = toOfficialBattleReport(source)
       expect(model.sides[0].traits[0]).toMatchObject({
-        name: traitName, phase: '战斗前', detailText: `设计效果比例：${rate * 100}%；设计最大影响比例：${rate * 100}%；本场压制兵力：贪狼营 +${affected}；触发概率：100%`,
+        name: traitName,
+        phase: traitId === 'qimen_dunjia' ? '进攻/防守/增援战斗前' : '战斗前',
+        detailText: traitId === 'qimen_dunjia'
+          ? `设计效果比例：${rate * 100}%；本场压制兵力：贪狼营 +${affected}；触发概率：100%`
+          : `设计效果比例：${rate * 100}%；设计最大影响比例：${rate * 100}%；本场压制兵力：贪狼营 +${affected}；触发概率：100%`,
       })
       expect(model.sides[1].traits).toEqual([])
     }
@@ -1321,9 +1330,9 @@ describe('官方战报适配', () => {
         detail: { effectRate: 0.1, extraLosses: { huWei: 11 }, triggerChance: 1 },
       },
       {
-        traitId: 'wolong_mouzhi', traitName: '卧龙谋制', ownerSide: 'reinforcement', ownerRole: 'reinforcement',
+        traitId: 'wolong_mouzhi', traitName: '卧龙奇谋', ownerSide: 'reinforcement', ownerRole: 'reinforcement',
         ownerPlayerId: 'player_zhugeliang', generalId: 'zhugeliang',
-        detail: { disableTraitCount: 1, disabledTraitCount: 1, triggerChance: 1 },
+        detail: { disabledGeneralCount: 1, disabledTraitCount: 2, triggerChance: 1 },
       },
     ]
 
@@ -1334,7 +1343,7 @@ describe('官方战报适配', () => {
       name: '老当益壮', phase: '战斗结算后', detailText: '设计效果比例：10%；追加损失：虎卫 +11；触发概率：100%',
     })])
     expect(zhugeliang?.traits).toEqual([expect.objectContaining({
-      name: '卧龙谋制', phase: '战斗结算后', detailText: '设计压制特性数：1；实际压制特性数：1；触发概率：100%',
+      name: '卧龙奇谋', phase: '进攻/防守/增援战斗前', detailText: '封禁将领数：1；实际压制特性数：2；触发概率：100%',
     })])
     expect(model.sides.slice(0, 2).flatMap((side) => side.traits)).toEqual([])
   })
@@ -1378,13 +1387,19 @@ describe('官方战报适配', () => {
     for (const [traitId, rate] of [['zhenhe_quanjun', 0.5], ['qimen_dunjia', 0.25]] as const) {
       const source = report()
       source.detail!.primarySide.generals = [{ id: traitId, name: traitId, level: 1 }]
+      const detail = traitId === 'qimen_dunjia'
+        ? { effectRate: rate, suppressedUnits: { greedyWolf: 250 }, triggerChance: 1 }
+        : { effectRate: rate, maxAffectedRate: rate, suppressedUnits: { greedyWolf: 250 }, triggerChance: 1 }
       source.detail!.traits = [{
         traitId, traitName: traitId, ownerSide: 'primary', generalId: traitId,
-        detail: { effectRate: rate, maxAffectedRate: rate, suppressedUnits: { greedyWolf: 250 }, triggerChance: 1 },
+        detail,
       }]
       const model = toOfficialBattleReport(source)
       expect(model.sides[0].traits[0]).toMatchObject({
-        phase: '战斗前', detailText: `设计效果比例：${rate * 100}%；设计最大影响比例：${rate * 100}%；本场压制兵力：贪狼营 +250；触发概率：100%`,
+        phase: traitId === 'qimen_dunjia' ? '进攻/防守/增援战斗前' : '战斗前',
+        detailText: traitId === 'qimen_dunjia'
+          ? `设计效果比例：${rate * 100}%；本场压制兵力：贪狼营 +250；触发概率：100%`
+          : `设计效果比例：${rate * 100}%；设计最大影响比例：${rate * 100}%；本场压制兵力：贪狼营 +250；触发概率：100%`,
       })
     }
   })
@@ -2551,7 +2566,7 @@ describe('官方战报适配', () => {
     expect(model.sides.flatMap((side) => side.traits)).toEqual([])
   })
 
-  it('主城刘备只返还主守军且同兵种援军保持原始阵亡', () => {
+  it('主城刘备只复活主守军且同兵种援军保持原始阵亡', () => {
     const source = report()
     source.result = 'draw'
     source.battleType = 'plunder'
@@ -2565,16 +2580,12 @@ describe('官方战报适配', () => {
     source.detail!.secondarySide!.faction = 'shu'
     source.detail!.secondarySide!.power = 10000
     source.detail!.secondarySide!.generals = [{ id: 'liubei', name: '刘备', level: 1 }]
-    source.detail!.secondarySide!.units = [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 500, dispatched: 500, lost: 250, survived: 400 }]
+    source.detail!.secondarySide!.units = [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 500, dispatched: 500, lost: 250, survived: 337 }]
     source.detail!.rewards.generalExp = 500
     source.detail!.traits = [
       {
-        traitId: 'rende', traitName: '仁德天下', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'liubei',
-        detail: { effectRate: 0.5, maxReviveCount: 10000, revivedUnits: { shuInfantry: 125 }, triggerChance: 1 },
-      },
-      {
         traitId: 'renzhu_shouhu', traitName: '仁主守护', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'liubei',
-        detail: { lossReductionRate: 0.1, maxReturnCount: 10000, returnedUnits: { shuInfantry: 25 }, triggerChance: 1 },
+        detail: { effectRate: 0.35, revivedUnits: { shuInfantry: 87 }, triggerChance: 0.6 },
       },
     ]
     source.pvpReinforcements = [{
@@ -2589,23 +2600,19 @@ describe('官方战报适配', () => {
     expect(model.sides[1]).toMatchObject({ role: 'defender', power: 10000, general: { id: 'liubei' } })
     expect(model.sides[2]).toMatchObject({ role: 'reinforcement', general: { id: 'guanyu' }, generalExp: 500 })
     expect(model.sides[0].units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 1000, lost: 500, survived: 500 })
-    expect(model.sides[1].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 500, lost: 250, survived: 400 })
+    expect(model.sides[1].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 500, lost: 250, survived: 337 })
     expect(model.sides[2].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 500, lost: 250, survived: 250 })
     expect(model.sides[1].traits).toEqual([
       {
-        key: 'rende-0', name: '仁德天下', phase: '进攻/防守/增援战斗结束后',
-        detailText: '设计效果比例：50%；设计复活上限：10,000；复活兵力：蜀步兵 +125；触发概率：100%',
-      },
-      {
-        key: 'renzhu_shouhu-1', name: '仁主守护', phase: '进攻/防守/增援战斗结束后',
-        detailText: '设计减损比例：10%；设计返还上限：10,000；返还兵力：蜀步兵 +25；触发概率：100%',
+        key: 'renzhu_shouhu-0', name: '仁主守护', phase: '进攻/防守/增援战斗结束后',
+        detailText: '设计效果比例：35%；复活兵力：蜀步兵 +87；触发概率：60%',
       },
     ])
     expect(model.sides[0].traits).toEqual([])
     expect(model.sides[2].traits).toEqual([])
   })
 
-  it('郭嘉在平局时保留拥有快照但不触发战败返兵', () => {
+  it('郭嘉在 PVP 平局时展示真实阵亡和复活', () => {
     for (const [generalId, generalName, traitId, traitName] of [
       ['guojia', '郭嘉', 'guicai_yice', '鬼才遗策'],
     ] as const) {
@@ -2619,28 +2626,35 @@ describe('官方战报适配', () => {
       source.detail!.primarySide.power = 10000
       source.detail!.primarySide.generals = [{
         id: generalId, name: generalName, level: 1,
-        traits: [{ traitId, name: traitName, requiredOutcome: 'loss' }],
+        traits: [{ traitId, name: traitName }],
       }]
-      source.detail!.primarySide.units = [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 500 }]
+      source.detail!.primarySide.units = [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 610 }]
       source.detail!.secondarySide!.faction = 'shu'
       source.detail!.secondarySide!.power = 10000
       source.detail!.secondarySide!.units = [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 500 }]
       source.detail!.rewards.generalExp = 500
-      source.detail!.traits = []
+      source.detail!.traits = [{
+        traitId, traitName, ownerSide: 'primary', ownerRole: 'attacker', generalId,
+        detail: { effectRate: 0.22, actualLostUnits: { weiInfantry: 500 }, revivedUnits: { weiInfantry: 110 }, totalRevived: 110 },
+      }]
       source.pvpReinforcements = []
       source.pvpReinforcementLosses = {}
 
       const model = toOfficialBattleReport(source)
       expect(source.detail!.primarySide.generals?.[0]?.traits?.[0]?.traitId).toBe(traitId)
       expect(model.sides[0]).toMatchObject({ role: 'attacker', power: 10000, general: { id: generalId }, generalExp: 500 })
-      expect(model.sides[0].units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 1000, lost: 500, survived: 500 })
+      expect(model.sides[0].units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 1000, lost: 500, survived: 610 })
       expect(model.sides[1].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 1000, lost: 500, survived: 500 })
-      expect(model.sides[0].traits).toEqual([])
+      expect(model.sides[0].traits[0]).toMatchObject({
+        name: traitName,
+        phase: '进攻/防守/增援战斗结束后',
+        detailText: '设计效果比例：22%；本场真实阵亡：魏步兵 +500；复活兵力：魏步兵 +110；复活总数：110',
+      })
       expect(model.sides[1].traits).toEqual([])
     }
   })
 
-  it('郭嘉在 NPC 与黄巾平局中按场景真实全损且不返兵', () => {
+  it('郭嘉在 NPC 与黄巾平局中按所属部队展示复活', () => {
     for (const [generalId, generalName, traitId, traitName] of [
       ['guojia', '郭嘉', 'guicai_yice', '鬼才遗策'],
     ] as const) {
@@ -2652,13 +2666,16 @@ describe('官方战报适配', () => {
       npc.detail!.winnerSide = 'none'
       npc.detail!.primarySide.faction = 'wei'
       npc.detail!.primarySide.power = 1000
-      npc.detail!.primarySide.generals = [{ id: generalId, name: generalName, level: 1, traits: [{ traitId, name: traitName, requiredOutcome: 'loss' }] }]
-      npc.detail!.primarySide.units = [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 }]
+      npc.detail!.primarySide.generals = [{ id: generalId, name: generalName, level: 1, traits: [{ traitId, name: traitName }] }]
+      npc.detail!.primarySide.units = [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 22 }]
       npc.detail!.secondarySide!.faction = 'wei'
       npc.detail!.secondarySide!.power = 1000
       npc.detail!.secondarySide!.units = [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 }]
       npc.detail!.rewards.generalExp = 100
-      npc.detail!.traits = []
+      npc.detail!.traits = [{
+        traitId, traitName, ownerSide: 'primary', ownerRole: 'attacker', generalId,
+        detail: { effectRate: 0.22, actualLostUnits: { weiInfantry: 100 }, revivedUnits: { weiInfantry: 22 }, totalRevived: 22 },
+      }]
 
       const yellow = report()
       yellow.viewType = 'defense'
@@ -2676,22 +2693,25 @@ describe('官方战报适配', () => {
       }
       yellow.detail!.secondarySide = {
         role: 'defender', faction: 'wei', power: 1030,
-        generals: [{ id: generalId, name: generalName, level: 1, traits: [{ traitId, name: traitName, requiredOutcome: 'loss' }] }],
-        units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 }],
+        generals: [{ id: generalId, name: generalName, level: 1, traits: [{ traitId, name: traitName }] }],
+        units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 22 }],
       }
       yellow.detail!.rewards.generalExp = 103
-      yellow.detail!.traits = []
+      yellow.detail!.traits = [{
+        traitId, traitName, ownerSide: 'secondary', ownerRole: 'defender', generalId,
+        detail: { effectRate: 0.22, actualLostUnits: { weiInfantry: 100 }, revivedUnits: { weiInfantry: 22 }, totalRevived: 22 },
+      }]
 
       const npcModel = toOfficialBattleReport(npc)
       const yellowModel = toOfficialBattleReport(yellow)
       expect(npcModel.sides[0]).toMatchObject({ role: 'attacker', power: 1000, general: { id: generalId }, generalExp: 100 })
-      expect(npcModel.sides[0].units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 100, lost: 100, survived: 0 })
-      expect(npcModel.sides.flatMap((side) => side.traits)).toEqual([])
+      expect(npcModel.sides[0].units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 100, lost: 100, survived: 22 })
+      expect(npcModel.sides[0].traits[0]).toMatchObject({ name: traitName, phase: '进攻/防守/增援战斗结束后' })
       expect(yellowModel.sides[0]).toMatchObject({ role: 'attacker', power: 1030 })
       expect(yellowModel.sides[1]).toMatchObject({ role: 'defender', power: 1030, general: { id: generalId }, generalExp: 103 })
       expect(yellowModel.sides[0].units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 103, lost: 103, survived: 0 })
-      expect(yellowModel.sides[1].units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 100, lost: 100, survived: 0 })
-      expect(yellowModel.sides.flatMap((side) => side.traits)).toEqual([])
+      expect(yellowModel.sides[1].units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 100, lost: 100, survived: 22 })
+      expect(yellowModel.sides[1].traits[0]).toMatchObject({ name: traitName, phase: '进攻/防守/增援战斗结束后' })
     }
   })
 
@@ -3787,7 +3807,7 @@ describe('官方战报适配', () => {
     expect(miss.model.sides.flatMap((side) => side.traits)).toEqual([])
   })
 
-  it('诸葛亮援军双压制保持真实跨阶段顺序并对齐最终兵力', () => {
+  it('诸葛亮援军战前困兵与全体封禁保持真实归属并对齐最终兵力', () => {
     const source = report()
     source.result = 'defender_victory'
     source.battleType = 'plunder'
@@ -3806,11 +3826,11 @@ describe('官方战报适配', () => {
     source.detail!.traits = [
       {
         traitId: 'qimen_dunjia', traitName: '奇门遁甲', ownerSide: 'reinforcement', ownerRole: 'reinforcement', ownerPlayerId: 'helper_zhugeliang', generalId: 'zhugeliang',
-        detail: { effectRate: 0.25, maxAffectedRate: 0.25, suppressedUnits: { shuInfantry: 25 }, triggerChance: 1 },
+        detail: { effectRate: 0.25, suppressedUnits: { shuInfantry: 25 }, triggerChance: 1 },
       },
       {
-        traitId: 'wolong_mouzhi', traitName: '卧龙谋制', ownerSide: 'reinforcement', ownerRole: 'reinforcement', ownerPlayerId: 'helper_zhugeliang', generalId: 'zhugeliang',
-        detail: { disableTraitCount: 1, disabledTraitCount: 1, triggerChance: 1 },
+        traitId: 'wolong_mouzhi', traitName: '卧龙奇谋', ownerSide: 'reinforcement', ownerRole: 'reinforcement', ownerPlayerId: 'helper_zhugeliang', generalId: 'zhugeliang',
+        detail: { disabledGeneralCount: 1, disabledTraitCount: 1, triggerChance: 1 },
       },
     ]
     source.pvpReinforcements = [{
@@ -3818,7 +3838,7 @@ describe('官方战报适配', () => {
       troops: { shuInfantry: 99 }, generalExpGained: 45,
       generals: [{
         id: 'zhugeliang', name: '诸葛亮', level: 1,
-        traits: [{ traitId: 'qimen_dunjia', name: '奇门遁甲' }, { traitId: 'wolong_mouzhi', name: '卧龙谋制' }],
+        traits: [{ traitId: 'qimen_dunjia', name: '奇门遁甲' }, { traitId: 'wolong_mouzhi', name: '卧龙奇谋' }],
       }],
     }]
     source.pvpReinforcementLosses = { rein_zhugeliang: { shuInfantry: 39 } }
@@ -3834,12 +3854,12 @@ describe('官方战报适配', () => {
     expect(model.sides.slice(0, 2).flatMap((side) => side.traits)).toEqual([])
     expect(model.sides[2].traits).toEqual([
       {
-        key: 'qimen_dunjia-helper_zhugeliang-0', name: '奇门遁甲', phase: '战斗前',
-        detailText: '设计效果比例：25%；设计最大影响比例：25%；本场压制兵力：蜀步兵 +25；触发概率：100%',
+        key: 'qimen_dunjia-helper_zhugeliang-0', name: '奇门遁甲', phase: '进攻/防守/增援战斗前',
+        detailText: '设计效果比例：25%；本场压制兵力：蜀步兵 +25；触发概率：100%',
       },
       {
-        key: 'wolong_mouzhi-helper_zhugeliang-1', name: '卧龙谋制', phase: '战斗结算后',
-        detailText: '设计压制特性数：1；实际压制特性数：1；触发概率：100%',
+        key: 'wolong_mouzhi-helper_zhugeliang-1', name: '卧龙奇谋', phase: '进攻/防守/增援战斗前',
+        detailText: '封禁将领数：1；实际压制特性数：1；触发概率：100%',
       },
     ])
     expect(model.sides.flatMap((side) => side.traits).some((trait) => trait.name === '老当益壮')).toBe(false)
@@ -4427,7 +4447,7 @@ describe('官方战报适配', () => {
     expect(model.sides.flatMap((side) => side.traits)).toEqual([])
   })
 
-  it('郭嘉征兵减耗只留在拥有快照且鬼才遗策对齐战败返兵', () => {
+  it('郭嘉永久四维和鬼才遗策真实复活分别展示', () => {
     const source = report()
     source.result = 'defender_victory'
     source.detail!.result = 'defender_victory'
@@ -4436,9 +4456,10 @@ describe('官方战报适配', () => {
     source.detail!.primarySide.power = 1000
     source.detail!.primarySide.generals = [{
       id: 'guojia', name: '郭嘉', level: 1,
-      traits: [{ traitId: 'shengui_zhicai', name: '神鬼之才' }, { traitId: 'guicai_yice', name: '鬼才遗策' }],
+      stats: { intelligence: 0, politics: 0 }, effectiveStats: { intelligence: 10, politics: 10 },
+      traits: [{ traitId: 'shengui_zhicai', name: '神鬼之才', params: { politicsBonus: 10, intelligenceBonus: 10 } }, { traitId: 'guicai_yice', name: '鬼才遗策' }],
     }]
-    source.detail!.primarySide.units = [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 10 }]
+    source.detail!.primarySide.units = [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 22 }]
     source.detail!.secondarySide!.faction = 'shu'
     source.detail!.secondarySide!.power = 10000
     source.detail!.secondarySide!.generals = [{ id: 'liubei', name: '刘备', level: 1 }]
@@ -4446,7 +4467,7 @@ describe('官方战报适配', () => {
     source.detail!.rewards.generalExp = 37
     source.detail!.traits = [{
       traitId: 'guicai_yice', traitName: '鬼才遗策', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'guojia',
-      detail: { lossReductionRate: 0.1, maxReturnCount: 10000, returnedUnits: { weiInfantry: 10 }, triggerChance: 1 },
+      detail: { effectRate: 0.22, actualLostUnits: { weiInfantry: 100 }, revivedUnits: { weiInfantry: 22 }, totalRevived: 22, triggerChance: 1 },
     }]
     source.pvpReinforcements = []
     source.pvpReinforcementLosses = {}
@@ -4454,14 +4475,17 @@ describe('官方战报适配', () => {
     expect(model.sides.map((side) => side.role)).toEqual(['attacker', 'defender'])
     expect(model.sides[0]).toMatchObject({ role: 'attacker', power: 1000, general: { id: 'guojia', name: '郭嘉', level: 1 }, generalExp: 37 })
     expect(model.sides[1]).toMatchObject({ role: 'defender', power: 10000 })
-    expect(model.sides[0].units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 100, lost: 100, survived: 10 })
+    expect(model.sides[0].units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 100, lost: 100, survived: 22 })
     expect(model.sides[1].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 1000, lost: 37, survived: 963 })
     expect(model.sides[0].traits).toEqual([{
-      key: 'guicai_yice-0', name: '鬼才遗策', phase: '进攻/防守/增援战败后',
-      detailText: '设计减损比例：10%；设计返还上限：10,000；返还兵力：魏步兵 +10；触发概率：100%',
+      key: 'guicai_yice-0', name: '鬼才遗策', phase: '进攻/防守/增援战斗结束后',
+      detailText: '设计效果比例：22%；本场真实阵亡：魏步兵 +100；复活兵力：魏步兵 +22；复活总数：22；触发概率：100%',
+    }])
+    expect(model.sides[0].passiveTraits).toEqual([{
+      key: 'passive-guojia-shengui_zhicai', name: '神鬼之才', phase: '永久被动', detailText: '内政 +10；智谋 +10',
     }])
     expect(model.sides[1].traits).toEqual([])
-    expect(model.sides.flatMap((side) => side.traits).some((trait) => trait.name === '神鬼之才')).toBe(false)
+    expect(model.sides[1].passiveTraits).toEqual([])
   })
 
   it('荀彧双留城能力只保留拥有快照且不伪造战斗触发', () => {
@@ -4681,33 +4705,33 @@ describe('官方战报适配', () => {
     expect(model.sides.flatMap((side) => side.traits).map((trait) => trait.name)).toEqual(['魅惑扰阵', '江东固守'])
   })
 
-  it('攻守双方刘备双返兵分别展示原始阵亡和返兵后存活', () => {
+  it('攻守双方刘备仁主守护分别展示原始阵亡和复活后存活', () => {
     const source = report()
     source.detail!.primarySide.faction = 'shu'
     source.detail!.primarySide.power = 10000
-    source.detail!.primarySide.generals = [{ id: 'liubei', name: '刘备', level: 1 }]
-    source.detail!.primarySide.units = [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 800 }]
+    source.detail!.primarySide.generals = [{
+      id: 'liubei', name: '刘备', level: 1,
+      stats: { politics: 0, command: 0 }, effectiveStats: { politics: 10, command: 12 },
+      traits: [{ traitId: 'rende', name: '仁德天下', params: { politicsBonus: 10, commandBonus: 12 } }, { traitId: 'renzhu_shouhu', name: '仁主守护' }],
+    }]
+    source.detail!.primarySide.units = [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 675 }]
     source.detail!.secondarySide!.faction = 'shu'
     source.detail!.secondarySide!.power = 10000
-    source.detail!.secondarySide!.generals = [{ id: 'liubei', name: '刘备', level: 1 }]
-    source.detail!.secondarySide!.units = [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 800 }]
+    source.detail!.secondarySide!.generals = [{
+      id: 'liubei', name: '刘备', level: 1,
+      stats: { politics: 0, command: 0 }, effectiveStats: { politics: 10, command: 12 },
+      traits: [{ traitId: 'rende', name: '仁德天下', params: { politicsBonus: 10, commandBonus: 12 } }, { traitId: 'renzhu_shouhu', name: '仁主守护' }],
+    }]
+    source.detail!.secondarySide!.units = [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 675 }]
     source.detail!.rewards.generalExp = 500
     source.detail!.traits = [
       {
-        traitId: 'rende', traitName: '仁德天下', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'liubei',
-        detail: { effectRate: 0.5, maxReviveCount: 10000, revivedUnits: { shuInfantry: 250 }, triggerChance: 1 },
-      },
-      {
         traitId: 'renzhu_shouhu', traitName: '仁主守护', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'liubei',
-        detail: { lossReductionRate: 0.1, maxReturnCount: 10000, returnedUnits: { shuInfantry: 50 }, triggerChance: 1 },
-      },
-      {
-        traitId: 'rende', traitName: '仁德天下', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'liubei',
-        detail: { effectRate: 0.5, maxReviveCount: 10000, revivedUnits: { shuInfantry: 250 }, triggerChance: 1 },
+        detail: { effectRate: 0.35, revivedUnits: { shuInfantry: 175 }, triggerChance: 0.6 },
       },
       {
         traitId: 'renzhu_shouhu', traitName: '仁主守护', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'liubei',
-        detail: { lossReductionRate: 0.1, maxReturnCount: 10000, returnedUnits: { shuInfantry: 50 }, triggerChance: 1 },
+        detail: { effectRate: 0.35, revivedUnits: { shuInfantry: 175 }, triggerChance: 0.6 },
       },
     ]
     source.pvpReinforcements = []
@@ -4716,24 +4740,25 @@ describe('官方战报适配', () => {
     expect(model.sides.map((side) => side.role)).toEqual(['attacker', 'defender'])
     expect(model.sides[0]).toMatchObject({ role: 'attacker', power: 10000, general: { id: 'liubei', name: '刘备', level: 1 }, generalExp: 500 })
     expect(model.sides[1]).toMatchObject({ role: 'defender', power: 10000, general: { id: 'liubei', name: '刘备', level: 1 }, generalExp: null })
-    expect(model.sides[0].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 1000, lost: 500, survived: 800 })
-    expect(model.sides[1].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 1000, lost: 500, survived: 800 })
+    expect(model.sides[0].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 1000, lost: 500, survived: 675 })
+    expect(model.sides[1].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 1000, lost: 500, survived: 675 })
     const expectedTraits = [
       {
-        key: 'rende-0', name: '仁德天下', phase: '进攻/防守/增援战斗结束后',
-        detailText: '设计效果比例：50%；设计复活上限：10,000；复活兵力：蜀步兵 +250；触发概率：100%',
-      },
-      {
-        key: 'renzhu_shouhu-1', name: '仁主守护', phase: '进攻/防守/增援战斗结束后',
-        detailText: '设计减损比例：10%；设计返还上限：10,000；返还兵力：蜀步兵 +50；触发概率：100%',
+        key: 'renzhu_shouhu-0', name: '仁主守护', phase: '进攻/防守/增援战斗结束后',
+        detailText: '设计效果比例：35%；复活兵力：蜀步兵 +175；触发概率：60%',
       },
     ]
     expect(model.sides[0].traits).toEqual(expectedTraits)
     expect(model.sides[1].traits).toEqual(expectedTraits)
-    expect(model.sides.flatMap((side) => side.traits)).toHaveLength(4)
+    expect(model.sides.flatMap((side) => side.traits)).toHaveLength(2)
+    const expectedPassive = [{
+      key: 'passive-liubei-rende', name: '仁德天下', phase: '永久被动', detailText: '内政 +10；统率 +12',
+    }]
+    expect(model.sides[0].passiveTraits).toEqual(expectedPassive)
+    expect(model.sides[1].passiveTraits).toEqual(expectedPassive)
   })
 
-  it('刘备多兵种大额阵亡按稳定顺序展示单场返兵上限', () => {
+  it('刘备多兵种大额阵亡逐兵种按百分比复活且不设人数上限', () => {
     const source = report()
     source.result = 'defender_victory'
     source.detail!.result = 'defender_victory'
@@ -4742,8 +4767,8 @@ describe('官方战报适配', () => {
     source.detail!.primarySide.power = 720000
     source.detail!.primarySide.generals = [{ id: 'liubei', name: '刘备', level: 1 }]
     source.detail!.primarySide.units = [
-      { unitType: 'shuCavalry', unitName: '蜀骑兵', amountBefore: 30000, dispatched: 30000, lost: 30000, survived: 13000 },
-      { unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 30000, dispatched: 30000, lost: 30000, survived: 3000 },
+      { unitType: 'shuCavalry', unitName: '蜀骑兵', amountBefore: 30000, dispatched: 30000, lost: 30000, survived: 10500 },
+      { unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 30000, dispatched: 30000, lost: 30000, survived: 10500 },
     ]
     source.detail!.secondarySide!.faction = 'wei'
     source.detail!.secondarySide!.power = 8833333
@@ -4752,12 +4777,8 @@ describe('官方战报适配', () => {
     source.detail!.rewards.generalExp = 28296
     source.detail!.traits = [
       {
-        traitId: 'rende', traitName: '仁德天下', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'liubei',
-        detail: { effectRate: 0.5, maxReviveCount: 10000, revivedUnits: { shuCavalry: 10000 }, totalRevived: 10000, triggerChance: 1 },
-      },
-      {
         traitId: 'renzhu_shouhu', traitName: '仁主守护', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'liubei',
-        detail: { lossReductionRate: 0.1, maxReturnCount: 10000, returnedUnits: { shuCavalry: 3000, shuInfantry: 3000 }, triggerChance: 1 },
+        detail: { effectRate: 0.35, revivedUnits: { shuCavalry: 10500, shuInfantry: 10500 }, totalRevived: 21000, triggerChance: 0.6 },
       },
     ]
     source.pvpReinforcements = []
@@ -4766,17 +4787,13 @@ describe('官方战报适配', () => {
     expect(model.sides.map((side) => side.role)).toEqual(['attacker', 'defender'])
     expect(model.sides[0]).toMatchObject({ role: 'attacker', power: 720000, general: { id: 'liubei', name: '刘备', level: 1 }, generalExp: 28296 })
     expect(model.sides[1]).toMatchObject({ role: 'defender', power: 8833333 })
-    expect(model.sides[0].units.find((unit) => unit.key === 'shuCavalry')).toMatchObject({ dispatched: 30000, lost: 30000, survived: 13000 })
-    expect(model.sides[0].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 30000, lost: 30000, survived: 3000 })
+    expect(model.sides[0].units.find((unit) => unit.key === 'shuCavalry')).toMatchObject({ dispatched: 30000, lost: 30000, survived: 10500 })
+    expect(model.sides[0].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 30000, lost: 30000, survived: 10500 })
     expect(model.sides[1].units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 1000000, lost: 28296, survived: 971704 })
     expect(model.sides[0].traits).toEqual([
       {
-        key: 'rende-0', name: '仁德天下', phase: '进攻/防守/增援战斗结束后',
-        detailText: '设计效果比例：50%；设计复活上限：10,000；复活兵力：蜀骑兵 +10,000；复活总数：10,000；触发概率：100%',
-      },
-      {
-        key: 'renzhu_shouhu-1', name: '仁主守护', phase: '进攻/防守/增援战斗结束后',
-        detailText: '设计减损比例：10%；设计返还上限：10,000；返还兵力：蜀骑兵 +3,000、蜀步兵 +3,000；触发概率：100%',
+        key: 'renzhu_shouhu-0', name: '仁主守护', phase: '进攻/防守/增援战斗结束后',
+        detailText: '设计效果比例：35%；复活兵力：蜀骑兵 +10,500、蜀步兵 +10,500；复活总数：21,000；触发概率：60%',
       },
     ])
     expect(model.sides[1].traits).toEqual([])
@@ -5054,11 +5071,11 @@ describe('官方战报适配', () => {
   it('两项正式压制特性分别展示真实压制数量', () => {
     const source = report()
     source.detail!.traits = [
-      { traitId: 'wolong_mouzhi', traitName: '卧龙谋制', ownerSide: 'primary', generalId: 'g1', detail: { disableTraitCount: 1, disabledTraitCount: 1, triggerChance: 1 } },
+      { traitId: 'wolong_mouzhi', traitName: '卧龙奇谋', ownerSide: 'primary', generalId: 'g1', detail: { disabledGeneralCount: 1, disabledTraitCount: 2, triggerChance: 1 } },
       { traitId: 'kurouji', traitName: '苦肉计', ownerSide: 'secondary', generalId: 'g2', detail: { disableTraitCount: 1, disabledTraitCount: 0, triggerChance: 1 } },
     ]
     const model = toOfficialBattleReport(source)
-    expect(model.sides[0].traits[0]).toMatchObject({ name: '卧龙谋制', phase: '战斗结算后', detailText: '设计压制特性数：1；实际压制特性数：1；触发概率：100%' })
+    expect(model.sides[0].traits[0]).toMatchObject({ name: '卧龙奇谋', phase: '进攻/防守/增援战斗前', detailText: '封禁将领数：1；实际压制特性数：2；触发概率：100%' })
     expect(model.sides[1].traits[0]).toMatchObject({ name: '苦肉计', phase: '战斗结算后', detailText: '设计压制特性数：1；实际压制特性数：0；触发概率：100%' })
   })
 
@@ -5092,39 +5109,43 @@ describe('官方战报适配', () => {
     expect(model.sides[1].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 100, lost: 49, survived: 51 })
   })
 
-  it('没有可压制目标时两项正式特性都保留实际压制零值', () => {
+  it('双方诸葛亮的卧龙奇谋都显示失效且不伪报封禁结果', () => {
     const source = report()
     source.detail!.traits = [
-      { traitId: 'wolong_mouzhi', traitName: '卧龙谋制', ownerSide: 'primary', generalId: 'g1', detail: { disableTraitCount: 1, disabledTraitCount: 0, triggerChance: 1 } },
-      { traitId: 'kurouji', traitName: '苦肉计', ownerSide: 'secondary', generalId: 'g2', detail: { disableTraitCount: 1, disabledTraitCount: 0, triggerChance: 1 } },
+      { traitId: 'wolong_mouzhi', traitName: '卧龙奇谋', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'g1', detail: { status: '特性已失效', invalidReason: '双方均有诸葛亮' } },
+      { traitId: 'wolong_mouzhi', traitName: '卧龙奇谋', ownerSide: 'secondary', ownerRole: 'defender', generalId: 'g2', detail: { status: '特性已失效', invalidReason: '双方均有诸葛亮' } },
     ]
     const model = toOfficialBattleReport(source)
-    expect(model.sides[0].traits[0]).toMatchObject({ name: '卧龙谋制', detailText: '设计压制特性数：1；实际压制特性数：0；触发概率：100%' })
-    expect(model.sides[1].traits[0]).toMatchObject({ name: '苦肉计', detailText: '设计压制特性数：1；实际压制特性数：0；触发概率：100%' })
+    for (const side of model.sides.slice(0, 2)) {
+      expect(side.traits[0]).toMatchObject({
+        name: '卧龙奇谋', phase: '进攻/防守/增援战斗前',
+        detailText: '状态：特性已失效；失效原因：双方均有诸葛亮',
+      })
+    }
   })
 
-  it('诸葛亮双压制区分本场压兵与后续特性拦截', () => {
+  it('诸葛亮双特性区分本场压兵与战前全体封禁', () => {
     const source = report()
     source.detail!.primarySide.generals = [{ id: 'zhugeliang', name: '诸葛亮', level: 1 }]
     source.detail!.traits = [
       {
         traitId: 'qimen_dunjia', traitName: '奇门遁甲', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhugeliang',
-        detail: { effectRate: 0.25, maxAffectedRate: 0.25, suppressedUnits: { greedyWolf: 25 }, triggerChance: 1 },
+        detail: { effectRate: 0.25, suppressedUnits: { greedyWolf: 25 }, triggerChance: 1 },
       },
       {
-        traitId: 'wolong_mouzhi', traitName: '卧龙谋制', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhugeliang',
-        detail: { disableTraitCount: 1, disabledTraitCount: 1, triggerChance: 1 },
+        traitId: 'wolong_mouzhi', traitName: '卧龙奇谋', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhugeliang',
+        detail: { disabledGeneralCount: 1, disabledTraitCount: 2, triggerChance: 1 },
       },
     ]
     const model = toOfficialBattleReport(source)
     expect(model.sides[0].traits).toHaveLength(2)
     expect(model.sides[0].traits[0]).toMatchObject({
-      name: '奇门遁甲', phase: '战斗前',
-      detailText: '设计效果比例：25%；设计最大影响比例：25%；本场压制兵力：贪狼营 +25；触发概率：100%',
+      name: '奇门遁甲', phase: '进攻/防守/增援战斗前',
+      detailText: '设计效果比例：25%；本场压制兵力：贪狼营 +25；触发概率：100%',
     })
     expect(model.sides[0].traits[1]).toMatchObject({
-      name: '卧龙谋制', phase: '战斗结算后',
-      detailText: '设计压制特性数：1；实际压制特性数：1；触发概率：100%',
+      name: '卧龙奇谋', phase: '进攻/防守/增援战斗前',
+      detailText: '封禁将领数：1；实际压制特性数：2；触发概率：100%',
     })
     expect(model.sides[1].traits).toEqual([])
     expect(model.sides.flatMap((side) => side.traits).some((trait) => trait.name === '老当益壮')).toBe(false)

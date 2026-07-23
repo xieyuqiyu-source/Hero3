@@ -373,7 +373,7 @@ func fillTestDualTraits(cfg GeneralsConfig) GeneralsConfig {
 				TraitType: "special",
 				Enabled:   true,
 				Scope:     "self_army",
-				Params:    map[string]float64{"effectRate": 0.1, "reviveRate": 0.1, "maxReviveCount": 1000, "triggerChance": 0},
+				Params:    map[string]float64{"politicsBonus": 0, "commandBonus": 0},
 			}
 		}
 		if strings.TrimSpace(hero.BonusTrait.TraitID) == "" {
@@ -382,7 +382,7 @@ func fillTestDualTraits(cfg GeneralsConfig) GeneralsConfig {
 				TraitType: "bonus",
 				Enabled:   true,
 				Scope:     "self_army",
-				Params:    map[string]float64{"lossReductionRate": 0.1, "maxReturnCount": 1000, "triggerChance": 0},
+				Params:    map[string]float64{"effectRate": 0.35, "triggerChance": 0},
 			}
 		}
 		cfg.Heroes[id] = hero
@@ -488,7 +488,7 @@ func TestValidateGeneralsConfigRejectsUnsafeTraitParams(t *testing.T) {
 					TraitID:   "renzhu_shouhu",
 					TraitType: "bonus",
 					Enabled:   true,
-					Params:    map[string]float64{"lossReductionRate": 0.1, "maxReturnCount": 1000},
+					Params:    map[string]float64{"effectRate": 0.35, "triggerChance": 0.6},
 				},
 			},
 		},
@@ -2187,9 +2187,10 @@ func TestSweepNpcCreatesOneAggregateReport(t *testing.T) {
 	if result.BattleReport.DispatchedUnits["weiInfantry"] != 100 {
 		t.Fatalf("expected sweep attacker dispatched units to use initial army only, got %+v", result.BattleReport.DispatchedUnits)
 	}
-	if result.BattleReport.Detail == nil || result.BattleReport.Detail.PrimarySide.Units[0].Dispatched != 100 {
+	if result.BattleReport.Detail == nil {
 		t.Fatalf("expected sweep detail primary side to use initial dispatched units, got %+v", result.BattleReport.Detail)
 	}
+	assertStandardUnitRow(t, result.BattleReport.ID, result.BattleReport.Detail.PrimarySide, "weiInfantry", 100, result.BattleReport.LostUnits["weiInfantry"], result.BattleReport.SurvivedUnits["weiInfantry"])
 	sweepExtra, ok := result.BattleReport.Detail.Extra["sweep"].(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected sweep extra in aggregate report detail, got %+v", result.BattleReport.Detail.Extra)

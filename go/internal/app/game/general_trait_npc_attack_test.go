@@ -3,6 +3,7 @@ package game
 
 import (
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -692,7 +693,7 @@ func TestNpcXiaobawangZhuijiRequiresPlunderVictory(t *testing.T) {
 	}
 }
 
-// TestNpcFormalLossReturnTraitsRespectOutcome 验证郭嘉以正式将领身份只在 NPC 战败后返还真实兵力。
+// TestNpcFormalLossReturnTraitsRespectOutcome 验证郭嘉在 NPC 不同胜负结果下都按真实阵亡复活。
 func TestNpcFormalLossReturnTraitsRespectOutcome(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -702,14 +703,15 @@ func TestNpcFormalLossReturnTraitsRespectOutcome(t *testing.T) {
 		rate       float64
 		wantReturn int
 	}{
-		{name: "鬼才遗策", traitID: "guicai_yice", traitType: general.TraitTypeBonus, generalID: "guojia", rate: 0.1, wantReturn: 10},
+		{name: "鬼才遗策", traitID: "guicai_yice", traitType: general.TraitTypeBonus, generalID: "guojia", rate: 0.22, wantReturn: 22},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			traitCfg := GeneralTraitConfig{
-				TraitID: tc.traitID, TraitType: tc.traitType, Enabled: true, Scope: "self_army", RequiredOutcome: "loss",
-				Params: map[string]float64{"lossReductionRate": tc.rate, "maxReturnCount": 10000, "triggerChance": 1},
+				TraitID: tc.traitID, TraitType: tc.traitType, Enabled: true, Scope: "self_army",
+				AllowedSides: []string{"attacker", "defender", "reinforcement"},
+				Params:       map[string]float64{"effectRate": tc.rate, "triggerChance": 1},
 			}
 			hero := GeneralHeroConfig{ID: tc.generalID, Name: tc.generalID, Faction: "wei", Enabled: true}
 			if tc.traitType == general.TraitTypeSpecial {
@@ -721,10 +723,11 @@ func TestNpcFormalLossReturnTraitsRespectOutcome(t *testing.T) {
 			t.Run("战败触发", func(t *testing.T) {
 				report, stored := resolveNpcAfterBattleHeroTest(t, tc.traitID+"_loss", hero, 100, 200)
 				outcome, ok := report.TraitOutcomes[tc.traitID]
-				returned, detailOK := outcome.Detail["returnedUnits"].(map[string]int)
-				returnCap, capOK := traitDetailInt(outcome.Detail["maxReturnCount"])
-				if !ok || !detailOK || !capOK || returned["weiInfantry"] != tc.wantReturn || outcome.Detail["lossReductionRate"] != tc.rate || returnCap != 10000 || outcome.Detail["triggerChance"] != 1.0 || outcome.OwnerGeneralID != tc.generalID {
-					t.Fatalf("expected %s to return %d troops after NPC defeat, outcome=%+v", tc.traitID, tc.wantReturn, outcome)
+				actualLost, lostOK := outcome.Detail["actualLostUnits"].(map[string]int)
+				revived, revivedOK := outcome.Detail["revivedUnits"].(map[string]int)
+				if !ok || !lostOK || !revivedOK || actualLost["weiInfantry"] != 100 || revived["weiInfantry"] != tc.wantReturn ||
+					outcome.Detail["effectRate"] != tc.rate || outcome.Detail["triggerChance"] != 1.0 || outcome.OwnerGeneralID != tc.generalID {
+					t.Fatalf("expected %s to revive %d troops after NPC defeat, outcome=%+v", tc.traitID, tc.wantReturn, outcome)
 				}
 				if report.LostUnits["weiInfantry"] != 100 || report.RevivedUnits["weiInfantry"] != tc.wantReturn || report.SurvivedUnits["weiInfantry"] != tc.wantReturn || armySliceToMap(stored.Army)["weiInfantry"] != tc.wantReturn {
 					t.Fatalf("expected %s loss/return/survivor 100/%d/%d, report=%+v stored=%+v", tc.traitID, tc.wantReturn, tc.wantReturn, report, stored.Army)
@@ -732,31 +735,33 @@ func TestNpcFormalLossReturnTraitsRespectOutcome(t *testing.T) {
 				assertNpcAfterBattleStandardResult(t, report, tc.traitID, tc.generalID, tc.wantReturn)
 			})
 
-			t.Run("获胜不触发", func(t *testing.T) {
+			t.Run("获胜触发", func(t *testing.T) {
 				report, stored := resolveNpcAfterBattleHeroTest(t, tc.traitID+"_win", hero, 200, 100)
-				if _, triggered := report.TraitOutcomes[tc.traitID]; triggered || len(report.RevivedUnits) != 0 {
-					t.Fatalf("expected %s not to trigger after NPC victory, outcomes=%+v returned=%+v", tc.traitID, report.TraitOutcomes, report.RevivedUnits)
+				lost := report.LostUnits["weiInfantry"]
+				wantRevived := int(math.Floor(float64(lost) * tc.rate))
+				outcome, triggered := report.TraitOutcomes[tc.traitID]
+				revived, revivedOK := outcome.Detail["revivedUnits"].(map[string]int)
+				if lost <= 0 || !triggered || !revivedOK || report.RevivedUnits["weiInfantry"] != wantRevived || revived["weiInfantry"] != wantRevived {
+					t.Fatalf("expected %s to revive %d after NPC victory, report=%+v", tc.traitID, wantRevived, report)
 				}
-				if got, want := armySliceToMap(stored.Army)["weiInfantry"], 200-report.LostUnits["weiInfantry"]; got != want {
-					t.Fatalf("expected winning %s army %d without return, got %d", tc.traitID, want, got)
-				}
-				for _, trait := range report.Detail.Traits {
-					if trait.TraitID == tc.traitID {
-						t.Fatalf("expected no fake %s standard outcome after victory, detail=%+v", tc.traitID, report.Detail)
-					}
+				if got, want := armySliceToMap(stored.Army)["weiInfantry"], 200-lost+wantRevived; got != want || !standardReportHasTrait(report.Detail, tc.traitID) {
+					t.Fatalf("expected winning %s army %d with revival, got %d detail=%+v", tc.traitID, want, got, report.Detail)
 				}
 			})
 
-			t.Run("平局不触发", func(t *testing.T) {
+			t.Run("平局触发", func(t *testing.T) {
 				report, stored := resolveNpcAfterBattleHeroTest(t, tc.traitID+"_draw", hero, 100, 100)
 				if report.Result != "draw" || report.PlayerPower != 1000 || report.EnemyPower != 1000 || report.LostUnits["weiInfantry"] != 100 || report.DefenderLostUnits["weiInfantry"] != 100 {
 					t.Fatalf("expected exact NPC draw 1000/1000 and attack-rule losses 100/100, report=%+v", report)
 				}
-				if _, triggered := report.TraitOutcomes[tc.traitID]; triggered || len(report.RevivedUnits) != 0 || len(report.TraitTriggered) != 0 || standardReportHasTrait(report.Detail, tc.traitID) {
-					t.Fatalf("expected %s not to trigger after NPC draw, report=%+v", tc.traitID, report)
+				outcome, triggered := report.TraitOutcomes[tc.traitID]
+				revived, revivedOK := outcome.Detail["revivedUnits"].(map[string]int)
+				if !triggered || !revivedOK || revived["weiInfantry"] != tc.wantReturn || report.RevivedUnits["weiInfantry"] != tc.wantReturn ||
+					len(report.TraitTriggered) != 1 || !standardReportHasTrait(report.Detail, tc.traitID) {
+					t.Fatalf("expected %s to revive after NPC draw, report=%+v", tc.traitID, report)
 				}
-				if report.SurvivedUnits["weiInfantry"] != 0 || report.GeneralExpGained != 100 || armySliceToMap(stored.Army)["weiInfantry"] != 0 {
-					t.Fatalf("expected NPC draw full losses and exp 100 without return, report=%+v stored=%+v", report, stored.Army)
+				if report.SurvivedUnits["weiInfantry"] != tc.wantReturn || report.GeneralExpGained != 100 || armySliceToMap(stored.Army)["weiInfantry"] != tc.wantReturn {
+					t.Fatalf("expected NPC draw to keep revived troops and exp 100, report=%+v stored=%+v", report, stored.Army)
 				}
 			})
 		})
@@ -864,31 +869,33 @@ func TestNpcDianWeiSizhanHitMissKeepsDefenseTraitInvalid(t *testing.T) {
 	}
 }
 
-// TestNpcFormalLiubeiDualReturnsAndLongdanDirection 验证刘备双返兵叠加，并锁定赵云主动 NPC 进攻无效。
-func TestNpcFormalLiubeiDualReturnsAndLongdanDirection(t *testing.T) {
-	t.Run("刘备双特性叠加", func(t *testing.T) {
+// TestNpcFormalLiubeiRevivalAndLongdanDirection 验证刘备当前战后复活，并锁定赵云主动 NPC 进攻无效。
+func TestNpcFormalLiubeiRevivalAndLongdanDirection(t *testing.T) {
+	t.Run("刘备仁主守护复活", func(t *testing.T) {
 		hero := GeneralHeroConfig{
 			ID: "liubei", Name: "刘备", Faction: "wei", Enabled: true,
 			SpecialTrait: GeneralTraitConfig{
 				TraitID: "rende", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army",
-				Params: map[string]float64{"effectRate": 0.5, "reviveRate": 0.5, "maxReviveCount": 10000, "triggerChance": 1},
+				Params: map[string]float64{"politicsBonus": 10, "commandBonus": 12},
 			},
 			BonusTrait: GeneralTraitConfig{
 				TraitID: "renzhu_shouhu", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army",
-				Params: map[string]float64{"lossReductionRate": 0.1, "maxReturnCount": 10000, "triggerChance": 1},
+				AllowedSides: []string{"attacker", "defender", "reinforcement"},
+				Params:       map[string]float64{"effectRate": 0.35, "triggerChance": 1},
 			},
 		}
-		report, stored := resolveNpcAfterBattleHeroTest(t, "liubei_dual", hero, 100, 200)
-		rende, rendeOK := report.TraitOutcomes["rende"].Detail["revivedUnits"].(map[string]int)
-		guard, guardOK := report.TraitOutcomes["renzhu_shouhu"].Detail["returnedUnits"].(map[string]int)
-		if !rendeOK || !guardOK || rende["weiInfantry"] != 50 || guard["weiInfantry"] != 10 {
-			t.Fatalf("expected Liu Bei NPC returns 50 + 10, outcomes=%+v", report.TraitOutcomes)
+		report, stored := resolveNpcAfterBattleHeroTest(t, "liubei_current", hero, 100, 200)
+		revived, revivedOK := report.TraitOutcomes["renzhu_shouhu"].Detail["revivedUnits"].(map[string]int)
+		if !revivedOK || revived["weiInfantry"] != 35 || len(report.TraitOutcomes) != 1 {
+			t.Fatalf("expected Renzhu alone to revive 35, outcomes=%+v", report.TraitOutcomes)
 		}
-		if report.LostUnits["weiInfantry"] != 100 || report.RevivedUnits["weiInfantry"] != 60 || report.SurvivedUnits["weiInfantry"] != 60 || armySliceToMap(stored.Army)["weiInfantry"] != 60 {
-			t.Fatalf("expected Liu Bei NPC loss/return/survivor 100/60/60, report=%+v stored=%+v", report, stored.Army)
+		if report.LostUnits["weiInfantry"] != 100 || report.RevivedUnits["weiInfantry"] != 35 || report.SurvivedUnits["weiInfantry"] != 35 || armySliceToMap(stored.Army)["weiInfantry"] != 35 {
+			t.Fatalf("expected Liu Bei NPC loss/revival/survivor 100/35/35, report=%+v stored=%+v", report, stored.Army)
 		}
-		assertNpcAfterBattleStandardResult(t, report, "rende", "liubei", 60)
-		assertNpcAfterBattleStandardResult(t, report, "renzhu_shouhu", "liubei", 60)
+		if standardReportHasTrait(report.Detail, "rende") {
+			t.Fatalf("expected permanent Rende absent from NPC timeline, report=%+v", report)
+		}
+		assertNpcAfterBattleStandardResult(t, report, "renzhu_shouhu", "liubei", 35)
 	})
 
 	t.Run("赵云主动进攻不触发", func(t *testing.T) {

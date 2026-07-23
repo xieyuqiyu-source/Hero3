@@ -3,6 +3,7 @@ package game
 
 import (
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -146,9 +147,7 @@ func TestYellowTurbanDefenseUsesHomeGeneralAndGrantsExp(t *testing.T) {
 	}
 	generalsCfg := GetGeneralsConfig()
 	liubeiCfg := generalsCfg.Heroes["liubei"]
-	liubeiCfg.SpecialTrait.Params["triggerChance"] = 1
-	liubeiCfg.SpecialTrait.Params["effectRate"] = 0.5
-	liubeiCfg.SpecialTrait.Params["reviveRate"] = 0.5
+	liubeiCfg.BonusTrait.Params["triggerChance"] = 1
 	generalsCfg.Heroes["liubei"] = liubeiCfg
 	if err := SetGeneralsConfig(generalsCfg); err != nil {
 		t.Fatalf("SetGeneralsConfig failed: %v", err)
@@ -233,18 +232,18 @@ func TestYellowTurbanDefenseUsesHomeGeneralAndGrantsExp(t *testing.T) {
 	revived := report.RevivedUnits["greedyWolf"]
 	expectedSurvived := 5000 - lost + revived
 	if lost <= 0 || revived <= 0 || report.SurvivedUnits["greedyWolf"] != expectedSurvived {
-		t.Fatalf("expected yellow turban Rende survivor formula, lost=%d revived=%d survived=%+v", lost, revived, report.SurvivedUnits)
+		t.Fatalf("expected yellow turban Renzhu Shouhu survivor formula, lost=%d revived=%d survived=%+v", lost, revived, report.SurvivedUnits)
 	}
 	if got := armySliceToMap(updated.Army)["greedyWolf"]; got != expectedSurvived {
 		t.Fatalf("expected real city army %d to match report, got %d", expectedSurvived, got)
 	}
-	rendeOutcome := report.TraitOutcomes["rende"]
-	rendeUnits, ok := rendeOutcome.Detail["revivedUnits"].(map[string]int)
-	if !ok || rendeUnits["greedyWolf"] != lost/2 {
-		t.Fatalf("expected Rende alone to revive half of losses, got %+v", rendeOutcome)
+	if _, exists := report.TraitOutcomes["rende"]; exists {
+		t.Fatalf("expected passive Rende to stay out of battle timeline, outcomes=%+v", report.TraitOutcomes)
 	}
-	if guardOutcome := report.TraitOutcomes["renzhu_shouhu"]; guardOutcome.Detail["returnedUnits"] == nil {
-		t.Fatalf("expected Renzhu Shouhu return detail, got %+v", guardOutcome)
+	guardOutcome := report.TraitOutcomes["renzhu_shouhu"]
+	revivedUnits, ok := guardOutcome.Detail["revivedUnits"].(map[string]int)
+	if !ok || revivedUnits["greedyWolf"] != int(math.Floor(float64(lost)*0.35)) {
+		t.Fatalf("expected Renzhu Shouhu to revive 35%% of actual losses, got %+v", guardOutcome)
 	}
 	standardSurvived := -1
 	if report.Detail.SecondarySide == nil {
@@ -261,7 +260,7 @@ func TestYellowTurbanDefenseUsesHomeGeneralAndGrantsExp(t *testing.T) {
 	}
 }
 
-// TestYellowTurbanLossReductionTraitsRespectOutcome 验证郭嘉只在黄巾防守失败时返兵。
+// TestYellowTurbanLossReductionTraitsRespectOutcome 验证郭嘉在黄巾守城不同胜负下都按真实阵亡复活。
 func TestYellowTurbanLossReductionTraitsRespectOutcome(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -273,14 +272,15 @@ func TestYellowTurbanLossReductionTraitsRespectOutcome(t *testing.T) {
 	for traitIndex, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			traitCfg := GeneralTraitConfig{
-				TraitID: tc.traitID, TraitType: tc.traitType, Enabled: true, Scope: "self_army", RequiredOutcome: "loss",
-				Params: map[string]float64{"lossReductionRate": 0.5, "maxReturnCount": 10000, "triggerChance": 1},
+				TraitID: tc.traitID, TraitType: tc.traitType, Enabled: true, Scope: "self_army",
+				AllowedSides: []string{"attacker", "defender", "reinforcement"},
+				Params:       map[string]float64{"effectRate": 0.5, "triggerChance": 1},
 			}
 			t.Run("战败触发", func(t *testing.T) {
 				report, stored := resolveYellowTurbanTraitTest(t, traitCfg, 100, 200, "loss_"+string(rune('a'+traitIndex)))
-				returned, ok := report.TraitOutcomes[tc.traitID].Detail["returnedUnits"].(map[string]int)
-				if !ok || returned["weiInfantry"] != 50 {
-					t.Fatalf("expected %s to return 50 troops after loss, got %+v", tc.traitID, report.TraitOutcomes[tc.traitID])
+				revived, ok := report.TraitOutcomes[tc.traitID].Detail["revivedUnits"].(map[string]int)
+				if !ok || revived["weiInfantry"] != 50 {
+					t.Fatalf("expected %s to revive 50 troops after loss, got %+v", tc.traitID, report.TraitOutcomes[tc.traitID])
 				}
 				if report.LostUnits["weiInfantry"] != 100 || report.RevivedUnits["weiInfantry"] != 50 || report.SurvivedUnits["weiInfantry"] != 50 {
 					t.Fatalf("expected loss/return/survivor 100/50/50, got lost=%+v returned=%+v survived=%+v", report.LostUnits, report.RevivedUnits, report.SurvivedUnits)
@@ -289,26 +289,33 @@ func TestYellowTurbanLossReductionTraitsRespectOutcome(t *testing.T) {
 					t.Fatalf("expected real army and standard report to keep 50 troops, army=%+v detail=%+v", stored.Army, report.Detail)
 				}
 			})
-			t.Run("获胜不触发", func(t *testing.T) {
+			t.Run("获胜触发", func(t *testing.T) {
 				report, stored := resolveYellowTurbanTraitTest(t, traitCfg, 200, 100, "win_"+string(rune('a'+traitIndex)))
-				if _, triggered := report.TraitOutcomes[tc.traitID]; triggered || len(report.RevivedUnits) != 0 {
-					t.Fatalf("expected %s not to trigger after defense victory, got %+v", tc.traitID, report.TraitOutcomes)
+				lost := report.LostUnits["weiInfantry"]
+				wantRevived := lost / 2
+				outcome, triggered := report.TraitOutcomes[tc.traitID]
+				revived, revivedOK := outcome.Detail["revivedUnits"].(map[string]int)
+				if lost <= 0 || !triggered || !revivedOK || revived["weiInfantry"] != wantRevived || report.RevivedUnits["weiInfantry"] != wantRevived {
+					t.Fatalf("expected %s to revive %d after defense victory, report=%+v", tc.traitID, wantRevived, report)
 				}
 				realSurvived := armySliceToMap(stored.Army)["weiInfantry"]
-				if realSurvived != report.SurvivedUnits["weiInfantry"] || yellowTurbanStandardDefenderSurvived(report, "weiInfantry") != realSurvived {
+				if realSurvived != 200-lost+wantRevived || realSurvived != report.SurvivedUnits["weiInfantry"] || yellowTurbanStandardDefenderSurvived(report, "weiInfantry") != realSurvived {
 					t.Fatalf("expected winning army and reports to agree, army=%d report=%+v detail=%+v", realSurvived, report.SurvivedUnits, report.Detail)
 				}
 			})
-			t.Run("平局不触发", func(t *testing.T) {
+			t.Run("平局触发", func(t *testing.T) {
 				report, stored := resolveYellowTurbanTraitTest(t, traitCfg, 100, 103, "draw_"+string(rune('a'+traitIndex)))
 				if report.Result != "draw" || report.PlayerPower != 1030 || report.EnemyPower != 1030 || report.LostUnits["weiInfantry"] != 100 || report.DefenderLostUnits["weiInfantry"] != 103 {
 					t.Fatalf("expected exact yellow turban draw 1030/1030 with attack-rule defender/attacker losses 100/103, report=%+v", report)
 				}
-				if _, triggered := report.TraitOutcomes[tc.traitID]; triggered || len(report.RevivedUnits) != 0 || len(report.TraitTriggered) != 0 || standardReportHasTrait(report.Detail, tc.traitID) {
-					t.Fatalf("expected %s not to trigger after yellow turban draw, report=%+v", tc.traitID, report)
+				outcome, triggered := report.TraitOutcomes[tc.traitID]
+				revived, revivedOK := outcome.Detail["revivedUnits"].(map[string]int)
+				if !triggered || !revivedOK || revived["weiInfantry"] != 50 || report.RevivedUnits["weiInfantry"] != 50 ||
+					len(report.TraitTriggered) != 1 || !standardReportHasTrait(report.Detail, tc.traitID) {
+					t.Fatalf("expected %s to revive after yellow turban draw, report=%+v", tc.traitID, report)
 				}
-				if report.SurvivedUnits["weiInfantry"] != 0 || report.GeneralExpGained != 103 || armySliceToMap(stored.Army)["weiInfantry"] != 0 || yellowTurbanStandardDefenderSurvived(report, "weiInfantry") != 0 {
-					t.Fatalf("expected yellow turban draw full losses and exp 103 without return, report=%+v stored=%+v", report, stored.Army)
+				if report.SurvivedUnits["weiInfantry"] != 50 || report.GeneralExpGained != 103 || armySliceToMap(stored.Army)["weiInfantry"] != 50 || yellowTurbanStandardDefenderSurvived(report, "weiInfantry") != 50 {
+					t.Fatalf("expected yellow turban draw to keep 50 revived troops and exp 103, report=%+v stored=%+v", report, stored.Army)
 				}
 			})
 		})
@@ -950,9 +957,10 @@ func TestYellowTurbanDefenderExtraDamageMatchesReport(t *testing.T) {
 	if !ok || extraLosses["weiInfantry"] != 20 {
 		t.Fatalf("expected defender trait to add 20 yellow turban losses, got %+v", outcome)
 	}
-	if report.DefenderLostUnits["weiInfantry"] < 20 || report.Detail == nil || report.Detail.PrimarySide.Units[0].Lost != report.DefenderLostUnits["weiInfantry"] {
+	if report.DefenderLostUnits["weiInfantry"] < 20 || report.Detail == nil {
 		t.Fatalf("expected legacy and standard yellow turban attacker losses to agree, report=%+v detail=%+v", report.DefenderLostUnits, report.Detail)
 	}
+	assertStandardUnitRow(t, report.ID, report.Detail.PrimarySide, "weiInfantry", 200, report.DefenderLostUnits["weiInfantry"], 200-report.DefenderLostUnits["weiInfantry"])
 }
 
 // TestYellowTurbanFormalAfterCombatDamageTraitsMatchStateAndReports 验证四项正式守城战后伤害逐项进入黄巾损失与双方格式战报。
@@ -1123,12 +1131,8 @@ func TestYellowTurbanRandomPreBattleTraitsHitAndMiss(t *testing.T) {
 					if report.Detail == nil || report.Detail.SecondarySide == nil {
 						t.Fatalf("expected complete standard yellow turban detail, report=%+v", report)
 					}
-					primaryUnit := report.Detail.PrimarySide.Units[0]
-					secondaryUnit := report.Detail.SecondarySide.Units[0]
-					if primaryUnit.UnitType != tc.attackerUnit || primaryUnit.Dispatched != 100 || primaryUnit.Lost != wantAttackLost || primaryUnit.Survived != wantAttackSurvived ||
-						secondaryUnit.UnitType != tc.defenderUnit || secondaryUnit.Dispatched != 100 || secondaryUnit.Lost != wantDefenseLost || secondaryUnit.Survived != wantDefenseSurvived {
-						t.Fatalf("expected standard units to match authoritative losses, primary=%+v secondary=%+v", primaryUnit, secondaryUnit)
-					}
+					assertStandardUnitRow(t, report.ID, report.Detail.PrimarySide, tc.attackerUnit, 100, wantAttackLost, wantAttackSurvived)
+					assertStandardUnitRow(t, report.ID, *report.Detail.SecondarySide, tc.defenderUnit, 100, wantDefenseLost, wantDefenseSurvived)
 					if !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, tc.generalID, tc.specialTraitID) || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, tc.generalID, tc.bonusTraitID) {
 						t.Fatalf("expected defender snapshot to preserve both owned traits, side=%+v", report.Detail.SecondarySide)
 					}
@@ -1230,12 +1234,8 @@ func TestYellowTurbanLuXunAfterCombatTraitsHitAndMiss(t *testing.T) {
 			if report.Detail == nil || report.Detail.SecondarySide == nil || len(report.Detail.PrimarySide.Units) == 0 || len(report.Detail.SecondarySide.Units) == 0 {
 				t.Fatalf("expected complete standard yellow turban detail, report=%+v", report)
 			}
-			primaryUnit := report.Detail.PrimarySide.Units[0]
-			secondaryUnit := report.Detail.SecondarySide.Units[0]
-			if primaryUnit.UnitType != "weiInfantry" || primaryUnit.Dispatched != 200 || primaryUnit.Lost != wantAttackerLost || primaryUnit.Survived != 200-wantAttackerLost ||
-				secondaryUnit.UnitType != "wuInfantry" || secondaryUnit.Dispatched != 100 || secondaryUnit.Lost != 100 || secondaryUnit.Survived != 0 {
-				t.Fatalf("expected exact standard unit rows, primary=%+v secondary=%+v", primaryUnit, secondaryUnit)
-			}
+			assertStandardUnitRow(t, report.ID, report.Detail.PrimarySide, "weiInfantry", 200, wantAttackerLost, 200-wantAttackerLost)
+			assertStandardUnitRow(t, report.ID, *report.Detail.SecondarySide, "wuInfantry", 100, 100, 0)
 			if !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "luxun", "huoshao_lianying") || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "luxun", "lianying_zengshang") {
 				t.Fatalf("expected Lu Xun snapshot to preserve both owned traits, side=%+v", report.Detail.SecondarySide)
 			}
@@ -1298,12 +1298,8 @@ func TestYellowTurbanHuangGaiSuppressionHitAndMissKeepsCounter(t *testing.T) {
 			if report.Detail == nil || report.Detail.SecondarySide == nil || len(report.Detail.PrimarySide.Units) == 0 || len(report.Detail.SecondarySide.Units) == 0 {
 				t.Fatalf("expected complete standard yellow turban detail, report=%+v", report)
 			}
-			primaryUnit := report.Detail.PrimarySide.Units[0]
-			secondaryUnit := report.Detail.SecondarySide.Units[0]
-			if primaryUnit.UnitType != "weiInfantry" || primaryUnit.Dispatched != 200 || primaryUnit.Lost != 97 || primaryUnit.Survived != 103 ||
-				secondaryUnit.UnitType != "wuInfantry" || secondaryUnit.Dispatched != 100 || secondaryUnit.Lost != 100 || secondaryUnit.Survived != 0 {
-				t.Fatalf("expected exact standard unit rows, primary=%+v secondary=%+v", primaryUnit, secondaryUnit)
-			}
+			assertStandardUnitRow(t, report.ID, report.Detail.PrimarySide, "weiInfantry", 200, 97, 103)
+			assertStandardUnitRow(t, report.ID, *report.Detail.SecondarySide, "wuInfantry", 100, 100, 0)
 			if !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "huanggai", "kurouji") || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "huanggai", "kurou_fanji") {
 				t.Fatalf("expected Huang Gai snapshot to preserve both owned traits, side=%+v", report.Detail.SecondarySide)
 			}
@@ -1360,12 +1356,8 @@ func TestYellowTurbanSunQuanLegalMissKeepsOwnedSnapshot(t *testing.T) {
 	if report.Detail == nil || report.Detail.SecondarySide == nil || len(report.Detail.PrimarySide.Units) == 0 || len(report.Detail.SecondarySide.Units) == 0 {
 		t.Fatalf("expected complete standard yellow turban detail, report=%+v", report)
 	}
-	primaryUnit := report.Detail.PrimarySide.Units[0]
-	secondaryUnit := report.Detail.SecondarySide.Units[0]
-	if primaryUnit.UnitType != "weiInfantry" || primaryUnit.Dispatched != 100 || primaryUnit.Lost != 100 || primaryUnit.Survived != 0 ||
-		secondaryUnit.UnitType != "wuInfantry" || secondaryUnit.Dispatched != 100 || secondaryUnit.Lost != 96 || secondaryUnit.Survived != 4 {
-		t.Fatalf("expected exact standard unit rows, primary=%+v secondary=%+v", primaryUnit, secondaryUnit)
-	}
+	assertStandardUnitRow(t, report.ID, report.Detail.PrimarySide, "weiInfantry", 100, 100, 0)
+	assertStandardUnitRow(t, report.ID, *report.Detail.SecondarySide, "wuInfantry", 100, 96, 4)
 	if !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "sunquan", "jiangdong_haoling") || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "sunquan", "jiangdong_gushou") {
 		t.Fatalf("expected Sun Quan snapshot to preserve both owned traits, side=%+v", report.Detail.SecondarySide)
 	}
@@ -1471,12 +1463,8 @@ func TestYellowTurbanZhaoYunLongdanLegalMissKeepsMarchTraitSnapshot(t *testing.T
 	if report.Detail == nil || report.Detail.SecondarySide == nil || len(report.Detail.PrimarySide.Units) == 0 || len(report.Detail.SecondarySide.Units) == 0 {
 		t.Fatalf("expected complete standard yellow turban detail, report=%+v", report)
 	}
-	primaryUnit := report.Detail.PrimarySide.Units[0]
-	secondaryUnit := report.Detail.SecondarySide.Units[0]
-	if primaryUnit.UnitType != "weiInfantry" || primaryUnit.Dispatched != 200 || primaryUnit.Lost != 76 || primaryUnit.Survived != 124 ||
-		secondaryUnit.UnitType != "greedyWolf" || secondaryUnit.Dispatched != 100 || secondaryUnit.Lost != 100 || secondaryUnit.Survived != 0 {
-		t.Fatalf("expected exact standard unit rows, primary=%+v secondary=%+v", primaryUnit, secondaryUnit)
-	}
+	assertStandardUnitRow(t, report.ID, report.Detail.PrimarySide, "weiInfantry", 200, 76, 124)
+	assertStandardUnitRow(t, report.ID, *report.Detail.SecondarySide, "greedyWolf", 100, 100, 0)
 	if !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "zhaoyun", "longdan_jiuyuan") || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "zhaoyun", "qijin_qichu") {
 		t.Fatalf("expected Zhao Yun snapshot to preserve both owned traits, side=%+v", report.Detail.SecondarySide)
 	}

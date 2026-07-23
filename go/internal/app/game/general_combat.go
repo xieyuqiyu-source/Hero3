@@ -287,7 +287,7 @@ func dispatchRecruitCostTraits(state *GameState, unitConfig UnitConfig, unitID s
 }
 
 // dispatchPlunderTraits 通过核心事件管线应用掠夺收益类特性。
-func dispatchPlunderTraits(state *GameState, generalIDs []string, rewards map[string]int, scene string, ownerSide string) (map[string]int, map[string]general.TraitOutcome) {
+func dispatchPlunderTraits(state *GameState, generalIDs []string, rewards map[string]int, scene string, ownerSide string, combatTraitsDisabled bool) (map[string]int, map[string]general.TraitOutcome) {
 	if len(rewards) == 0 {
 		return rewards, nil
 	}
@@ -295,7 +295,8 @@ func dispatchPlunderTraits(state *GameState, generalIDs []string, rewards map[st
 		Rewards: rewards,
 		Scene:   scene,
 	}
-	general.Dispatch(ctx, withTraitOwnerSide(buildActiveTraitsForGeneralIDs(state, generalIDs), ownerSide))
+	active := filterDisabledCombatTraits(buildActiveTraitsForGeneralIDs(state, generalIDs), combatTraitsDisabled)
+	general.Dispatch(ctx, withTraitOwnerSide(active, ownerSide))
 	return ctx.Rewards, ctx.Triggered
 }
 
@@ -373,14 +374,15 @@ func reinforcementEnemyCombatTraits(active []general.ActiveTrait) []general.Acti
 }
 
 // activeReinforcementEnemyTraits 汇总真实参战援军的对敌特性。
-func activeReinforcementEnemyTraits(records []Reinforcement) []general.ActiveTrait {
+func activeReinforcementEnemyTraits(records []Reinforcement, combatTraitsDisabled bool) []general.ActiveTrait {
 	result := []general.ActiveTrait{}
 	for _, record := range records {
 		normalizeGarrisonRecord(&record)
 		if record.Status != ReinforcementStatusStationed || !record.Rules.CanFight {
 			continue
 		}
-		result = append(result, reinforcementEnemyCombatTraits(buildActiveTraitsForReinforcement(record))...)
+		active := filterDisabledCombatTraits(buildActiveTraitsForReinforcement(record), combatTraitsDisabled)
+		result = append(result, reinforcementEnemyCombatTraits(active)...)
 	}
 	return result
 }
@@ -416,7 +418,7 @@ func splitReinforcementTraitOutcomes(outcomes map[string]general.TraitOutcome, r
 }
 
 // applyReinforcementEnemyBeforeBattleTraits 让各援军批次对真实来袭军队执行战前对敌特性。
-func applyReinforcementEnemyBeforeBattleTraits(records []Reinforcement, attacker *combat.Army, defender *combat.Army, scene string) (map[string]map[string]general.TraitOutcome, []*general.BeforeBattleContext) {
+func applyReinforcementEnemyBeforeBattleTraits(records []Reinforcement, attacker *combat.Army, defender *combat.Army, scene string, combatTraitsDisabled bool) (map[string]map[string]general.TraitOutcome, []*general.BeforeBattleContext) {
 	outcomes := map[string]map[string]general.TraitOutcome{}
 	contexts := []*general.BeforeBattleContext{}
 	for _, record := range records {
@@ -424,7 +426,8 @@ func applyReinforcementEnemyBeforeBattleTraits(records []Reinforcement, attacker
 		if record.Status != ReinforcementStatusStationed || !record.Rules.CanFight {
 			continue
 		}
-		active := reinforcementEnemyCombatTraits(buildActiveTraitsForReinforcement(record))
+		active := filterDisabledCombatTraits(buildActiveTraitsForReinforcement(record), combatTraitsDisabled)
+		active = reinforcementEnemyCombatTraits(active)
 		if len(active) == 0 {
 			continue
 		}
@@ -441,7 +444,7 @@ func applyReinforcementEnemyBeforeBattleTraits(records []Reinforcement, attacker
 }
 
 // applyReinforcementBeforeBattleTraits 只调整当前一批援军自己的战斗单位。
-func applyReinforcementBeforeBattleTraits(record Reinforcement, units []combat.Unit, scene string) ([]combat.Unit, map[string]general.TraitOutcome) {
+func applyReinforcementBeforeBattleTraits(record Reinforcement, units []combat.Unit, scene string, combatTraitsDisabled ...bool) ([]combat.Unit, map[string]general.TraitOutcome) {
 	if len(units) == 0 {
 		return units, nil
 	}
@@ -455,7 +458,9 @@ func applyReinforcementBeforeBattleTraits(record Reinforcement, units []combat.U
 		IsPvP:             true,
 		Scene:             scene,
 	}
-	general.Dispatch(ctx, reinforcementCombatTraits(buildActiveTraitsForReinforcement(record)))
+	disabled := len(combatTraitsDisabled) > 0 && combatTraitsDisabled[0]
+	active := filterDisabledCombatTraits(buildActiveTraitsForReinforcement(record), disabled)
+	general.Dispatch(ctx, reinforcementCombatTraits(active))
 	return defenderArmy.Units, ctx.Triggered
 }
 
@@ -469,7 +474,7 @@ type reinforcementTraitResolution struct {
 }
 
 // resolveReinforcementAfterBattleTraits 分开保存援军结算减损后的阵亡与战斗结束返兵后的最终净损失。
-func resolveReinforcementAfterBattleTraits(records []Reinforcement, losses map[string]map[string]int, winner string, scene string, disabledTraitCount int) reinforcementTraitResolution {
+func resolveReinforcementAfterBattleTraits(records []Reinforcement, losses map[string]map[string]int, winner string, scene string, disabledTraitCount int, combatTraitsDisabled ...bool) reinforcementTraitResolution {
 	if len(records) == 0 || len(losses) == 0 {
 		return reinforcementTraitResolution{FinalLosses: losses, AfterCombatLosses: cloneNestedStringIntMap(losses)}
 	}
@@ -479,6 +484,7 @@ func resolveReinforcementAfterBattleTraits(records []Reinforcement, losses map[s
 	afterCombatOutcomes := map[string]map[string]general.TraitOutcome{}
 	afterBattleOutcomes := map[string]map[string]general.TraitOutcome{}
 	outcomes := map[string]map[string]general.TraitOutcome{}
+	disableCombatTraits := len(combatTraitsDisabled) > 0 && combatTraitsDisabled[0]
 	for _, record := range records {
 		recordLosses := next[record.ID]
 		if len(recordLosses) == 0 {
@@ -500,7 +506,8 @@ func resolveReinforcementAfterBattleTraits(records []Reinforcement, losses map[s
 			DisabledTraitSide: map[string]int{"reinforcement": disabledTraitCount},
 			Scene:             scene,
 		}
-		general.Dispatch(afterCombatCtx, reinforcementCombatTraits(buildActiveTraitsForReinforcement(record)))
+		active := filterDisabledCombatTraits(buildActiveTraitsForReinforcement(record), disableCombatTraits)
+		general.Dispatch(afterCombatCtx, reinforcementCombatTraits(active))
 		disabledTraitCount = afterCombatCtx.DisabledTraitSide["reinforcement"]
 		recordLosses = combatLossMap(result.DefenderLosses)
 		afterCombatLosses[record.ID] = cloneStringIntMap(recordLosses)
@@ -521,7 +528,7 @@ func resolveReinforcementAfterBattleTraits(records []Reinforcement, losses map[s
 			Winner:       winner,
 			Scene:        scene,
 		}
-		general.Dispatch(ctx, buildActiveTraitsForReinforcement(record))
+		general.Dispatch(ctx, active)
 		afterBattleOutcomes[record.ID] = mergeGeneralTraitOutcomeMaps(afterBattleOutcomes[record.ID], ctx.Triggered)
 		outcomes[record.ID] = mergeGeneralTraitOutcomeMaps(outcomes[record.ID], ctx.Triggered)
 		for unitType, revived := range ctx.Revived {

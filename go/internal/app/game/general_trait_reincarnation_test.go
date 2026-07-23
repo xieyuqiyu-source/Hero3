@@ -162,19 +162,19 @@ func TestReincarnationAttackAppliesBeforeBattleTraits(t *testing.T) {
 	}
 }
 
-// TestReincarnationAttackAppliesAfterBattleRecovery 验证刘备进攻波的复活和返兵进入权威兵力、战报与战斗记录。
+// TestReincarnationAttackAppliesAfterBattleRecovery 验证刘备进攻波的仁主守护复活进入权威兵力、战报与战斗记录。
 func TestReincarnationAttackAppliesAfterBattleRecovery(t *testing.T) {
 	hero := GeneralHeroConfig{
 		ID: "liubei", Name: "刘备", Faction: "shu", Enabled: true,
-		SpecialTrait: GeneralTraitConfig{TraitID: "rende", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army", Params: map[string]float64{"effectRate": 0.5, "maxReviveCount": 10000, "triggerChance": 1}},
-		BonusTrait:   GeneralTraitConfig{TraitID: "renzhu_shouhu", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", Params: map[string]float64{"lossReductionRate": 0.1, "maxReturnCount": 1000, "triggerChance": 1}},
+		SpecialTrait: GeneralTraitConfig{TraitID: "rende", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army", Params: map[string]float64{"politicsBonus": 10, "commandBonus": 12}},
+		BonusTrait:   GeneralTraitConfig{TraitID: "renzhu_shouhu", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", Params: map[string]float64{"effectRate": 0.35, "triggerChance": 1}},
 	}
 	fixture := newReincarnationTraitFixture(t, "liubei_recovery", hero, "wei", ReincarnationWaveAttack, 500, 1000)
 	result := fightReincarnationTraitFixture(t, fixture, 100, hero.ID, "liubei-recovery-once")
 	report := result.BattleReport
 	revived := report.RevivedUnits[fixture.playerUnit]
-	if report.LostUnits[fixture.playerUnit] <= 0 || revived <= 0 || len(report.TraitOutcomes) != 2 {
-		t.Fatalf("expected real losses and two recovery traits, report=%+v", report)
+	if report.LostUnits[fixture.playerUnit] <= 0 || revived <= 0 || len(report.TraitOutcomes) != 1 || report.TraitOutcomes["renzhu_shouhu"].OwnerSide != "attacker" {
+		t.Fatalf("expected only attacker-owned Renzhu Shouhu recovery, report=%+v", report)
 	}
 	expectedArmy := fixture.initial - report.LostUnits[fixture.playerUnit] + revived
 	storedState, err := fixture.repo.GetState(fixture.playerID)
@@ -261,19 +261,19 @@ func TestReincarnationDefenseAppliesDefenseAndEnemyDamageTraits(t *testing.T) {
 	})
 }
 
-// TestReincarnationDefenseAppliesAfterBattleRecovery 验证刘备防守波返兵从主城真实损失中恢复并进入防守侧战报。
+// TestReincarnationDefenseAppliesAfterBattleRecovery 验证刘备防守波仁主守护从主城真实阵亡中复活并进入防守侧战报。
 func TestReincarnationDefenseAppliesAfterBattleRecovery(t *testing.T) {
 	hero := GeneralHeroConfig{
 		ID: "liubei", Name: "刘备", Faction: "shu", Enabled: true,
-		SpecialTrait: GeneralTraitConfig{TraitID: "rende", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army", Params: map[string]float64{"effectRate": 0.5, "maxReviveCount": 10000, "triggerChance": 1}},
-		BonusTrait:   GeneralTraitConfig{TraitID: "renzhu_shouhu", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", Params: map[string]float64{"lossReductionRate": 0.1, "maxReturnCount": 1000, "triggerChance": 1}},
+		SpecialTrait: GeneralTraitConfig{TraitID: "rende", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army", Params: map[string]float64{"politicsBonus": 10, "commandBonus": 12}},
+		BonusTrait:   GeneralTraitConfig{TraitID: "renzhu_shouhu", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", Params: map[string]float64{"effectRate": 0.35, "triggerChance": 1}},
 	}
 	fixture := newReincarnationTraitFixture(t, "liubei_defense_recovery", hero, "wei", ReincarnationWaveDefense, 500, 1000)
 	result := fightReincarnationTraitFixture(t, fixture, 100, hero.ID, "liubei-defense-recovery-once")
 	report := result.BattleReport
 	revived := report.RevivedUnits[fixture.playerUnit]
-	if report.LostUnits[fixture.playerUnit] <= 0 || revived <= 0 || report.TraitOutcomes["rende"].OwnerSide != "defender" || report.TraitOutcomes["renzhu_shouhu"].OwnerSide != "defender" {
-		t.Fatalf("expected defender-owned recovery outcomes, report=%+v", report)
+	if report.LostUnits[fixture.playerUnit] <= 0 || revived <= 0 || len(report.TraitOutcomes) != 1 || report.TraitOutcomes["renzhu_shouhu"].OwnerSide != "defender" {
+		t.Fatalf("expected only defender-owned Renzhu Shouhu recovery, report=%+v", report)
 	}
 	expectedArmy := fixture.initial - report.LostUnits[fixture.playerUnit] + revived
 	storedState, err := fixture.repo.GetState(fixture.playerID)
@@ -285,8 +285,8 @@ func TestReincarnationDefenseAppliesAfterBattleRecovery(t *testing.T) {
 	}
 }
 
-// TestReincarnationLossOnlyRecoveryDoesNotTreatDrawAsDefeat 验证轮回攻防平局都不会触发仅战败返兵。
-func TestReincarnationLossOnlyRecoveryDoesNotTreatDrawAsDefeat(t *testing.T) {
+// TestReincarnationGuicaiYiceRevivesOnDraw 验证轮回攻防平局都按真实阵亡复活。
+func TestReincarnationGuicaiYiceRevivesOnDraw(t *testing.T) {
 	cases := []struct {
 		name        string
 		generalID   string
@@ -295,14 +295,15 @@ func TestReincarnationLossOnlyRecoveryDoesNotTreatDrawAsDefeat(t *testing.T) {
 		traitType   string
 		rate        float64
 	}{
-		{name: "郭嘉鬼才遗策", generalID: "guojia", generalName: "郭嘉", traitID: "guicai_yice", traitType: general.TraitTypeBonus, rate: 0.1},
+		{name: "郭嘉鬼才遗策", generalID: "guojia", generalName: "郭嘉", traitID: "guicai_yice", traitType: general.TraitTypeBonus, rate: 0.22},
 	}
 	for _, tc := range cases {
 		for _, waveType := range []string{ReincarnationWaveAttack, ReincarnationWaveDefense} {
 			t.Run(tc.name+"_"+waveType, func(t *testing.T) {
 				trait := GeneralTraitConfig{
-					TraitID: tc.traitID, TraitType: tc.traitType, Enabled: true, Scope: "self_army", RequiredOutcome: "loss",
-					Params: map[string]float64{"lossReductionRate": tc.rate, "maxReturnCount": 10000, "triggerChance": 1},
+					TraitID: tc.traitID, TraitType: tc.traitType, Enabled: true, Scope: "self_army",
+					AllowedSides: []string{"attacker", "defender", "reinforcement"},
+					Params:       map[string]float64{"effectRate": tc.rate, "triggerChance": 1},
 				}
 				hero := GeneralHeroConfig{ID: tc.generalID, Name: tc.generalName, Faction: "wei", Enabled: true}
 				if tc.traitType == general.TraitTypeSpecial {
@@ -317,11 +318,15 @@ func TestReincarnationLossOnlyRecoveryDoesNotTreatDrawAsDefeat(t *testing.T) {
 				if report.Result != "draw" || report.WinnerSide != ReportWinnerDraw || report.OwnerOutcome != ReportOwnerOutcomeDraw || report.PlayerPower != 1000 || report.EnemyPower != 1000 {
 					t.Fatalf("expected equal-power reincarnation draw, report=%+v", report)
 				}
-				if report.LostUnits[fixture.playerUnit] != 100 || report.DefenderLostUnits[fixture.enemyUnit] != 100 || report.SurvivedUnits[fixture.playerUnit] != 0 || len(report.RevivedUnits) != 0 {
-					t.Fatalf("expected draw to keep original full losses without returns, report=%+v", report)
+				if report.LostUnits[fixture.playerUnit] != 100 || report.DefenderLostUnits[fixture.enemyUnit] != 100 || report.SurvivedUnits[fixture.playerUnit] != 22 || report.RevivedUnits[fixture.playerUnit] != 22 {
+					t.Fatalf("expected draw to revive 22 of 100 actual losses, report=%+v", report)
 				}
-				if report.GeneralExpGained != 100 || len(report.TraitTriggered) != 0 || len(report.TraitOutcomes) != 0 || standardReportHasTrait(report.Detail, tc.traitID) {
-					t.Fatalf("expected draw experience 100 and empty loss-only timeline, report=%+v", report)
+				outcome, triggered := report.TraitOutcomes[tc.traitID]
+				actualLost, lostOK := outcome.Detail["actualLostUnits"].(map[string]int)
+				revived, revivedOK := outcome.Detail["revivedUnits"].(map[string]int)
+				if report.GeneralExpGained != 100 || !triggered || !lostOK || !revivedOK || actualLost[fixture.playerUnit] != 100 ||
+					revived[fixture.playerUnit] != 22 || !standardReportHasTrait(report.Detail, tc.traitID) {
+					t.Fatalf("expected draw experience 100 and exact revival timeline, report=%+v", report)
 				}
 				generals := report.PvpAttackerGenerals
 				if waveType == ReincarnationWaveDefense {
@@ -331,11 +336,12 @@ func TestReincarnationLossOnlyRecoveryDoesNotTreatDrawAsDefeat(t *testing.T) {
 					t.Fatalf("expected owned trait to remain in carried-general snapshot, generals=%+v", generals)
 				}
 				storedState, err := fixture.repo.GetState(fixture.playerID)
-				if err != nil || armySliceToMap(storedState.Army)[fixture.playerUnit] != 400 {
-					t.Fatalf("expected authoritative army 400 after full draw loss, state=%+v err=%v", storedState.Army, err)
+				if err != nil || armySliceToMap(storedState.Army)[fixture.playerUnit] != 422 {
+					t.Fatalf("expected authoritative army 422 after revival, state=%+v err=%v", storedState.Army, err)
 				}
-				if len(result.Run.Battles) != 1 || len(result.Run.Battles[0].RevivedUnits) != 0 || result.Run.Battles[0].SurvivedTroops[fixture.playerUnit] != 0 || len(result.Run.Battles[0].TraitOutcomes) != 0 {
-					t.Fatalf("expected stored dungeon battle to preserve draw without return, battles=%+v", result.Run.Battles)
+				if len(result.Run.Battles) != 1 || result.Run.Battles[0].RevivedUnits[fixture.playerUnit] != 22 ||
+					result.Run.Battles[0].SurvivedTroops[fixture.playerUnit] != 22 || len(result.Run.Battles[0].TraitOutcomes) != 1 {
+					t.Fatalf("expected stored dungeon battle to preserve exact revival, battles=%+v", result.Run.Battles)
 				}
 			})
 		}
@@ -442,17 +448,17 @@ func formalReincarnationTraitCases(t *testing.T, cfg GeneralsConfig) []reincarna
 	}
 	bothSides := map[string]bool{
 		"yibing_touxi": true,
-		"guicai_yice":  true, "rende": true, "renzhu_shouhu": true, "shuiyan_qijun": true,
-		"zhenhe_quanjun": true, "qimen_dunjia": true, "wolong_mouzhi": true, "xiliang_tuji": true,
+		"guicai_yice":  true, "renzhu_shouhu": true, "shuiyan_qijun": true,
+		"zhenhe_quanjun": true, "qimen_dunjia": true, "xiliang_tuji": true,
 		"laodang_yizhuang": true, "huoshao_lianying": true, "lianying_zengshang": true,
 		"kurouji": true, "kurou_fanji": true,
 	}
 	nonBattle := map[string]bool{
-		"weiwu_haoling": true, "jixing_benxi": true, "huhu_shengwei": true, "shengui_zhicai": true, "wangzuo_zhicai": true,
+		"weiwu_haoling": true, "jixing_benxi": true, "huhu_shengwei": true, "shengui_zhicai": true, "rende": true, "wangzuo_zhicai": true,
 		"neizheng_jingying": true, "qijin_qichu": true, "tianshen_xiafan": true,
 		"jiangdong_haoling": true, "xiaobawang_zhuiji": true, "baiyi_dujiang": true,
 		"baiyi_jixing": true, "kuairu_shandian": true, "xinyi_yonglie": true,
-		"jinfan_jielue": true, "jinfan_qixi": true,
+		"jinfan_jielue": true, "jinfan_qixi": true, "wolong_mouzhi": true,
 	}
 
 	heroIDs := make([]string, 0, len(cfg.Heroes))
@@ -499,11 +505,15 @@ func isolatedReincarnationFormalHero(t *testing.T, cfg GeneralsConfig, tc reinca
 	hero.Traits = nil
 	if hero.SpecialTrait.TraitID == tc.traitID {
 		hero.SpecialTrait.Enabled = true
-		hero.SpecialTrait.Params["triggerChance"] = 1
+		if trait, registered := general.Get(tc.traitID); registered && len(trait.Subscribe()) > 0 {
+			hero.SpecialTrait.Params["triggerChance"] = 1
+		}
 		hero.BonusTrait.Enabled = false
 	} else if hero.BonusTrait.TraitID == tc.traitID {
 		hero.BonusTrait.Enabled = true
-		hero.BonusTrait.Params["triggerChance"] = 1
+		if trait, registered := general.Get(tc.traitID); registered && len(trait.Subscribe()) > 0 {
+			hero.BonusTrait.Params["triggerChance"] = 1
+		}
 		hero.SpecialTrait.Enabled = false
 	} else {
 		t.Fatalf("formal general %s does not own trait %s", tc.generalID, tc.traitID)
@@ -518,6 +528,8 @@ func reincarnationFormalTraitUnits(hero GeneralHeroConfig, enemyFaction string, 
 	switch traitID {
 	case "weiwu_tongyu":
 		playerUnit = "huWei"
+	case "huzhu_xuezhan":
+		playerUnit = "jinWeiSoldier"
 	case "weizhen_xiaoyao":
 		playerUnit, playerCategory = hero.Faction+"Cavalry", "cavalry"
 	case "xiaobawang_tieqi":
@@ -586,10 +598,10 @@ func TestFormalReincarnationTraitApplicabilityMatrix(t *testing.T) {
 				if outcome.OwnerSide != wantOwner || outcome.OwnerGeneralID != hero.ID {
 					t.Fatalf("expected outcome owner %s/%s, outcome=%+v", wantOwner, hero.ID, outcome)
 				}
-				if tc.traitID != "wolong_mouzhi" && tc.traitID != "kurouji" && !reincarnationTraitHasActualIntegerChange(outcome.Detail) {
+				if tc.traitID != "kurouji" && !reincarnationTraitHasActualIntegerChange(outcome.Detail) {
 					t.Fatalf("expected non-zero actual integer change for %s, outcome=%+v", tc.traitID, outcome)
 				}
-				if (tc.traitID == "wolong_mouzhi" || tc.traitID == "kurouji") && outcome.Detail["disabledTraitCount"] != 0 {
+				if tc.traitID == "kurouji" && outcome.Detail["disabledTraitCount"] != 0 {
 					t.Fatalf("expected no-target suppressor to preserve actual zero, outcome=%+v", outcome)
 				}
 			}

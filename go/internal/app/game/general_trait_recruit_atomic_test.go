@@ -18,7 +18,6 @@ func TestRecruitCostTraitFailureRollsBackPendingSettlement(t *testing.T) {
 		traitID     string
 		rate        float64
 	}{
-		{generalID: "guojia", generalName: "郭嘉", traitID: "shengui_zhicai", rate: 0.5},
 		{generalID: "xunyu", generalName: "荀彧", traitID: "wangzuo_zhicai", rate: 0.05},
 	} {
 		t.Run(traitCase.generalName+traitCase.traitID, func(t *testing.T) {

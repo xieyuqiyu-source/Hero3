@@ -1,4 +1,4 @@
-// 本文件验证正式特性压制在没有可拦截目标时不修改真实战斗，只如实记录零次实际压制。
+// 本文件验证战后单项压制在没有可拦截目标时不修改真实战斗，只如实记录零次实际压制。
 package game
 
 import (
@@ -8,7 +8,7 @@ import (
 	"hero3/internal/core/general"
 )
 
-// TestPvpFormalTraitSuppressorsReportZeroWithoutEnemyFollowup 验证卧龙谋制和苦肉计在攻守双方均不会伪报压制目标。
+// TestPvpFormalTraitSuppressorsReportZeroWithoutEnemyFollowup 验证苦肉计在攻守双方均不会伪报压制目标。
 func TestPvpFormalTraitSuppressorsReportZeroWithoutEnemyFollowup(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -18,7 +18,6 @@ func TestPvpFormalTraitSuppressorsReportZeroWithoutEnemyFollowup(t *testing.T) {
 		traitID     string
 		traitType   string
 	}{
-		{name: "诸葛亮卧龙谋制", generalID: "zhugeliang", generalName: "诸葛亮", faction: "shu", traitID: "wolong_mouzhi", traitType: general.TraitTypeBonus},
 		{name: "黄盖苦肉计", generalID: "huanggai", generalName: "黄盖", faction: "wu", traitID: "kurouji", traitType: general.TraitTypeSpecial},
 	}
 	for _, tc := range cases {

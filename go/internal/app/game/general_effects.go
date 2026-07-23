@@ -54,11 +54,7 @@ func applyHeroConfigToGeneral(g *General) {
 		if value := tc.Params["productionBonusRate"]; value > 0 {
 			addGeneralAttributeWithSource(g, StatProductionBonus, value, "将领特性")
 		}
-		if value := tc.Params["forceBonus"]; value > 0 {
-			bonus := int(value)
-			g.EffectiveStats["force"] += bonus
-			addGeneralAttributeWithSource(g, StatAttackBonus, float64(bonus)*GeneralStatPercentPerPoint, "将领特性·武力")
-		}
+		applyPassiveGeneralStatTrait(g, tc)
 		params := make(map[string]float64, len(tc.Params))
 		for k, v := range tc.Params {
 			params[k] = v
@@ -78,6 +74,35 @@ func applyHeroConfigToGeneral(g *General) {
 	}
 	for k, v := range g.Attributes {
 		g.Buffs[k] = v
+	}
+}
+
+// applyPassiveGeneralStatTrait 把武力、智谋、内政、统率固定值写入最终四维及对应真实属性。
+func applyPassiveGeneralStatTrait(g *General, traitCfg GeneralTraitConfig) {
+	if g == nil {
+		return
+	}
+	type statEffect struct {
+		param      string
+		stat       string
+		source     string
+		attributes []string
+	}
+	effects := []statEffect{
+		{param: "forceBonus", stat: "force", source: "将领特性·武力", attributes: []string{StatAttackBonus}},
+		{param: "intelligenceBonus", stat: "intelligence", source: "将领特性·智谋", attributes: []string{StatRecruitSpeedBonus, StatMarchSpeedBonus}},
+		{param: "politicsBonus", stat: "politics", source: "将领特性·内政", attributes: []string{StatProductionBonus, StatCapacityBonus}},
+		{param: "commandBonus", stat: "command", source: "将领特性·统率", attributes: []string{StatDefenseBonus}},
+	}
+	for _, effect := range effects {
+		bonus := int(traitCfg.Params[effect.param])
+		if bonus <= 0 {
+			continue
+		}
+		g.EffectiveStats[effect.stat] += bonus
+		for _, attribute := range effect.attributes {
+			addGeneralAttributeWithSource(g, attribute, float64(bonus)*GeneralStatPercentPerPoint, effect.source)
+		}
 	}
 }
 

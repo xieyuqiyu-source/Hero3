@@ -87,8 +87,9 @@ const traitDetailLabels: Record<string, string> = {
   preBattleAffected: '战前真实伤亡', suppressedUnits: '本场压制兵力', fledUnits: '本场溃逃兵力', capturedUnits: '俘虏归队', capturedToGarrison: '俘虏驻防', modifiedUnits: '实际攻防修正',
   attackModifiedUnits: '实际攻击修正', infantryDefenseModifiedUnits: '实际步防修正', cavalryDefenseModifiedUnits: '实际骑防修正',
   extraLosses: '追加损失', targetExtraLosses: '目标兵种追加损失', reducedLosses: '减少损失', disabledTraits: '压制特性',
-  revivedUnits: '复活兵力', returnedUnits: '返还兵力', returnedFledUnits: '战后返回兵力', extraDamage: '额外伤害', totalRevived: '复活总数',
-  totalSuppressed: '压制总数', totalCaptured: '俘虏总数', disabledTraitCount: '实际压制特性数',
+  actualLostUnits: '本场真实阵亡', revivedUnits: '复活兵力', returnedUnits: '返还兵力', returnedFledUnits: '战后返回兵力', extraDamage: '额外伤害', totalRevived: '复活总数',
+  totalSuppressed: '压制总数', totalCaptured: '俘虏总数', disabledGeneralCount: '封禁将领数', disabledTraitCount: '实际压制特性数',
+  status: '状态', invalidReason: '失效原因',
   plunderDelta: '掠夺资源修正',
 }
 const traitPercentageKeys = new Set([
@@ -123,9 +124,10 @@ const traitPhaseOverrides: Record<string, string> = {
   gushou_hanzhong: '防守/增援战斗前',
   jiangdong_gushou: '防守/增援战斗前',
   longdan_jiuyuan: '防守/增援战斗结算后',
-  rende: '进攻/防守/增援战斗结束后',
   renzhu_shouhu: '进攻/防守/增援战斗结束后',
-  guicai_yice: '进攻/防守/增援战败后',
+  guicai_yice: '进攻/防守/增援战斗结束后',
+  qimen_dunjia: '进攻/防守/增援战斗前',
+  wolong_mouzhi: '进攻/防守/增援战斗前',
 }
 
 /** 把资源键值表转换为官方横排行文。 */
@@ -165,16 +167,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const visibleSelfTraitDetailKeys = new Set([
-  'modifiedUnits', 'reducedLosses', 'revivedUnits', 'returnedUnits', 'totalRevived', 'plunderDelta',
+  'modifiedUnits', 'reducedLosses', 'actualLostUnits', 'revivedUnits', 'returnedUnits', 'totalRevived', 'plunderDelta',
 ])
 
 /** 按战报情报可见性裁剪特性实际结果，避免从己方特性反推出隐藏敌军。 */
 function visibleTraitActualDetail(detail: Record<string, unknown>, enemyDetailsVisible: boolean, scope?: string) {
   if (enemyDetailsVisible) return detail
+  const publicControlKeys = new Set(['disabledGeneralCount', 'disabledTraitCount', 'status', 'invalidReason'])
   const normalizedScope = (scope || '').toLowerCase()
   const selfScope = normalizedScope.startsWith('self_') || normalizedScope === 'reinforcement_self'
-  if (!selfScope) return {}
-  return Object.fromEntries(Object.entries(detail).filter(([key]) => visibleSelfTraitDetailKeys.has(key)))
+  return Object.fromEntries(Object.entries(detail).filter(([key]) => publicControlKeys.has(key) || (selfScope && visibleSelfTraitDetailKeys.has(key))))
 }
 
 /** 从双方战报快照建立兵种 ID 到中文名映射。 */
@@ -245,11 +247,32 @@ const passiveUnitTraits: Record<string, { unitName: string }> = {
   huhu_shengwei: { unitName: '虎豹骑' },
 }
 
+/** 从参战将领快照生成四维永久被动展示。 */
+function passiveStatTrait(general: BattleReportGeneralState, trait: NonNullable<BattleReportGeneralState['traits']>[number]): OfficialReportTraitViewModel | null {
+  if (trait.traitId !== 'shengui_zhicai' && trait.traitId !== 'rende') return null
+  const politics = Number(trait.params?.politicsBonus ?? 0)
+  const secondaryKey = trait.traitId === 'rende' ? 'commandBonus' : 'intelligenceBonus'
+  const secondaryLabel = trait.traitId === 'rende' ? '统率' : '智谋'
+  const secondary = Number(trait.params?.[secondaryKey] ?? 0)
+  if (politics <= 0 && secondary <= 0) return null
+  return {
+    key: `passive-${general.id}-${trait.traitId}`,
+    name: traitLabel(trait.traitId, trait.name),
+    phase: '永久被动',
+    detailText: `内政 +${politics.toLocaleString('zh-CN')}；${secondaryLabel} +${secondary.toLocaleString('zh-CN')}`,
+  }
+}
+
 /** 从参战将领快照读取永久兵种被动，和本场触发时间线分开展示。 */
 function sidePassiveTraits(side: BattleReportSideState): OfficialReportTraitViewModel[] {
   const result: OfficialReportTraitViewModel[] = []
   for (const general of side.generals ?? []) {
     for (const trait of general.traits ?? []) {
+      const statTrait = passiveStatTrait(general, trait)
+      if (statTrait) {
+        result.push(statTrait)
+        continue
+      }
       const definition = passiveUnitTraits[trait.traitId]
       if (!definition) continue
       const attack = Number(trait.params?.unitAttackFlat ?? 0)

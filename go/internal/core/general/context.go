@@ -62,6 +62,19 @@ type BeforeBattleContext struct {
 
 func (c *BeforeBattleContext) EventType() string { return EventBeforeBattle }
 
+// BattleTraitControlContext 在任何战斗触发特性执行前确定整场封禁状态。
+type BattleTraitControlContext struct {
+	Scene                    string
+	Actor                    TraitActor
+	CombatGeneralCounts      map[string]int
+	CombatTraitCounts        map[string]int
+	DisabledCombatTraitSides map[string]bool
+	Triggered                map[string]TraitOutcome
+}
+
+// EventType 返回战斗特性控制事件。
+func (c *BattleTraitControlContext) EventType() string { return EventBattleTraitControl }
+
 // AfterCombatResolveContext 战斗计算之后、战报生成之前的上下文
 //
 // 特性可以在这里：
