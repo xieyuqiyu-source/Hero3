@@ -31,7 +31,8 @@ function formatNumber(value: number) { return Math.max(0, value || 0).toLocaleSt
           </div>
           <div class="official-report-result" :class="side.result"><img v-if="side.result === 'defeat'" src="/assets/official/report/zz_sb.gif" alt="败" /><b v-else>{{ side.resultLabel }}</b></div>
         </div>
-        <p class="official-report-traits"><b>将领特性：</b><span v-if="side.traits.length" class="official-report-trait-list"><span v-for="trait in side.traits" :key="trait.key" class="official-report-trait"><strong>{{ trait.name }}</strong><em v-if="trait.phase">{{ trait.phase }}</em><span v-if="trait.detailText">{{ trait.detailText }}</span></span></span><template v-else>-</template></p>
+        <p v-if="side.passiveTraits.length" class="official-report-traits"><b>被动生效：</b><span class="official-report-trait-list"><span v-for="trait in side.passiveTraits" :key="trait.key" class="official-report-trait"><strong>{{ trait.name }}</strong><em>{{ trait.phase }}</em><span>{{ trait.detailText }}</span></span></span></p>
+        <p class="official-report-traits"><b>将领特性触发：</b><span v-if="side.traits.length" class="official-report-trait-list"><span v-for="trait in side.traits" :key="trait.key" class="official-report-trait"><strong>{{ trait.name }}</strong><em v-if="trait.phase">{{ trait.phase }}</em><span v-if="trait.detailText">{{ trait.detailText }}</span></span></span><template v-else>-</template></p>
         <table class="official-report-units">
           <tbody>
             <tr><th>兵种</th><td v-for="unit in side.units" :key="unit.key" :title="unit.name"><img v-if="unit.icon" :src="unit.icon" :alt="unit.name" /><span v-else>?</span></td></tr>

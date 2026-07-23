@@ -123,14 +123,9 @@ func applyExpectedMarchRates(base int, rates []float64, minimum int) int {
 	return result
 }
 
-// TestFormalMarchTraitIDsChangeRealPvpAndReinforcement 验证四个正式 ID 都进入真实出征和增援记录。
+// TestFormalMarchTraitIDsChangeRealPvpAndReinforcement 验证现行行军特性都进入真实出征和增援记录。
 func TestFormalMarchTraitIDsChangeRealPvpAndReinforcement(t *testing.T) {
 	tests := []realMarchTraitCase{
-		{
-			name: "夏侯渊疾行奔袭", faction: "wei", generalID: "xiahouyuan", generalName: "夏侯渊",
-			specialTrait: marchTraitConfig("jixing_benxi", general.TraitTypeSpecial, 0.2, 60, 1),
-			rates:        []float64{0.2}, minimum: 60,
-		},
 		{
 			name: "吕蒙白衣渡江", faction: "wu", generalID: "lvmeng", generalName: "吕蒙",
 			specialTrait: marchTraitConfig("baiyi_dujiang", general.TraitTypeSpecial, 0.2, 60, 1),

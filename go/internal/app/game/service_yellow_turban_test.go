@@ -261,14 +261,13 @@ func TestYellowTurbanDefenseUsesHomeGeneralAndGrantsExp(t *testing.T) {
 	}
 }
 
-// TestYellowTurbanLossReductionTraitsRespectOutcome 验证典韦和郭嘉只在黄巾防守失败时返兵。
+// TestYellowTurbanLossReductionTraitsRespectOutcome 验证郭嘉只在黄巾防守失败时返兵。
 func TestYellowTurbanLossReductionTraitsRespectOutcome(t *testing.T) {
 	cases := []struct {
 		name      string
 		traitID   string
 		traitType string
 	}{
-		{name: "典韦护主死战", traitID: "huzhu_sizhan", traitType: general.TraitTypeSpecial},
 		{name: "郭嘉鬼才遗策", traitID: "guicai_yice", traitType: general.TraitTypeBonus},
 	}
 	for traitIndex, tc := range cases {
@@ -336,8 +335,8 @@ func TestYellowTurbanDefensivePreBattleTraitsMatchPowerStateAndReports(t *testin
 		},
 		{
 			name: "盾阵防御", traitID: "dunzhen_fangyu", traitType: general.TraitTypeBonus,
-			params:    map[string]float64{"defenseBonusRate": 0.35, "triggerChance": 1},
-			designKey: "defenseBonusRate", designValue: 0.35, infantryChange: 4, cavalryChange: 3,
+			params:    map[string]float64{"defenseBonusRate": 0.3, "triggerChance": 1},
+			designKey: "defenseBonusRate", designValue: 0.3, infantryChange: 3, cavalryChange: 2,
 		},
 		{
 			name: "固守汉中", traitID: "gushou_hanzhong", traitType: general.TraitTypeBonus,
@@ -479,12 +478,12 @@ func TestYellowTurbanGeneralChangeUsesSettlementGeneralAndPreBattleSnapshot(t *t
 		"xiahouyuan": {
 			ID: "xiahouyuan", Name: "夏侯渊", Faction: "wei", Enabled: true,
 			SpecialTrait: GeneralTraitConfig{
-				TraitID: "jixing_benxi", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army",
-				Params: map[string]float64{"speedBonusRate": 0.2, "minMarchSeconds": 60},
+				TraitID: "jixing_benxi", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army", TargetUnitType: "qiQiYing",
+				Params: map[string]float64{"unitAttackFlat": 18, "unitSpeedFlat": 5},
 			},
 			BonusTrait: GeneralTraitConfig{
 				TraitID: "dunzhen_fangyu", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", AllowedSides: []string{"defender", "reinforcement"},
-				Params: map[string]float64{"defenseBonusRate": 0.35},
+				Params: map[string]float64{"defenseBonusRate": 0.3, "triggerChance": 1},
 			},
 		},
 	}})
@@ -532,8 +531,8 @@ func TestYellowTurbanGeneralChangeUsesSettlementGeneralAndPreBattleSnapshot(t *t
 	if err != nil {
 		t.Fatalf("resolve yellow turban general-change march: %v", err)
 	}
-	if report.EnemyPower != 1000 || report.PlayerPower != 1442 {
-		t.Fatalf("expected only Xiahou Yuan defense on 1000/1442 power, got %d/%d", report.EnemyPower, report.PlayerPower)
+	if report.EnemyPower != 1000 || report.PlayerPower != 1339 {
+		t.Fatalf("expected only Xiahou Yuan +30%% defense on 1000/1339 power, got %d/%d", report.EnemyPower, report.PlayerPower)
 	}
 	if _, ok := report.TraitOutcomes["dunzhen_fangyu"]; !ok || standardReportHasTrait(report.Detail, "jixing_benxi") {
 		t.Fatalf("expected only Xiahou Yuan battle trait, outcomes=%+v detail=%+v", report.TraitOutcomes, report.Detail)
@@ -855,52 +854,42 @@ func TestYellowTurbanSimaYiYibingLegalMissKeepsMouding(t *testing.T) {
 	}
 }
 
-// TestYellowTurbanDianWeiLossReturnHitAndMissExcludeAttackTrait 验证典韦守城战败时返兵概率与主动进攻加攻彼此隔离。
-func TestYellowTurbanDianWeiLossReturnHitAndMissExcludeAttackTrait(t *testing.T) {
-	for _, tc := range []struct {
-		name          string
-		triggerChance float64
-		wantReturned  int
-	}{
-		{name: "护主死战命中", triggerChance: 1, wantReturned: 15},
-		{name: "护主死战未命中", triggerChance: 0},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			hero := GeneralHeroConfig{
-				ID: "dianwei", Name: "典韦", Faction: "wei", Enabled: true,
-				SpecialTrait: GeneralTraitConfig{
-					TraitID: "huzhu_sizhan", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army", RequiredOutcome: "loss",
-					Params: map[string]float64{"triggerChance": tc.triggerChance, "lossReductionRate": 0.15, "maxReturnCount": 10000},
-				},
-				BonusTrait: GeneralTraitConfig{
-					TraitID: "sizhandaodi", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", TargetUnitType: "infantry",
-					AllowedSides: []string{"attacker"}, Params: map[string]float64{"attackBonusRate": 0.35},
-				},
-			}
-			report, stored := resolveYellowTurbanHeroTest(t, hero, 100, 200, "dianwei_"+tc.name)
-			if report.Result != "attacker_victory" || report.EnemyPower != 2000 || report.PlayerPower != 1030 || report.DefenderLostUnits["weiInfantry"] != 77 || report.LostUnits["weiInfantry"] != 100 {
-				t.Fatalf("expected exact Dian Wei yellow turban core result, report=%+v", report)
-			}
-			if report.RevivedUnits["weiInfantry"] != tc.wantReturned || report.SurvivedUnits["weiInfantry"] != tc.wantReturned || armySliceToMap(stored.Army)["weiInfantry"] != tc.wantReturned || report.GeneralExpGained != 77 {
-				t.Fatalf("expected Dian Wei return/state/exp %d/%d, report=%+v stored=%+v", tc.wantReturned, 77, report, stored.Army)
-			}
-			if report.Detail == nil || report.Detail.SecondarySide == nil || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "dianwei", "huzhu_sizhan") || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "dianwei", "sizhandaodi") {
-				t.Fatalf("expected Dian Wei snapshot to preserve both traits, detail=%+v", report.Detail)
-			}
-			if standardReportHasTrait(report.Detail, "sizhandaodi") {
-				t.Fatalf("expected attacker-only Sizhan not to trigger on yellow turban defense, detail=%+v", report.Detail)
-			}
-			if tc.wantReturned == 0 {
-				if len(report.TraitTriggered) != 0 || len(report.TraitOutcomes) != 0 || len(report.Detail.Traits) != 0 {
-					t.Fatalf("expected legal Huzhu miss and invalid Sizhan to keep empty timeline, report=%+v", report)
-				}
-				return
-			}
-			returned, ok := report.TraitOutcomes["huzhu_sizhan"].Detail["returnedUnits"].(map[string]int)
-			if !ok || returned["weiInfantry"] != tc.wantReturned || len(report.TraitTriggered) != 1 || report.TraitTriggered[0] != "huzhu_sizhan" || len(report.Detail.Traits) != 1 {
-				t.Fatalf("expected only Huzhu to return %d troops, report=%+v", tc.wantReturned, report)
-			}
-		})
+// TestYellowTurbanDianWeiHuzhuStrengthensJinwei 验证黄巾防守时护主血战加防，死战到底方向无效。
+func TestYellowTurbanDianWeiHuzhuStrengthensJinwei(t *testing.T) {
+	buildHero := func(enabled bool) GeneralHeroConfig {
+		return GeneralHeroConfig{
+			ID: "dianwei", Name: "典韦", Faction: "wei", Enabled: true,
+			SpecialTrait: GeneralTraitConfig{
+				TraitID: "huzhu_xuezhan", TraitType: general.TraitTypeSpecial, Enabled: enabled, Scope: "self_army", TargetUnitType: "jinWeiSoldier",
+				AllowedSides: []string{"defender", "reinforcement"}, Params: map[string]float64{"triggerChance": 1, "generalDefenseFlat": 20},
+			},
+			BonusTrait: GeneralTraitConfig{
+				TraitID: "sizhandaodi", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", TargetUnitType: "infantry",
+				AllowedSides: []string{"attacker"}, Params: map[string]float64{"triggerChance": 1, "attackBonusRate": 0.35},
+			},
+		}
+	}
+	control, _ := resolveYellowTurbanHeroFactionTest(t, buildHero(false), "wei", "jinWeiSoldier", 100, "wei", "weiInfantry", 200, "dianwei_huzhu_control")
+	report, stored := resolveYellowTurbanHeroFactionTest(t, buildHero(true), "wei", "jinWeiSoldier", 100, "wei", "weiInfantry", 200, "dianwei_huzhu_active")
+	if control.EnemyPower != 2000 || report.EnemyPower != 2000 || control.PlayerPower != 1339 || report.PlayerPower != 3399 {
+		t.Fatalf("expected Huzhu plus Wei faction defense power 1339 -> 3399, control=%+v active=%+v", control, report)
+	}
+	controlLoss := control.LostUnits["jinWeiSoldier"]
+	activeLoss := report.LostUnits["jinWeiSoldier"]
+	if controlLoss != 100 || activeLoss != 47 || control.DefenderLostUnits["weiInfantry"] != 113 || report.DefenderLostUnits["weiInfantry"] != 200 {
+		t.Fatalf("expected exact Huzhu losses 100/113 -> 47/200, control=%+v active=%+v", control, report)
+	}
+	if report.RevivedUnits["jinWeiSoldier"] != 0 || report.SurvivedUnits["jinWeiSoldier"] != 100-activeLoss || armySliceToMap(stored.Army)["jinWeiSoldier"] != 100-activeLoss {
+		t.Fatalf("expected no obsolete return and authoritative survivors, report=%+v stored=%+v", report, stored.Army)
+	}
+	if report.Detail == nil || report.Detail.SecondarySide == nil || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "dianwei", "huzhu_xuezhan") || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "dianwei", "sizhandaodi") || standardReportHasTrait(report.Detail, "sizhandaodi") {
+		t.Fatalf("expected current traits in snapshot and only Huzhu direction valid, report=%+v", report)
+	}
+	outcome := report.TraitOutcomes["huzhu_xuezhan"]
+	infantry, infantryOK := outcome.Detail["infantryDefenseModifiedUnits"].(map[string]int)
+	cavalry, cavalryOK := outcome.Detail["cavalryDefenseModifiedUnits"].(map[string]int)
+	if !infantryOK || !cavalryOK || infantry["jinWeiSoldier"] != 20 || cavalry["jinWeiSoldier"] != 20 || len(report.TraitTriggered) != 1 || report.TraitTriggered[0] != "huzhu_xuezhan" || len(report.Detail.Traits) != 1 {
+		t.Fatalf("expected only Huzhu +20/+20 in yellow turban timeline, report=%+v", report)
 	}
 }
 
@@ -1051,7 +1040,7 @@ func TestYellowTurbanAttackOnlyAfterCombatTraitsDoNotTriggerOnDefense(t *testing
 	}
 }
 
-// TestYellowTurbanRandomPreBattleTraitsHitAndMiss 验证关羽、张辽、张飞守黄巾时随机战前能力独立判断概率与方向。
+// TestYellowTurbanRandomPreBattleTraitsHitAndMiss 验证关羽、张飞守黄巾时随机战前能力独立判断概率与方向。
 func TestYellowTurbanRandomPreBattleTraitsHitAndMiss(t *testing.T) {
 	cases := []struct {
 		name            string
@@ -1078,12 +1067,6 @@ func TestYellowTurbanRandomPreBattleTraitsHitAndMiss(t *testing.T) {
 			defenderFaction: "shu", defenderUnit: "shuInfantry", attackerFaction: "wei", attackerUnit: "weiInfantry",
 			specialTraitID: "shuiyan_qijun", bonusTraitID: "wusheng_pojun", bonusAttackRate: 0.2, effectRate: 0.35, actualDetailKey: "preBattleAffected",
 			defensePower: 1020, hitAttackPower: 650, hitDefenseLost: 52, hitAttackLost: 100, missDefenseLost: 97,
-		},
-		{
-			name: "张辽威震震慑", generalID: "zhangliao", generalName: "张辽",
-			defenderFaction: "wei", defenderUnit: "weiInfantry", attackerFaction: "shu", attackerUnit: "shuInfantry",
-			specialTraitID: "weizhen_zhenhe", bonusTraitID: "weizhen_xiaoyao", bonusTarget: "cavalry", bonusAttackRate: 0.35, effectRate: 0.2, actualDetailKey: "suppressedUnits",
-			defensePower: 1030, hitAttackPower: 800, hitDefenseLost: 69, hitAttackLost: 80, missDefenseLost: 95,
 		},
 		{
 			name: "张飞震慑全军", generalID: "zhangfei", generalName: "张飞",
@@ -1171,6 +1154,34 @@ func TestYellowTurbanRandomPreBattleTraitsHitAndMiss(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+// TestYellowTurbanZhangLiaoAttackerOnlyTraitsDoNotDefend 验证张辽两项概率即使强制命中也不能在黄巾守城中触发。
+func TestYellowTurbanZhangLiaoAttackerOnlyTraitsDoNotDefend(t *testing.T) {
+	hero := GeneralHeroConfig{
+		ID: "zhangliao", Name: "张辽", Faction: "wei", Enabled: true,
+		SpecialTrait: GeneralTraitConfig{
+			TraitID: "weizhen_zhenhe", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "enemy_army", AllowedSides: []string{"attacker"},
+			Params: map[string]float64{"effectRate": 0.25, "triggerChance": 1},
+		},
+		BonusTrait: GeneralTraitConfig{
+			TraitID: "weizhen_xiaoyao", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", TargetUnitType: "cavalry", AllowedSides: []string{"attacker"},
+			Params: map[string]float64{"attackBonusRate": 0.35, "triggerChance": 1},
+		},
+	}
+	report, stored := resolveYellowTurbanHeroFactionTest(t, hero, "wei", "weiInfantry", 100, "shu", "shuInfantry", 100, "zhangliao_wrong_direction")
+	if report.Result != "defender_victory" || report.EnemyPower != 1000 || report.PlayerPower != 1030 || report.LostUnits["weiInfantry"] != 95 || report.DefenderLostUnits["shuInfantry"] != 100 || report.SurvivedUnits["weiInfantry"] != 5 {
+		t.Fatalf("expected baseline yellow turban defense without Zhang Liao traits, report=%+v", report)
+	}
+	if armySliceToMap(stored.Army)["weiInfantry"] != 5 || report.GeneralExpGained != 100 || pvpTestGeneralExp(stored, "zhangliao") != 100 {
+		t.Fatalf("expected authoritative baseline army and exp, state=%+v report=%+v", stored, report)
+	}
+	if report.Detail == nil || report.Detail.SecondarySide == nil || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "zhangliao", "weizhen_zhenhe") || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "zhangliao", "weizhen_xiaoyao") {
+		t.Fatalf("expected owned traits to remain in defender snapshot, detail=%+v", report.Detail)
+	}
+	if len(report.TraitTriggered) != 0 || len(report.TraitOutcomes) != 0 || len(report.Detail.Traits) != 0 {
+		t.Fatalf("expected attacker-only traits absent from yellow turban timeline, report=%+v", report)
 	}
 }
 

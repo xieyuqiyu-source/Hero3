@@ -28,8 +28,8 @@ func TestFormalAttackTraitConfigsMatchDesign(t *testing.T) {
 		allowedScenes  []string
 		params         map[string]float64
 	}{
-		{generalID: "dianwei", traitID: "sizhandaodi", targetUnitType: "infantry", allowedSides: []string{"attacker"}, params: map[string]float64{"attackBonusRate": 0.35}},
-		{generalID: "zhangliao", traitID: "weizhen_xiaoyao", targetUnitType: "cavalry", allowedSides: []string{"attacker"}, params: map[string]float64{"attackBonusRate": 0.35}},
+		{generalID: "dianwei", traitID: "sizhandaodi", targetUnitType: "infantry", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.6, "attackBonusRate": 0.35}},
+		{generalID: "zhangliao", traitID: "weizhen_xiaoyao", targetUnitType: "cavalry", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.6, "attackBonusRate": 0.35}},
 		{generalID: "guanyu", traitID: "wusheng_pojun", allowedSides: []string{"attacker"}, params: map[string]float64{"attackBonusRate": 0.2}},
 		{generalID: "zhangfei", traitID: "wanren_nuhou", targetUnitType: "infantry", allowedSides: []string{"attacker"}, params: map[string]float64{"attackBonusRate": 0.2}},
 		{generalID: "sunce", traitID: "xiaobawang_tieqi", targetUnitType: "overlordRider", allowedSides: []string{"attacker"}, params: map[string]float64{"unitAttackFlat": 50}},

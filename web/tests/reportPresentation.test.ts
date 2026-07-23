@@ -133,13 +133,21 @@ test('战前真实伤亡与临时压制使用不同展示语义', () => {
 	}
 	assert.equal(formatTraitOutcomeDetail('maxAffectedRate', 0.35), '设计最大影响比例: 35%')
 	assert.match(formatTraitOutcomeDetail('suppressedUnits', { weiInfantry: 20 }), /本场压制兵力/)
-	for (const [traitId, rate, expected] of [['weizhen_zhenhe', 0.2, '20%'], ['zhenhe_quanjun', 0.5, '50%'], ['qimen_dunjia', 0.25, '25%']] as const) {
+	for (const [traitId, rate, expected] of [['zhenhe_quanjun', 0.5, '50%'], ['qimen_dunjia', 0.25, '25%']] as const) {
 		const trait = getTraitMeta(traitId)
 		assert.equal(trait.trigger, '战斗前')
 		assert.match(trait.description, /仅本场不参战，战后保留/)
 		assert.equal(formatTraitOutcomeDetail('effectRate', rate), `设计效果比例: ${expected}`)
 		assert.equal(formatTraitOutcomeDetail('maxAffectedRate', rate), `设计最大影响比例: ${expected}`)
 	}
+	const zhangLiao = getTraitMeta('weizhen_zhenhe')
+	assert.equal(zhangLiao.name, '震慑全军')
+	assert.equal(zhangLiao.trigger, '主动进攻战斗前')
+	assert.match(zhangLiao.description, /35% 概率/)
+	assert.match(zhangLiao.description, /25% 兵力溃逃/)
+	assert.match(zhangLiao.description, /不计死亡，战后完整返回/)
+	assert.equal(formatTraitOutcomeDetail('effectRate', 0.25), '设计效果比例: 25%')
+	assert.equal(formatTraitOutcomeDetails({ suppressedUnits: { weiInfantry: 25 }, fledUnits: { weiInfantry: 25 }, returnedUnits: { weiInfantry: 25 } }, options), '本场溃逃兵力: 魏步兵 +25；战后返回兵力: 魏步兵 +25')
 	assert.match(getTraitMeta('qimen_dunjia').description, /必定/)
 	assert.match(getTraitMeta('qimen_dunjia').description, /25%/)
 })
@@ -316,7 +324,7 @@ test('甄宓 NPC 与 PVP 双特性同时展示真实攻防变化和最终兵力'
 test('全部正式随机战斗特性展示准确触发概率', () => {
 	const expected = {
 		meiren: '50%', meihuo_raozhen: '50%',
-		yibing_touxi: '35%', huchi_chongzhen: '35%', huzhu_sizhan: '35%', weizhen_zhenhe: '35%',
+		yibing_touxi: '35%', huchi_chongzhen: '50%', sizhandaodi: '60%', weizhen_zhenhe: '35%', weizhen_xiaoyao: '60%',
 		shuiyan_qijun: '35%', zhenhe_quanjun: '50%', longdan_jiuyuan: '35%', xiliang_tuji: '35%',
 		baibu_chuanyang: '35%', qibing_raohou: '35%', jiangdong_gushou: '50%', xiaobawang_zhuiji: '35%',
 		huoshao_lianying: '35%', kurouji: '35%',
@@ -993,34 +1001,38 @@ test('魏延奇兵绕后合法未命中时只展示基础战斗结果', () => {
 	assert.deepEqual(detail.rewards, { generalExp: 500, resources: {} })
 })
 
-test('夏侯渊增援加速不进入战斗时间线且盾阵对齐援军实损', () => {
-	const options = { faction: 'wei', units: { wei: { huWei: { name: '虎卫' } } } }
+test('夏侯渊被动不进入触发时间线且盾阵对齐援军实损', () => {
+	const options = { faction: 'wei', units: { wei: { qiQiYing: { name: '骁骑营' } } } }
 	const detail = {
 		primarySide: {
-			role: 'reinforcement', power: 1410,
+			role: 'reinforcement', power: 1710,
 			generals: [{
 				id: 'xiahouyuan', name: '夏侯渊', level: 1,
-				traits: [{ traitId: 'jixing_benxi', name: '疾行奔袭' }, { traitId: 'dunzhen_fangyu', name: '盾阵防御' }],
+				traits: [{ traitId: 'jixing_benxi', name: '疾行奔袭', params: { unitAttackFlat: 18, unitSpeedFlat: 5 } }, { traitId: 'dunzhen_fangyu', name: '盾阵防御' }],
 			}],
-			units: [{ unitType: 'huWei', unitName: '虎卫', amountBefore: 100, dispatched: 100, lost: 70, survived: 30 }],
+			units: [{ unitType: 'qiQiYing', unitName: '骁骑营', amountBefore: 100, dispatched: 100, lost: 60, survived: 40 }],
 		},
 		rewards: { generalExp: 110, resources: {} },
 		traits: [{
 			traitId: 'dunzhen_fangyu', traitName: '盾阵防御', ownerSide: 'reinforcement', ownerRole: 'reinforcement', generalId: 'xiahouyuan',
-			detail: { defenseBonusRate: 0.35, infantryDefenseModifiedUnits: { huWei: 4 }, cavalryDefenseModifiedUnits: { huWei: 3 }, triggerChance: 1 },
+			detail: { defenseBonusRate: 0.3, infantryDefenseModifiedUnits: { qiQiYing: 4 }, cavalryDefenseModifiedUnits: { qiQiYing: 3 }, triggerChance: 0.6 },
 		}],
 	}
 	assert.equal(hasStandardUnitRows(detail.primarySide), true)
-	assert.deepEqual(detail.primarySide.units[0], { unitType: 'huWei', unitName: '虎卫', amountBefore: 100, dispatched: 100, lost: 70, survived: 30 })
+	assert.deepEqual(detail.primarySide.units[0], { unitType: 'qiQiYing', unitName: '骁骑营', amountBefore: 100, dispatched: 100, lost: 60, survived: 40 })
 	assert.deepEqual(detail.primarySide.generals[0].traits.map((trait) => trait.traitId), ['jixing_benxi', 'dunzhen_fangyu'])
 	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['dunzhen_fangyu'])
 	assert.equal(detail.traits.some((trait) => trait.traitId === 'jixing_benxi'), false)
-	assert.equal(getTraitMeta('jixing_benxi').trigger, '行军创建时')
+	assert.equal(getTraitMeta('jixing_benxi').trigger, '永久被动')
 	assert.equal(getTraitMeta('dunzhen_fangyu').trigger, '防守/增援战斗前')
 	assert.equal(resolveReportTraitDisplaySide({ sourceType: 'player_city', viewType: 'reinforcement' }, detail.traits[0]), 'reinforcement')
-	assert.equal(formatTraitOutcomeDetail('defenseBonusRate', detail.traits[0].detail.defenseBonusRate), '设计防御加成: 35%')
-	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[0].detail.infantryDefenseModifiedUnits, options), '实际步防修正: 虎卫 +4')
-	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[0].detail.cavalryDefenseModifiedUnits, options), '实际骑防修正: 虎卫 +3')
+	assert.equal(formatTraitOutcomeDetail('defenseBonusRate', detail.traits[0].detail.defenseBonusRate), '设计防御加成: 30%')
+	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[0].detail.infantryDefenseModifiedUnits, options), '实际步防修正: 骁骑营 +4')
+	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[0].detail.cavalryDefenseModifiedUnits, options), '实际骑防修正: 骁骑营 +3')
+	assert.equal(formatTraitOutcomeDetail('unitAttackFlat', 18), '设计单位攻击增加: 18')
+	assert.equal(formatTraitOutcomeDetail('unitSpeedFlat', 5), '设计单位移动增加: 5')
+	const detailSource = readFileSync(new URL('../src/pages/news/components/BattleReportDetail.tsx', import.meta.url), 'utf8')
+	assert.match(detailSource, /jixing_benxi: \{ name: '疾行奔袭', unitName: '骁骑营' \}/)
 	assert.deepEqual(detail.rewards, { generalExp: 110, resources: {} })
 })
 
@@ -1453,13 +1465,14 @@ test('纯防御特性明确限制为防守或增援并展示正式数值', () =>
 		assert.equal(trait.trigger, '防守/增援战斗前')
 		assert.match(trait.description, /仅在防守或作为援军/)
 	}
-	assert.match(getTraitMeta('dunzhen_fangyu').description, /35%/)
+	assert.match(getTraitMeta('dunzhen_fangyu').description, /60% 概率/)
+	assert.match(getTraitMeta('dunzhen_fangyu').description, /防御提升 30%/)
 	assert.match(getTraitMeta('gushou_hanzhong').description, /20 点/)
 	assert.match(getTraitMeta('jiangdong_gushou').description, /50% 概率/)
 	assert.match(getTraitMeta('jiangdong_gushou').description, /防御提升 50%/)
 	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', { huWei: 4 }), '实际步防修正: 虎卫 +4')
 	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', { huWei: 3 }), '实际骑防修正: 虎卫 +3')
-	assert.equal(formatTraitOutcomeDetail('defenseBonusRate', 0.35), '设计防御加成: 35%')
+	assert.equal(formatTraitOutcomeDetail('defenseBonusRate', 0.3), '设计防御加成: 30%')
 	assert.equal(formatTraitOutcomeDetail('generalDefenseFlat', 20), '设计全军防御增加: 20')
 })
 
@@ -1659,8 +1672,8 @@ test('刘备双特性区分复活与返还并约束累计归队上限', () => {
 	assert.equal(formatTraitOutcomeDetail('returnedUnits', { shuInfantry: 10 }, options), '返还兵力: 蜀步兵 +10')
 })
 
-test('典韦和郭嘉只在进攻、防守或增援战败后降低最终实际损失', () => {
-	for (const [traitId, rate, amount] of [['huzhu_sizhan', '15%', 15], ['guicai_yice', '10%', 10]] as const) {
+test('郭嘉只在进攻、防守或增援战败后降低最终实际损失', () => {
+	for (const [traitId, rate, amount] of [['guicai_yice', '10%', 10]] as const) {
 		const trait = getTraitMeta(traitId)
 		assert.equal(trait.trigger, '进攻/防守/增援战败后')
 		assert.match(trait.description, /作为援军战败后/)
@@ -1671,9 +1684,8 @@ test('典韦和郭嘉只在进攻、防守或增援战败后降低最终实际�
 	}
 })
 
-test('典韦和郭嘉在平局时拥有返兵特性但不会触发或改变兵力', () => {
+test('郭嘉在平局时拥有返兵特性但不会触发或改变兵力', () => {
 	for (const [generalId, generalName, traitId, traitName] of [
-		['dianwei', '典韦', 'huzhu_sizhan', '护主死战'],
 		['guojia', '郭嘉', 'guicai_yice', '鬼才遗策'],
 	] as const) {
 		const report = {
@@ -1702,9 +1714,8 @@ test('典韦和郭嘉在平局时拥有返兵特性但不会触发或改变兵�
 	}
 })
 
-test('典韦和郭嘉在 NPC 与黄巾平局中按场景真实全损且不返兵', () => {
+test('郭嘉在 NPC 与黄巾平局中按场景真实全损且不返兵', () => {
 	for (const [generalId, generalName, traitId, traitName] of [
-		['dianwei', '典韦', 'huzhu_sizhan', '护主死战'],
 		['guojia', '郭嘉', 'guicai_yice', '鬼才遗策'],
 	] as const) {
 		const ownedGeneral = {
@@ -1760,12 +1771,24 @@ test('七进七出是出征或增援过程能力且前端使用后端到达时�
 	assert.doesNotMatch(source, /qijin_qichu|speedBonusRate/)
 })
 
-test('四项正式行军特性明确概率倍率和最低时长', () => {
+test('疾行奔袭与虎虎生威明确为指定骑兵永久被动，其他正式行军特性保留概率倍率和最低时长', () => {
 	const jixing = getTraitMeta('jixing_benxi')
-	assert.equal(jixing.trigger, '行军创建时')
-	assert.match(jixing.description, /出征或增援/)
-	assert.match(jixing.description, /20%/)
-	assert.match(jixing.description, /最低 60 秒/)
+	assert.equal(jixing.trigger, '永久被动')
+	assert.match(jixing.description, /骁骑营/)
+	assert.match(jixing.description, /18 点攻击/)
+	assert.match(jixing.description, /5 点移动/)
+	assert.match(jixing.description, /不作为战斗触发特性/)
+	const huhu = getTraitMeta('huhu_shengwei')
+	assert.equal(huhu.trigger, '永久被动')
+	assert.match(huhu.description, /虎豹骑/)
+	assert.match(huhu.description, /12 点攻击/)
+	assert.match(huhu.description, /5 点移动/)
+	assert.match(huhu.description, /进攻、防守、增援均持续生效/)
+	assert.match(huhu.description, /不作为战斗触发特性/)
+	const detailSource = readFileSync(new URL('../src/pages/news/components/BattleReportDetail.tsx', import.meta.url), 'utf8')
+	assert.match(detailSource, /huhu_shengwei/)
+	assert.match(detailSource, /虎虎生威/)
+	assert.match(detailSource, /虎豹骑/)
 
 	const dujiang = getTraitMeta('baiyi_dujiang')
 	assert.match(dujiang.description, /35% 概率/)
@@ -1894,7 +1917,7 @@ test('吕蒙作为援军时拥有快照不能成为触发效果来源', () => {
 	const detailSource = readFileSync(new URL('../src/pages/news/components/BattleReportDetail.tsx', import.meta.url), 'utf8')
 	assert.match(detailSource, /traits: general\.traits/)
 	const start = detailSource.indexOf('function sideTriggeredEffectText')
-	const end = detailSource.indexOf('\n}\n\n// participantResult', start)
+	const end = detailSource.indexOf('\n}\n\n// sidePassiveEffectText', start)
 	assert.ok(start >= 0 && end > start)
 	const effectBody = detailSource.slice(start, end)
 	assert.match(effectBody, /detail\.traits/)
@@ -1917,14 +1940,14 @@ test('战前属性特性只在实际影响战力的方向触发', () => {
 	assert.equal(delayed.trigger, '防守/增援战斗前')
 	assert.match(delayed.description, /防守或作为援军/)
 	assert.match(delayed.description, /防御提升 35%/)
-	for (const traitId of ['meihuo_raozhen', 'huchi_chongzhen', 'pojun_pofang', 'baibu_chuanyang', 'qibing_raohou']) {
+	for (const traitId of ['meihuo_raozhen', 'huchi_chongzhen', 'baibu_chuanyang', 'qibing_raohou']) {
 		const trait = getTraitMeta(traitId)
 		assert.equal(trait.trigger, '主动进攻战斗前')
 		assert.match(trait.description, /仅在主动进攻/)
 	}
 	assert.match(getTraitMeta('meihuo_raozhen').description, /防御降低 25%/)
-	assert.match(getTraitMeta('huchi_chongzhen').description, /防御降低 20%/)
-	assert.match(getTraitMeta('pojun_pofang').description, /防御降低 35%/)
+	assert.match(getTraitMeta('huchi_chongzhen').description, /50% 概率/)
+	assert.match(getTraitMeta('huchi_chongzhen').description, /防御降低 30%/)
 	assert.match(getTraitMeta('baibu_chuanyang').description, /防御降低 20%/)
 	assert.match(getTraitMeta('qibing_raohou').description, /降低敌军 20%/)
 	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', { huWei: -1 }), '实际攻击修正: 虎卫 -1')
@@ -2021,19 +2044,13 @@ test('司马懿黄巾守城按疑兵伤亡再谋定加防的顺序展示组合�
 	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[1].detail.infantryDefenseModifiedUnits, options), '实际步防修正: 魏步兵 +4')
 })
 
-test('关羽、张辽与张飞黄巾守城随机战前特性命中或未命中时保持准确战报', () => {
+test('关羽与张飞黄巾守城随机战前特性命中或未命中时保持准确战报', () => {
 	const cases = [
 		{
 			generalId: 'guanyu', generalName: '关羽', defenderFaction: 'shu', defenderUnit: 'shuInfantry', defenderUnitName: '蜀步兵',
 			attackerFaction: 'wei', attackerUnit: 'weiInfantry', attackerUnitName: '魏步兵', traitId: 'shuiyan_qijun', traitName: '水淹七军', bonusId: 'wusheng_pojun', bonusName: '武圣破军',
 			defensePower: 1020, hitAttackPower: 650, hitDefenseLost: 52, hitAttackLost: 100, missDefenseLost: 97,
 			detail: { effectRate: 0.35, maxAffectedRate: 0.35, preBattleAffected: { weiInfantry: 35 }, triggerChance: 1 },
-		},
-		{
-			generalId: 'zhangliao', generalName: '张辽', defenderFaction: 'wei', defenderUnit: 'weiInfantry', defenderUnitName: '魏步兵',
-			attackerFaction: 'shu', attackerUnit: 'shuInfantry', attackerUnitName: '蜀步兵', traitId: 'weizhen_zhenhe', traitName: '威震震慑', bonusId: 'weizhen_xiaoyao', bonusName: '威震逍遥',
-			defensePower: 1030, hitAttackPower: 800, hitDefenseLost: 69, hitAttackLost: 80, missDefenseLost: 95,
-			detail: { effectRate: 0.2, maxAffectedRate: 0.2, suppressedUnits: { shuInfantry: 20 }, triggerChance: 1 },
 		},
 		{
 			generalId: 'zhangfei', generalName: '张飞', defenderFaction: 'shu', defenderUnit: 'shuInfantry', defenderUnitName: '蜀步兵',
@@ -2096,8 +2113,6 @@ test('关羽、张辽与张飞黄巾守城随机战前特性命中或未命中�
 		assert.equal([...(hit.traits ?? []), ...(miss.traits ?? [])].some((trait) => trait.traitId === current.bonusId), false)
 		if (current.traitId === 'shuiyan_qijun') {
 			assert.equal(formatTraitOutcomeDetail('preBattleAffected', hit.traits?.[0].detail.preBattleAffected, options), '战前真实伤亡: 魏步兵 +35')
-		} else if (current.traitId === 'weizhen_zhenhe') {
-			assert.equal(formatTraitOutcomeDetail('suppressedUnits', hit.traits?.[0].detail.suppressedUnits, options), '本场压制兵力: 蜀步兵 +20')
 		} else {
 			assert.equal(formatTraitOutcomeDetail('suppressedUnits', hit.traits?.[0].detail.suppressedUnits, options), '本场压制兵力: 魏步兵 +50')
 		}
@@ -2369,49 +2384,39 @@ test('司马懿黄巾与 NPC 疑兵命中或未命中时严格隔离谋定方向
 	}
 })
 
-test('典韦黄巾与 NPC 护主命中或未命中时保持原始阵亡和最终存活准确', () => {
-	const cases = [
-		{ id: 'dianwei-yellow-hit', sourceType: 'yellow_turban', viewType: 'defense', primaryPower: 2000, primaryAmount: 200, primaryLost: 77, primarySurvived: 123, secondaryPower: 1030, secondaryAmount: 100, secondaryLost: 100, secondarySurvived: 15, generalExp: 77, hit: true, generalSide: 'secondary' },
-		{ id: 'dianwei-yellow-miss', sourceType: 'yellow_turban', viewType: 'defense', primaryPower: 2000, primaryAmount: 200, primaryLost: 77, primarySurvived: 123, secondaryPower: 1030, secondaryAmount: 100, secondaryLost: 100, secondarySurvived: 0, generalExp: 77, hit: false, generalSide: 'secondary' },
-		{ id: 'dianwei-npc-hit', sourceType: 'npc_city', viewType: 'attack', primaryPower: 1400, primaryAmount: 100, primaryLost: 100, primarySurvived: 15, secondaryPower: 2000, secondaryAmount: 200, secondaryLost: 120, secondarySurvived: 80, generalExp: 120, hit: true, generalSide: 'primary' },
-		{ id: 'dianwei-npc-miss', sourceType: 'npc_city', viewType: 'attack', primaryPower: 1400, primaryAmount: 100, primaryLost: 100, primarySurvived: 0, secondaryPower: 2000, secondaryAmount: 200, secondaryLost: 120, secondarySurvived: 80, generalExp: 120, hit: false, generalSide: 'primary' },
-	] as const
+test('典韦黄巾防守与 NPC 进攻分别展示护主血战和死战到底的实际结果', () => {
+	const general = { id: 'dianwei', name: '典韦', level: 1, traits: [{ traitId: 'huzhu_xuezhan', name: '护主血战', allowedSides: ['defender', 'reinforcement'] }, { traitId: 'sizhandaodi', name: '死战到底', allowedSides: ['attacker'] }] }
+	const yellow = normalizeBattleReportDetail({
+		id: 'dianwei-yellow-defense', playerId: 'player_dianwei', ownerPlayerId: 'player_dianwei', viewType: 'defense', sourceType: 'yellow_turban', battleType: 'yellow_turban', type: 'defense', result: 'attacker_victory', rewards: {}, read: true, createdAt: '2026-07-23T02:05:00Z',
+		detail: {
+			id: 'dianwei-yellow-defense', sourceType: 'yellow_turban', viewType: 'defense', battleType: 'yellow_turban', result: 'attacker_victory', winnerSide: 'attacker', ownerSide: 'defender',
+			primarySide: { role: 'attacker', faction: 'wei', power: 2000, generals: [], units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 200, dispatched: 200, lost: 200, survived: 0 }] },
+			secondarySide: { role: 'defender', faction: 'wei', power: 3399, generals: [general], units: [{ unitType: 'jinWeiSoldier', unitName: '禁卫甲士', amountBefore: 100, dispatched: 100, lost: 47, survived: 53 }] },
+			rewards: { generalExp: 200, resources: {} }, traits: [{ traitId: 'huzhu_xuezhan', traitName: '护主血战', ownerSide: 'secondary', ownerRole: 'defender', ownerPlayerId: 'player_dianwei', generalId: 'dianwei', detail: { generalDefenseFlat: 20, infantryDefenseModifiedUnits: { jinWeiSoldier: 20 }, cavalryDefenseModifiedUnits: { jinWeiSoldier: 20 }, triggerChance: 1 } }],
+		},
+	})
+	assert.deepEqual(yellow.secondarySide?.units[0], { unitType: 'jinWeiSoldier', unitName: '禁卫甲士', amountBefore: 100, dispatched: 100, lost: 47, survived: 53 })
+	assert.deepEqual(yellow.secondarySide?.generals?.[0]?.traits?.map((trait) => trait.traitId), ['huzhu_xuezhan', 'sizhandaodi'])
+	assert.deepEqual(yellow.traits?.map((trait) => trait.traitId), ['huzhu_xuezhan'])
 
-	for (const current of cases) {
-		const isNpc = current.sourceType === 'npc_city'
-		const general = { id: 'dianwei', name: '典韦', level: 1, traits: [{ traitId: 'huzhu_sizhan', name: '护主死战', requiredOutcome: 'loss' }, { traitId: 'sizhandaodi', name: '死战到底', allowedSides: ['attacker'] }] }
-		const traits = [
-			...(isNpc ? [{ traitId: 'sizhandaodi', traitName: '死战到底', ownerSide: 'primary', ownerRole: 'attacker', ownerPlayerId: 'player_dianwei', generalId: 'dianwei', detail: { attackBonusRate: 0.35, attackModifiedUnits: { weiInfantry: 4 }, triggerChance: 1 } }] : []),
-			...(current.hit ? [{ traitId: 'huzhu_sizhan', traitName: '护主死战', ownerSide: current.generalSide, ownerRole: current.generalSide === 'primary' ? 'attacker' : 'defender', ownerPlayerId: 'player_dianwei', generalId: 'dianwei', detail: { lossReductionRate: 0.15, maxReturnCount: 10000, returnedUnits: { weiInfantry: 15 }, triggerChance: 1 } }] : []),
-		]
-		const detail = normalizeBattleReportDetail({
-			id: current.id, playerId: 'player_dianwei', ownerPlayerId: 'player_dianwei', viewType: current.viewType, sourceType: current.sourceType,
-			battleType: isNpc ? 'attack' : 'yellow_turban', type: current.viewType, result: isNpc ? 'defender_victory' : 'attacker_victory', rewards: {}, read: true, createdAt: '2026-07-21T02:05:00Z',
+	for (const hit of [true, false]) {
+		const npc = normalizeBattleReportDetail({
+			id: `dianwei-npc-${hit ? 'hit' : 'miss'}`, playerId: 'player_dianwei', ownerPlayerId: 'player_dianwei', viewType: 'attack', sourceType: 'npc_city', battleType: 'attack', type: 'attack', result: 'defender_victory', rewards: {}, read: true, createdAt: '2026-07-23T02:06:00Z',
 			detail: {
-				id: current.id, sourceType: current.sourceType, viewType: current.viewType, battleType: isNpc ? 'attack' : 'yellow_turban', result: isNpc ? 'defender_victory' : 'attacker_victory', winnerSide: isNpc ? 'defender' : 'attacker', ownerSide: current.generalSide === 'primary' ? 'attacker' : 'defender',
-				primarySide: { role: 'attacker', faction: 'wei', power: current.primaryPower, generals: current.generalSide === 'primary' ? [general] : [], units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: current.primaryAmount, dispatched: current.primaryAmount, lost: current.primaryLost, survived: current.primarySurvived }] },
-				secondarySide: { role: 'defender', faction: 'wei', power: current.secondaryPower, generals: current.generalSide === 'secondary' ? [general] : [], units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: current.secondaryAmount, dispatched: current.secondaryAmount, lost: current.secondaryLost, survived: current.secondarySurvived }] },
-				rewards: { generalExp: current.generalExp, resources: {} }, traits,
+				id: `dianwei-npc-${hit ? 'hit' : 'miss'}`, sourceType: 'npc_city', viewType: 'attack', battleType: 'attack', result: 'defender_victory', winnerSide: 'defender', ownerSide: 'attacker',
+				primarySide: { role: 'attacker', faction: 'wei', power: hit ? 1400 : 1000, generals: [general], units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 }] },
+				secondarySide: { role: 'defender', faction: 'wei', power: 2000, generals: [], units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 200, dispatched: 200, lost: hit ? 120 : 74, survived: hit ? 80 : 126 }] },
+				rewards: { generalExp: hit ? 120 : 74, resources: {} }, traits: hit ? [{ traitId: 'sizhandaodi', traitName: '死战到底', ownerSide: 'primary', ownerRole: 'attacker', ownerPlayerId: 'player_dianwei', generalId: 'dianwei', detail: { attackBonusRate: 0.35, attackModifiedUnits: { weiInfantry: 4 }, triggerChance: 0.6 } }] : [],
 			},
 		})
-		assert.deepEqual(detail.primarySide.units[0], { unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: current.primaryAmount, dispatched: current.primaryAmount, lost: current.primaryLost, survived: current.primarySurvived })
-		assert.deepEqual(detail.secondarySide?.units[0], { unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: current.secondaryAmount, dispatched: current.secondaryAmount, lost: current.secondaryLost, survived: current.secondarySurvived })
-		assert.deepEqual((current.generalSide === 'primary' ? detail.primarySide : detail.secondarySide)?.generals?.[0]?.traits?.map((trait) => trait.traitId), ['huzhu_sizhan', 'sizhandaodi'])
-		assert.deepEqual(detail.traits?.map((trait) => trait.traitId), isNpc ? (current.hit ? ['sizhandaodi', 'huzhu_sizhan'] : ['sizhandaodi']) : (current.hit ? ['huzhu_sizhan'] : []))
-		assert.equal(detail.rewards.generalExp, current.generalExp)
-		assert.equal(detail.traits?.some((trait) => trait.traitId === 'sizhandaodi'), isNpc)
+		assert.equal(npc.primarySide.power, hit ? 1400 : 1000)
+		assert.equal(npc.secondarySide?.units[0]?.lost, hit ? 120 : 74)
+		assert.deepEqual(npc.traits?.map((trait) => trait.traitId), hit ? ['sizhandaodi'] : [])
 	}
 })
 
-test('许褚关羽张辽张飞 NPC 战前随机未命中时保留各自确定性加成', () => {
+test('关羽张辽张飞 NPC 战前随机未命中时保留各自独立战斗加成', () => {
 	const cases = [
-		{
-			generalId: 'xuchu', generalName: '许褚', attackerUnit: 'weiInfantry', attackerUnitName: '魏步兵', specialId: 'huchi_chongzhen', specialName: '虎痴冲阵', bonusId: 'pojun_pofang', bonusName: '破敌防御',
-			hitPower: [2000, 500], missPower: [2000, 700], hitLosses: [27, 100], missLosses: [44, 100], hitExp: 100, missExp: 100,
-			hitSpecialDetail: { enemyDefenseReductionRate: 0.2, infantryDefenseModifiedUnits: { weiInfantry: -2 }, cavalryDefenseModifiedUnits: { weiInfantry: -2 }, triggerChance: 1 },
-			hitBonusDetail: { enemyDefenseReductionRate: 0.35, infantryDefenseModifiedUnits: { weiInfantry: -3 }, cavalryDefenseModifiedUnits: { weiInfantry: -2 }, triggerChance: 1 },
-			missBonusDetail: { enemyDefenseReductionRate: 0.35, infantryDefenseModifiedUnits: { weiInfantry: -3 }, cavalryDefenseModifiedUnits: { weiInfantry: -3 }, triggerChance: 1 },
-		},
 		{
 			generalId: 'guanyu', generalName: '关羽', attackerUnit: 'weiInfantry', attackerUnitName: '魏步兵', specialId: 'shuiyan_qijun', specialName: '水淹七军', bonusId: 'wusheng_pojun', bonusName: '武圣破军',
 			hitPower: [2400, 650], missPower: [2400, 1000], hitLosses: [31, 100], missLosses: [57, 100], hitExp: 100, missExp: 100,
@@ -2420,9 +2425,9 @@ test('许褚关羽张辽张飞 NPC 战前随机未命中时保留各自确定性
 			missBonusDetail: { attackBonusRate: 0.2, attackModifiedUnits: { weiInfantry: 2 }, triggerChance: 1 },
 		},
 		{
-			generalId: 'zhangliao', generalName: '张辽', attackerUnit: 'weiCavalry', attackerUnitName: '魏骑兵', specialId: 'weizhen_zhenhe', specialName: '威震震慑', bonusId: 'weizhen_xiaoyao', bonusName: '威震逍遥',
-			hitPower: [3800, 640], missPower: [3800, 800], hitLosses: [15, 80], missLosses: [21, 100], hitExp: 80, missExp: 100,
-			hitSpecialDetail: { effectRate: 0.2, maxAffectedRate: 0.2, suppressedUnits: { weiInfantry: 20 }, triggerChance: 1 },
+			generalId: 'zhangliao', generalName: '张辽', attackerUnit: 'weiCavalry', attackerUnitName: '魏骑兵', specialId: 'weizhen_zhenhe', specialName: '震慑全军', bonusId: 'weizhen_xiaoyao', bonusName: '威震逍遥',
+			hitPower: [3800, 600], missPower: [3800, 800], hitLosses: [14, 75], missLosses: [21, 100], hitExp: 75, missExp: 100,
+			hitSpecialDetail: { effectRate: 0.25, suppressedUnits: { weiInfantry: 25 }, fledUnits: { weiInfantry: 25 }, returnedUnits: { weiInfantry: 25 }, triggerChance: 1 },
 			hitBonusDetail: { attackBonusRate: 0.35, attackModifiedUnits: { weiCavalry: 5 }, triggerChance: 1 },
 			missBonusDetail: { attackBonusRate: 0.35, attackModifiedUnits: { weiCavalry: 5 }, triggerChance: 1 },
 		},
@@ -2692,21 +2697,21 @@ test('张飞震慑未命中时步兵加攻仍生效且不产生临时压制', ()
 	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', detail.traits[0].detail.attackModifiedUnits, { faction: 'shu', units: { shu: { shuInfantry: { name: '蜀步兵' } } } }), '实际攻击修正: 蜀步兵 +2')
 })
 
-test('张辽主动进攻双特性对齐骑兵加攻、临时压制和最终战报数值', () => {
+test('张辽主动进攻双特性对齐骑兵加攻、溃逃返回和最终战报数值', () => {
 	const detail = {
 		sourceType: 'player_city', viewType: 'attack',
 		primarySide: {
 			role: 'attacker', power: 19000,
-			units: [{ unitType: 'weiCavalry', unitName: '魏骑兵', amountBefore: 1000, dispatched: 1000, lost: 218, survived: 782 }],
+			units: [{ unitType: 'weiCavalry', unitName: '魏骑兵', amountBefore: 1000, dispatched: 1000, lost: 199, survived: 801 }],
 		},
 		secondarySide: {
-			role: 'defender', power: 6528,
-			units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 800, survived: 200 }],
+			role: 'defender', power: 6120,
+			units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 750, survived: 250 }],
 		},
 		traits: [
 			{
-				traitId: 'weizhen_zhenhe', traitName: '威震震慑', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhangliao',
-				detail: { effectRate: 0.2, maxAffectedRate: 0.2, suppressedUnits: { shuInfantry: 200 }, triggerChance: 1 },
+				traitId: 'weizhen_zhenhe', traitName: '震慑全军', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhangliao',
+				detail: { effectRate: 0.25, suppressedUnits: { shuInfantry: 250 }, fledUnits: { shuInfantry: 250 }, returnedUnits: { shuInfantry: 250 }, triggerChance: 1 },
 			},
 			{
 				traitId: 'weizhen_xiaoyao', traitName: '威震逍遥', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhangliao',
@@ -2720,11 +2725,11 @@ test('张辽主动进攻双特性对齐骑兵加攻、临时压制和最终战�
 	}
 	assert.equal(hasTraitEntries(detail), true)
 	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['weizhen_zhenhe', 'weizhen_xiaoyao'])
-	assert.deepEqual(detail.traits.map((trait) => getTraitMeta(trait.traitId).trigger), ['战斗前', '主动进攻战斗前'])
+	assert.deepEqual(detail.traits.map((trait) => getTraitMeta(trait.traitId).trigger), ['主动进攻战斗前', '主动进攻战斗前'])
 	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['primary', 'primary'])
-	assert.deepEqual(detail.primarySide, { role: 'attacker', power: 19000, units: [{ unitType: 'weiCavalry', unitName: '魏骑兵', amountBefore: 1000, dispatched: 1000, lost: 218, survived: 782 }] })
-	assert.deepEqual(detail.secondarySide, { role: 'defender', power: 6528, units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 800, survived: 200 }] })
-	assert.equal(formatTraitOutcomeDetail('suppressedUnits', detail.traits[0].detail.suppressedUnits, unitOptions), '本场压制兵力: 蜀步兵 +200')
+	assert.deepEqual(detail.primarySide, { role: 'attacker', power: 19000, units: [{ unitType: 'weiCavalry', unitName: '魏骑兵', amountBefore: 1000, dispatched: 1000, lost: 199, survived: 801 }] })
+	assert.deepEqual(detail.secondarySide, { role: 'defender', power: 6120, units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 750, survived: 250 }] })
+	assert.equal(formatTraitOutcomeDetails(detail.traits[0].detail, unitOptions), '设计效果比例: 25%；本场溃逃兵力: 蜀步兵 +250；战后返回兵力: 蜀步兵 +250；触发概率: 100%')
 	assert.equal(formatTraitOutcomeDetail('attackBonusRate', detail.traits[1].detail.attackBonusRate, unitOptions), '设计攻击加成: 35%')
 	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', detail.traits[1].detail.attackModifiedUnits, unitOptions), '实际攻击修正: 魏骑兵 +5')
 })
@@ -2736,7 +2741,7 @@ test('张辽震慑未命中时骑兵加攻仍生效且不产生临时压制', ()
 			role: 'attacker', power: 19000,
 			generals: [{
 				id: 'zhangliao', name: '张辽', level: 1,
-				traits: [{ traitId: 'weizhen_zhenhe', name: '威震震慑' }, { traitId: 'weizhen_xiaoyao', name: '威震逍遥' }],
+				traits: [{ traitId: 'weizhen_zhenhe', name: '震慑全军' }, { traitId: 'weizhen_xiaoyao', name: '威震逍遥' }],
 			}],
 			units: [{ unitType: 'weiCavalry', unitName: '魏骑兵', amountBefore: 1000, dispatched: 1000, lost: 300, survived: 700 }],
 		},
@@ -2784,112 +2789,100 @@ test('关羽张辽张飞防守随机未命中时进攻专属加成也不越界�
 		assert.equal(hasTraitEntries(detail), false)
 		assert.deepEqual(detail.primarySide.units[0], { unitType: tc.attackerUnit, unitName: tc.attackerName, amountBefore: 1000, dispatched: 1000, lost: 500, survived: 500 })
 		assert.deepEqual(detail.secondarySide.units[0], { unitType: tc.defenderUnit, unitName: tc.defenderName, amountBefore: 1000, dispatched: 1000, lost: 500, survived: 500 })
-		assert.equal(getTraitMeta(tc.traitIds[0]).trigger, '战斗前')
+		assert.equal(getTraitMeta(tc.traitIds[0]).trigger, tc.generalId === 'zhangliao' ? '主动进攻战斗前' : '战斗前')
 		assert.equal(getTraitMeta(tc.traitIds[1]).trigger, '主动进攻战斗前')
 		assert.deepEqual(detail.rewards, { generalExp: 500, resources: {} })
 	}
 })
 
-test('许褚主动进攻双破防按当前整数防御逐次生效并对齐最终战报', () => {
+test('许褚虎痴命中与虎虎生威永久被动按不同区域展示', () => {
 	const detail = {
 		sourceType: 'player_city', viewType: 'attack',
 		primarySide: {
-			role: 'attacker', power: 10000,
-			units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 373, survived: 627 }],
-		},
-		secondarySide: {
-			role: 'defender', power: 5000,
-			units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 1000, survived: 0 }],
-		},
-		traits: [
-			{
-				traitId: 'huchi_chongzhen', traitName: '虎痴冲阵', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'xuchu',
-				detail: { enemyDefenseReductionRate: 0.2, infantryDefenseModifiedUnits: { shuInfantry: -2 }, cavalryDefenseModifiedUnits: { shuInfantry: -2 }, triggerChance: 1 },
-			},
-			{
-				traitId: 'pojun_pofang', traitName: '破敌防御', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'xuchu',
-				detail: { enemyDefenseReductionRate: 0.35, infantryDefenseModifiedUnits: { shuInfantry: -3 }, cavalryDefenseModifiedUnits: { shuInfantry: -2 } },
-			},
-		],
-	}
-	const unitOptions = { faction: 'wei', units: { shu: { shuInfantry: { name: '蜀步兵' } } } }
-	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['huchi_chongzhen', 'pojun_pofang'])
-	assert.deepEqual(detail.traits.map((trait) => getTraitMeta(trait.traitId).trigger), ['主动进攻战斗前', '主动进攻战斗前'])
-	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['primary', 'primary'])
-	assert.deepEqual(detail.primarySide, { role: 'attacker', power: 10000, units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 373, survived: 627 }] })
-	assert.deepEqual(detail.secondarySide, { role: 'defender', power: 5000, units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 1000, survived: 0 }] })
-	assert.equal(formatTraitOutcomeDetail('enemyDefenseReductionRate', detail.traits[0].detail.enemyDefenseReductionRate, unitOptions), '设计敌方防御降低: 20%')
-	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[0].detail.infantryDefenseModifiedUnits, unitOptions), '实际步防修正: 蜀步兵 -2')
-	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[0].detail.cavalryDefenseModifiedUnits, unitOptions), '实际骑防修正: 蜀步兵 -2')
-	assert.equal(formatTraitOutcomeDetail('enemyDefenseReductionRate', detail.traits[1].detail.enemyDefenseReductionRate, unitOptions), '设计敌方防御降低: 35%')
-	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[1].detail.infantryDefenseModifiedUnits, unitOptions), '实际步防修正: 蜀步兵 -3')
-	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[1].detail.cavalryDefenseModifiedUnits, unitOptions), '实际骑防修正: 蜀步兵 -2')
-})
-
-test('许褚主动进攻时虎痴未命中仍保留破敌防御的独立破防', () => {
-	const detail = {
-		sourceType: 'player_city', viewType: 'attack',
-		primarySide: {
-			role: 'attacker', power: 10000,
+			role: 'attacker', power: 8400,
 			generals: [{
 				id: 'xuchu', name: '许褚', level: 1,
-				traits: [{ traitId: 'huchi_chongzhen', name: '虎痴冲阵' }, { traitId: 'pojun_pofang', name: '破敌防御' }],
+				traits: [
+					{ traitId: 'huchi_chongzhen', name: '虎痴冲阵', params: { triggerChance: 0.5, enemyDefenseReductionRate: 0.3 } },
+					{ traitId: 'huhu_shengwei', name: '虎虎生威', params: { unitAttackFlat: 12, unitSpeedFlat: 5 } },
+				],
 			}],
-			units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 602, survived: 398 }],
+			units: [{ unitType: 'huBaoQi', unitName: '虎豹骑', amountBefore: 200, dispatched: 200, lost: 100, survived: 100 }],
 		},
 		secondarySide: {
 			role: 'defender', power: 7000,
-			units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 1000, survived: 0 }],
+			units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 600, survived: 400 }],
 		},
-		rewards: { generalExp: 1000, resources: {} },
 		traits: [{
-			traitId: 'pojun_pofang', traitName: '破敌防御', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'xuchu',
-			detail: { enemyDefenseReductionRate: 0.35, infantryDefenseModifiedUnits: { shuInfantry: -3 }, cavalryDefenseModifiedUnits: { shuInfantry: -3 } },
+			traitId: 'huchi_chongzhen', traitName: '虎痴冲阵', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'xuchu',
+			detail: { enemyDefenseReductionRate: 0.3, infantryDefenseModifiedUnits: { shuInfantry: -3 }, cavalryDefenseModifiedUnits: { shuInfantry: -2 }, triggerChance: 0.5 },
 		}],
 	}
 	const unitOptions = { faction: 'wei', units: { shu: { shuInfantry: { name: '蜀步兵' } } } }
-	assert.deepEqual(detail.primarySide.generals[0].traits.map((trait) => trait.traitId), ['huchi_chongzhen', 'pojun_pofang'])
-	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['pojun_pofang'])
-	assert.equal(detail.traits.some((trait) => trait.traitId === 'huchi_chongzhen'), false)
-	assert.deepEqual(detail.primarySide.units[0], { unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 602, survived: 398 })
-	assert.deepEqual(detail.secondarySide.units[0], { unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 1000, survived: 0 })
+	assert.deepEqual(detail.primarySide.generals[0].traits.map((trait) => trait.traitId), ['huchi_chongzhen', 'huhu_shengwei'])
+	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['huchi_chongzhen'])
+	assert.equal(detail.traits.some((trait) => trait.traitId === 'huhu_shengwei'), false)
+	assert.equal(getTraitMeta('huchi_chongzhen').trigger, '主动进攻战斗前')
+	assert.equal(getTraitMeta('huhu_shengwei').trigger, '永久被动')
+	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['primary'])
+	assert.equal(formatTraitOutcomeDetail('enemyDefenseReductionRate', detail.traits[0].detail.enemyDefenseReductionRate, unitOptions), '设计敌方防御降低: 30%')
 	assert.equal(formatTraitOutcomeDetail('infantryDefenseModifiedUnits', detail.traits[0].detail.infantryDefenseModifiedUnits, unitOptions), '实际步防修正: 蜀步兵 -3')
-	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[0].detail.cavalryDefenseModifiedUnits, unitOptions), '实际骑防修正: 蜀步兵 -3')
+	assert.equal(formatTraitOutcomeDetail('cavalryDefenseModifiedUnits', detail.traits[0].detail.cavalryDefenseModifiedUnits, unitOptions), '实际骑防修正: 蜀步兵 -2')
+	assert.equal(formatTraitOutcomeDetail('triggerChance', detail.traits[0].detail.triggerChance, unitOptions), '触发概率: 50%')
 })
 
-test('典韦跨阶段双特性区分战前加攻、原始阵亡、战后返还和最终存活', () => {
+test('许褚虎痴合法未命中时不补造触发，虎虎生威仍保留在拥有快照', () => {
+	const detail = {
+		sourceType: 'player_city', viewType: 'attack',
+		primarySide: {
+			role: 'attacker', power: 8400,
+			generals: [{
+				id: 'xuchu', name: '许褚', level: 1,
+				traits: [
+					{ traitId: 'huchi_chongzhen', name: '虎痴冲阵', params: { triggerChance: 0.5, enemyDefenseReductionRate: 0.3 } },
+					{ traitId: 'huhu_shengwei', name: '虎虎生威', params: { unitAttackFlat: 12, unitSpeedFlat: 5 } },
+				],
+			}],
+			units: [{ unitType: 'huBaoQi', unitName: '虎豹骑', amountBefore: 200, dispatched: 200, lost: 120, survived: 80 }],
+		},
+		secondarySide: {
+			role: 'defender', power: 10000,
+			units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 500, survived: 500 }],
+		},
+		traits: [],
+	}
+	assert.deepEqual(detail.primarySide.generals[0].traits.map((trait) => trait.traitId), ['huchi_chongzhen', 'huhu_shengwei'])
+	assert.equal(hasTraitEntries(detail), false)
+	assert.equal(detail.traits.some((trait) => trait.traitId === 'huchi_chongzhen'), false)
+})
+
+
+test('典韦双特性按攻防方向展示实际战前属性修正', () => {
 	const detail = {
 		sourceType: 'player_city', viewType: 'attack',
 		primarySide: {
 			role: 'attacker', power: 1400,
-			units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 15 }],
+		units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 94, survived: 6 }],
 		},
 		secondarySide: {
 			role: 'defender', power: 10000,
-			units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 61, survived: 939 }],
+		units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 57, survived: 943 }],
 		},
 		traits: [
 			{
 				traitId: 'sizhandaodi', traitName: '死战到底', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'dianwei',
 				detail: { attackBonusRate: 0.35, attackModifiedUnits: { weiInfantry: 4 } },
 			},
-			{
-				traitId: 'huzhu_sizhan', traitName: '护主死战', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'dianwei',
-				detail: { lossReductionRate: 0.15, maxReturnCount: 10000, returnedUnits: { weiInfantry: 15 }, triggerChance: 1 },
-			},
 		],
 	}
 	const unitOptions = { faction: 'wei', units: { wei: { weiInfantry: { name: '魏步兵' } } } }
-	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['sizhandaodi', 'huzhu_sizhan'])
-	assert.deepEqual(detail.traits.map((trait) => getTraitMeta(trait.traitId).trigger), ['主动进攻战斗前', '进攻/防守/增援战败后'])
-	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['primary', 'primary'])
-	assert.deepEqual(detail.primarySide, { role: 'attacker', power: 1400, units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 15 }] })
-	assert.deepEqual(detail.secondarySide, { role: 'defender', power: 10000, units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 61, survived: 939 }] })
+	assert.deepEqual(detail.traits.map((trait) => trait.traitId), ['sizhandaodi'])
+	assert.deepEqual(detail.traits.map((trait) => getTraitMeta(trait.traitId).trigger), ['主动进攻战斗前'])
+	assert.deepEqual(detail.traits.map((trait) => resolveReportTraitDisplaySide(detail, trait)), ['primary'])
+	assert.deepEqual(detail.primarySide, { role: 'attacker', power: 1400, units: [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 94, survived: 6 }] })
+	assert.deepEqual(detail.secondarySide, { role: 'defender', power: 10000, units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 57, survived: 943 }] })
 	assert.equal(formatTraitOutcomeDetail('attackBonusRate', detail.traits[0].detail.attackBonusRate, unitOptions), '设计攻击加成: 35%')
 	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', detail.traits[0].detail.attackModifiedUnits, unitOptions), '实际攻击修正: 魏步兵 +4')
-	assert.equal(formatTraitOutcomeDetail('lossReductionRate', detail.traits[1].detail.lossReductionRate, unitOptions), '设计减损比例: 15%')
-	assert.equal(formatTraitOutcomeDetail('maxReturnCount', detail.traits[1].detail.maxReturnCount, unitOptions), '设计返还上限: 10,000')
-	assert.equal(formatTraitOutcomeDetail('returnedUnits', detail.traits[1].detail.returnedUnits, unitOptions), '返还兵力: 魏步兵 +15')
 })
 
 test('黄忠掠夺战双特性区分战前破防、核心战损和战后追加扣兵', () => {
@@ -3063,13 +3056,8 @@ test('孙策掠夺获胜但追击未命中时只展示铁骑加攻和核心兵�
 	assert.equal(formatTraitOutcomeDetail('attackModifiedUnits', detail.traits[0].detail.attackModifiedUnits, { faction: 'wu', units: { wu: { overlordRider: { name: '霸王骑' } } } }), '实际攻击修正: 霸王骑 +50')
 })
 
-test('典韦马超孙策防守随机条件成立但未命中时只展示核心结算', () => {
+test('马超孙策防守随机条件成立但未命中时只展示核心结算', () => {
 	const cases = [
-		{
-			general: { id: 'dianwei', name: '典韦', level: 1, traits: [{ traitId: 'huzhu_sizhan', name: '护主死战' }, { traitId: 'sizhandaodi', name: '死战到底' }] },
-			primarySide: { role: 'attacker', power: 10000, units: [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 37, survived: 963 }] },
-			secondaryPower: 1000, secondaryUnit: { unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 100, dispatched: 100, lost: 100, survived: 0 }, generalExp: 37,
-		},
 		{
 			general: { id: 'machao', name: '马超', level: 1, stats: { force: 0 }, effectiveStats: { force: 20 }, buffs: { attackBonus: 0.4 }, traits: [{ traitId: 'xiliang_tuji', name: '西凉突击' }, { traitId: 'tianshen_xiafan', name: '天神下凡' }] },
 			primarySide: { role: 'attacker', power: 20000, units: [{ unitType: 'wuInfantry', unitName: '吴步兵', amountBefore: 1000, dispatched: 1000, lost: 12, survived: 988 }, { unitType: 'wuCavalry', unitName: '吴骑兵', amountBefore: 1000, dispatched: 1000, lost: 12, survived: 988 }] },
@@ -3316,13 +3304,8 @@ test('司马懿援军双特性同时命中或均未命中时准确展示', () =>
 	assert.equal(hasTraitEntries(miss), false)
 })
 
-test('张辽与关羽援军随机战前特性命中或未命中时保持准确兵力和方向', () => {
+test('关羽援军随机战前特性命中或未命中时保持准确兵力和方向', () => {
 	const cases = [
-		{
-			generalId: 'zhangliao', generalName: '张辽', helperFaction: 'wei', helperUnit: 'weiInfantry', traitId: 'weizhen_zhenhe', traitName: '威震震慑', bonusId: 'weizhen_xiaoyao', bonusName: '威震逍遥',
-			attackerFaction: 'shu', attackerUnit: 'shuInfantry', attackerUnitName: '蜀步兵', hitPower: 800, hitAttackerLosses: 46, hitDefendingLosses: 42, hitReinforcementLosses: 42,
-			detail: { effectRate: 0.2, maxAffectedRate: 0.2, suppressedUnits: { shuInfantry: 20 }, triggerChance: 1 },
-		},
 		{
 			generalId: 'guanyu', generalName: '关羽', helperFaction: 'shu', helperUnit: 'shuInfantry', traitId: 'shuiyan_qijun', traitName: '水淹七军', bonusId: 'wusheng_pojun', bonusName: '武圣破军',
 			attackerFaction: 'wei', attackerUnit: 'weiInfantry', attackerUnitName: '魏步兵', hitPower: 650, hitAttackerLosses: 77, hitDefendingLosses: 35, hitReinforcementLosses: 35,
@@ -3382,11 +3365,7 @@ test('张辽与关羽援军随机战前特性命中或未命中时保持准确�
 		assert.equal(resolveReportTraitDisplaySide(hit, hit.traits?.[0]), 'reinforcement')
 		assert.equal(hasTraitEntries(miss), false)
 		assert.equal([...(hit.traits ?? []), ...(miss.traits ?? [])].some((trait) => trait.traitId === current.bonusId), false)
-		if (current.traitId === 'weizhen_zhenhe') {
-			assert.equal(formatTraitOutcomeDetail('suppressedUnits', hit.traits?.[0].detail.suppressedUnits, options), '本场压制兵力: 蜀步兵 +20')
-		} else {
-			assert.equal(formatTraitOutcomeDetail('preBattleAffected', hit.traits?.[0].detail.preBattleAffected, options), '战前真实伤亡: 魏步兵 +35')
-		}
+		assert.equal(formatTraitOutcomeDetail('preBattleAffected', hit.traits?.[0].detail.preBattleAffected, options), '战前真实伤亡: 魏步兵 +35')
 	}
 })
 
@@ -3892,23 +3871,23 @@ test('轮回副本战报按后端时间线展示真实扣兵、攻击修正和�
 })
 
 test('轮回副本全正式特性矩阵只展示后端实际触发项', () => {
-	const bothSides = 'weiwu_tongyu yibing_touxi huzhu_sizhan weizhen_zhenhe guicai_yice rende renzhu_shouhu shuiyan_qijun zhenhe_quanjun qimen_dunjia wolong_mouzhi xiliang_tuji laodang_yizhuang huoshao_lianying lianying_zengshang kurouji kurou_fanji'.split(' ')
-	const attackerOnly = 'meiren meihuo_raozhen huchi_chongzhen pojun_pofang sizhandaodi weizhen_xiaoyao wusheng_pojun wanren_nuhou baibu_chuanyang qibing_raohou xiaobawang_tieqi huogong meizhoulang_junlue'.split(' ')
-	const defenderOnly = 'mouding_houfa dunzhen_fangyu longdan_jiuyuan gushou_hanzhong jiangdong_gushou'.split(' ')
-	const nonBattle = 'weiwu_haoling jixing_benxi shengui_zhicai wangzuo_zhicai neizheng_jingying qijin_qichu tianshen_xiafan jiangdong_haoling xiaobawang_zhuiji baiyi_dujiang baiyi_jixing kuairu_shandian xinyi_yonglie jinfan_jielue jinfan_qixi'.split(' ')
+	const bothSides = 'weiwu_tongyu yibing_touxi guicai_yice rende renzhu_shouhu shuiyan_qijun zhenhe_quanjun qimen_dunjia wolong_mouzhi xiliang_tuji laodang_yizhuang huoshao_lianying lianying_zengshang kurouji kurou_fanji'.split(' ')
+	const attackerOnly = 'meiren meihuo_raozhen huchi_chongzhen sizhandaodi weizhen_zhenhe weizhen_xiaoyao wusheng_pojun wanren_nuhou baibu_chuanyang qibing_raohou xiaobawang_tieqi huogong meizhoulang_junlue'.split(' ')
+	const defenderOnly = 'mouding_houfa huzhu_xuezhan dunzhen_fangyu longdan_jiuyuan gushou_hanzhong jiangdong_gushou'.split(' ')
+	const nonBattle = 'weiwu_haoling jixing_benxi huhu_shengwei shengui_zhicai wangzuo_zhicai neizheng_jingying qijin_qichu tianshen_xiafan jiangdong_haoling xiaobawang_zhuiji baiyi_dujiang baiyi_jixing kuairu_shandian xinyi_yonglie jinfan_jielue jinfan_qixi'.split(' ')
 	const allTraitIds = [...bothSides, ...attackerOnly, ...defenderOnly, ...nonBattle]
 	assert.equal(new Set(allTraitIds).size, 50)
 
 	const attackTraits = [...bothSides, ...attackerOnly].map((traitId) => ({ traitId, ownerSide: 'primary', ownerRole: 'attacker', generalId: 'g1' }))
 	const attackDetail = { sourceType: 'dungeon', viewType: 'attack', battleType: 'dungeon_reincarnation_attack', traits: attackTraits }
-	assert.equal(attackTraits.length, 30)
-	assert.deepEqual(attackTraits.map((trait) => resolveReportTraitDisplaySide(attackDetail, trait)), Array(30).fill('primary'))
+	assert.equal(attackTraits.length, 28)
+	assert.deepEqual(attackTraits.map((trait) => resolveReportTraitDisplaySide(attackDetail, trait)), Array(28).fill('primary'))
 	assert.equal(attackTraits.every((trait) => getTraitMeta(trait.traitId).name !== trait.traitId && getTraitMeta(trait.traitId).trigger.length > 0), true)
 
 	const defenseTraits = [...bothSides, ...defenderOnly].map((traitId) => ({ traitId, ownerSide: 'secondary', ownerRole: 'defender', generalId: 'g2' }))
 	const defenseDetail = { sourceType: 'dungeon', viewType: 'defense', battleType: 'dungeon_reincarnation_defense', traits: defenseTraits }
-	assert.equal(defenseTraits.length, 22)
-	assert.deepEqual(defenseTraits.map((trait) => resolveReportTraitDisplaySide(defenseDetail, trait)), Array(22).fill('secondary'))
+	assert.equal(defenseTraits.length, 21)
+	assert.deepEqual(defenseTraits.map((trait) => resolveReportTraitDisplaySide(defenseDetail, trait)), Array(21).fill('secondary'))
 
 	const snapshotOnly = {
 		sourceType: 'dungeon', viewType: 'attack', traits: [],
@@ -3934,9 +3913,8 @@ test('轮回攻防无将领时不从城内主将快照补造特性', () => {
 	}
 })
 
-test('典韦和郭嘉在轮回攻防平局中按后端全损结果展示且不返兵', () => {
+test('郭嘉在轮回攻防平局中按后端全损结果展示且不返兵', () => {
 	for (const [generalId, generalName, traitId, traitName] of [
-		['dianwei', '典韦', 'huzhu_sizhan', '护主死战'],
 		['guojia', '郭嘉', 'guicai_yice', '鬼才遗策'],
 	] as const) {
 		for (const viewType of ['attack', 'defense'] as const) {
@@ -4107,7 +4085,7 @@ test('标准详情支持全兵种固定列和特性触发展示', () => {
 
 test('将领携带特性快照不能代替本场真实触发时间线', () => {
 	const randomTraitIds = [
-		'yibing_touxi', 'huchi_chongzhen', 'huzhu_sizhan', 'weizhen_zhenhe',
+		'yibing_touxi', 'huchi_chongzhen', 'sizhandaodi', 'weizhen_zhenhe',
 		'shuiyan_qijun', 'zhenhe_quanjun', 'longdan_jiuyuan', 'xiliang_tuji',
 		'baibu_chuanyang', 'qibing_raohou', 'jiangdong_gushou', 'xiaobawang_zhuiji',
 		'huoshao_lianying', 'baiyi_dujiang', 'kuairu_shandian', 'kurouji',
@@ -4239,13 +4217,13 @@ test('黄巾来袭途中换将后只展示新主将战前快照和战后升级',
 	const trait = {
 		traitId: 'dunzhen_fangyu', traitName: '盾阵防御', ownerSide: 'secondary', ownerRole: 'defender',
 		ownerPlayerId: 'general_change_owner', generalId: 'xiahouyuan',
-		detail: { defenseBonusRate: 0.35, infantryDefenseModifiedUnits: { weiInfantry: 4 }, cavalryDefenseModifiedUnits: { weiInfantry: 3 } },
+		detail: { defenseBonusRate: 0.3, infantryDefenseModifiedUnits: { weiInfantry: 3 }, cavalryDefenseModifiedUnits: { weiInfantry: 2 }, triggerChance: 0.6 },
 	}
 	const detail = {
 		sourceType: 'yellow_turban', viewType: 'defense', traits: [trait],
 		secondarySide: {
-			role: 'defender', playerId: 'general_change_owner', power: 1442,
-			generals: [{ id: 'xiahouyuan', name: '夏侯渊', level: 1, traits: [{ traitId: 'jixing_benxi' }, { traitId: 'dunzhen_fangyu' }] }],
+			role: 'defender', playerId: 'general_change_owner', power: 1339,
+			generals: [{ id: 'xiahouyuan', name: '夏侯渊', level: 1, traits: [{ traitId: 'jixing_benxi', params: { unitAttackFlat: 18, unitSpeedFlat: 5 } }, { traitId: 'dunzhen_fangyu' }] }],
 		},
 		rewards: { generalExp: 100, generalLevelBefore: 1, generalLevelAfter: 2 },
 	}

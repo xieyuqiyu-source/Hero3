@@ -44,6 +44,9 @@ func (t *configurableTrait) Description(params general.Params) string { return t
 // ParamSchema 返回 GM 可配置参数 schema。
 func (t *configurableTrait) ParamSchema() []general.ParamField {
 	out := append([]general.ParamField(nil), t.schema...)
+	if t.effect == "passive_unit_stats" {
+		return out
+	}
 	for _, field := range commonScopeFields(t.triggerChanceDefault()) {
 		if t.id == "yibing_touxi" && (field.Key == "maxAffectedRate" || field.Key == "maxAffectedCount") {
 			continue
@@ -106,9 +109,23 @@ func (t *configurableTrait) handleBeforeBattle(c *general.BeforeBattleContext, p
 		recordPreBattleLosses(c, affected)
 		t.recordBefore(c, params, affected, "preBattleAffected")
 	case "suppress":
-		affected := reduceArmyUnits(actorEnemyArmy(c), params, "effectRate", c.Actor.TargetUnitType)
+		var affected map[string]int
+		if t.id == "weizhen_zhenhe" {
+			// 张辽按敌方本次参战总兵力精确计算溃逃人数，不受旧通用上限字段截断。
+			affected = reduceArmyUnitsByTotalRate(actorEnemyArmy(c), params, "effectRate", c.Actor.TargetUnitType)
+		} else {
+			affected = reduceArmyUnits(actorEnemyArmy(c), params, "effectRate", c.Actor.TargetUnitType)
+		}
 		recordSuppressedUnits(c, affected)
-		t.recordBefore(c, params, affected, "suppressedUnits")
+		if t.id == "weizhen_zhenhe" && len(affected) > 0 {
+			t.recordBeforeDetail(c, params, map[string]interface{}{
+				"suppressedUnits": affected,
+				"fledUnits":       affected,
+				"returnedUnits":   affected,
+			})
+		} else {
+			t.recordBefore(c, params, affected, "suppressedUnits")
+		}
 	case "unit_attack_bonus", "unit_defense_bonus", "army_attack_bonus", "army_defense_bonus", "enemy_defense_reduce", "enemy_attack_reduce", "general_attack_flat", "general_defense_flat", "unit_attack_flat":
 		changed := applyBattleStatBonus(c, params, t.effect)
 		t.recordBeforeStatChanges(c, params, changed)
@@ -345,6 +362,48 @@ func reduceArmyUnits(army *combat.Army, params general.Params, rateKey string, t
 		if maxCount > 0 && total >= maxCount {
 			break
 		}
+	}
+	return affected
+}
+
+// reduceArmyUnitsByTotalRate 按目标兵种总人数精确抽离指定比例，并把取整余数稳定分配到原始兵种顺序。
+func reduceArmyUnitsByTotalRate(army *combat.Army, params general.Params, rateKey string, targetUnitType string) map[string]int {
+	if army == nil {
+		return nil
+	}
+	rate := params.FloatWithBounds(rateKey, 0, 0, 1)
+	targetUnitType = strings.TrimSpace(targetUnitType)
+	total := 0
+	for _, unit := range army.Units {
+		if unit.Count > 0 && combatUnitMatchesTarget(unit, targetUnitType) {
+			total += unit.Count
+		}
+	}
+	target := int(math.Floor(float64(total) * rate))
+	if target <= 0 {
+		return nil
+	}
+	affected := map[string]int{}
+	remainingTotal := total
+	remainingTarget := target
+	for index := range army.Units {
+		unit := &army.Units[index]
+		if unit.Count <= 0 || !combatUnitMatchesTarget(*unit, targetUnitType) {
+			continue
+		}
+		count := remainingTarget
+		if remainingTotal > unit.Count {
+			count = int(math.Floor(float64(unit.Count*remainingTarget) / float64(remainingTotal)))
+		}
+		if count > unit.Count {
+			count = unit.Count
+		}
+		if count > 0 {
+			unit.Count -= count
+			affected[unit.ID] += count
+			remainingTarget -= count
+		}
+		remainingTotal -= unit.Count + count
 	}
 	return affected
 }
@@ -773,7 +832,7 @@ func (t *configurableTrait) outcome(actor general.TraitActor, params general.Par
 	} else if effectRate, configured := params["effectRate"]; configured {
 		detail["effectRate"] = effectRate
 	}
-	if maxAffectedRate, configured := params["maxAffectedRate"]; configured && t.id != "yibing_touxi" {
+	if maxAffectedRate, configured := params["maxAffectedRate"]; configured && t.id != "yibing_touxi" && t.id != "weizhen_zhenhe" {
 		detail["maxAffectedRate"] = params.FloatWithBounds("maxAffectedRate", maxAffectedRate, 0, 1)
 	}
 	if attackBonusRate, configured := params["attackBonusRate"]; configured {
@@ -861,14 +920,14 @@ func init() {
 		{id: "mouding_houfa", name: "谋定后发", traitType: general.TraitTypeBonus, description: "防守或增援战斗前概率提升所率全军防御，主动进攻无效。", effect: "army_defense_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("defenseBonusRate", "全军防御提升", 0.35, 2)}, defaultTriggerChance: 0.35},
 		{id: "meiren", name: "美人心计", traitType: general.TraitTypeSpecial, description: "主动进攻战斗前概率提升所率全军攻击 25%，防守和增援无效。", effect: "army_attack_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("attackBonusRate", "全军攻击提升", 0.25, 2)}, defaultTriggerChance: 0.5},
 		{id: "meihuo_raozhen", name: "魅惑扰阵", traitType: general.TraitTypeBonus, description: "主动进攻战斗前概率降低敌方全军防御 25%，防守和增援无效。", effect: "enemy_defense_reduce", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("enemyDefenseReductionRate", "敌方防御降低", 0.25, 0.9)}, defaultTriggerChance: 0.5},
-		{id: "huchi_chongzhen", name: "虎痴冲阵", traitType: general.TraitTypeSpecial, description: "主动进攻时概率突破敌方防御。", effect: "enemy_defense_reduce", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("enemyDefenseReductionRate", "突破防御比例", 0.2, 0.9)}},
-		{id: "pojun_pofang", name: "破敌防御", traitType: general.TraitTypeBonus, description: "主动进攻时降低敌方防御。", effect: "enemy_defense_reduce", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("enemyDefenseReductionRate", "敌方防御降低", 0.35, 0.9)}},
-		{id: "huzhu_sizhan", name: "护主死战", traitType: general.TraitTypeSpecial, description: "濒临失败时降低最终损失。", effect: "reduce_final_losses", events: []string{general.EventAfterBattle}, schema: []general.ParamField{rateField("lossReductionRate", "最终减损", 0.15, 0.8), countField("maxReturnCount", "返还上限", 10000, 1000000)}},
-		{id: "sizhandaodi", name: "死战到底", traitType: general.TraitTypeBonus, description: "主动进攻时提升步兵攻击。", effect: "unit_attack_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("attackBonusRate", "步兵攻击提升", 0.35, 2)}},
-		{id: "jixing_benxi", name: "疾行奔袭", traitType: general.TraitTypeSpecial, description: "出征或增援创建时固定提升行军速度，最低时长由配置约束。", effect: "march_speed", events: []string{general.EventMarchCreate}, schema: []general.ParamField{rateField("speedBonusRate", "速度提升", 0.2, 10), countField("minMarchSeconds", "最短行军秒数", 60, 86400)}},
-		{id: "dunzhen_fangyu", name: "盾阵防御", traitType: general.TraitTypeBonus, description: "防守或增援时提升我军防御。", effect: "army_defense_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("defenseBonusRate", "防御提升", 0.35, 2)}},
-		{id: "weizhen_zhenhe", name: "威震震慑", traitType: general.TraitTypeSpecial, description: "概率让敌方部分兵仅本场不参战，战后保留。", effect: "suppress", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "震慑比例", 0.2, 1)}},
-		{id: "weizhen_xiaoyao", name: "威震逍遥", traitType: general.TraitTypeBonus, description: "主动进攻时提升骑兵攻击。", effect: "unit_attack_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("attackBonusRate", "骑兵攻击提升", 0.35, 2)}},
+		{id: "huchi_chongzhen", name: "虎痴冲阵", traitType: general.TraitTypeSpecial, description: "主动进攻战斗前概率降低敌方全军防御，防守和增援无效。", effect: "enemy_defense_reduce", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("enemyDefenseReductionRate", "敌方全军防御降低", 0.3, 0.9)}, defaultTriggerChance: 0.5},
+		{id: "huhu_shengwei", name: "虎虎生威", traitType: general.TraitTypeBonus, description: "被动使所率虎豹骑固定增加攻击和移动，不作为战斗触发特性。", effect: "passive_unit_stats", events: nil, schema: []general.ParamField{countField("unitAttackFlat", "虎豹骑攻击增加", 12, 100000), countField("unitSpeedFlat", "虎豹骑移动增加", 5, 100000)}},
+		{id: "huzhu_xuezhan", name: "护主血战", traitType: general.TraitTypeSpecial, description: "防守或增援战斗前使所率禁卫甲士固定增加步兵防御和骑兵防御，主动进攻无效。", effect: "general_defense_flat", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{countField("generalDefenseFlat", "禁卫甲士步防与骑防增加", 20, 100000)}},
+		{id: "sizhandaodi", name: "死战到底", traitType: general.TraitTypeBonus, description: "主动进攻战斗前概率提升所率步兵攻击，防守和增援无效。", effect: "unit_attack_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("attackBonusRate", "步兵攻击提升", 0.35, 2)}, defaultTriggerChance: 0.6},
+		{id: "jixing_benxi", name: "疾行奔袭", traitType: general.TraitTypeSpecial, description: "被动使所率骁骑营固定增加攻击和移动，不作为战斗触发特性。", effect: "passive_unit_stats", events: nil, schema: []general.ParamField{countField("unitAttackFlat", "骁骑营攻击增加", 18, 100000), countField("unitSpeedFlat", "骁骑营移动增加", 5, 100000)}},
+		{id: "dunzhen_fangyu", name: "盾阵防御", traitType: general.TraitTypeBonus, description: "防守或增援战斗前概率提升所率全军防御。", effect: "army_defense_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("defenseBonusRate", "全军防御提升", 0.3, 2)}, defaultTriggerChance: 0.6},
+		{id: "weizhen_zhenhe", name: "震慑全军", traitType: general.TraitTypeSpecial, description: "主动进攻战斗前概率使敌方部分兵力溃逃；溃逃兵不参与本次攻防、不计死亡，战后完整返回敌方部队。", effect: "suppress", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "溃逃比例", 0.25, 1)}, defaultTriggerChance: 0.35},
+		{id: "weizhen_xiaoyao", name: "威震逍遥", traitType: general.TraitTypeBonus, description: "主动进攻战斗前概率提升所率骑兵攻击。", effect: "unit_attack_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("attackBonusRate", "骑兵攻击提升", 0.35, 2)}, defaultTriggerChance: 0.6},
 		{id: "shengui_zhicai", name: "神鬼之才", traitType: general.TraitTypeSpecial, description: "征兵资源消耗降低。", effect: "recruit_cost_reduce", events: []string{general.EventRecruitCost}, schema: []general.ParamField{rateField("resourceCostReduction", "征兵消耗降低", 0.5, 0.8)}},
 		{id: "guicai_yice", name: "鬼才遗策", traitType: general.TraitTypeBonus, description: "战败时最终损失降低。", effect: "reduce_final_losses", events: []string{general.EventAfterBattle}, schema: []general.ParamField{rateField("lossReductionRate", "最终减损", 0.1, 0.8), countField("maxReturnCount", "返还上限", 10000, 1000000)}},
 		{id: "wangzuo_zhicai", name: "王佐之才", traitType: general.TraitTypeSpecial, description: "将领留城时降低征兵资源消耗，离城后失效。", effect: "recruit_cost_reduce", events: []string{general.EventRecruitCost}, schema: []general.ParamField{rateField("resourceCostReduction", "征兵消耗降低", 0.05, 0.8)}},

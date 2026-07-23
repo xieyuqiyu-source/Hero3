@@ -145,11 +145,13 @@ func buildCombatUnitFromConfig(unitType string, count int, unitCfg UnitConfig, n
 	cavDefense := ComputeAttributeAt(float64(baseCavDef), StatDefenseBonus, now, modSources...)
 	cavDefense = ComputeAttributeAt(cavDefense, StatCavalryDefenseBonus, now, modSources...)
 
+	attack := ComputeIntAttributeAt(baseAttack, StatAttackBonus, now, modSources...)
+	attack += ComputeIntAttributeAt(0, unitAttackFlatModifierKey(unitType), now, modSources...)
 	return combat.Unit{
 		ID:              unitType,
 		Category:        unitCfg.Category,
 		Count:           count,
-		Attack:          ComputeIntAttributeAt(baseAttack, StatAttackBonus, now, modSources...),
+		Attack:          attack,
 		InfantryDefense: int(infDefense),
 		CavalryDefense:  int(cavDefense),
 		CarryCapacity:   unitCfg.Stats["carryCapacity"],

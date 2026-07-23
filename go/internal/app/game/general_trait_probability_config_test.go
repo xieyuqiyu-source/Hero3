@@ -22,9 +22,10 @@ func TestFormalTraitTriggerChancesMatchDesign(t *testing.T) {
 	want := map[string]map[string]float64{
 		"simayi":     {"yibing_touxi": 0.35, "mouding_houfa": 0.35},
 		"zhenmi":     {"meiren": 0.5, "meihuo_raozhen": 0.5},
-		"xuchu":      {"huchi_chongzhen": 0.35},
-		"dianwei":    {"huzhu_sizhan": 0.35},
-		"zhangliao":  {"weizhen_zhenhe": 0.35},
+		"xuchu":      {"huchi_chongzhen": 0.5},
+		"xiahouyuan": {"dunzhen_fangyu": 0.6},
+		"dianwei":    {"huzhu_xuezhan": 1, "sizhandaodi": 0.6},
+		"zhangliao":  {"weizhen_zhenhe": 0.35, "weizhen_xiaoyao": 0.6},
 		"liubei":     {"rende": 1},
 		"guanyu":     {"shuiyan_qijun": 0.35},
 		"zhangfei":   {"zhenhe_quanjun": 0.5},

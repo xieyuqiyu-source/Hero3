@@ -183,17 +183,15 @@ func TestAllConfigurableRandomCombatTraitsRespectZeroTriggerChance(t *testing.T)
 		})
 	}
 
-	t.Run("huzhu_sizhan", func(t *testing.T) {
-		army := map[string]int{"infantry": 4}
-		ctx := &general.AfterBattleContext{
-			PlayerArmy: army, PlayerLosses: map[string]int{"infantry": 96}, IsAttacker: true, Won: false, Scene: "plunder",
-		}
+	t.Run("huzhu_xuezhan", func(t *testing.T) {
+		defender := combat.Army{Units: []combat.Unit{{ID: "jinWeiSoldier", Category: "infantry", Count: 100, InfantryDefense: 13, CavalryDefense: 7}}}
+		ctx := &general.BeforeBattleContext{Attacker: &combat.Army{}, Defender: &defender}
 		general.Dispatch(ctx, []general.ActiveTrait{{
-			TraitID: "huzhu_sizhan", OwnerSide: "attacker",
-			Params: general.Params{"triggerChance": 0, "lossReductionRate": 0.15, "maxReturnCount": 10000},
+			TraitID: "huzhu_xuezhan", OwnerSide: "defender", AllowedSides: []string{"defender", "reinforcement"}, TargetUnitType: "jinWeiSoldier",
+			Params: general.Params{"triggerChance": 0, "generalDefenseFlat": 20},
 		}})
-		if army["infantry"] != 4 || len(ctx.Revived) != 0 || len(ctx.Triggered) != 0 {
-			t.Fatalf("expected zero chance Huzhu Sizhan not to return troops, army=%+v ctx=%+v", army, ctx)
+		if defender.Units[0].InfantryDefense != 13 || defender.Units[0].CavalryDefense != 7 || len(ctx.Triggered) != 0 {
+			t.Fatalf("expected zero chance Huzhu Xuezhan to leave defense untouched, defender=%+v ctx=%+v", defender, ctx)
 		}
 	})
 }
@@ -608,25 +606,20 @@ func TestTargetUnitDamageMatchesRealUnitCategory(t *testing.T) {
 	})
 }
 
-// TestDefenseReductionsStackSequentiallyWithActualReportDeltas 验证多个破防特性逐次叠加并分别记录实际整数差值。
-func TestDefenseReductionsStackSequentiallyWithActualReportDeltas(t *testing.T) {
+// TestHuchiChongzhenReducesBothDefensesAndReportsActualDeltas 验证虎痴冲阵同时降低两类防御并记录实际整数差值。
+func TestHuchiChongzhenReducesBothDefensesAndReportsActualDeltas(t *testing.T) {
 	attacker := combat.Army{Units: []combat.Unit{{ID: "huWei", Category: "infantry", Count: 100, Attack: 14}}}
 	defender := combat.Army{Units: []combat.Unit{{ID: "overlordRider", Category: "cavalry", Count: 100, InfantryDefense: 101, CavalryDefense: 101}}}
 	ctx := &general.BeforeBattleContext{Attacker: &attacker, Defender: &defender, AttackerOwnsTrait: true, Scene: "attack"}
-	general.Dispatch(ctx, []general.ActiveTrait{
-		{TraitID: "huchi_chongzhen", OwnerSide: "attacker", Params: general.Params{"enemyDefenseReductionRate": 0.2, "triggerChance": 1}},
-		{TraitID: "pojun_pofang", OwnerSide: "attacker", Params: general.Params{"enemyDefenseReductionRate": 0.35, "triggerChance": 1}},
-	})
+	general.Dispatch(ctx, []general.ActiveTrait{{TraitID: "huchi_chongzhen", OwnerSide: "attacker", Params: general.Params{"enemyDefenseReductionRate": 0.3, "triggerChance": 1}}})
 
-	if defender.Units[0].InfantryDefense != 53 || defender.Units[0].CavalryDefense != 53 {
-		t.Fatalf("expected sequential rounded defense 101 -> 81 -> 53, got %+v", defender.Units[0])
+	if defender.Units[0].InfantryDefense != 71 || defender.Units[0].CavalryDefense != 71 {
+		t.Fatalf("expected rounded defense 101 -> 71, got %+v", defender.Units[0])
 	}
 	huchiInfantry := ctx.Triggered["huchi_chongzhen"].Detail["infantryDefenseModifiedUnits"].(map[string]int)
 	huchiCavalry := ctx.Triggered["huchi_chongzhen"].Detail["cavalryDefenseModifiedUnits"].(map[string]int)
-	pojunInfantry := ctx.Triggered["pojun_pofang"].Detail["infantryDefenseModifiedUnits"].(map[string]int)
-	pojunCavalry := ctx.Triggered["pojun_pofang"].Detail["cavalryDefenseModifiedUnits"].(map[string]int)
-	if huchiInfantry["overlordRider"] != -20 || huchiCavalry["overlordRider"] != -20 || pojunInfantry["overlordRider"] != -28 || pojunCavalry["overlordRider"] != -28 {
-		t.Fatalf("expected each trait to report its actual rounded delta, got %+v", ctx.Triggered)
+	if huchiInfantry["overlordRider"] != -30 || huchiCavalry["overlordRider"] != -30 || ctx.Triggered["huchi_chongzhen"].Detail["enemyDefenseReductionRate"] != 0.3 {
+		t.Fatalf("expected Huchi to report design 30%% and actual -30/-30, got %+v", ctx.Triggered)
 	}
 }
 
@@ -650,7 +643,6 @@ func TestAllMarchSpeedTraitsModifyFinalDuration(t *testing.T) {
 		minimum int
 		want    int
 	}{
-		{traitID: "jixing_benxi", rate: 0.2, minimum: 60, want: 834},
 		{traitID: "qijin_qichu", rate: 1, minimum: 60, want: 500},
 		{traitID: "baiyi_dujiang", rate: 0.2, minimum: 60, want: 834},
 		{traitID: "baiyi_jixing", rate: 0.2, minimum: 60, want: 834},
@@ -677,7 +669,6 @@ func TestMarchSpeedTraitsRespectMinimumAndProbability(t *testing.T) {
 		base    int
 		minimum int
 	}{
-		{traitID: "jixing_benxi", rate: 0.2, base: 70, minimum: 60},
 		{traitID: "qijin_qichu", rate: 1, base: 100, minimum: 60},
 		{traitID: "baiyi_dujiang", rate: 0.2, base: 70, minimum: 60},
 		{traitID: "baiyi_jixing", rate: 0.2, base: 70, minimum: 60},
@@ -746,9 +737,9 @@ func TestRemainingBeforeBattleTraitIDsModifyRealStats(t *testing.T) {
 				t.Fatalf("expected enemy defense 80, got %+v", defender.Units)
 			}
 		}},
-		{traitID: "dunzhen_fangyu", params: general.Params{"defenseBonusRate": 0.35, "triggerChance": 1}, outcomeKey: "infantryDefenseModifiedUnits", check: func(t *testing.T, attacker combat.Army, _ combat.Army) {
-			if attacker.Units[0].InfantryDefense != 135 {
-				t.Fatalf("expected own defense 135, got %+v", attacker.Units)
+		{traitID: "dunzhen_fangyu", params: general.Params{"defenseBonusRate": 0.3, "triggerChance": 1}, outcomeKey: "infantryDefenseModifiedUnits", check: func(t *testing.T, attacker combat.Army, _ combat.Army) {
+			if attacker.Units[0].InfantryDefense != 130 {
+				t.Fatalf("expected own defense 130, got %+v", attacker.Units)
 			}
 		}},
 		{traitID: "meihuo_raozhen", params: general.Params{"enemyDefenseReductionRate": 0.25, "triggerChance": 1}, outcomeKey: "infantryDefenseModifiedUnits", check: func(t *testing.T, _ combat.Army, defender combat.Army) {
@@ -815,7 +806,7 @@ func TestRemainingSuppressionTraitIDsModifyParticipants(t *testing.T) {
 		rate    float64
 		want    int
 	}{
-		{traitID: "weizhen_zhenhe", rate: 0.2, want: 80},
+		{traitID: "weizhen_zhenhe", rate: 0.25, want: 75},
 		{traitID: "zhenhe_quanjun", rate: 0.5, want: 50},
 	} {
 		t.Run(tc.traitID, func(t *testing.T) {
@@ -826,7 +817,41 @@ func TestRemainingSuppressionTraitIDsModifyParticipants(t *testing.T) {
 			if defender.Units[0].Count != tc.want || ctx.DefenderSuppressedUnits["shadowGuard"] != 100-tc.want {
 				t.Fatalf("expected participants %d and preserved suppression %d, army=%+v suppressed=%+v", tc.want, 100-tc.want, defender.Units, ctx.DefenderSuppressedUnits)
 			}
+			if tc.traitID == "weizhen_zhenhe" {
+				outcome := ctx.Triggered[tc.traitID]
+				fled, fledOK := outcome.Detail["fledUnits"].(map[string]int)
+				returned, returnedOK := outcome.Detail["returnedUnits"].(map[string]int)
+				if outcome.Name != "震慑全军" || !fledOK || !returnedOK || fled["shadowGuard"] != 25 || returned["shadowGuard"] != 25 {
+					t.Fatalf("expected Zhang Liao flee and return outcome, got %+v", outcome)
+				}
+			}
 		})
+	}
+}
+
+// TestZhangLiaoSuppressionUsesExactMixedArmyTotal 验证混编敌军按总人数精确溃逃 25%，不会因逐兵种向下取整少算。
+func TestZhangLiaoSuppressionUsesExactMixedArmyTotal(t *testing.T) {
+	attacker := combat.Army{Units: []combat.Unit{{ID: "huBaoQi", Category: "cavalry", Count: 20}}}
+	defender := combat.Army{Units: []combat.Unit{
+		{ID: "shadowGuard", Category: "infantry", Count: 1},
+		{ID: "overlordRider", Category: "cavalry", Count: 3},
+		{ID: "divineWind", Category: "special", Count: 3},
+	}}
+	ctx := &general.BeforeBattleContext{Attacker: &attacker, Defender: &defender, AttackerOwnsTrait: true, Scene: "attack"}
+	general.Dispatch(ctx, []general.ActiveTrait{{
+		TraitID: "weizhen_zhenhe", OwnerSide: "attacker",
+		Params: general.Params{"effectRate": 0.25, "triggerChance": 1},
+	}})
+	totalRemaining := 0
+	for _, unit := range defender.Units {
+		totalRemaining += unit.Count
+	}
+	totalFled := 0
+	for _, amount := range ctx.DefenderSuppressedUnits {
+		totalFled += amount
+	}
+	if totalRemaining != 6 || totalFled != 1 {
+		t.Fatalf("expected floor(7*25%%)=1 troop to flee and 6 to participate, remaining=%d fled=%+v", totalRemaining, ctx.DefenderSuppressedUnits)
 	}
 }
 

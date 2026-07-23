@@ -163,6 +163,78 @@ func normalizeTraitConfigParams(traitCfg *GeneralTraitConfig) {
 			traitCfg.Params["attackBonusRate"] = 0.25
 			traitCfg.Params["triggerChance"] = 0.5
 		}
+	case "huchi_chongzhen":
+		// 旧版 35% 概率降低 20% 防御迁移为新版 50% 概率降低 30%。
+		if chance, ok := traitCfg.Params["triggerChance"]; !ok || math.Abs(chance-0.35) < 1e-9 {
+			traitCfg.Params["triggerChance"] = 0.5
+		}
+		if rate, ok := traitCfg.Params["enemyDefenseReductionRate"]; !ok || math.Abs(rate-0.2) < 1e-9 {
+			traitCfg.Params["enemyDefenseReductionRate"] = 0.3
+		}
+		traitCfg.Scope = "enemy_army"
+		traitCfg.TargetUnitType = ""
+		traitCfg.AllowedSides = []string{"attacker"}
+	case "pojun_pofang":
+		// 许褚旧固定破防能力废止，存量配置统一迁移为虎豹骑永久固定属性。
+		traitCfg.TraitID = "huhu_shengwei"
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = "huBaoQi"
+		traitCfg.AllowedSides = nil
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+		traitCfg.Params = map[string]float64{"unitAttackFlat": 12, "unitSpeedFlat": 5}
+	case "huhu_shengwei":
+		// 现行虎虎生威保留 GM 已配置固定值，并补足缺失参数与作用目标。
+		delete(traitCfg.Params, "triggerChance")
+		delete(traitCfg.Params, "enemyDefenseReductionRate")
+		if _, ok := traitCfg.Params["unitAttackFlat"]; !ok {
+			traitCfg.Params["unitAttackFlat"] = 12
+		}
+		if _, ok := traitCfg.Params["unitSpeedFlat"]; !ok {
+			traitCfg.Params["unitSpeedFlat"] = 5
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = "huBaoQi"
+		traitCfg.AllowedSides = nil
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "huzhu_sizhan":
+		// 典韦旧战败返兵能力废止，存量配置统一迁移为守城/增援禁卫甲士固定加防。
+		traitCfg.TraitID = "huzhu_xuezhan"
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = "jinWeiSoldier"
+		traitCfg.AllowedSides = []string{"defender", "reinforcement"}
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+		traitCfg.Params = map[string]float64{"triggerChance": 1, "generalDefenseFlat": 20}
+	case "huzhu_xuezhan":
+		// 现行护主血战保留 GM 已配置固定防御值，并清除旧战败返兵参数。
+		delete(traitCfg.Params, "lossReductionRate")
+		delete(traitCfg.Params, "maxReturnCount")
+		if _, ok := traitCfg.Params["generalDefenseFlat"]; !ok {
+			traitCfg.Params["generalDefenseFlat"] = 20
+		}
+		if _, ok := traitCfg.Params["triggerChance"]; !ok {
+			traitCfg.Params["triggerChance"] = 1
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = "jinWeiSoldier"
+		traitCfg.AllowedSides = []string{"defender", "reinforcement"}
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "sizhandaodi":
+		// 旧版必定步兵加攻迁移为默认 60% 概率，保留 GM 已显式配置的新概率和比例。
+		if _, ok := traitCfg.Params["attackBonusRate"]; !ok {
+			traitCfg.Params["attackBonusRate"] = 0.35
+		}
+		if _, ok := traitCfg.Params["triggerChance"]; !ok {
+			traitCfg.Params["triggerChance"] = 0.6
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = "infantry"
+		traitCfg.AllowedSides = []string{"attacker"}
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
 	case "yibing_touxi":
 		// 旧上限与伤亡比例重复，移除后由 GM 的 effectRate 直接决定真实减员。
 		delete(traitCfg.Params, "maxAffectedRate")
@@ -180,6 +252,54 @@ func normalizeTraitConfigParams(traitCfg *GeneralTraitConfig) {
 		}
 		traitCfg.Scope = "self_army"
 		traitCfg.AllowedSides = []string{"defender", "reinforcement"}
+	case "jixing_benxi":
+		// 旧版全军百分比行军加速迁移为骁骑营永久攻击与移动属性。
+		_, hadOldSpeedRate := traitCfg.Params["speedBonusRate"]
+		_, hadOldMinimum := traitCfg.Params["minMarchSeconds"]
+		delete(traitCfg.Params, "speedBonusRate")
+		delete(traitCfg.Params, "minMarchSeconds")
+		delete(traitCfg.Params, "triggerChance")
+		if hadOldSpeedRate || hadOldMinimum {
+			traitCfg.Params["unitAttackFlat"] = 18
+			traitCfg.Params["unitSpeedFlat"] = 5
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = "qiQiYing"
+		traitCfg.AllowedSides = nil
+	case "dunzhen_fangyu":
+		// 旧版必定增加 35% 防御迁移为新版 60% 概率增加 30%。
+		_, hadTriggerChance := traitCfg.Params["triggerChance"]
+		if rate, ok := traitCfg.Params["defenseBonusRate"]; !ok || (!hadTriggerChance && math.Abs(rate-0.35) < 1e-9) {
+			traitCfg.Params["defenseBonusRate"] = 0.3
+		}
+		if !hadTriggerChance {
+			traitCfg.Params["triggerChance"] = 0.6
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.AllowedSides = []string{"defender", "reinforcement"}
+	case "weizhen_zhenhe":
+		// 旧版 20% 全方向临时压制迁移为主动进攻 25% 溃逃，效果比例本身即可表达上限。
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		if rate, ok := traitCfg.Params["effectRate"]; !ok || math.Abs(rate-0.2) < 1e-9 {
+			traitCfg.Params["effectRate"] = 0.25
+		}
+		if _, ok := traitCfg.Params["triggerChance"]; !ok {
+			traitCfg.Params["triggerChance"] = 0.35
+		}
+		traitCfg.Scope = "enemy_army"
+		traitCfg.AllowedSides = []string{"attacker"}
+	case "weizhen_xiaoyao":
+		// 旧版必定骑兵加攻迁移为默认 60% 概率，保留 GM 已显式设置的新概率。
+		if _, ok := traitCfg.Params["attackBonusRate"]; !ok {
+			traitCfg.Params["attackBonusRate"] = 0.35
+		}
+		if _, ok := traitCfg.Params["triggerChance"]; !ok {
+			traitCfg.Params["triggerChance"] = 0.6
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = "cavalry"
+		traitCfg.AllowedSides = []string{"attacker"}
 	}
 }
 

@@ -1,8 +1,12 @@
+// 本文件归口武将配置装配、属性拆解和 Modifier 来源。
 package game
 
-import "time"
+import (
+	"strings"
+	"time"
 
-// 本文件归口武将配置装配、属性拆解和 Modifier 来源。
+	"hero3/internal/core/general"
+)
 
 // applyHeroConfigToGeneral 根据配置把 buffs、成长属性和特性实例注入到武将。
 func applyHeroConfigToGeneral(g *General) {
@@ -70,9 +74,28 @@ func applyHeroConfigToGeneral(g *General) {
 			RequiredOutcome: tc.RequiredOutcome,
 			Params:          params,
 		})
+		applyPassiveUnitTraitModifiers(g, tc)
 	}
 	for k, v := range g.Attributes {
 		g.Buffs[k] = v
+	}
+}
+
+// applyPassiveUnitTraitModifiers 把无事件订阅的兵种固定属性写入随军 Modifier。
+func applyPassiveUnitTraitModifiers(g *General, traitCfg GeneralTraitConfig) {
+	if g == nil || strings.TrimSpace(traitCfg.TargetUnitType) == "" {
+		return
+	}
+	trait, ok := general.Get(traitCfg.TraitID)
+	if !ok || len(trait.Subscribe()) != 0 {
+		return
+	}
+	unitType := strings.TrimSpace(traitCfg.TargetUnitType)
+	if value := traitCfg.Params["unitAttackFlat"]; value != 0 {
+		g.Buffs[unitAttackFlatModifierKey(unitType)] += value
+	}
+	if value := traitCfg.Params["unitSpeedFlat"]; value != 0 {
+		g.Buffs[unitSpeedFlatModifierKey(unitType)] += value
 	}
 }
 
@@ -136,10 +159,14 @@ func (g *GeneralModifierSource) Modifiers(now time.Time) []Modifier {
 		if value == 0 {
 			continue
 		}
+		mode := "percentAdd"
+		if isUnitFlatModifierKey(key) {
+			mode = "flat"
+		}
 		mods = append(mods, Modifier{
 			Key:   key,
 			Value: value,
-			Mode:  "percentAdd",
+			Mode:  mode,
 		})
 	}
 	return mods

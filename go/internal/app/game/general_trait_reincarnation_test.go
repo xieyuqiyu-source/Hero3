@@ -295,7 +295,6 @@ func TestReincarnationLossOnlyRecoveryDoesNotTreatDrawAsDefeat(t *testing.T) {
 		traitType   string
 		rate        float64
 	}{
-		{name: "典韦护主死战", generalID: "dianwei", generalName: "典韦", traitID: "huzhu_sizhan", traitType: general.TraitTypeSpecial, rate: 0.15},
 		{name: "郭嘉鬼才遗策", generalID: "guojia", generalName: "郭嘉", traitID: "guicai_yice", traitType: general.TraitTypeBonus, rate: 0.1},
 	}
 	for _, tc := range cases {
@@ -432,24 +431,24 @@ func loadFormalReincarnationGenerals(t *testing.T) GeneralsConfig {
 func formalReincarnationTraitCases(t *testing.T, cfg GeneralsConfig) []reincarnationFormalTraitCase {
 	t.Helper()
 	attackerOnly := map[string]bool{
-		"meiren": true, "meihuo_raozhen": true, "huchi_chongzhen": true, "pojun_pofang": true,
-		"sizhandaodi": true, "weizhen_xiaoyao": true, "wusheng_pojun": true, "wanren_nuhou": true,
+		"meiren": true, "meihuo_raozhen": true, "huchi_chongzhen": true,
+		"sizhandaodi": true, "weizhen_zhenhe": true, "weizhen_xiaoyao": true, "wusheng_pojun": true, "wanren_nuhou": true,
 		"baibu_chuanyang": true, "qibing_raohou": true, "xiaobawang_tieqi": true, "huogong": true,
 		"meizhoulang_junlue": true,
 	}
 	defenderOnly := map[string]bool{
 		"mouding_houfa": true, "dunzhen_fangyu": true, "longdan_jiuyuan": true,
-		"gushou_hanzhong": true, "jiangdong_gushou": true, "weiwu_tongyu": true,
+		"gushou_hanzhong": true, "jiangdong_gushou": true, "weiwu_tongyu": true, "huzhu_xuezhan": true,
 	}
 	bothSides := map[string]bool{
-		"yibing_touxi": true, "huzhu_sizhan": true, "weizhen_zhenhe": true,
-		"guicai_yice": true, "rende": true, "renzhu_shouhu": true, "shuiyan_qijun": true,
+		"yibing_touxi": true,
+		"guicai_yice":  true, "rende": true, "renzhu_shouhu": true, "shuiyan_qijun": true,
 		"zhenhe_quanjun": true, "qimen_dunjia": true, "wolong_mouzhi": true, "xiliang_tuji": true,
 		"laodang_yizhuang": true, "huoshao_lianying": true, "lianying_zengshang": true,
 		"kurouji": true, "kurou_fanji": true,
 	}
 	nonBattle := map[string]bool{
-		"weiwu_haoling": true, "jixing_benxi": true, "shengui_zhicai": true, "wangzuo_zhicai": true,
+		"weiwu_haoling": true, "jixing_benxi": true, "huhu_shengwei": true, "shengui_zhicai": true, "wangzuo_zhicai": true,
 		"neizheng_jingying": true, "qijin_qichu": true, "tianshen_xiafan": true,
 		"jiangdong_haoling": true, "xiaobawang_zhuiji": true, "baiyi_dujiang": true,
 		"baiyi_jixing": true, "kuairu_shandian": true, "xinyi_yonglie": true,

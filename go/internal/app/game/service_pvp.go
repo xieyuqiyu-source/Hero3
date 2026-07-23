@@ -2278,6 +2278,7 @@ func calculatePvpMarchTravel(distance int, preferredFaction string, troops map[s
 		if speed <= 0 {
 			speed = 1
 		}
+		speed += ComputeIntAttributeAt(0, unitSpeedFlatModifierKey(unitType), now, sources...)
 		if minSpeed == 0 || speed < minSpeed {
 			minSpeed = speed
 		}

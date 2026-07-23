@@ -259,7 +259,7 @@ func TestNpcFormalPreBattleTraitsMatchRealStateAndBothReports(t *testing.T) {
 	}{
 		{name: "疑兵偷袭", traitID: "yibing_touxi", generalID: "simayi", generalName: "司马懿", detailKey: "preBattleAffected", rate: 0.35},
 		{name: "水淹七军", traitID: "shuiyan_qijun", generalID: "guanyu", generalName: "关羽", detailKey: "preBattleAffected", rate: 0.35},
-		{name: "威震震慑", traitID: "weizhen_zhenhe", generalID: "zhangliao", generalName: "张辽", detailKey: "suppressedUnits", rate: 0.2},
+		{name: "震慑全军", traitID: "weizhen_zhenhe", generalID: "zhangliao", generalName: "张辽", detailKey: "suppressedUnits", rate: 0.25},
 		{name: "震慑全军", traitID: "zhenhe_quanjun", generalID: "zhangfei", generalName: "张飞", detailKey: "suppressedUnits", rate: 0.5},
 		{name: "奇门遁甲", traitID: "qimen_dunjia", generalID: "zhugeliang", generalName: "诸葛亮", detailKey: "suppressedUnits", rate: 0.25},
 	}
@@ -270,7 +270,12 @@ func TestNpcFormalPreBattleTraitsMatchRealStateAndBothReports(t *testing.T) {
 			wantAffected := int(100 * tc.rate)
 			outcome, ok := report.TraitOutcomes[tc.traitID]
 			affected, detailOK := outcome.Detail[tc.detailKey].(map[string]int)
-			if !ok || !detailOK || affected["weiInfantry"] != wantAffected || outcome.Detail["effectRate"] != tc.rate || outcome.Detail["maxAffectedRate"] != tc.rate || outcome.Detail["triggerChance"] != 1.0 {
+			maxRateValid := outcome.Detail["maxAffectedRate"] == tc.rate
+			if tc.traitID == "yibing_touxi" || tc.traitID == "weizhen_zhenhe" {
+				_, maxRateExists := outcome.Detail["maxAffectedRate"]
+				maxRateValid = !maxRateExists
+			}
+			if !ok || !detailOK || affected["weiInfantry"] != wantAffected || outcome.Detail["effectRate"] != tc.rate || !maxRateValid || outcome.Detail["triggerChance"] != 1.0 {
 				t.Fatalf("expected %s design and actual result %d, outcome=%+v", tc.traitID, wantAffected, outcome)
 			}
 			if outcome.OwnerSide != "attacker" || outcome.OwnerGeneralID != tc.generalID {
@@ -313,7 +318,7 @@ func TestNpcFormalPreBattleTraitsMatchRealStateAndBothReports(t *testing.T) {
 	}
 }
 
-// TestNpcFormalRandomPreBattleHitAndMissKeepBonusIndependent 验证四名正式将领的随机战前能力未命中时不会吞掉确定性加成。
+// TestNpcFormalRandomPreBattleHitAndMissKeepBonusIndependent 验证正式将领的随机战前能力未命中时不会吞掉另一项战斗加成。
 func TestNpcFormalRandomPreBattleHitAndMissKeepBonusIndependent(t *testing.T) {
 	cases := []struct {
 		name             string
@@ -339,13 +344,6 @@ func TestNpcFormalRandomPreBattleHitAndMissKeepBonusIndependent(t *testing.T) {
 		missEnemyLosses  int
 	}{
 		{
-			name: "许褚", generalID: "xuchu", generalName: "许褚", attackerUnit: "weiInfantry",
-			specialTraitID: "huchi_chongzhen", bonusTraitID: "pojun_pofang", specialDetailKey: "infantryDefenseModifiedUnits", specialActual: -2, specialSides: []string{"attacker"}, specialParams: map[string]float64{"enemyDefenseReductionRate": 0.2},
-			bonusScope: "enemy_army", bonusParams: map[string]float64{"enemyDefenseReductionRate": 0.35},
-			hitPlayerPower: 2000, hitEnemyPower: 500, missPlayerPower: 2000, missEnemyPower: 700,
-			hitPlayerLosses: 27, missPlayerLosses: 44, hitEnemyLosses: 100, missEnemyLosses: 100,
-		},
-		{
 			name: "关羽", generalID: "guanyu", generalName: "关羽", attackerUnit: "weiInfantry",
 			specialTraitID: "shuiyan_qijun", bonusTraitID: "wusheng_pojun", specialDetailKey: "preBattleAffected", specialActual: 35, specialParams: map[string]float64{"effectRate": 0.35, "maxAffectedRate": 0.35},
 			bonusScope: "self_army", bonusParams: map[string]float64{"attackBonusRate": 0.2},
@@ -354,10 +352,10 @@ func TestNpcFormalRandomPreBattleHitAndMissKeepBonusIndependent(t *testing.T) {
 		},
 		{
 			name: "张辽", generalID: "zhangliao", generalName: "张辽", attackerUnit: "weiCavalry",
-			specialTraitID: "weizhen_zhenhe", bonusTraitID: "weizhen_xiaoyao", specialDetailKey: "suppressedUnits", specialActual: 20, specialParams: map[string]float64{"effectRate": 0.2, "maxAffectedRate": 0.2},
-			bonusScope: "self_army", bonusTarget: "cavalry", bonusParams: map[string]float64{"attackBonusRate": 0.35},
-			hitPlayerPower: 3800, hitEnemyPower: 640, missPlayerPower: 3800, missEnemyPower: 800,
-			hitPlayerLosses: 15, missPlayerLosses: 21, hitEnemyLosses: 80, missEnemyLosses: 100,
+			specialTraitID: "weizhen_zhenhe", bonusTraitID: "weizhen_xiaoyao", specialDetailKey: "fledUnits", specialActual: 25, specialSides: []string{"attacker"}, specialParams: map[string]float64{"effectRate": 0.25},
+			bonusScope: "self_army", bonusTarget: "cavalry", bonusParams: map[string]float64{"triggerChance": 1, "attackBonusRate": 0.35},
+			hitPlayerPower: 3800, hitEnemyPower: 600, missPlayerPower: 3800, missEnemyPower: 800,
+			hitPlayerLosses: 14, missPlayerLosses: 21, hitEnemyLosses: 75, missEnemyLosses: 100,
 		},
 		{
 			name: "张飞", generalID: "zhangfei", generalName: "张飞", attackerUnit: "weiInfantry",
@@ -715,7 +713,12 @@ func TestPvpFormalPreDamageTraitsMatchBothReportsAndRealState(t *testing.T) {
 				for _, reportCase := range reports {
 					outcome, ok := reportCase.report.TraitOutcomes[traitCase.traitID]
 					preDamage, detailOK := outcome.Detail["preBattleAffected"].(map[string]int)
-					if !ok || !detailOK || preDamage[targetUnit] != 350 || outcome.Detail["effectRate"] != 0.35 || outcome.Detail["maxAffectedRate"] != 0.35 || outcome.Detail["triggerChance"] != float64(1) || outcome.OwnerSide != ownerSide || outcome.OwnerGeneralID != traitCase.generalID {
+					maxRateValid := outcome.Detail["maxAffectedRate"] == 0.35
+					if traitCase.traitID == "yibing_touxi" {
+						_, maxRateExists := outcome.Detail["maxAffectedRate"]
+						maxRateValid = !maxRateExists
+					}
+					if !ok || !detailOK || preDamage[targetUnit] != 350 || outcome.Detail["effectRate"] != 0.35 || !maxRateValid || outcome.Detail["triggerChance"] != float64(1) || outcome.OwnerSide != ownerSide || outcome.OwnerGeneralID != traitCase.generalID {
 						t.Fatalf("expected exact formal pre-damage outcome in both reports, got %+v", outcome)
 					}
 					legacyLosses := reportCase.report.DefenderLostUnits
@@ -774,7 +777,7 @@ func TestPvpFormalPreDamageTraitsMatchBothReportsAndRealState(t *testing.T) {
 	}
 }
 
-// TestPvpFormalSuppressionTraitsMatchBothReportsAndPreserveState 验证三项临时压制在攻守双方只减少本场参战兵力，不形成真实伤亡。
+// TestPvpFormalSuppressionTraitsMatchBothReportsAndPreserveState 验证三项临时压制按各自合法方向减少本场参战兵力且不形成真实伤亡。
 func TestPvpFormalSuppressionTraitsMatchBothReportsAndPreserveState(t *testing.T) {
 	traits := []struct {
 		traitID     string
@@ -783,15 +786,21 @@ func TestPvpFormalSuppressionTraitsMatchBothReportsAndPreserveState(t *testing.T
 		generalName string
 		faction     string
 		rate        float64
+		ownerSides  []string
+		noMaxField  bool
 	}{
-		{traitID: "weizhen_zhenhe", traitName: "威震震慑", generalID: "zhangliao", generalName: "张辽", faction: "wei", rate: 0.2},
+		{traitID: "weizhen_zhenhe", traitName: "震慑全军", generalID: "zhangliao", generalName: "张辽", faction: "wei", rate: 0.25, ownerSides: []string{"attacker"}, noMaxField: true},
 		{traitID: "zhenhe_quanjun", traitName: "震慑全军", generalID: "zhangfei", generalName: "张飞", faction: "shu", rate: 0.5},
 		{traitID: "qimen_dunjia", traitName: "奇门遁甲", generalID: "zhugeliang", generalName: "诸葛亮", faction: "shu", rate: 0.25},
 	}
 
 	for _, traitCase := range traits {
 		traitCase := traitCase
-		for _, ownerSide := range []string{"attacker", "defender"} {
+		ownerSides := traitCase.ownerSides
+		if len(ownerSides) == 0 {
+			ownerSides = []string{"attacker", "defender"}
+		}
+		for _, ownerSide := range ownerSides {
 			ownerSide := ownerSide
 			t.Run(traitCase.traitName+"_"+ownerSide, func(t *testing.T) {
 				enemyFaction := "shu"
@@ -805,6 +814,10 @@ func TestPvpFormalSuppressionTraitsMatchBothReportsAndPreserveState(t *testing.T
 				trait := GeneralTraitConfig{
 					TraitID: traitCase.traitID, TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "enemy_army",
 					Params: map[string]float64{"effectRate": traitCase.rate, "maxAffectedRate": traitCase.rate, "triggerChance": 1},
+				}
+				if traitCase.noMaxField {
+					delete(trait.Params, "maxAffectedRate")
+					trait.AllowedSides = []string{"attacker"}
 				}
 				setTestFactionsAndGenerals(t, FactionsConfig{
 					traitCase.faction: {Name: traitCase.faction, Generals: []GeneralInfo{{ID: traitCase.generalID, Name: traitCase.generalName}}},
@@ -870,8 +883,20 @@ func TestPvpFormalSuppressionTraitsMatchBothReportsAndPreserveState(t *testing.T
 				for _, report := range []BattleReport{attackerReports[0], defenderReports[0]} {
 					outcome, ok := report.TraitOutcomes[traitCase.traitID]
 					suppressed, detailOK := outcome.Detail["suppressedUnits"].(map[string]int)
-					if !ok || !detailOK || suppressed[targetUnit] != expectedSuppressed || outcome.Detail["effectRate"] != traitCase.rate || outcome.Detail["maxAffectedRate"] != traitCase.rate || outcome.Detail["triggerChance"] != float64(1) || outcome.OwnerSide != ownerSide || outcome.OwnerGeneralID != traitCase.generalID {
+					maxRateValid := outcome.Detail["maxAffectedRate"] == traitCase.rate
+					if traitCase.noMaxField {
+						_, maxRateExists := outcome.Detail["maxAffectedRate"]
+						maxRateValid = !maxRateExists
+					}
+					if !ok || !detailOK || suppressed[targetUnit] != expectedSuppressed || outcome.Detail["effectRate"] != traitCase.rate || !maxRateValid || outcome.Detail["triggerChance"] != float64(1) || outcome.OwnerSide != ownerSide || outcome.OwnerGeneralID != traitCase.generalID {
 						t.Fatalf("expected exact formal suppression outcome in both reports, got %+v", outcome)
+					}
+					if traitCase.traitID == "weizhen_zhenhe" {
+						fled, fledOK := outcome.Detail["fledUnits"].(map[string]int)
+						returned, returnedOK := outcome.Detail["returnedUnits"].(map[string]int)
+						if !fledOK || !returnedOK || fled[targetUnit] != expectedSuppressed || returned[targetUnit] != expectedSuppressed {
+							t.Fatalf("expected Zhang Liao exact flee and return values, outcome=%+v", outcome)
+						}
 					}
 					if report.Detail == nil {
 						t.Fatalf("expected standard report detail, got %+v", report)
@@ -879,7 +904,12 @@ func TestPvpFormalSuppressionTraitsMatchBothReportsAndPreserveState(t *testing.T
 					standardMatched := false
 					for _, reportTrait := range report.Detail.Traits {
 						standardSuppressed, standardDetailOK := reportTrait.Detail["suppressedUnits"].(map[string]int)
-						if reportTrait.TraitID == traitCase.traitID && standardDetailOK && standardSuppressed[targetUnit] == expectedSuppressed && reportTrait.Detail["effectRate"] == traitCase.rate && reportTrait.Detail["maxAffectedRate"] == traitCase.rate {
+						standardMaxValid := reportTrait.Detail["maxAffectedRate"] == traitCase.rate
+						if traitCase.noMaxField {
+							_, standardMaxExists := reportTrait.Detail["maxAffectedRate"]
+							standardMaxValid = !standardMaxExists
+						}
+						if reportTrait.TraitID == traitCase.traitID && standardDetailOK && standardSuppressed[targetUnit] == expectedSuppressed && reportTrait.Detail["effectRate"] == traitCase.rate && standardMaxValid {
 							standardMatched = true
 						}
 					}

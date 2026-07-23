@@ -7,7 +7,7 @@ import (
 	"hero3/internal/core/general"
 )
 
-// TestPvpLossOnlyRecoveryTraitsDoNotTreatDrawAsDefeat 验证典韦和郭嘉在等势平局时不返兵。
+// TestPvpLossOnlyRecoveryTraitsDoNotTreatDrawAsDefeat 验证郭嘉在等势平局时不返兵。
 func TestPvpLossOnlyRecoveryTraitsDoNotTreatDrawAsDefeat(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -17,7 +17,6 @@ func TestPvpLossOnlyRecoveryTraitsDoNotTreatDrawAsDefeat(t *testing.T) {
 		traitType   string
 		rate        float64
 	}{
-		{name: "典韦护主死战", generalID: "dianwei", generalName: "典韦", traitID: "huzhu_sizhan", traitType: general.TraitTypeSpecial, rate: 0.15},
 		{name: "郭嘉鬼才遗策", generalID: "guojia", generalName: "郭嘉", traitID: "guicai_yice", traitType: general.TraitTypeBonus, rate: 0.1},
 	}
 	for _, tc := range cases {
@@ -103,7 +102,6 @@ func TestPvpReinforcementLossOnlyRecoveryDoesNotTreatDrawAsDefeat(t *testing.T) 
 		traitType string
 		rate      float64
 	}{
-		{name: "典韦护主死战", traitID: "huzhu_sizhan", traitType: general.TraitTypeSpecial, rate: 0.15},
 		{name: "郭嘉鬼才遗策", traitID: "guicai_yice", traitType: general.TraitTypeBonus, rate: 0.1},
 	}
 	for _, tc := range cases {

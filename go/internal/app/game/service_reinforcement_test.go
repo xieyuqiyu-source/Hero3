@@ -663,10 +663,10 @@ func TestReinforcementTravelUsesSlowestSelectedUnitSpeed(t *testing.T) {
 	activeUnits["wei"] = weiUnits
 	unitsMu.Unlock()
 
-	if got := reinforcementSlowestUnitSpeed("wei", map[string]int{"weiCavalry": 10}); got != 5 {
+	if got := reinforcementSlowestUnitSpeed("wei", map[string]int{"weiCavalry": 10}, time.Now()); got != 5 {
 		t.Fatalf("expected cavalry-only speed 5, got %.2f", got)
 	}
-	if got := reinforcementSlowestUnitSpeed("wei", map[string]int{"weiInfantry": 10, "weiCavalry": 10}); got != 1 {
+	if got := reinforcementSlowestUnitSpeed("wei", map[string]int{"weiInfantry": 10, "weiCavalry": 10}, time.Now()); got != 1 {
 		t.Fatalf("expected mixed troops to use slowest speed 1, got %.2f", got)
 	}
 }

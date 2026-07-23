@@ -123,7 +123,7 @@ func TestDefenseOnlyTraitsModifyOwnReinforcementUnits(t *testing.T) {
 		wantInfantryChange int
 		wantCavalryChange  int
 	}{
-		{name: "盾阵防御", traitID: "dunzhen_fangyu", generalID: "xiahouyuan", params: map[string]float64{"defenseBonusRate": 0.35, "triggerChance": 1}, wantInfantryChange: 4, wantCavalryChange: 3},
+		{name: "盾阵防御", traitID: "dunzhen_fangyu", generalID: "xiahouyuan", params: map[string]float64{"defenseBonusRate": 0.3, "triggerChance": 1}, wantInfantryChange: 3, wantCavalryChange: 2},
 		{name: "固守汉中", traitID: "gushou_hanzhong", generalID: "weiyan", params: map[string]float64{"generalDefenseFlat": 20, "triggerChance": 1}, wantInfantryChange: 20, wantCavalryChange: 20},
 	}
 	for _, tc := range tests {
@@ -425,7 +425,6 @@ func TestNpcSweepLossReductionTraitsMatchReturnedArmy(t *testing.T) {
 		traitID   string
 		traitType string
 	}{
-		{name: "典韦护主死战", traitID: "huzhu_sizhan", traitType: general.TraitTypeSpecial},
 		{name: "郭嘉鬼才遗策", traitID: "guicai_yice", traitType: general.TraitTypeBonus},
 	}
 	for index, tc := range cases {

@@ -31,55 +31,6 @@ func assertDefenderMissPairReports(t *testing.T, repo *MemoryRepository, battle 
 	return reports
 }
 
-// TestPvpDefenderDianweiLossMissDoesNotReturnTroops 验证典韦守城战败但护主死战未命中时不返兵。
-func TestPvpDefenderDianweiLossMissDoesNotReturnTroops(t *testing.T) {
-	setTestFactionsAndGenerals(t, FactionsConfig{
-		"shu": {Name: "蜀国", Generals: []GeneralInfo{{ID: "opponent", Name: "对手"}}},
-		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "dianwei", Name: "典韦"}}},
-	}, GeneralsConfig{Enabled: true, Heroes: map[string]GeneralHeroConfig{
-		"opponent": {ID: "opponent", Name: "对手", Faction: "shu", Enabled: true},
-		"dianwei": {
-			ID: "dianwei", Name: "典韦", Faction: "wei", Enabled: true,
-			SpecialTrait: GeneralTraitConfig{
-				TraitID: "huzhu_sizhan", TraitType: general.TraitTypeSpecial, Enabled: true,
-				Scope: "self_army", RequiredOutcome: "loss", Params: map[string]float64{"triggerChance": 0, "lossReductionRate": 0.15, "maxReturnCount": 10000},
-			},
-			BonusTrait: GeneralTraitConfig{
-				TraitID: "sizhandaodi", TraitType: general.TraitTypeBonus, Enabled: true,
-				Scope: "self_army", TargetUnitType: "infantry", AllowedSides: []string{"attacker"}, Params: map[string]float64{"attackBonusRate": 0.35},
-			},
-		},
-	}})
-	svc, repo, attacker, defender := newPvpTestServiceForGenerals(t, "shu", "opponent", "wei", "dianwei")
-	attacker.Army = []ArmyUnit{{UnitType: "shuInfantry", Amount: 1000}}
-	defender.Army = []ArmyUnit{{UnitType: "weiInfantry", Amount: 100}}
-	defender.Buildings = nil
-	repo.players[attacker.Player.ID] = attacker
-	repo.players[defender.Player.ID] = defender
-
-	started, err := svc.StartPvpAttack(PvpAttackRequest{PlayerID: attacker.Player.ID, TargetPlayerID: defender.Player.ID, MarchMode: PvpMarchTypeAttack, Troops: map[string]int{"shuInfantry": 1000}, GeneralIDs: []string{"opponent"}})
-	if err != nil {
-		t.Fatalf("StartPvpAttack failed: %v", err)
-	}
-	forcePvpMarchDue(t, repo, started.March.ID)
-	battle, err := svc.ResolvePvpMarch(started.March.ID)
-	if err != nil {
-		t.Fatalf("ResolvePvpMarch failed: %v", err)
-	}
-	attackerLosses := pvpTestLossesFromBattle(t, battle, "attacker")
-	defenderLosses := pvpTestLossesFromBattle(t, battle, "defender")
-	if battle.Result["winner"] != "attacker" || battle.Result["attackerPower"] != float64(10000) || battle.Result["defensePower"] != float64(1000) || attackerLosses["shuInfantry"] != 37 || defenderLosses["weiInfantry"] != 100 {
-		t.Fatalf("expected exact defender-loss baseline without return, battle=%+v", battle)
-	}
-	reports := assertDefenderMissPairReports(t, repo, battle, attacker.Player.ID, defender.Player.ID, "dianwei", "huzhu_sizhan", "sizhandaodi", "shuInfantry", 1000, 37, "weiInfantry", 100, 100)
-	storedMarch, _ := repo.GetPvpMarch(started.March.ID)
-	storedAttacker, _ := repo.GetState(attacker.Player.ID)
-	storedDefender, _ := repo.GetState(defender.Player.ID)
-	if storedMarch.AttackTroops["shuInfantry"] != 963 || armySliceToMap(storedDefender.Army)["weiInfantry"] != 0 || pvpTestGeneralExp(storedAttacker, "opponent") != 100 || pvpTestGeneralExp(storedDefender, "dianwei") != 37 || reports[0].GeneralExpGained != 100 || reports[1].GeneralExpGained != 37 {
-		t.Fatalf("expected authoritative troops and experience without defender return, march=%+v states=%+v/%+v reports=%+v", storedMarch, storedAttacker.Generals, storedDefender.Generals, reports)
-	}
-}
-
 // TestPvpDefenderMachaoXiliangMissKeepsPassiveSnapshotOnly 验证马超守城时西凉未命中且被动武力不伪装成触发。
 func TestPvpDefenderMachaoXiliangMissKeepsPassiveSnapshotOnly(t *testing.T) {
 	setTestFactionsAndGenerals(t, FactionsConfig{

@@ -1011,7 +1011,7 @@ func mergeRepeatedSweepTraitOutcome(current TraitOutcomeReport, next TraitOutcom
 // isCumulativeSweepTraitMap 判断逐兵种或逐资源实际结算值是否应跨扫荡场次累加。
 func isCumulativeSweepTraitMap(key string) bool {
 	switch key {
-	case "preBattleAffected", "suppressedUnits", "capturedUnits", "capturedToGarrison", "extraLosses", "targetExtraLosses", "reducedLosses", "disabledTraits", "revivedUnits", "returnedUnits", "plunderDelta":
+	case "preBattleAffected", "suppressedUnits", "fledUnits", "capturedUnits", "capturedToGarrison", "extraLosses", "targetExtraLosses", "reducedLosses", "disabledTraits", "revivedUnits", "returnedUnits", "plunderDelta":
 		return true
 	default:
 		return false

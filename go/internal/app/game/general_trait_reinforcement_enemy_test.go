@@ -236,79 +236,36 @@ func reinforcementOutcome(report BattleReport, traitID string, playerID string) 
 	return TraitOutcomeReport{}, false
 }
 
-// TestReinforcementEnemyPreBattleTraitChangesRealAttackPower 验证张辽援军震慑真实降低来袭战力且不把压制兵算作阵亡。
+// TestReinforcementEnemyPreBattleTraitChangesRealAttackPower 验证张辽两项主动进攻特性作为援军时即使概率强制命中也不得生效。
 func TestReinforcementEnemyPreBattleTraitChangesRealAttackPower(t *testing.T) {
-	cases := []struct {
-		name                    string
-		triggerChance           float64
-		wantAttackerPower       float64
-		wantAttackerLosses      int
-		wantDefendingLosses     int
-		wantMainDefenderLosses  int
-		wantReinforcementLosses int
-		wantSuppressed          int
-	}{
-		{name: "威震命中仅让两成来袭兵暂不参战", triggerChance: 1, wantAttackerPower: 800, wantAttackerLosses: 46, wantDefendingLosses: 42, wantMainDefenderLosses: 0, wantReinforcementLosses: 42, wantSuppressed: 20},
-		{name: "威震未命中保持基础平局", triggerChance: 0, wantAttackerPower: 1000, wantAttackerLosses: 50, wantDefendingLosses: 50, wantMainDefenderLosses: 1, wantReinforcementLosses: 49},
+	id := "zhangliao_reinforcement_wrong_direction"
+	result := runReinforcementEnemyPvp(t, reinforcementEnemyPvpConfig{
+		id: id, attackerTroops: 100, defenderTroops: 1, marchMode: PvpMarchTypePlunder,
+		helperFaction: "wei", helperGeneralID: "zhangliao", helperName: "张辽", helperTroops: 99,
+		attackerFaction: "shu", attackerGeneral: "liubei", attackerName: "刘备",
+		defenderFaction: "wu", defenderGeneral: "sunquan", defenderName: "孙权",
+		helperSpecial: GeneralTraitConfig{
+			TraitID: "weizhen_zhenhe", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "enemy_army", AllowedSides: []string{"attacker"},
+			Params: map[string]float64{"triggerChance": 1, "effectRate": 0.25},
+		},
+		helperBonus: GeneralTraitConfig{
+			TraitID: "weizhen_xiaoyao", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", TargetUnitType: "cavalry", AllowedSides: []string{"attacker"},
+			Params: map[string]float64{"triggerChance": 1, "attackBonusRate": 0.35},
+		},
+	})
+	if result.battle.Result["winner"] != "draw" || result.battle.Result["attackerPower"] != float64(1000) || result.battle.Result["defensePower"] != float64(1000) {
+		t.Fatalf("expected reinforcement direction to keep baseline draw 1000/1000, result=%+v", result.battle.Result)
 	}
-	for index, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			id := "zhangliao_reinforcement_" + string(rune('a'+index))
-			result := runReinforcementEnemyPvp(t, reinforcementEnemyPvpConfig{
-				id: id, attackerTroops: 100, defenderTroops: 1, marchMode: PvpMarchTypePlunder,
-				helperFaction: "wei", helperGeneralID: "zhangliao", helperName: "张辽", helperTroops: 99,
-				attackerFaction: "shu", attackerGeneral: "liubei", attackerName: "刘备",
-				defenderFaction: "wu", defenderGeneral: "sunquan", defenderName: "孙权",
-				helperSpecial: GeneralTraitConfig{
-					TraitID: "weizhen_zhenhe", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "enemy_army",
-					Params: map[string]float64{"triggerChance": tc.triggerChance, "effectRate": 0.2, "maxAffectedRate": 0.2},
-				},
-				helperBonus: GeneralTraitConfig{
-					TraitID: "weizhen_xiaoyao", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", TargetUnitType: "cavalry", AllowedSides: []string{"attacker"},
-					Params: map[string]float64{"attackBonusRate": 0.35},
-				},
-			})
-			wantWinner := "draw"
-			if tc.wantSuppressed > 0 {
-				wantWinner = "defender"
-			}
-			if result.battle.Result["winner"] != wantWinner || result.battle.Result["attackerPower"] != tc.wantAttackerPower || result.battle.Result["defensePower"] != float64(1000) {
-				t.Fatalf("expected exact winner and power %s %.0f/1000, result=%+v", wantWinner, tc.wantAttackerPower, result.battle.Result)
-			}
-			if result.attackerLosses != tc.wantAttackerLosses || result.defendingLosses != tc.wantDefendingLosses || result.defenderReport.LostUnits["wuInfantry"] != tc.wantMainDefenderLosses || result.storedReinforcement.Losses["weiInfantry"] != tc.wantReinforcementLosses {
-				t.Fatalf("expected attacker/main/reinforcement losses %d/%d/%d, battle=%+v main=%+v reinforcement=%+v", tc.wantAttackerLosses, tc.wantMainDefenderLosses, tc.wantReinforcementLosses, result.battle.Losses, result.defenderReport.LostUnits, result.storedReinforcement)
-			}
-			if result.attackerReport.DispatchedUnits["shuInfantry"] != 100 || result.attackerReport.SurvivedUnits["shuInfantry"] != 100-tc.wantAttackerLosses || result.storedMarch.AttackTroops["shuInfantry"] != 100-tc.wantAttackerLosses || armySliceToMap(result.defenderState.Army)["wuInfantry"] != 1-tc.wantMainDefenderLosses || result.storedReinforcement.RemainingTroops["weiInfantry"] != 99-tc.wantReinforcementLosses {
-				t.Fatalf("expected suppressed troops retained and authoritative survivors %d/%d/%d, report=%+v march=%+v defender=%+v reinforcement=%+v", 100-tc.wantAttackerLosses, 1-tc.wantMainDefenderLosses, 99-tc.wantReinforcementLosses, result.attackerReport, result.storedMarch, result.defenderState.Army, result.storedReinforcement)
-			}
-			if result.attackerReport.GeneralExpGained != tc.wantDefendingLosses || result.defenderReport.GeneralExpGained != tc.wantAttackerLosses || result.reinforcementReport.GeneralExpGained != tc.wantAttackerLosses || pvpTestGeneralExp(result.helperState, "zhangliao") != tc.wantAttackerLosses {
-				t.Fatalf("expected attacker/main/helper exp %d/%d/%d, reports=%d/%d/%d helper=%+v", tc.wantDefendingLosses, tc.wantAttackerLosses, tc.wantAttackerLosses, result.attackerReport.GeneralExpGained, result.defenderReport.GeneralExpGained, result.reinforcementReport.GeneralExpGained, result.helperState.Generals)
-			}
-			for _, report := range []BattleReport{result.attackerReport, result.defenderReport, result.reinforcementReport} {
-				if len(report.PvpReinforcements) != 1 || len(report.PvpReinforcements[0].Generals) != 1 || !reinforcementSnapshotHasTrait(report.PvpReinforcements[0].Generals[0], "weizhen_zhenhe") || !reinforcementSnapshotHasTrait(report.PvpReinforcements[0].Generals[0], "weizhen_xiaoyao") {
-					t.Fatalf("expected Zhang Liao snapshot to retain both traits, report=%s snapshots=%+v", report.ID, report.PvpReinforcements)
-				}
-				if _, exists := reinforcementOutcome(report, "weizhen_xiaoyao", "player_enemy_"+id); exists || standardReportHasTrait(report.Detail, "weizhen_xiaoyao") {
-					t.Fatalf("expected attacker-only Xiaoyao excluded for reinforcement, report=%+v", report)
-				}
-				if tc.wantSuppressed == 0 {
-					if len(report.TraitTriggered) != 0 || len(report.TraitOutcomes) != 0 || report.Detail == nil || len(report.Detail.Traits) != 0 {
-						t.Fatalf("expected missed Weizhen and excluded Xiaoyao to leave empty timelines, report=%+v", report)
-					}
-					continue
-				}
-				outcome, triggered := reinforcementOutcome(report, "weizhen_zhenhe", "player_enemy_"+id)
-				suppressed, detailOK := outcome.Detail["suppressedUnits"].(map[string]int)
-				if !triggered || !detailOK || suppressed["shuInfantry"] != tc.wantSuppressed || len(report.TraitTriggered) != 1 || report.Detail == nil || len(report.Detail.Traits) != 1 {
-					t.Fatalf("expected one reinforcement Weizhen suppression %d, report=%s outcome=%+v", tc.wantSuppressed, report.ID, outcome)
-				}
-				trait := report.Detail.Traits[0]
-				standardSuppressed, standardOK := trait.Detail["suppressedUnits"].(map[string]int)
-				if trait.TraitID != "weizhen_zhenhe" || trait.OwnerRole != "reinforcement" || trait.OwnerPlayerID != "player_enemy_"+id || !standardOK || standardSuppressed["shuInfantry"] != tc.wantSuppressed {
-					t.Fatalf("expected standard reinforcement Weizhen timeline with actual amount %d, report=%s trait=%+v", tc.wantSuppressed, report.ID, trait)
-				}
-			}
-		})
+	if result.attackerLosses != 50 || result.defendingLosses != 50 || result.defenderReport.LostUnits["wuInfantry"] != 1 || result.storedReinforcement.Losses["weiInfantry"] != 49 {
+		t.Fatalf("expected baseline attacker/main/reinforcement losses 50/1/49, battle=%+v main=%+v reinforcement=%+v", result.battle.Losses, result.defenderReport.LostUnits, result.storedReinforcement)
+	}
+	for _, report := range []BattleReport{result.attackerReport, result.defenderReport, result.reinforcementReport} {
+		if len(report.PvpReinforcements) != 1 || len(report.PvpReinforcements[0].Generals) != 1 || !reinforcementSnapshotHasTrait(report.PvpReinforcements[0].Generals[0], "weizhen_zhenhe") || !reinforcementSnapshotHasTrait(report.PvpReinforcements[0].Generals[0], "weizhen_xiaoyao") {
+			t.Fatalf("expected Zhang Liao snapshot to retain both traits, report=%s snapshots=%+v", report.ID, report.PvpReinforcements)
+		}
+		if len(report.TraitTriggered) != 0 || len(report.TraitOutcomes) != 0 || report.Detail == nil || len(report.Detail.Traits) != 0 {
+			t.Fatalf("expected both attacker-only traits excluded for reinforcement, report=%+v", report)
+		}
 	}
 }
 
@@ -1064,14 +1021,14 @@ func TestFormalReinforcementEnemyTraitRoleMatrix(t *testing.T) {
 		t.Fatalf("decode formal generals config failed: %v", err)
 	}
 	allowed := map[string]bool{
-		"yibing_touxi": true, "weizhen_zhenhe": true, "shuiyan_qijun": true,
+		"yibing_touxi": true, "shuiyan_qijun": true,
 		"zhenhe_quanjun": true, "qimen_dunjia": true, "wolong_mouzhi": true,
 		"xiliang_tuji": true, "laodang_yizhuang": true, "xiaobawang_zhuiji": true,
 		"huoshao_lianying": true, "lianying_zengshang": true, "kurouji": true, "kurou_fanji": true,
 	}
 	excluded := map[string]bool{
-		"meihuo_raozhen": true, "huchi_chongzhen": true,
-		"pojun_pofang": true, "baibu_chuanyang": true, "qibing_raohou": true, "huogong": true,
+		"meihuo_raozhen": true, "huchi_chongzhen": true, "weizhen_zhenhe": true,
+		"baibu_chuanyang": true, "qibing_raohou": true, "huogong": true,
 	}
 	seen := map[string]bool{}
 	for _, hero := range cfg.Heroes {

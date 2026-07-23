@@ -292,7 +292,7 @@ func TestPvpDefenderHuoshaoMissKeepsLianyingDamage(t *testing.T) {
 	}
 }
 
-// TestPvpDefenderRandomPreBattleMissesDoNotEnableAttackerOnlyBonuses 验证三项双角色随机能力防守未命中时不越界启用进攻加成。
+// TestPvpDefenderRandomPreBattleMissesDoNotEnableAttackerOnlyBonuses 验证随机未命中或张辽方向不符时不会越界启用主动进攻特性。
 func TestPvpDefenderRandomPreBattleMissesDoNotEnableAttackerOnlyBonuses(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -304,12 +304,14 @@ func TestPvpDefenderRandomPreBattleMissesDoNotEnableAttackerOnlyBonuses(t *testi
 		generalName       string
 		specialTraitID    string
 		specialEffectRate float64
+		specialChance     float64
+		specialSides      []string
 		bonusTraitID      string
 		bonusTarget       string
 		bonusAttackRate   float64
 	}{
 		{name: "关羽水淹七军", defenderFaction: "shu", defenderUnit: "shuInfantry", attackerFaction: "wei", attackerUnit: "weiInfantry", generalID: "guanyu", generalName: "关羽", specialTraitID: "shuiyan_qijun", specialEffectRate: 0.35, bonusTraitID: "wusheng_pojun", bonusAttackRate: 0.2},
-		{name: "张辽威震震慑", defenderFaction: "wei", defenderUnit: "weiInfantry", attackerFaction: "shu", attackerUnit: "shuInfantry", generalID: "zhangliao", generalName: "张辽", specialTraitID: "weizhen_zhenhe", specialEffectRate: 0.2, bonusTraitID: "weizhen_xiaoyao", bonusTarget: "cavalry", bonusAttackRate: 0.35},
+		{name: "张辽主动进攻双特性方向隔离", defenderFaction: "wei", defenderUnit: "weiInfantry", attackerFaction: "shu", attackerUnit: "shuInfantry", generalID: "zhangliao", generalName: "张辽", specialTraitID: "weizhen_zhenhe", specialEffectRate: 0.25, specialChance: 1, specialSides: []string{"attacker"}, bonusTraitID: "weizhen_xiaoyao", bonusTarget: "cavalry", bonusAttackRate: 0.35},
 		{name: "张飞震慑全军", defenderFaction: "shu", defenderUnit: "shuInfantry", attackerFaction: "wei", attackerUnit: "weiInfantry", generalID: "zhangfei", generalName: "张飞", specialTraitID: "zhenhe_quanjun", specialEffectRate: 0.5, bonusTraitID: "wanren_nuhou", bonusTarget: "infantry", bonusAttackRate: 0.2},
 	}
 	for _, tc := range tests {
@@ -323,12 +325,12 @@ func TestPvpDefenderRandomPreBattleMissesDoNotEnableAttackerOnlyBonuses(t *testi
 					ID: tc.generalID, Name: tc.generalName, Faction: tc.defenderFaction, Enabled: true,
 					SpecialTrait: GeneralTraitConfig{
 						TraitID: tc.specialTraitID, TraitType: general.TraitTypeSpecial, Enabled: true,
-						Scope: "enemy_army", Params: map[string]float64{"triggerChance": 0, "effectRate": tc.specialEffectRate, "maxAffectedRate": tc.specialEffectRate},
+						Scope: "enemy_army", AllowedSides: tc.specialSides, Params: map[string]float64{"triggerChance": tc.specialChance, "effectRate": tc.specialEffectRate},
 					},
 					BonusTrait: GeneralTraitConfig{
 						TraitID: tc.bonusTraitID, TraitType: general.TraitTypeBonus, Enabled: true,
 						Scope: "self_army", TargetUnitType: tc.bonusTarget, AllowedSides: []string{"attacker"},
-						Params: map[string]float64{"attackBonusRate": tc.bonusAttackRate},
+						Params: map[string]float64{"triggerChance": 1, "attackBonusRate": tc.bonusAttackRate},
 					},
 				},
 			}})

@@ -148,15 +148,6 @@ func formalReinforcementReturnCases() []reinforcementReturnCase {
 			}{"rende": {detailKey: "revivedUnits", rate: 0.5}, "renzhu_shouhu": {detailKey: "returnedUnits", rate: 0.1}},
 		},
 		{
-			name: "典韦护主死战", faction: "wei", generalID: "dianwei", generalName: "典韦", requiresLoss: true,
-			specialTrait: GeneralTraitConfig{TraitID: "huzhu_sizhan", TraitType: general.TraitTypeSpecial, Scope: "self_army", RequiredOutcome: "loss", Params: map[string]float64{"lossReductionRate": 0.15, "maxReturnCount": 10000, "triggerChance": 1}},
-			bonusTrait:   GeneralTraitConfig{TraitID: "sizhandaodi", TraitType: general.TraitTypeBonus, Scope: "self_army", Enabled: false},
-			expected: map[string]struct {
-				detailKey string
-				rate      float64
-			}{"huzhu_sizhan": {detailKey: "returnedUnits", rate: 0.15}},
-		},
-		{
 			name: "郭嘉鬼才遗策", faction: "wei", generalID: "guojia", generalName: "郭嘉", requiresLoss: true,
 			specialTrait: GeneralTraitConfig{TraitID: "shengui_zhicai", TraitType: general.TraitTypeSpecial, Scope: "self_city", Enabled: false},
 			bonusTrait:   GeneralTraitConfig{TraitID: "guicai_yice", TraitType: general.TraitTypeBonus, Scope: "self_army", RequiredOutcome: "loss", Params: map[string]float64{"lossReductionRate": 0.1, "maxReturnCount": 10000, "triggerChance": 1}},

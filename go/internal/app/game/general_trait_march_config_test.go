@@ -26,7 +26,6 @@ func TestFormalMarchTraitConfigsMatchDesign(t *testing.T) {
 		traitType string
 		params    map[string]float64
 	}{
-		{generalID: "xiahouyuan", traitID: "jixing_benxi", traitType: "special", params: map[string]float64{"speedBonusRate": 0.2, "minMarchSeconds": 60}},
 		{generalID: "zhaoyun", traitID: "qijin_qichu", traitType: "bonus", params: map[string]float64{"speedBonusRate": 1, "minMarchSeconds": 60}},
 		{generalID: "lvmeng", traitID: "baiyi_dujiang", traitType: "special", params: map[string]float64{"triggerChance": 0.35, "speedBonusRate": 0.2, "minMarchSeconds": 60}},
 		{generalID: "lvmeng", traitID: "baiyi_jixing", traitType: "bonus", params: map[string]float64{"speedBonusRate": 0.2, "minMarchSeconds": 60}},

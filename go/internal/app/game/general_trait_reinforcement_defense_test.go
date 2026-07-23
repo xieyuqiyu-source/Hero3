@@ -15,9 +15,12 @@ type reinforcementDefenseCase struct {
 	generalID            string
 	generalName          string
 	disabledSpecialID    string
+	disabledBonusID      string
 	specialTrait         GeneralTraitConfig
 	traitID              string
+	traitType            string
 	scope                string
+	targetUnitType       string
 	allowedSides         []string
 	params               map[string]float64
 	wantDefensePower     float64
@@ -47,10 +50,16 @@ type xiahouyuanReinforcementComboResult struct {
 func formalReinforcementDefenseCases() []reinforcementDefenseCase {
 	return []reinforcementDefenseCase{
 		{
+			name: "典韦护主血战", faction: "wei", generalID: "dianwei", generalName: "典韦", disabledBonusID: "sizhandaodi",
+			traitID: "huzhu_xuezhan", traitType: general.TraitTypeSpecial, scope: "self_army", targetUnitType: "jinWeiSoldier", allowedSides: []string{"defender", "reinforcement"},
+			params:           map[string]float64{"generalDefenseFlat": 20, "triggerChance": 1},
+			wantDefensePower: 3010, wantInfantryIncrease: 20, wantCavalryIncrease: 20,
+		},
+		{
 			name: "夏侯渊盾阵防御", faction: "wei", generalID: "xiahouyuan", generalName: "夏侯渊", disabledSpecialID: "jixing_benxi",
 			traitID: "dunzhen_fangyu", scope: "self_army", allowedSides: []string{"defender", "reinforcement"},
-			params:           map[string]float64{"defenseBonusRate": 0.35, "triggerChance": 1},
-			wantDefensePower: 1410, wantInfantryIncrease: 4, wantCavalryIncrease: 3,
+			params:           map[string]float64{"defenseBonusRate": 0.3, "triggerChance": 1},
+			wantDefensePower: 1310, wantInfantryIncrease: 3, wantCavalryIncrease: 2,
 		},
 		{
 			name: "魏延固守汉中", faction: "shu", generalID: "weiyan", generalName: "魏延", disabledSpecialID: "qibing_raohou",
@@ -73,6 +82,14 @@ func formalReinforcementDefenseCases() []reinforcementDefenseCase {
 	}
 }
 
+// reinforcementDefenseUnitType 返回当前援军防御案例实际携带的兵种。
+func reinforcementDefenseUnitType(tc reinforcementDefenseCase) string {
+	if tc.targetUnitType != "" {
+		return tc.targetUnitType
+	}
+	return tc.faction + "Infantry"
+}
+
 // runReinforcementDefensePvp 执行一场正式将领援军参与的完整 PVP 防守事务。
 func runReinforcementDefensePvp(t *testing.T, tc reinforcementDefenseCase, enabled bool) reinforcementDefenseResult {
 	t.Helper()
@@ -93,21 +110,33 @@ func runReinforcementDefensePvp(t *testing.T, tc reinforcementDefenseCase, enabl
 	if tc.specialTrait.TraitID != "" {
 		specialTrait = tc.specialTrait
 	}
+	activeTraitType := tc.traitType
+	if activeTraitType == "" {
+		activeTraitType = general.TraitTypeBonus
+	}
+	activeTrait := GeneralTraitConfig{
+		TraitID: tc.traitID, TraitType: activeTraitType, Enabled: enabled, Scope: tc.scope, TargetUnitType: tc.targetUnitType,
+		AllowedSides: tc.allowedSides, Params: tc.params,
+	}
+	special := specialTrait
+	bonus := GeneralTraitConfig{TraitID: tc.disabledBonusID, TraitType: general.TraitTypeBonus, Enabled: false}
+	if activeTraitType == general.TraitTypeSpecial {
+		special = activeTrait
+	} else {
+		bonus = activeTrait
+	}
 	heroes[tc.generalID] = GeneralHeroConfig{
 		ID: tc.generalID, Name: tc.generalName, Faction: tc.faction, Enabled: true,
-		SpecialTrait: specialTrait,
-		BonusTrait: GeneralTraitConfig{
-			TraitID: tc.traitID, TraitType: general.TraitTypeBonus, Enabled: enabled, Scope: tc.scope,
-			AllowedSides: tc.allowedSides, Params: tc.params,
-		},
+		SpecialTrait: special,
+		BonusTrait:   bonus,
 	}
 	setTestFactionsAndGenerals(t, FactionsConfig{
-		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "caocao", Name: "曹操"}, {ID: "xiahouyuan", Name: "夏侯渊"}}},
+		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "caocao", Name: "曹操"}, {ID: "dianwei", Name: "典韦"}, {ID: "xiahouyuan", Name: "夏侯渊"}}},
 		"shu": {Name: "蜀国", Generals: []GeneralInfo{{ID: "liubei", Name: "刘备"}, {ID: "weiyan", Name: "魏延"}}},
 		"wu":  {Name: "吴国", Generals: []GeneralInfo{{ID: "sunquan", Name: "孙权"}, {ID: "taishici", Name: "太史慈"}}},
 	}, GeneralsConfig{Enabled: true, Heroes: heroes})
 	svc, repo, attacker, defender := newPvpTestServiceForGenerals(t, attackerFaction, attackerID, defenderFaction, defenderID)
-	helperUnit := tc.faction + "Infantry"
+	helperUnit := reinforcementDefenseUnitType(tc)
 	unitsMu.Lock()
 	if activeUnits[tc.faction] == nil {
 		activeUnits[tc.faction] = FactionUnits{}
@@ -224,7 +253,8 @@ func TestFormalDefenseTraitsStrengthenRealReinforcements(t *testing.T) {
 				infantry, infantryOK := outcome.Detail["infantryDefenseModifiedUnits"].(map[string]int)
 				cavalry, cavalryOK := outcome.Detail["cavalryDefenseModifiedUnits"].(map[string]int)
 				designValue, designOK := outcome.Detail[designKey].(float64)
-				if !ok || !infantryOK || !cavalryOK || !designOK || designValue != wantDesignValue || infantry[tc.faction+"Infantry"] != tc.wantInfantryIncrease || cavalry[tc.faction+"Infantry"] != tc.wantCavalryIncrease ||
+				helperUnit := reinforcementDefenseUnitType(tc)
+				if !ok || !infantryOK || !cavalryOK || !designOK || designValue != wantDesignValue || infantry[helperUnit] != tc.wantInfantryIncrease || cavalry[helperUnit] != tc.wantCavalryIncrease ||
 					outcome.OwnerSide != "reinforcement" || outcome.OwnerGeneralID != tc.generalID {
 					t.Fatalf("expected reinforcement-owned defense deltas +%d/+%d, got %+v", tc.wantInfantryIncrease, tc.wantCavalryIncrease, outcome)
 				}
@@ -343,9 +373,51 @@ func TestSunquanJiangdongGushouLegalMissAsReinforcement(t *testing.T) {
 	}
 }
 
+// TestXiahouyuanDunzhenFangyuLegalMissAsReinforcement 验证盾阵防御未命中时不修改防御或伪造触发战报。
+func TestXiahouyuanDunzhenFangyuLegalMissAsReinforcement(t *testing.T) {
+	var tc reinforcementDefenseCase
+	for _, candidate := range formalReinforcementDefenseCases() {
+		if candidate.generalID == "xiahouyuan" {
+			tc = candidate
+			break
+		}
+	}
+	if tc.generalID == "" {
+		t.Fatal("expected Xiahou Yuan reinforcement defense case")
+	}
+	tc.params = map[string]float64{"defenseBonusRate": 0.3, "triggerChance": 0}
+	missed := runReinforcementDefensePvp(t, tc, true)
+	if missed.defensePower != 1010 || missed.losses != 100 || missed.record.Losses["weiInfantry"] != 100 || missed.record.RemainingTroops["weiInfantry"] != 0 {
+		t.Fatalf("expected missed Dunzhen Fangyu to keep baseline defense and losses, result=%+v", missed)
+	}
+	for _, report := range missed.reports {
+		if len(report.TraitTriggered) != 0 || len(report.TraitOutcomes) != 0 || report.Detail == nil || len(report.Detail.Traits) != 0 {
+			t.Fatalf("expected missed Dunzhen Fangyu absent from every timeline, report=%+v", report)
+		}
+		if len(report.PvpReinforcements) != 1 || !reinforcementSnapshotHasTrait(report.PvpReinforcements[0].Generals[0], "dunzhen_fangyu") {
+			t.Fatalf("expected owned shield trait retained only in reinforcement snapshot, report=%+v", report)
+		}
+	}
+}
+
 // runXiahouyuanReinforcementCombo 执行夏侯渊从增援创建、到达驻防到真实参战的完整事务。
 func runXiahouyuanReinforcementCombo(t *testing.T, enabled bool) xiahouyuanReinforcementComboResult {
 	t.Helper()
+	originalUnits := GetUnitsConfig()
+	unitsMu.Lock()
+	if activeUnits["wei"] == nil {
+		activeUnits["wei"] = FactionUnits{}
+	}
+	activeUnits["wei"]["qiQiYing"] = UnitConfig{
+		Name: "骁骑营", Category: "cavalry",
+		Stats: map[string]int{"attack": 24, "infantryDefense": 13, "cavalryDefense": 10, "speed": 14, "carryCapacity": 200, "upkeep": 3},
+	}
+	unitsMu.Unlock()
+	t.Cleanup(func() {
+		unitsMu.Lock()
+		activeUnits = originalUnits
+		unitsMu.Unlock()
+	})
 	setTestFactionsAndGenerals(t, FactionsConfig{
 		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "xiahouyuan", Name: "夏侯渊"}}},
 		"shu": {Name: "蜀国", Generals: []GeneralInfo{{ID: "liubei", Name: "刘备"}}},
@@ -354,13 +426,13 @@ func runXiahouyuanReinforcementCombo(t *testing.T, enabled bool) xiahouyuanReinf
 		"xiahouyuan": {
 			ID: "xiahouyuan", Name: "夏侯渊", Faction: "wei", Enabled: true,
 			SpecialTrait: GeneralTraitConfig{
-				TraitID: "jixing_benxi", TraitType: general.TraitTypeSpecial, Enabled: enabled, Scope: "self_army",
-				Params: map[string]float64{"speedBonusRate": 0.2, "minMarchSeconds": 60, "triggerChance": 1},
+				TraitID: "jixing_benxi", TraitType: general.TraitTypeSpecial, Enabled: enabled, Scope: "self_army", TargetUnitType: "qiQiYing",
+				Params: map[string]float64{"unitAttackFlat": 18, "unitSpeedFlat": 5},
 			},
 			BonusTrait: GeneralTraitConfig{
 				TraitID: "dunzhen_fangyu", TraitType: general.TraitTypeBonus, Enabled: enabled, Scope: "self_army",
 				AllowedSides: []string{"defender", "reinforcement"},
-				Params:       map[string]float64{"defenseBonusRate": 0.35, "triggerChance": 1},
+				Params:       map[string]float64{"defenseBonusRate": 0.3, "triggerChance": 1},
 			},
 		},
 		"liubei":  {ID: "liubei", Name: "刘备", Faction: "shu", Enabled: true},
@@ -368,9 +440,9 @@ func runXiahouyuanReinforcementCombo(t *testing.T, enabled bool) xiahouyuanReinf
 	}})
 	svc, repo, attacker, defender := newPvpTestServiceForGenerals(t, "shu", "liubei", "wu", "sunquan")
 	unitsMu.Lock()
-	activeUnits["wei"]["huWei"] = UnitConfig{
-		Name: "虎卫", Category: "infantry",
-		Stats: map[string]int{"attack": 10, "infantryDefense": 10, "cavalryDefense": 8, "speed": 1, "carryCapacity": 5, "upkeep": 1},
+	activeUnits["wei"]["qiQiYing"] = UnitConfig{
+		Name: "骁骑营", Category: "cavalry",
+		Stats: map[string]int{"attack": 24, "infantryDefense": 13, "cavalryDefense": 10, "speed": 14, "carryCapacity": 200, "upkeep": 3},
 	}
 	unitsMu.Unlock()
 	now := time.Now().UTC()
@@ -381,7 +453,7 @@ func runXiahouyuanReinforcementCombo(t *testing.T, enabled bool) xiahouyuanReinf
 	helper := newPlayerState("player_xiahouyuan_combo", "夏侯渊援军", "wei", "xiahouyuan", now)
 	baselineExp := generalExpRequiredForLevelForTest(2) - 1
 	setPvpTestGeneralProgress(&helper, "xiahouyuan", 1, baselineExp)
-	helper.Army = []ArmyUnit{{UnitType: "huWei", Amount: 100}}
+	helper.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 100}}
 	if err := repo.CreatePlayer(helperAccount.ID, helper, now); err != nil {
 		t.Fatalf("CreatePlayer helper failed: %v", err)
 	}
@@ -406,7 +478,7 @@ func runXiahouyuanReinforcementCombo(t *testing.T, enabled bool) xiahouyuanReinf
 
 	sent, err := svc.SendReinforcement(SendReinforcementRequest{
 		FromPlayerID: helper.Player.ID, TargetPlayerID: defender.Player.ID,
-		Troops: map[string]int{"huWei": 100}, GeneralIDs: []string{"xiahouyuan"},
+		Troops: map[string]int{"qiQiYing": 100}, GeneralIDs: []string{"xiahouyuan"},
 	})
 	if err != nil {
 		t.Fatalf("SendReinforcement failed: %v", err)
@@ -456,29 +528,29 @@ func runXiahouyuanReinforcementCombo(t *testing.T, enabled bool) xiahouyuanReinf
 	}
 }
 
-// TestXiahouyuanMarchAndDefenseTraitsReconcileInRealReinforcement 验证行军加速只作用过程，盾阵防御才进入真实战斗和三方战报。
+// TestXiahouyuanMarchAndDefenseTraitsReconcileInRealReinforcement 验证骁骑营移动被动与盾阵防御在增援全流程中各自生效。
 func TestXiahouyuanMarchAndDefenseTraitsReconcileInRealReinforcement(t *testing.T) {
 	control := runXiahouyuanReinforcementCombo(t, false)
 	active := runXiahouyuanReinforcementCombo(t, true)
-	wantMarchSeconds := applyExpectedMarchRates(control.sent.MarchSeconds, []float64{0.2}, 60)
-	wantSpeed := control.sent.SpeedMultiplier * float64(control.sent.MarchSeconds) / float64(wantMarchSeconds)
-	if active.sent.MarchSeconds != wantMarchSeconds || active.sent.ReturnSeconds != wantMarchSeconds || math.Abs(active.sent.SpeedMultiplier-wantSpeed) > 1e-9 {
-		t.Fatalf("expected Jixing duration %d and speed %.6f, control=%+v active=%+v", wantMarchSeconds, wantSpeed, control.sent, active.sent)
+	if active.sent.MarchSeconds >= control.sent.MarchSeconds || active.sent.ReturnSeconds != active.sent.MarchSeconds || math.Abs(active.sent.SpeedMultiplier-control.sent.SpeedMultiplier) > 1e-9 {
+		t.Fatalf("expected passive movement to shorten the same qiQiYing route without old percentage march outcome, control=%+v active=%+v", control.sent, active.sent)
 	}
 	attackPower, attackOK := active.battle.Result["attackerPower"].(float64)
 	defensePower, defenseOK := active.battle.Result["defensePower"].(float64)
-	if !attackOK || !defenseOK || attackPower != 1100 || defensePower != 1410 || active.battle.Result["winner"] != "defender" {
-		t.Fatalf("expected shield defense to produce 1100/1410 defender victory, result=%+v", active.battle.Result)
+	if !attackOK || !defenseOK || attackPower != 1100 || defensePower != 1710 || active.battle.Result["winner"] != "defender" {
+		t.Fatalf("expected shield defense to produce 1100/1710 defender victory, result=%+v", active.battle.Result)
 	}
 	controlDefensePower, controlDefenseOK := control.battle.Result["defensePower"].(float64)
-	if !controlDefenseOK || controlDefensePower != 1010 {
-		t.Fatalf("expected no-trait defense baseline 1010, result=%+v", control.battle.Result)
+	if !controlDefenseOK || controlDefensePower != 1310 {
+		t.Fatalf("expected no-trait defense baseline 1310, result=%+v", control.battle.Result)
 	}
-	if active.record.RemainingTroops["huWei"] != 30 || active.record.Losses["huWei"] != 70 || active.record.Status != ReinforcementStatusStationed {
-		t.Fatalf("expected active reinforcement 100/70/30 and still stationed, record=%+v", active.record)
+	activeLost := active.record.Losses["qiQiYing"]
+	activeSurvived := active.record.RemainingTroops["qiQiYing"]
+	if activeLost <= 0 || activeSurvived <= 0 || activeLost+activeSurvived != 100 || active.record.Status != ReinforcementStatusStationed {
+		t.Fatalf("expected active reinforcement losses and survivors to reconcile to 100, record=%+v", active.record)
 	}
-	if control.record.RemainingTroops["huWei"] != 0 || control.record.Losses["huWei"] != 100 || !control.record.IsAnnihilated {
-		t.Fatalf("expected no-trait reinforcement to be annihilated, record=%+v", control.record)
+	if activeLost >= control.record.Losses["qiQiYing"] {
+		t.Fatalf("expected shield to reduce real reinforcement losses, control=%+v active=%+v", control.record, active.record)
 	}
 
 	for _, report := range []BattleReport{active.attackerReport, active.defenderReport, active.helperReport} {
@@ -486,13 +558,13 @@ func TestXiahouyuanMarchAndDefenseTraitsReconcileInRealReinforcement(t *testing.
 			t.Fatalf("expected only shield defense in battle timeline, report=%s timeline=%v outcomes=%+v", report.ID, report.TraitTriggered, report.TraitOutcomes)
 		}
 		if _, exists := report.TraitOutcomes["jixing_benxi"]; exists || standardReportHasTrait(report.Detail, "jixing_benxi") {
-			t.Fatalf("expected march process trait absent from battle timeline, report=%s outcomes=%+v detail=%+v", report.ID, report.TraitOutcomes, report.Detail)
+			t.Fatalf("expected passive trait absent from battle timeline, report=%s outcomes=%+v detail=%+v", report.ID, report.TraitOutcomes, report.Detail)
 		}
 		outcome := report.TraitOutcomes["dunzhen_fangyu"]
 		infantry, infantryOK := outcome.Detail["infantryDefenseModifiedUnits"].(map[string]int)
 		cavalry, cavalryOK := outcome.Detail["cavalryDefenseModifiedUnits"].(map[string]int)
 		rate, rateOK := outcome.Detail["defenseBonusRate"].(float64)
-		if !infantryOK || !cavalryOK || !rateOK || rate != 0.35 || infantry["huWei"] != 4 || cavalry["huWei"] != 3 || outcome.OwnerSide != "reinforcement" || outcome.OwnerGeneralID != "xiahouyuan" {
+		if !infantryOK || !cavalryOK || !rateOK || rate != 0.3 || infantry["qiQiYing"] != 4 || cavalry["qiQiYing"] != 3 || outcome.OwnerSide != "reinforcement" || outcome.OwnerGeneralID != "xiahouyuan" {
 			t.Fatalf("expected reinforcement-owned shield deltas +4/+3, report=%s outcome=%+v", report.ID, outcome)
 		}
 		if report.Detail == nil || len(report.Detail.Traits) != 1 || report.Detail.Traits[0].TraitID != "dunzhen_fangyu" || report.Detail.Traits[0].OwnerRole != "reinforcement" {
@@ -508,15 +580,15 @@ func TestXiahouyuanMarchAndDefenseTraitsReconcileInRealReinforcement(t *testing.
 		if !ownedTraits["jixing_benxi"] || !ownedTraits["dunzhen_fangyu"] {
 			t.Fatalf("expected snapshot to retain both owned traits, report=%s traits=%+v", report.ID, report.PvpReinforcements[0].Generals[0].Traits)
 		}
-		if report.PvpReinforcementLosses[active.sent.ID]["huWei"] != 70 {
-			t.Fatalf("expected three reports to use reinforcement loss 70, report=%s losses=%+v", report.ID, report.PvpReinforcementLosses)
+		if report.PvpReinforcementLosses[active.sent.ID]["qiQiYing"] != activeLost {
+			t.Fatalf("expected three reports to use authoritative reinforcement loss %d, report=%s losses=%+v", activeLost, report.ID, report.PvpReinforcementLosses)
 		}
 		if report.PvpReinforcements[0].GeneralExpGained != 110 || report.PvpReinforcements[0].GeneralLevelBefore != 1 || report.PvpReinforcements[0].GeneralLevelAfter != 2 {
 			t.Fatalf("expected authoritative reinforcement progress 110 and level 1 -> 2, report=%s reinforcement=%+v", report.ID, report.PvpReinforcements[0])
 		}
 	}
-	if active.helperReport.DispatchedUnits["huWei"] != 100 || active.helperReport.LostUnits["huWei"] != 70 || active.helperReport.SurvivedUnits["huWei"] != 30 {
-		t.Fatalf("expected helper legacy row 100/70/30, report=%+v", active.helperReport)
+	if active.helperReport.DispatchedUnits["qiQiYing"] != 100 || active.helperReport.LostUnits["qiQiYing"] != activeLost || active.helperReport.SurvivedUnits["qiQiYing"] != activeSurvived {
+		t.Fatalf("expected helper legacy row to match 100/%d/%d, report=%+v", activeLost, activeSurvived, active.helperReport)
 	}
 	if active.helperReport.Detail == nil || active.helperReport.Detail.SecondarySide == nil || active.helperReport.Detail.PrimarySide.Role != "attacker" || active.helperReport.Detail.SecondarySide.Role != "defender" {
 		t.Fatalf("expected helper standard detail to preserve complete attacker and defender snapshots, detail=%+v", active.helperReport.Detail)

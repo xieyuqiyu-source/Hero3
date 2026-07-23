@@ -21,13 +21,14 @@ func TestFormalPreBattleForceTraitConfigsMatchDesign(t *testing.T) {
 		t.Fatalf("decode formal generals config failed: %v", err)
 	}
 	tests := []struct {
-		generalID string
-		traitID   string
-		params    map[string]float64
+		generalID    string
+		traitID      string
+		allowedSides []string
+		params       map[string]float64
 	}{
 		{generalID: "simayi", traitID: "yibing_touxi", params: map[string]float64{"triggerChance": 0.35, "effectRate": 0.35}},
 		{generalID: "guanyu", traitID: "shuiyan_qijun", params: map[string]float64{"triggerChance": 0.35, "effectRate": 0.35, "maxAffectedRate": 0.35}},
-		{generalID: "zhangliao", traitID: "weizhen_zhenhe", params: map[string]float64{"triggerChance": 0.35, "effectRate": 0.2, "maxAffectedRate": 0.2}},
+		{generalID: "zhangliao", traitID: "weizhen_zhenhe", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.35, "effectRate": 0.25}},
 		{generalID: "zhangfei", traitID: "zhenhe_quanjun", params: map[string]float64{"triggerChance": 0.5, "effectRate": 0.5, "maxAffectedRate": 0.5}},
 		{generalID: "zhugeliang", traitID: "qimen_dunjia", params: map[string]float64{"effectRate": 0.25, "maxAffectedRate": 0.25}},
 	}
@@ -41,7 +42,7 @@ func TestFormalPreBattleForceTraitConfigsMatchDesign(t *testing.T) {
 			if !trait.Enabled || trait.TraitID != tc.traitID || trait.TraitType != "special" || trait.Scope != "enemy_army" {
 				t.Fatalf("unexpected formal trait identity: %+v", trait)
 			}
-			if len(trait.AllowedSides) != 0 || len(trait.AllowedScenes) != 0 || trait.RequiredOutcome != "" || trait.TargetUnitType != "" {
+			if !reflect.DeepEqual(trait.AllowedSides, tc.allowedSides) || len(trait.AllowedScenes) != 0 || trait.RequiredOutcome != "" || trait.TargetUnitType != "" {
 				t.Fatalf("unexpected battle constraints: %+v", trait)
 			}
 			if !reflect.DeepEqual(trait.Params, tc.params) {

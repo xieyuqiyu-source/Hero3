@@ -46,6 +46,221 @@ func TestTianshenXiafanAddsForceWithoutBattleTrigger(t *testing.T) {
 	}
 }
 
+// TestJixingBenxiAddsOnlyQiqiyingAttackAndSpeedWithoutTrigger 验证疾行奔袭只永久修改夏侯渊所率骁骑营。
+func TestJixingBenxiAddsOnlyQiqiyingAttackAndSpeedWithoutTrigger(t *testing.T) {
+	originalUnits := GetUnitsConfig()
+	unitsMu.Lock()
+	activeUnits = UnitsConfig{"wei": {
+		"qiQiYing":     {Name: "骁骑营", Category: "cavalry", Stats: map[string]int{"attack": 24, "infantryDefense": 13, "cavalryDefense": 10, "speed": 14, "carryCapacity": 200, "upkeep": 3}},
+		"huBaoQi":      {Name: "虎豹骑", Category: "cavalry", Stats: map[string]int{"attack": 30, "infantryDefense": 15, "cavalryDefense": 12, "speed": 12, "carryCapacity": 180, "upkeep": 4}},
+		"qingZhouArmy": {Name: "青州军", Category: "infantry", Stats: map[string]int{"attack": 8, "infantryDefense": 7, "cavalryDefense": 10, "speed": 6, "carryCapacity": 80, "upkeep": 2}},
+	}}
+	unitsMu.Unlock()
+	t.Cleanup(func() {
+		unitsMu.Lock()
+		activeUnits = originalUnits
+		unitsMu.Unlock()
+	})
+	setTestFactionsAndGenerals(t, FactionsConfig{
+		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "xiahouyuan", Name: "夏侯渊"}}},
+	}, GeneralsConfig{Enabled: true, Heroes: map[string]GeneralHeroConfig{
+		"xiahouyuan": {
+			ID: "xiahouyuan", Name: "夏侯渊", Faction: "wei", Enabled: true,
+			SpecialTrait: GeneralTraitConfig{
+				TraitID: "jixing_benxi", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army", TargetUnitType: "qiQiYing",
+				Params: map[string]float64{"unitAttackFlat": 18, "unitSpeedFlat": 5},
+			},
+		},
+	}})
+
+	xiahouyuan := newGeneral("wei", "xiahouyuan")
+	sources := []ModifierSource{&GeneralModifierSource{General: xiahouyuan}}
+	qiqiCfg, ok := GetUnitConfig("wei", "qiQiYing")
+	if !ok {
+		t.Fatal("formal qiQiYing config not found")
+	}
+	baseUnit := buildCombatUnitFromConfig("qiQiYing", 100, qiqiCfg, time.Now())
+	activeUnit := buildCombatUnitFromConfig("qiQiYing", 100, qiqiCfg, time.Now(), sources...)
+	if baseUnit.Attack != 24 || activeUnit.Attack != 42 {
+		t.Fatalf("expected qiQiYing attack 24 -> 42, base=%+v active=%+v", baseUnit, activeUnit)
+	}
+	hubaoCfg, ok := GetUnitConfig("wei", "huBaoQi")
+	if !ok {
+		t.Fatal("formal huBaoQi config not found")
+	}
+	baseHubao := buildCombatUnitFromConfig("huBaoQi", 100, hubaoCfg, time.Now())
+	activeHubao := buildCombatUnitFromConfig("huBaoQi", 100, hubaoCfg, time.Now(), sources...)
+	if activeHubao.Attack != baseHubao.Attack {
+		t.Fatalf("expected non-target huBaoQi unchanged, base=%+v active=%+v", baseHubao, activeHubao)
+	}
+
+	now := time.Now()
+	baseSeconds, _, err := calculatePvpMarchTravel(10, "wei", map[string]int{"qiQiYing": 100}, now, nil)
+	if err != nil {
+		t.Fatalf("calculate base march failed: %v", err)
+	}
+	activeSeconds, _, err := calculatePvpMarchTravel(10, "wei", map[string]int{"qiQiYing": 100}, now, sources)
+	if err != nil {
+		t.Fatalf("calculate passive march failed: %v", err)
+	}
+	if baseSeconds != CalculateWorldMarchSeconds(10, 14, now, nil) || activeSeconds != CalculateWorldMarchSeconds(10, 19, now, nil) || activeSeconds >= baseSeconds {
+		t.Fatalf("expected qiQiYing speed 14 -> 19, base=%d active=%d", baseSeconds, activeSeconds)
+	}
+	mixedBase, _, err := calculatePvpMarchTravel(10, "wei", map[string]int{"qiQiYing": 100, "qingZhouArmy": 1}, now, nil)
+	if err != nil {
+		t.Fatalf("calculate mixed base march failed: %v", err)
+	}
+	mixedActive, _, err := calculatePvpMarchTravel(10, "wei", map[string]int{"qiQiYing": 100, "qingZhouArmy": 1}, now, sources)
+	if err != nil || mixedActive != mixedBase {
+		t.Fatalf("expected mixed army still limited by slower unit, base=%d active=%d err=%v", mixedBase, mixedActive, err)
+	}
+
+	attacker := combat.Army{Faction: "wei", Units: []combat.Unit{activeUnit}}
+	defender := combat.Army{Faction: "shu", Units: []combat.Unit{{ID: "shuInfantry", Count: 100, Attack: 10}}}
+	ctx := &general.BeforeBattleContext{Attacker: &attacker, Defender: &defender, AttackerOwnsTrait: true, Scene: "attack"}
+	general.Dispatch(ctx, buildActiveTraits(xiahouyuan))
+	if _, ok := ctx.Triggered["jixing_benxi"]; ok {
+		t.Fatalf("expected passive unit trait absent from battle outcomes, got %+v", ctx.Triggered)
+	}
+}
+
+// TestHuhuShengweiAddsOnlyHubaoqiAttackAndSpeedWithoutTrigger 验证虎虎生威只永久修改许褚所率虎豹骑。
+func TestHuhuShengweiAddsOnlyHubaoqiAttackAndSpeedWithoutTrigger(t *testing.T) {
+	setTestCombatUnitsConfig(t)
+	setTestFactionsAndGenerals(t, FactionsConfig{
+		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "xuchu", Name: "许褚"}}},
+	}, GeneralsConfig{Enabled: true, Heroes: map[string]GeneralHeroConfig{
+		"xuchu": {
+			ID: "xuchu", Name: "许褚", Faction: "wei", Enabled: true,
+			BonusTrait: GeneralTraitConfig{
+				TraitID: "huhu_shengwei", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", TargetUnitType: "huBaoQi",
+				Params: map[string]float64{"unitAttackFlat": 12, "unitSpeedFlat": 5},
+			},
+		},
+	}})
+
+	xuchu := newGeneral("wei", "xuchu")
+	sources := []ModifierSource{&GeneralModifierSource{General: xuchu}}
+	hubaoCfg, ok := GetUnitConfig("wei", "huBaoQi")
+	if !ok {
+		t.Fatal("formal huBaoQi config not found")
+	}
+	baseHubao := buildCombatUnitFromConfig("huBaoQi", 100, hubaoCfg, time.Now())
+	activeHubao := buildCombatUnitFromConfig("huBaoQi", 100, hubaoCfg, time.Now(), sources...)
+	if baseHubao.Attack != 30 || activeHubao.Attack != 42 {
+		t.Fatalf("expected huBaoQi attack 30 -> 42, base=%+v active=%+v", baseHubao, activeHubao)
+	}
+	qiqiCfg, ok := GetUnitConfig("wei", "qiQiYing")
+	if !ok {
+		t.Fatal("formal qiQiYing config not found")
+	}
+	baseQiqi := buildCombatUnitFromConfig("qiQiYing", 100, qiqiCfg, time.Now())
+	activeQiqi := buildCombatUnitFromConfig("qiQiYing", 100, qiqiCfg, time.Now(), sources...)
+	if activeQiqi.Attack != baseQiqi.Attack {
+		t.Fatalf("expected non-target qiQiYing unchanged, base=%+v active=%+v", baseQiqi, activeQiqi)
+	}
+
+	now := time.Now()
+	baseSeconds, _, err := calculatePvpMarchTravel(10, "wei", map[string]int{"huBaoQi": 100}, now, nil)
+	if err != nil {
+		t.Fatalf("calculate base march failed: %v", err)
+	}
+	activeSeconds, _, err := calculatePvpMarchTravel(10, "wei", map[string]int{"huBaoQi": 100}, now, sources)
+	if err != nil || baseSeconds != CalculateWorldMarchSeconds(10, 12, now, nil) || activeSeconds != CalculateWorldMarchSeconds(10, 17, now, nil) || activeSeconds >= baseSeconds {
+		t.Fatalf("expected huBaoQi speed 12 -> 17, base=%d active=%d err=%v", baseSeconds, activeSeconds, err)
+	}
+	baseReinforcementSpeed := reinforcementSlowestUnitSpeed("wei", map[string]int{"huBaoQi": 100}, now)
+	activeReinforcementSpeed := reinforcementSlowestUnitSpeed("wei", map[string]int{"huBaoQi": 100}, now, sources...)
+	if baseReinforcementSpeed != 12 || activeReinforcementSpeed != 17 {
+		t.Fatalf("expected reinforcement huBaoQi speed 12 -> 17, base=%v active=%v", baseReinforcementSpeed, activeReinforcementSpeed)
+	}
+
+	attacker := combat.Army{Faction: "wei", Units: []combat.Unit{activeHubao}}
+	defender := combat.Army{Faction: "shu", Units: []combat.Unit{{ID: "shuInfantry", Count: 100, Attack: 10}}}
+	ctx := &general.BeforeBattleContext{Attacker: &attacker, Defender: &defender, AttackerOwnsTrait: true, Scene: "attack"}
+	general.Dispatch(ctx, buildActiveTraits(xuchu))
+	if _, ok := ctx.Triggered["huhu_shengwei"]; ok {
+		t.Fatalf("expected Huhu passive absent from battle outcomes, got %+v", ctx.Triggered)
+	}
+}
+
+// runJixingBenxiPvp 执行夏侯渊率骁骑营主动进攻的真实 PVP。
+func runJixingBenxiPvp(t *testing.T, enabled bool) (PvpBattle, PvpMarch, []BattleReport) {
+	t.Helper()
+	setTestCombatUnitsConfig(t)
+	setTestFactionsAndGenerals(t, FactionsConfig{
+		"wei": {Name: "魏国", Generals: []GeneralInfo{{ID: "xiahouyuan", Name: "夏侯渊"}}},
+		"shu": {Name: "蜀国", Generals: []GeneralInfo{{ID: "liubei", Name: "刘备"}}},
+	}, GeneralsConfig{Enabled: true, Heroes: map[string]GeneralHeroConfig{
+		"xiahouyuan": {
+			ID: "xiahouyuan", Name: "夏侯渊", Faction: "wei", Enabled: true,
+			SpecialTrait: GeneralTraitConfig{
+				TraitID: "jixing_benxi", TraitType: general.TraitTypeSpecial, Enabled: enabled, Scope: "self_army", TargetUnitType: "qiQiYing",
+				Params: map[string]float64{"unitAttackFlat": 18, "unitSpeedFlat": 5},
+			},
+		},
+		"liubei": {ID: "liubei", Name: "刘备", Faction: "shu", Enabled: true},
+	}})
+	svc, repo, attacker, defender := newPvpTestServiceForGenerals(t, "wei", "xiahouyuan", "shu", "liubei")
+	attacker.Army = []ArmyUnit{{UnitType: "qiQiYing", Amount: 100}}
+	defender.Army = []ArmyUnit{{UnitType: "shuInfantry", Amount: 1000}}
+	defender.Buildings = nil
+	repo.players[attacker.Player.ID] = attacker
+	repo.players[defender.Player.ID] = defender
+	started, err := svc.StartPvpAttack(PvpAttackRequest{
+		PlayerID: attacker.Player.ID, TargetPlayerID: defender.Player.ID, MarchMode: PvpMarchTypeAttack,
+		Troops: map[string]int{"qiQiYing": 100}, GeneralIDs: []string{"xiahouyuan"},
+	})
+	if err != nil {
+		t.Fatalf("StartPvpAttack failed: %v", err)
+	}
+	forcePvpMarchDue(t, repo, started.March.ID)
+	battle, err := svc.ResolvePvpMarch(started.March.ID)
+	if err != nil {
+		t.Fatalf("ResolvePvpMarch failed: %v", err)
+	}
+	attackerReports, _, err := repo.ListReports(attacker.Player.ID, 10, 0)
+	if err != nil || len(attackerReports) == 0 || attackerReports[0].ID != battle.AttackerReportID {
+		t.Fatalf("expected attacker report, reports=%+v err=%v", attackerReports, err)
+	}
+	defenderReports, _, err := repo.ListReports(defender.Player.ID, 10, 0)
+	if err != nil || len(defenderReports) == 0 || defenderReports[0].ID != battle.DefenderReportID {
+		t.Fatalf("expected defender report, reports=%+v err=%v", defenderReports, err)
+	}
+	return battle, started.March, []BattleReport{attackerReports[0], defenderReports[0]}
+}
+
+// TestPvpJixingBenxiChangesPowerMarchAndReportsWithoutTrigger 验证疾行奔袭真实修改战力、行军和兵损，但不伪造触发记录。
+func TestPvpJixingBenxiChangesPowerMarchAndReportsWithoutTrigger(t *testing.T) {
+	controlBattle, controlMarch, _ := runJixingBenxiPvp(t, false)
+	activeBattle, activeMarch, activeReports := runJixingBenxiPvp(t, true)
+	controlPower, controlOK := controlBattle.Result["attackerPower"].(float64)
+	activePower, activeOK := activeBattle.Result["attackerPower"].(float64)
+	if !controlOK || !activeOK || activePower-controlPower != 1800 {
+		t.Fatalf("expected 100 qiQiYing with attack +18 to add 1800 power, control=%+v active=%+v", controlBattle.Result, activeBattle.Result)
+	}
+	if activeMarch.DurationSeconds >= controlMarch.DurationSeconds {
+		t.Fatalf("expected qiQiYing movement +5 to shorten PVP march, control=%+v active=%+v", controlMarch, activeMarch)
+	}
+	controlDefenderLosses := pvpTestLossesFromBattle(t, controlBattle, "defender")["shuInfantry"]
+	activeDefenderLosses := pvpTestLossesFromBattle(t, activeBattle, "defender")["shuInfantry"]
+	if activeDefenderLosses <= controlDefenderLosses {
+		t.Fatalf("expected passive attack to increase real defender losses, control=%d active=%d", controlDefenderLosses, activeDefenderLosses)
+	}
+	for _, report := range activeReports {
+		if len(report.TraitTriggered) != 0 || len(report.TraitOutcomes) != 0 || standardReportHasTrait(report.Detail, "jixing_benxi") {
+			t.Fatalf("expected passive trait absent from triggered timeline, report=%+v", report)
+		}
+		if report.Detail == nil || report.Detail.PrimarySide.Power != int(activePower) || len(report.Detail.PrimarySide.Generals) != 1 {
+			t.Fatalf("expected report to expose authoritative passive-adjusted power and general snapshot, detail=%+v", report.Detail)
+		}
+		generalSnapshot := report.Detail.PrimarySide.Generals[0]
+		if generalSnapshot.Buffs[unitAttackFlatModifierKey("qiQiYing")] != 18 || generalSnapshot.Buffs[unitSpeedFlatModifierKey("qiQiYing")] != 5 {
+			t.Fatalf("expected report general snapshot to retain passive +18/+5 values, general=%+v", generalSnapshot)
+		}
+	}
+}
+
 // runTianshenXiafanPvp 执行一场马超主动进攻的真实 PVP，返回战斗和双方战报。
 func runTianshenXiafanPvp(t *testing.T, enabled bool) (PvpBattle, []BattleReport) {
 	t.Helper()

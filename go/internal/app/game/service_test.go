@@ -397,6 +397,18 @@ func setTestCombatUnitsConfig(t *testing.T) {
 	unitsMu.Lock()
 	activeUnits = UnitsConfig{
 		"wei": FactionUnits{
+			"jinWeiSoldier": UnitConfig{
+				Name:     "禁卫甲士",
+				Category: "infantry",
+				Stats: map[string]int{
+					"attack":          6,
+					"infantryDefense": 13,
+					"cavalryDefense":  7,
+					"speed":           5,
+					"carryCapacity":   40,
+					"upkeep":          2,
+				},
+			},
 			"weiInfantry": UnitConfig{
 				Name:     "魏步兵",
 				Category: "infantry",
@@ -417,6 +429,30 @@ func setTestCombatUnitsConfig(t *testing.T) {
 					"cavalryDefense":  10,
 					"carryCapacity":   6,
 					"upkeep":          2,
+				},
+			},
+			"qiQiYing": UnitConfig{
+				Name:     "骁骑营",
+				Category: "cavalry",
+				Stats: map[string]int{
+					"attack":          24,
+					"infantryDefense": 13,
+					"cavalryDefense":  10,
+					"speed":           14,
+					"carryCapacity":   200,
+					"upkeep":          3,
+				},
+			},
+			"huBaoQi": UnitConfig{
+				Name:     "虎豹骑",
+				Category: "cavalry",
+				Stats: map[string]int{
+					"attack":          30,
+					"infantryDefense": 15,
+					"cavalryDefense":  12,
+					"speed":           12,
+					"carryCapacity":   180,
+					"upkeep":          4,
 				},
 			},
 		},
@@ -549,15 +585,14 @@ func TestGeneralsConfigFileHasAllDualTraits(t *testing.T) {
 	for generalID, trait := range map[string]GeneralTraitConfig{
 		"zhenmi":       cfg.Heroes["zhenmi"].BonusTrait,
 		"xuchuSpecial": cfg.Heroes["xuchu"].SpecialTrait,
-		"xuchuBonus":   cfg.Heroes["xuchu"].BonusTrait,
 		"huangzhong":   cfg.Heroes["huangzhong"].SpecialTrait,
 	} {
 		if strings.Join(trait.AllowedSides, ",") != "attacker" {
 			t.Fatalf("expected %s defense-reduction trait to allow attacker only, got %+v", generalID, trait.AllowedSides)
 		}
 	}
-	if trait := cfg.Heroes["simayi"].BonusTrait; strings.Join(trait.AllowedSides, ",") != "defender" {
-		t.Fatalf("expected Simayi attack-reduction trait to allow defender only, got %+v", trait.AllowedSides)
+	if trait := cfg.Heroes["simayi"].BonusTrait; strings.Join(trait.AllowedSides, ",") != "defender,reinforcement" {
+		t.Fatalf("expected Simayi defense trait to allow defender and reinforcement, got %+v", trait.AllowedSides)
 	}
 	for generalID, trait := range map[string]GeneralTraitConfig{
 		"dianwei":   cfg.Heroes["dianwei"].BonusTrait,

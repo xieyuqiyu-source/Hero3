@@ -64,7 +64,8 @@ func (s *Service) SendReinforcement(req SendReinforcementRequest) (Reinforcement
 			for _, item := range generals {
 				generalIDs = append(generalIDs, item.ID)
 			}
-			baseMarchSeconds := reinforcementTravelSecondsForDistance(distance, reinforcementSlowestUnitSpeed(from.Player.Faction, troops), now, CollectModifierSources(from))
+			modifierSources := modifierSourcesForBattleGenerals(from, generalIDs)
+			baseMarchSeconds := reinforcementTravelSecondsForDistance(distance, reinforcementSlowestUnitSpeed(from.Player.Faction, troops, now, modifierSources...), now, modifierSources)
 			marchSeconds := dispatchMarchCreateTraits(baseMarchSeconds, "reinforcement", from, generalIDs)
 			traitSpeedMultiplier := 1.0
 			if marchSeconds > 0 {
@@ -616,7 +617,7 @@ func reinforcementTravelSecondsForDistance(distance int, unitSpeed float64, now 
 }
 
 // reinforcementSlowestUnitSpeed 返回携带部队中最慢兵种速度，缺省按速度 1 处理。
-func reinforcementSlowestUnitSpeed(preferredFaction string, troops map[string]int) float64 {
+func reinforcementSlowestUnitSpeed(preferredFaction string, troops map[string]int, now time.Time, sources ...ModifierSource) float64 {
 	slowest := 0
 	for unitType, amount := range troops {
 		if strings.TrimSpace(unitType) == "" || amount <= 0 {
@@ -626,6 +627,7 @@ func reinforcementSlowestUnitSpeed(preferredFaction string, troops map[string]in
 		if cfg, _, ok := findAnyUnitConfig(preferredFaction, unitType); ok && cfg.Stats["speed"] > 0 {
 			speed = cfg.Stats["speed"]
 		}
+		speed += ComputeIntAttributeAt(0, unitSpeedFlatModifierKey(unitType), now, sources...)
 		if slowest == 0 || speed < slowest {
 			slowest = speed
 		}
@@ -1035,11 +1037,15 @@ func reinforcementBuffSnapshot(generals []ReinforcementGeneralSnapshot) []Modifi
 			if value == 0 {
 				continue
 			}
+			mode := "percentAdd"
+			if isUnitFlatModifierKey(key) {
+				mode = "flat"
+			}
 			items = append(items, ModifierBreakdownItem{
 				Source: "援军武将:" + general.Name,
 				Key:    key,
 				Value:  value,
-				Mode:   "percentAdd",
+				Mode:   mode,
 			})
 		}
 	}

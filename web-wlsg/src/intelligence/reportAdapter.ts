@@ -42,6 +42,7 @@ export interface OfficialReportSideViewModel {
   resultLabel: string
   traitText: string
   traits: OfficialReportTraitViewModel[]
+  passiveTraits: OfficialReportTraitViewModel[]
   generalExp: number | null
   generalLevelBefore: number | null
   generalLevelAfter: number | null
@@ -82,11 +83,11 @@ const traitDetailLabels: Record<string, string> = {
   baseSuppressRate: '基础震慑比例', suppressPerRatio: '每倍差距震慑', maxSuppressRate: '最高震慑比例',
   guardPerMinute: '每分钟产兵', maxGuardPerDay: '每日产兵上限', captureMax: '设计单兵种俘虏上限', maxReturnCount: '设计返还上限',
   maxReviveCount: '设计复活上限', maxAffectedCount: '最大影响数量', minMarchSeconds: '最低行军时间', disableTraitCount: '设计压制特性数',
-  generalAttackFlat: '将领攻击固定加成', generalDefenseFlat: '设计全军防御增加', unitAttackFlat: '设计单位攻击增加',
-  preBattleAffected: '战前真实伤亡', suppressedUnits: '本场压制兵力', capturedUnits: '俘虏归队', capturedToGarrison: '俘虏驻防', modifiedUnits: '实际攻防修正',
+  generalAttackFlat: '将领攻击固定加成', generalDefenseFlat: '设计全军防御增加', unitAttackFlat: '设计单位攻击增加', unitSpeedFlat: '设计单位移动增加',
+  preBattleAffected: '战前真实伤亡', suppressedUnits: '本场压制兵力', fledUnits: '本场溃逃兵力', capturedUnits: '俘虏归队', capturedToGarrison: '俘虏驻防', modifiedUnits: '实际攻防修正',
   attackModifiedUnits: '实际攻击修正', infantryDefenseModifiedUnits: '实际步防修正', cavalryDefenseModifiedUnits: '实际骑防修正',
   extraLosses: '追加损失', targetExtraLosses: '目标兵种追加损失', reducedLosses: '减少损失', disabledTraits: '压制特性',
-  revivedUnits: '复活兵力', returnedUnits: '返还兵力', extraDamage: '额外伤害', totalRevived: '复活总数',
+  revivedUnits: '复活兵力', returnedUnits: '返还兵力', returnedFledUnits: '战后返回兵力', extraDamage: '额外伤害', totalRevived: '复活总数',
   totalSuppressed: '压制总数', totalCaptured: '俘虏总数', disabledTraitCount: '实际压制特性数',
   plunderDelta: '掠夺资源修正',
 }
@@ -108,9 +109,10 @@ const traitPhaseOverrides: Record<string, string> = {
   mouding_houfa: '防守/增援战斗前',
   meihuo_raozhen: '主动进攻战斗前',
   huchi_chongzhen: '主动进攻战斗前',
-  pojun_pofang: '主动进攻战斗前',
+  huzhu_xuezhan: '防守/增援战斗前',
   baibu_chuanyang: '主动进攻战斗前',
   sizhandaodi: '主动进攻战斗前',
+  weizhen_zhenhe: '主动进攻战斗前',
   weizhen_xiaoyao: '主动进攻战斗前',
   wusheng_pojun: '主动进攻战斗前',
   wanren_nuhou: '主动进攻战斗前',
@@ -123,7 +125,6 @@ const traitPhaseOverrides: Record<string, string> = {
   longdan_jiuyuan: '防守/增援战斗结算后',
   rende: '进攻/防守/增援战斗结束后',
   renzhu_shouhu: '进攻/防守/增援战斗结束后',
-  huzhu_sizhan: '进攻/防守/增援战败后',
   guicai_yice: '进攻/防守/增援战败后',
 }
 
@@ -188,7 +189,7 @@ function reportUnitNames(detail: BattleReportDetailState) {
 /** 根据特性实际结果字段判断它发生在哪个战斗阶段。 */
 function traitPhase(detail: Record<string, unknown>) {
   const keys = new Set(Object.keys(detail))
-  if (['preBattleAffected', 'suppressedUnits', 'capturedUnits', 'capturedToGarrison', 'modifiedUnits', 'attackModifiedUnits', 'infantryDefenseModifiedUnits', 'cavalryDefenseModifiedUnits', 'totalSuppressed', 'totalCaptured'].some((key) => keys.has(key))) return '战斗前'
+  if (['preBattleAffected', 'suppressedUnits', 'fledUnits', 'capturedUnits', 'capturedToGarrison', 'modifiedUnits', 'attackModifiedUnits', 'infantryDefenseModifiedUnits', 'cavalryDefenseModifiedUnits', 'totalSuppressed', 'totalCaptured'].some((key) => keys.has(key))) return '战斗前'
   if (['extraLosses', 'targetExtraLosses', 'reducedLosses', 'disabledTraits', 'disableTraitCount', 'disabledTraitCount', 'extraDamage'].some((key) => keys.has(key))) return '战斗结算后'
   if (['revivedUnits', 'returnedUnits', 'totalRevived'].some((key) => keys.has(key))) return '战斗结束后'
   if (keys.has('plunderDelta')) return '掠夺结算'
@@ -197,13 +198,14 @@ function traitPhase(detail: Record<string, unknown>) {
 
 /** 把比例、数量和逐兵种变化完整格式化为官方战报的一行说明。 */
 function formatTraitDetail(detail: Record<string, unknown>, unitNames: Map<string, string>) {
-  const orderedKeys = Object.keys(detail).sort((left, right) => {
+  const orderedKeys = Object.keys(detail).filter((key) => key !== 'suppressedUnits' || !isRecord(detail.fledUnits)).sort((left, right) => {
 		const rank = (key: string) => ['effectRate', 'maxAffectedRate', 'captureRate', 'captureMax', 'disableTraitCount', 'attackBonusRate', 'unitAttackFlat', 'attackReductionRate', 'enemyDefenseReductionRate', 'defenseBonusRate', 'generalDefenseFlat', 'lossReductionRate', 'maxReviveCount', 'maxReturnCount', 'plunderBonusRate'].includes(key) ? 0 : isRecord(detail[key]) ? 1 : key === 'triggerChance' ? 3 : 2
     return rank(left) - rank(right)
   })
   return orderedKeys.flatMap((key) => {
     const value = detail[key]
-    const label = traitDetailLabels[key] || key
+    const labelKey = key === 'returnedUnits' && isRecord(detail.fledUnits) ? 'returnedFledUnits' : key
+    const label = traitDetailLabels[labelKey] || labelKey
     if (typeof value === 'number' && Number.isFinite(value)) {
       if (traitPercentageKeys.has(key) || /Rate$|Chance$|Percent$|Ratio$/i.test(key)) return [`${label}：${Math.round(value * 10000) / 100}%`]
       if (/Seconds$/i.test(key)) return [`${label}：${value.toLocaleString('zh-CN')} 秒`]
@@ -238,13 +240,39 @@ function sideResult(role: OfficialReportSideViewModel['role'], winnerSide?: stri
   return { result: won ? 'victory' as const : 'defeat' as const, resultLabel: won ? '胜' : '败' }
 }
 
+const passiveUnitTraits: Record<string, { unitName: string }> = {
+  jixing_benxi: { unitName: '骁骑营' },
+  huhu_shengwei: { unitName: '虎豹骑' },
+}
+
+/** 从参战将领快照读取永久兵种被动，和本场触发时间线分开展示。 */
+function sidePassiveTraits(side: BattleReportSideState): OfficialReportTraitViewModel[] {
+  const result: OfficialReportTraitViewModel[] = []
+  for (const general of side.generals ?? []) {
+    for (const trait of general.traits ?? []) {
+      const definition = passiveUnitTraits[trait.traitId]
+      if (!definition) continue
+      const attack = Number(trait.params?.unitAttackFlat ?? 0)
+      const speed = Number(trait.params?.unitSpeedFlat ?? 0)
+      if (attack <= 0 && speed <= 0) continue
+      result.push({
+        key: `passive-${general.id}-${trait.traitId}`,
+        name: traitLabel(trait.traitId, trait.name),
+        phase: '永久被动',
+        detailText: `${definition.unitName}攻击 +${attack.toLocaleString('zh-CN')}；移动 +${speed.toLocaleString('zh-CN')}`,
+      })
+    }
+  }
+  return result
+}
+
 /** 把标准战报一方转换为官方参战卡片。 */
 function mapSide(side: BattleReportSideState, index: number, winnerSide: string | undefined, traits: OfficialReportTraitViewModel[], generalExp: number | null, generalLevelBefore: number | null = null, generalLevelAfter: number | null = null, forcedRole?: OfficialReportSideViewModel['role'], forceGeneralPlaceholder = false): OfficialReportSideViewModel {
   const role = forcedRole ?? (side.role === 'attacker' ? 'attacker' : side.role === 'reinforcement' ? 'reinforcement' : 'defender')
   const result = sideResult(role, winnerSide)
   const general = side.generals?.[0] ?? null
   const showGeneralPlaceholder = !general || forceGeneralPlaceholder || side.targetType === 'npc_city'
-  return { key: `${role}-${side.playerId || side.targetId || index}`, role, roleLabel: role === 'attacker' ? '进攻方' : role === 'reinforcement' ? '增援方' : '防守方', name: side.cityName || side.playerName || side.targetName || '未知城池', faction: side.faction || 'wei', factionIcon: `/assets/official/report/country_${factionIndex[side.faction || ''] ?? 1}.gif`, general, showGeneralPlaceholder, units: mapUnits(side), power: Math.max(0, side.power || 0), result: result.result, resultLabel: result.resultLabel, traitText: traits.map((trait) => [trait.name, trait.phase, trait.detailText].filter(Boolean).join(' ')).join('；'), traits, generalExp: general?.generalExpGained ?? generalExp, generalLevelBefore: general?.generalLevelBefore ?? generalLevelBefore, generalLevelAfter: general?.generalLevelAfter ?? generalLevelAfter }
+  return { key: `${role}-${side.playerId || side.targetId || index}`, role, roleLabel: role === 'attacker' ? '进攻方' : role === 'reinforcement' ? '增援方' : '防守方', name: side.cityName || side.playerName || side.targetName || '未知城池', faction: side.faction || 'wei', factionIcon: `/assets/official/report/country_${factionIndex[side.faction || ''] ?? 1}.gif`, general, showGeneralPlaceholder, units: mapUnits(side), power: Math.max(0, side.power || 0), result: result.result, resultLabel: result.resultLabel, traitText: traits.map((trait) => [trait.name, trait.phase, trait.detailText].filter(Boolean).join(' ')).join('；'), traits, passiveTraits: sidePassiveTraits(side), generalExp: general?.generalExpGained ?? generalExp, generalLevelBefore: general?.generalLevelBefore ?? generalLevelBefore, generalLevelAfter: general?.generalLevelAfter ?? generalLevelAfter }
 }
 
 /** 判断一条触发结果的玩家、绝对角色或标准位置是否属于当前参战方。 */

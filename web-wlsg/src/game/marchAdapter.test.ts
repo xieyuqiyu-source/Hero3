@@ -50,9 +50,8 @@ describe('出征状态适配', () => {
     expect(items).toEqual([])
   })
 
-  it('五项正式行军特性都直接使用后端最终到达时间和最低时长结果', () => {
+  it('四项正式行军特性都直接使用后端最终到达时间和最低时长结果', () => {
     const cases = [
-      { traitId: 'jixing_benxi', name: '疾行奔袭', duration: 2475, speed: 1.2, arrivesAt: '2026-07-13T00:41:15Z' },
       { traitId: 'qijin_qichu', name: '七进七出', duration: 60, speed: 2, arrivesAt: '2026-07-13T00:01:00Z' },
       { traitId: 'baiyi_dujiang', name: '白衣渡江', duration: 2475, speed: 1.2, arrivesAt: '2026-07-13T00:41:15Z' },
       { traitId: 'baiyi_jixing', name: '白衣急行', duration: 2063, speed: 1.44, arrivesAt: '2026-07-13T00:34:23Z' },

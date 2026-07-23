@@ -13,6 +13,7 @@ interface BattleParticipantBlockProps {
   rewards?: BattleReportRewards
   feedback?: string
   effectText?: string
+  passiveText?: string
   effectTone?: 'normal' | 'highlight'
   result?: 'victory' | 'defeat' | 'draw' | 'none'
   generalExp?: number
@@ -112,6 +113,7 @@ const BattleParticipantBlock: FC<BattleParticipantBlockProps> = ({
   rewards,
   feedback,
   effectText,
+  passiveText,
   effectTone = 'normal',
   result = 'none',
   generalExp = 0,
@@ -165,6 +167,11 @@ const BattleParticipantBlock: FC<BattleParticipantBlockProps> = ({
               {side.power > 0 && <span>战力：<b className="text-amber-500">{side.power.toLocaleString()}</b></span>}
             </div>
           </div>
+          {passiveText && (
+            <div className="border-b border-[var(--color-border)] px-3 py-2 text-center text-[11px] font-bold text-sky-400">
+              {passiveText}
+            </div>
+          )}
           <div className={`px-3 py-2 text-center text-[11px] ${effectTone === 'highlight' ? 'font-bold text-amber-500' : 'text-[var(--color-text-secondary)]'}`}>
             {effectText || '本场无触发效果'}
           </div>

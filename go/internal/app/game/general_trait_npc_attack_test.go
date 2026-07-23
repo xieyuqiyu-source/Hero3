@@ -228,8 +228,8 @@ func TestNpcAttackBonusTraitsMatchPowerStateAndReports(t *testing.T) {
 		baseAttack  int
 		attackDelta int
 	}{
-		{name: "死战到底", traitID: "sizhandaodi", generalID: "dianwei", unitType: "weiInfantry", target: "infantry", mode: "attack", params: map[string]float64{"attackBonusRate": 0.35}, designKey: "attackBonusRate", designValue: 0.35, baseAttack: 10, attackDelta: 4},
-		{name: "威震逍遥", traitID: "weizhen_xiaoyao", generalID: "zhangliao", unitType: "weiCavalry", target: "cavalry", mode: "attack", params: map[string]float64{"attackBonusRate": 0.35}, designKey: "attackBonusRate", designValue: 0.35, baseAttack: 14, attackDelta: 5},
+		{name: "死战到底", traitID: "sizhandaodi", generalID: "dianwei", unitType: "weiInfantry", target: "infantry", mode: "attack", params: map[string]float64{"triggerChance": 1, "attackBonusRate": 0.35}, designKey: "attackBonusRate", designValue: 0.35, baseAttack: 10, attackDelta: 4},
+		{name: "威震逍遥", traitID: "weizhen_xiaoyao", generalID: "zhangliao", unitType: "weiCavalry", target: "cavalry", mode: "attack", params: map[string]float64{"triggerChance": 1, "attackBonusRate": 0.35}, designKey: "attackBonusRate", designValue: 0.35, baseAttack: 14, attackDelta: 5},
 		{name: "武圣破军", traitID: "wusheng_pojun", generalID: "guanyu", unitType: "weiInfantry", mode: "attack", params: map[string]float64{"attackBonusRate": 0.2}, designKey: "attackBonusRate", designValue: 0.2, baseAttack: 10, attackDelta: 2},
 		{name: "万人怒吼", traitID: "wanren_nuhou", generalID: "zhangfei", unitType: "weiInfantry", target: "infantry", mode: "attack", params: map[string]float64{"attackBonusRate": 0.2}, designKey: "attackBonusRate", designValue: 0.2, baseAttack: 10, attackDelta: 2},
 		{name: "小霸王", traitID: "xiaobawang_tieqi", generalID: "sunce", unitType: "overlordRider", target: "overlordRider", mode: "attack", params: map[string]float64{"unitAttackFlat": 50}, designKey: "unitAttackFlat", designValue: 50, baseAttack: 28, attackDelta: 50},
@@ -310,7 +310,7 @@ func TestNpcGeneralSnapshotStaysAtPreBattleLevelAfterUpgrade(t *testing.T) {
 	}
 }
 
-// TestNpcEnemyDefenseReductionTraitsMatchPowerStateAndReports 验证五项主动破防真实降低 NPC 防御战力并保存两类实际变化。
+// TestNpcEnemyDefenseReductionTraitsMatchPowerStateAndReports 验证四项主动破防真实降低 NPC 防御战力并保存两类实际变化。
 func TestNpcEnemyDefenseReductionTraitsMatchPowerStateAndReports(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -320,16 +320,20 @@ func TestNpcEnemyDefenseReductionTraitsMatchPowerStateAndReports(t *testing.T) {
 		rate         float64
 		defensePower int
 		defenseDelta int
+		cavalryDelta int
 	}{
 		{name: "魅惑扰阵", traitID: "meihuo_raozhen", traitType: general.TraitTypeBonus, generalID: "zhenmi", rate: 0.25, defensePower: 800, defenseDelta: -2},
-		{name: "虎痴冲阵", traitID: "huchi_chongzhen", traitType: general.TraitTypeSpecial, generalID: "xuchu", rate: 0.2, defensePower: 800, defenseDelta: -2},
-		{name: "破敌防御", traitID: "pojun_pofang", traitType: general.TraitTypeBonus, generalID: "xuchu", rate: 0.35, defensePower: 700, defenseDelta: -3},
+		{name: "虎痴冲阵", traitID: "huchi_chongzhen", traitType: general.TraitTypeSpecial, generalID: "xuchu", rate: 0.3, defensePower: 700, defenseDelta: -3, cavalryDelta: -2},
 		{name: "百步穿杨", traitID: "baibu_chuanyang", traitType: general.TraitTypeSpecial, generalID: "huangzhong", rate: 0.2, defensePower: 800, defenseDelta: -2},
 		{name: "奇兵绕后", traitID: "qibing_raohou", traitType: general.TraitTypeSpecial, generalID: "weiyan", rate: 0.2, defensePower: 800, defenseDelta: -2},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			cavalryDelta := tc.cavalryDelta
+			if cavalryDelta == 0 {
+				cavalryDelta = tc.defenseDelta
+			}
 			report, stored := resolveNpcEnemyDefenseTraitTest(t, tc.traitID, tc.traitType, tc.generalID, tc.rate)
 			if report.EnemyPower != tc.defensePower || report.PlayerPower != 1000 {
 				t.Fatalf("expected %s attack/defense power 1000/%d, got %d/%d", tc.traitID, tc.defensePower, report.PlayerPower, report.EnemyPower)
@@ -337,7 +341,7 @@ func TestNpcEnemyDefenseReductionTraitsMatchPowerStateAndReports(t *testing.T) {
 			outcome, ok := report.TraitOutcomes[tc.traitID]
 			infantry, infantryOK := outcome.Detail["infantryDefenseModifiedUnits"].(map[string]int)
 			cavalry, cavalryOK := outcome.Detail["cavalryDefenseModifiedUnits"].(map[string]int)
-			if !ok || !infantryOK || !cavalryOK || infantry["weiInfantry"] != tc.defenseDelta || cavalry["weiInfantry"] != tc.defenseDelta || outcome.Detail["enemyDefenseReductionRate"] != tc.rate || outcome.OwnerSide != "attacker" || outcome.OwnerGeneralID != tc.generalID {
+			if !ok || !infantryOK || !cavalryOK || infantry["weiInfantry"] != tc.defenseDelta || cavalry["weiInfantry"] != cavalryDelta || outcome.Detail["enemyDefenseReductionRate"] != tc.rate || outcome.OwnerSide != "attacker" || outcome.OwnerGeneralID != tc.generalID {
 				t.Fatalf("expected %s design rate and actual defense changes, outcome=%+v", tc.traitID, outcome)
 			}
 
@@ -347,7 +351,7 @@ func TestNpcEnemyDefenseReductionTraitsMatchPowerStateAndReports(t *testing.T) {
 					if trait.TraitID == tc.traitID {
 						standardInfantry, standardInfantryOK := trait.Detail["infantryDefenseModifiedUnits"].(map[string]int)
 						standardCavalry, standardCavalryOK := trait.Detail["cavalryDefenseModifiedUnits"].(map[string]int)
-						standardFound = standardInfantryOK && standardCavalryOK && standardInfantry["weiInfantry"] == tc.defenseDelta && standardCavalry["weiInfantry"] == tc.defenseDelta && trait.OwnerSide == "primary" && trait.OwnerRole == "attacker" && trait.GeneralID == tc.generalID
+						standardFound = standardInfantryOK && standardCavalryOK && standardInfantry["weiInfantry"] == tc.defenseDelta && standardCavalry["weiInfantry"] == cavalryDelta && trait.OwnerSide == "primary" && trait.OwnerRole == "attacker" && trait.GeneralID == tc.generalID
 					}
 				}
 			}
@@ -688,7 +692,7 @@ func TestNpcXiaobawangZhuijiRequiresPlunderVictory(t *testing.T) {
 	}
 }
 
-// TestNpcFormalLossReturnTraitsRespectOutcome 验证典韦和郭嘉以正式将领身份只在 NPC 战败后返还真实兵力。
+// TestNpcFormalLossReturnTraitsRespectOutcome 验证郭嘉以正式将领身份只在 NPC 战败后返还真实兵力。
 func TestNpcFormalLossReturnTraitsRespectOutcome(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -698,7 +702,6 @@ func TestNpcFormalLossReturnTraitsRespectOutcome(t *testing.T) {
 		rate       float64
 		wantReturn int
 	}{
-		{name: "护主死战", traitID: "huzhu_sizhan", traitType: general.TraitTypeSpecial, generalID: "dianwei", rate: 0.15, wantReturn: 15},
 		{name: "鬼才遗策", traitID: "guicai_yice", traitType: general.TraitTypeBonus, generalID: "guojia", rate: 0.1, wantReturn: 10},
 	}
 
@@ -811,55 +814,51 @@ func TestNpcSimaYiYibingHitAndMissExcludeDefenderTrait(t *testing.T) {
 	}
 }
 
-// TestNpcDianWeiDualTraitsKeepLossReturnProbabilityIndependent 验证典韦主动加攻后战败返兵的命中与未命中不互相污染。
-func TestNpcDianWeiDualTraitsKeepLossReturnProbabilityIndependent(t *testing.T) {
+// TestNpcDianWeiSizhanHitMissKeepsDefenseTraitInvalid 验证死战到底命中与未命中，并锁定护主血战主动进攻无效。
+func TestNpcDianWeiSizhanHitMissKeepsDefenseTraitInvalid(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
 		triggerChance float64
-		wantReturned  int
+		wantPower     int
+		wantEnemyLoss int
 	}{
-		{name: "护主死战命中", triggerChance: 1, wantReturned: 15},
-		{name: "护主死战未命中", triggerChance: 0},
+		{name: "死战到底命中", triggerChance: 1, wantPower: 1400, wantEnemyLoss: 120},
+		{name: "死战到底未命中", triggerChance: 0, wantPower: 1000, wantEnemyLoss: 74},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			hero := GeneralHeroConfig{
 				ID: "dianwei", Name: "典韦", Faction: "wei", Enabled: true,
 				SpecialTrait: GeneralTraitConfig{
-					TraitID: "huzhu_sizhan", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army", RequiredOutcome: "loss",
-					Params: map[string]float64{"triggerChance": tc.triggerChance, "lossReductionRate": 0.15, "maxReturnCount": 10000},
+					TraitID: "huzhu_xuezhan", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "self_army", TargetUnitType: "jinWeiSoldier",
+					AllowedSides: []string{"defender", "reinforcement"}, Params: map[string]float64{"triggerChance": 1, "generalDefenseFlat": 20},
 				},
 				BonusTrait: GeneralTraitConfig{
 					TraitID: "sizhandaodi", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", TargetUnitType: "infantry",
-					AllowedSides: []string{"attacker"}, Params: map[string]float64{"attackBonusRate": 0.35},
+					AllowedSides: []string{"attacker"}, Params: map[string]float64{"triggerChance": tc.triggerChance, "attackBonusRate": 0.35},
 				},
 			}
 			report, stored := resolveNpcAfterBattleHeroTest(t, "dianwei_dual_"+tc.name, hero, 100, 200)
-			if report.Result != "defender_victory" || report.PlayerPower != 1400 || report.EnemyPower != 2000 || report.LostUnits["weiInfantry"] != 100 || report.DefenderLostUnits["weiInfantry"] != 120 || report.GeneralExpGained != 120 {
-				t.Fatalf("expected exact Dian Wei NPC core result after Sizhan bonus, report=%+v", report)
+			if report.Result != "defender_victory" || report.PlayerPower != tc.wantPower || report.EnemyPower != 2000 || report.LostUnits["weiInfantry"] != 100 || report.DefenderLostUnits["weiInfantry"] != tc.wantEnemyLoss || report.GeneralExpGained != tc.wantEnemyLoss {
+				t.Fatalf("expected exact Dian Wei NPC hit/miss result, report=%+v", report)
 			}
-			if report.RevivedUnits["weiInfantry"] != tc.wantReturned || report.SurvivedUnits["weiInfantry"] != tc.wantReturned || armySliceToMap(stored.Army)["weiInfantry"] != tc.wantReturned || armySliceToMap(stored.NpcState.Cities[0].Army)["weiInfantry"] != 80 {
-				t.Fatalf("expected Dian Wei NPC return and state %d, report=%+v stored=%+v", tc.wantReturned, report, stored)
+			if report.RevivedUnits["weiInfantry"] != 0 || report.SurvivedUnits["weiInfantry"] != 0 || armySliceToMap(stored.Army)["weiInfantry"] != 0 || armySliceToMap(stored.NpcState.Cities[0].Army)["weiInfantry"] != 200-tc.wantEnemyLoss {
+				t.Fatalf("expected no obsolete troop return and authoritative NPC state, report=%+v stored=%+v", report, stored)
 			}
-			if report.Detail == nil || !reportSideGeneralOwnsTrait(report.Detail.PrimarySide, "dianwei", "huzhu_sizhan") || !reportSideGeneralOwnsTrait(report.Detail.PrimarySide, "dianwei", "sizhandaodi") {
+			if report.Detail == nil || !reportSideGeneralOwnsTrait(report.Detail.PrimarySide, "dianwei", "huzhu_xuezhan") || !reportSideGeneralOwnsTrait(report.Detail.PrimarySide, "dianwei", "sizhandaodi") {
 				t.Fatalf("expected Dian Wei NPC snapshot to preserve both traits, detail=%+v", report.Detail)
 			}
-			attackModified, ok := report.TraitOutcomes["sizhandaodi"].Detail["attackModifiedUnits"].(map[string]int)
-			wantTimeline := 1
-			if tc.wantReturned > 0 {
-				wantTimeline = 2
+			if standardReportHasTrait(report.Detail, "huzhu_xuezhan") {
+				t.Fatalf("expected defense-only Huzhu Xuezhan absent from NPC attack timeline, report=%+v", report)
 			}
-			if !ok || attackModified["weiInfantry"] != 4 || len(report.TraitTriggered) != wantTimeline || report.TraitTriggered[0] != "sizhandaodi" {
-				t.Fatalf("expected Sizhan to add 4 attack before optional Huzhu, report=%+v", report)
-			}
-			if tc.wantReturned == 0 {
-				if standardReportHasTrait(report.Detail, "huzhu_sizhan") || len(report.TraitOutcomes) != 1 || len(report.Detail.Traits) != 1 {
-					t.Fatalf("expected legal Huzhu miss to keep only Sizhan timeline, report=%+v", report)
+			if tc.triggerChance == 0 {
+				if len(report.TraitTriggered) != 0 || len(report.TraitOutcomes) != 0 || len(report.Detail.Traits) != 0 {
+					t.Fatalf("expected missed Sizhan and invalid Huzhu to keep empty timeline, report=%+v", report)
 				}
 				return
 			}
-			returned, returnedOK := report.TraitOutcomes["huzhu_sizhan"].Detail["returnedUnits"].(map[string]int)
-			if !returnedOK || returned["weiInfantry"] != tc.wantReturned || report.TraitTriggered[1] != "huzhu_sizhan" || len(report.Detail.Traits) != 2 {
-				t.Fatalf("expected Huzhu to return %d after Sizhan, report=%+v", tc.wantReturned, report)
+			attackModified, ok := report.TraitOutcomes["sizhandaodi"].Detail["attackModifiedUnits"].(map[string]int)
+			if !ok || attackModified["weiInfantry"] != 4 || len(report.TraitTriggered) != 1 || report.TraitTriggered[0] != "sizhandaodi" || len(report.Detail.Traits) != 1 {
+				t.Fatalf("expected only Sizhan to add 4 attack, report=%+v", report)
 			}
 		})
 	}

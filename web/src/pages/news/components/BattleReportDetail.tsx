@@ -176,6 +176,23 @@ function sideTriggeredEffectText(
   }).join('；')
 }
 
+// sidePassiveEffectText 从参战快照展示真实生效的兵种永久被动，不混入触发时间线。
+function sidePassiveEffectText(side: BattleReportSide): string {
+  const definitions: Record<string, { name: string; unitName: string }> = {
+    jixing_benxi: { name: '疾行奔袭', unitName: '骁骑营' },
+    huhu_shengwei: { name: '虎虎生威', unitName: '虎豹骑' },
+  }
+  const lines = (side.generals ?? []).flatMap((general) => general.traits ?? []).flatMap((trait) => {
+    const definition = definitions[trait.traitId]
+    if (!definition) return []
+    const attack = Number(trait.params?.unitAttackFlat ?? 0)
+    const speed = Number(trait.params?.unitSpeedFlat ?? 0)
+    if (attack <= 0 && speed <= 0) return []
+    return [`${definition.name} · ${definition.unitName}攻击 +${attack.toLocaleString()}，移动 +${speed.toLocaleString()}`]
+  })
+  return lines.length > 0 ? `被动生效：${lines.join('；')}` : ''
+}
+
 // participantResult 按战报胜方计算当前参与方的胜败印。
 function participantResult(detail: BattleReportDetailData, side: BattleReportSide): 'victory' | 'defeat' | 'draw' | 'none' {
   const winnerSide = detail.winnerSide || (detail.result === 'attacker_victory' ? 'attacker' : detail.result === 'defender_victory' ? 'defender' : detail.result)
@@ -238,6 +255,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
         rewards={detail.ownerSide === 'defender' ? undefined : detail.rewards}
         feedback={sideLossFeedback(attackerSide)}
         effectText={attackerTraitText}
+        passiveText={sidePassiveEffectText(attackerSide)}
         effectTone={attackerTraitText === '本场无触发效果' ? 'normal' : 'highlight'}
         result={participantResult(detail, attackerSide)}
         generalExp={attackerGeneralExp}
@@ -265,6 +283,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
           rewards={detail.ownerSide === 'defender' ? detail.rewards : undefined}
           feedback={sideLossFeedback(defenderSide)}
           effectText={defenderTraitText}
+          passiveText={sidePassiveEffectText(defenderSide)}
           effectTone={defenderTraitText === '本场无触发效果' ? 'normal' : 'highlight'}
           result={participantResult(detail, defenderSide)}
           generalExp={defenderGeneralExp}
@@ -286,6 +305,7 @@ const BattleReportDetail: FC<BattleReportDetailProps> = ({ report, onBack }) => 
             side={side}
             feedback={sideLossFeedback(side)}
             effectText={reinforcementTraitText}
+            passiveText={sidePassiveEffectText(side)}
             effectTone={reinforcementTraitText === '本场无触发效果' ? 'normal' : 'highlight'}
             result={participantResult(detail, side)}
             generalExp={side.generalExpGained}

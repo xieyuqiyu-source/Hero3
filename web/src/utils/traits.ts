@@ -49,14 +49,14 @@ export const TRAIT_REGISTRY: Record<string, TraitMeta> = {
   mouding_houfa: trait('mouding_houfa', '谋定后发', 'bonus', '防守或作为援军战斗前有 35% 概率使所率全军步兵、骑兵防御提升 35%，主动进攻无效；概率和比例可由 GM 配置。', '防守/增援战斗前'),
   meiren: trait('meiren', '美人心计', 'special', '仅在主动进攻战斗前有 50% 概率使所率全军攻击提升 25%，概率可由 GM 配置。', '主动进攻战斗前'),
   meihuo_raozhen: trait('meihuo_raozhen', '魅惑扰阵', 'bonus', '仅在主动进攻战斗前有 50% 概率使敌方全军步兵、骑兵防御降低 25%，概率可由 GM 配置。', '主动进攻战斗前'),
-  huchi_chongzhen: trait('huchi_chongzhen', '虎痴冲阵', 'special', '仅在主动进攻时有 35% 概率使敌方全军步兵、骑兵防御降低 20%。', '主动进攻战斗前'),
-  pojun_pofang: trait('pojun_pofang', '破敌防御', 'bonus', '仅在主动进攻时使敌方全军步兵、骑兵防御降低 35%。', '主动进攻战斗前'),
-  huzhu_sizhan: trait('huzhu_sizhan', '护主死战', 'special', '进攻、守城或作为援军战败后有 35% 概率返还本场真实阵亡的 15%，单场最多返还 10000，降低最终实际损失。', '进攻/防守/增援战败后'),
-  sizhandaodi: trait('sizhandaodi', '死战到底', 'bonus', '仅在主动进攻时使所带步兵攻击提升 35%。', '主动进攻战斗前'),
-  jixing_benxi: trait('jixing_benxi', '疾行奔袭', 'special', '主动出征或增援创建时固定提升 20% 行军速度，最低 60 秒，不作为战斗触发特性。', '行军创建时'),
-  dunzhen_fangyu: trait('dunzhen_fangyu', '盾阵防御', 'bonus', '仅在防守或作为援军时，使所带部队的步兵、骑兵防御提升 35%。', '防守/增援战斗前'),
-  weizhen_zhenhe: trait('weizhen_zhenhe', '威震震慑', 'special', '战斗前有 35% 概率让敌方 20% 兵力仅本场不参战，战后保留。', '战斗前'),
-  weizhen_xiaoyao: trait('weizhen_xiaoyao', '威震逍遥', 'bonus', '仅在主动进攻时使所带骑兵攻击提升 35%。', '主动进攻战斗前'),
+  huchi_chongzhen: trait('huchi_chongzhen', '虎痴冲阵', 'special', '仅在主动进攻战斗前有 50% 概率使敌方全军步兵、骑兵防御降低 30%；概率和比例可由 GM 配置。', '主动进攻战斗前'),
+  huhu_shengwei: trait('huhu_shengwei', '虎虎生威', 'bonus', '被动使许褚所率虎豹骑固定增加 12 点攻击和 5 点移动；进攻、防守、增援均持续生效，不作为战斗触发特性。', '永久被动'),
+  huzhu_xuezhan: trait('huzhu_xuezhan', '护主血战', 'special', '防守或增援战斗前必定使典韦所率禁卫甲士固定增加 20 点步兵防御和 20 点骑兵防御；主动进攻无效，固定值可由 GM 配置。', '防守/增援战斗前'),
+  sizhandaodi: trait('sizhandaodi', '死战到底', 'bonus', '仅在主动进攻战斗前有 60% 概率使典韦所率步兵攻击提升 35%；概率和比例可由 GM 配置。', '主动进攻战斗前'),
+  jixing_benxi: trait('jixing_benxi', '疾行奔袭', 'special', '被动使夏侯渊所率骁骑营固定增加 18 点攻击和 5 点移动；进攻、防守、增援均持续生效，不作为战斗触发特性。', '永久被动'),
+  dunzhen_fangyu: trait('dunzhen_fangyu', '盾阵防御', 'bonus', '仅在防守或作为援军战斗前，有 60% 概率使所率全军步兵、骑兵防御提升 30%；概率和比例可由 GM 配置。', '防守/增援战斗前'),
+  weizhen_zhenhe: trait('weizhen_zhenhe', '震慑全军', 'special', '仅在主动进攻战斗前有 35% 概率使敌方 25% 兵力溃逃；溃逃兵不参与本次攻防、不计死亡，战后完整返回敌方部队。', '主动进攻战斗前'),
+  weizhen_xiaoyao: trait('weizhen_xiaoyao', '威震逍遥', 'bonus', '仅在主动进攻战斗前有 60% 概率使所带骑兵攻击提升 35%。', '主动进攻战斗前'),
   shengui_zhicai: trait('shengui_zhicai', '神鬼之才', 'special', '郭嘉留城时降低 50% 征兵资源消耗，离城失效，不作为战斗触发特性。', '留城征兵消耗时'),
   guicai_yice: trait('guicai_yice', '鬼才遗策', 'bonus', '进攻、守城或作为援军战败后返还本场真实阵亡的 10%，单场最多返还 10000，降低最终实际损失。', '进攻/防守/增援战败后'),
   wangzuo_zhicai: trait('wangzuo_zhicai', '王佐之才', 'special', '荀彧留城时降低 5% 征兵资源消耗，离城失效，不作为战斗触发特性。', '留城征兵消耗时'),
@@ -99,8 +99,8 @@ export const GENERAL_TRAITS: Record<string, string[]> = {
   caocao: ['weiwu_haoling', 'weiwu_tongyu'],
   simayi: ['yibing_touxi', 'mouding_houfa'],
   zhenmi: ['meiren', 'meihuo_raozhen'],
-  xuchu: ['huchi_chongzhen', 'pojun_pofang'],
-  dianwei: ['huzhu_sizhan', 'sizhandaodi'],
+  xuchu: ['huchi_chongzhen', 'huhu_shengwei'],
+  dianwei: ['huzhu_xuezhan', 'sizhandaodi'],
   xiahouyuan: ['jixing_benxi', 'dunzhen_fangyu'],
   zhangliao: ['weizhen_zhenhe', 'weizhen_xiaoyao'],
   guojia: ['shengui_zhicai', 'guicai_yice'],
@@ -148,6 +148,7 @@ const PARAM_LABELS: Record<string, string> = {
   forceBonus: '武力增加',
   generalDefenseFlat: '全军防御增加',
   unitAttackFlat: '兵种攻击',
+  unitSpeedFlat: '兵种移动',
   enemyDefenseReductionRate: '敌方防御降低',
   lossReductionRate: '损失降低',
   reviveRate: '复活比例',
@@ -177,6 +178,7 @@ const OUTCOME_LABELS: Record<string, string> = {
   totalRevived: '复活总数',
   revivedUnits: '复活兵力',
   returnedUnits: '返还兵力',
+  returnedFledUnits: '战后返回兵力',
   extraDamage: '额外伤害',
   extraLosses: '追加损失',
   targetExtraLosses: '目标兵种追加损失',
@@ -190,11 +192,13 @@ const OUTCOME_LABELS: Record<string, string> = {
   suppressRate: '震慑比例',
   totalSuppressed: '震慑兵力',
   suppressedUnits: '本场压制兵力',
+  fledUnits: '本场溃逃兵力',
   preBattleAffected: '战前真实伤亡',
   modifiedUnits: '实际攻防修正',
   attackModifiedUnits: '实际攻击修正',
   attackBonusRate: '设计攻击加成',
   unitAttackFlat: '设计单位攻击增加',
+  unitSpeedFlat: '设计单位移动增加',
   attackReductionRate: '设计攻击降低',
   enemyDefenseReductionRate: '设计敌方防御降低',
   defenseBonusRate: '设计防御加成',
@@ -324,7 +328,8 @@ export function formatTraitOutcomeDetail(key: string, value: TraitOutcomeValue, 
 export function formatTraitOutcomeDetails(detail?: Record<string, TraitOutcomeValue>, options: TraitOutcomeFormatOptions = {}): string {
   if (!detail) return ''
   return Object.entries(detail)
-    .map(([key, value]) => formatTraitOutcomeDetail(key, value, options))
+    .filter(([key]) => key !== 'suppressedUnits' || detail.fledUnits == null)
+    .map(([key, value]) => formatTraitOutcomeDetail(key === 'returnedUnits' && detail.fledUnits != null ? 'returnedFledUnits' : key, value, options))
     .filter(Boolean)
     .join('；')
 }

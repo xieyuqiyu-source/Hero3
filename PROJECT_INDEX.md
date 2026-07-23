@@ -2,7 +2,7 @@
 
 # Hero3 AI 项目索引
 
-最后核对：2026-07-22
+最后核对：2026-07-23
 适用分支：`main-core`
 
 ## 1. 这个索引怎么用
@@ -297,6 +297,10 @@ go/internal/transport/api/router.go
 | 曹操特性 | `docs/系统设计/曹操特性更新开发文档.md`、`go/config/generals.json`、两端 `guardProjection.ts` |
 | 甄宓特性 | `docs/系统设计/甄宓特性更新开发文档.md`、`go/config/generals.json`、`go/internal/core/general/traits/catalog.go`、两端战报适配器 |
 | 司马懿特性 | `docs/系统设计/司马懿特性更新开发文档.md`、`go/config/generals.json`、`go/internal/core/general/traits/catalog.go`、PVP/NPC/黄巾/援军测试、两端战报适配器 |
+| 夏侯渊特性 | `docs/系统设计/夏侯渊特性更新开发文档.md`、`go/config/generals.json`、被动兵种 Modifier、PVP/黄巾/援军测试、两端战报被动与触发分栏 |
+| 张辽特性 | `docs/系统设计/张辽特性更新开发文档.md`、`go/config/generals.json`、战前溃逃适配、PVP/NPC/轮回/方向测试、两端战报适配器 |
+| 许褚特性 | `docs/系统设计/许褚特性更新开发文档.md`、`go/config/generals.json`、兵种被动 Modifier、PVP/NPC/方向测试、两端战报被动与触发分栏 |
+| 典韦特性 | `docs/系统设计/典韦特性更新开发文档.md`、`go/config/generals.json`、战前攻防修正、PVP/NPC/黄巾/增援测试、两端战报适配器 |
 | 产品方向 | `docs/产品/项目最终目的.md`、`docs/产品/未来开发规划.md` |
 
 专题设计文档可能同时包含已完成事实和后续规划，读取后必须用当前代码、OpenAPI 和最近记忆核验。
