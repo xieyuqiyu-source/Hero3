@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// TestFormalRecoveryTraitConfigsMatchDesign 逐项核对当前三项战后恢复特性的正式配置和适用条件。
+// TestFormalRecoveryTraitConfigsMatchDesign 逐项核对当前两项战后恢复特性的正式配置和适用条件。
 func TestFormalRecoveryTraitConfigsMatchDesign(t *testing.T) {
 	path := filepath.Join("..", "..", "..", "config", "generals.json")
 	raw, err := os.ReadFile(path)
@@ -31,7 +31,6 @@ func TestFormalRecoveryTraitConfigsMatchDesign(t *testing.T) {
 	}{
 		{generalID: "guojia", traitID: "guicai_yice", traitType: "bonus", scope: "self_army", allowedSides: []string{"attacker", "defender", "reinforcement"}, params: map[string]float64{"effectRate": 0.22, "triggerChance": 1}},
 		{generalID: "liubei", traitID: "renzhu_shouhu", traitType: "bonus", scope: "self_army", allowedSides: []string{"attacker", "defender", "reinforcement"}, params: map[string]float64{"effectRate": 0.35, "triggerChance": 0.6}},
-		{generalID: "zhaoyun", traitID: "longdan_jiuyuan", traitType: "special", scope: "reinforcement_self", allowedSides: []string{"defender", "reinforcement"}, params: map[string]float64{"triggerChance": 0.35, "lossReductionRate": 0.2}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.traitID, func(t *testing.T) {

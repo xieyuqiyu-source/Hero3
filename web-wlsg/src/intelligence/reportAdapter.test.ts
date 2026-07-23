@@ -984,18 +984,18 @@ describe('官方战报适配', () => {
     expect(model.sides.flatMap((side) => side.traits).some((trait) => trait.name === '火烧联营')).toBe(false)
   })
 
-  it('龙胆救援展示防守或增援结算后的逐兵种实际减损', () => {
+  it('龙胆救援展示战前麒麟卫双防与掠夺资源保护', () => {
     const source = report()
     source.detail!.secondarySide!.generals = [{ id: 'zhaoyun', name: '赵云', level: 1 }]
     source.detail!.traits = [{
       traitId: 'longdan_jiuyuan', traitName: '龙胆救援', ownerSide: 'secondary', generalId: 'zhaoyun',
-      detail: { lossReductionRate: 0.2, reducedLosses: { greedyWolf: 20 }, triggerChance: 1 },
+      detail: { defenseBonusRate: 0.25, infantryDefenseModifiedUnits: { qilinGuard: 20 }, cavalryDefenseModifiedUnits: { qilinGuard: 15 }, plunderProtectionContributionRate: 0.2, protectedResources: { wood: 200 } },
     }]
     const model = toOfficialBattleReport(source)
     expect(model.sides[0].traits).toEqual([])
     expect(model.sides[1].traits[0]).toMatchObject({
-      name: '龙胆救援', phase: '防守/增援战斗结算后',
-      detailText: '设计减损比例：20%；减少损失：贪狼营 +20；触发概率：100%',
+      name: '龙胆救援', phase: '防守/增援战斗前及掠夺结算',
+      detailText: '设计防御加成：25%；实际步防修正：麒麟卫 +20；实际骑防修正：麒麟卫 +15；实际保护资源：木材 +200；本次资源保护：20%',
     })
 
     const npcSource = report()
@@ -1112,7 +1112,7 @@ describe('官方战报适配', () => {
     }
 
     for (const [traitId, traitName, generalId, generalName, rate, affected] of [
-      ['zhenhe_quanjun', '震慑全军', 'zhangfei', '张飞', 0.5, 50],
+      ['zhenhe_quanjun', '万人怒吼', 'zhangfei', '张飞', 0.5, 50],
       ['qimen_dunjia', '奇门遁甲', 'zhugeliang', '诸葛亮', 0.25, 25],
     ] as const) {
       const source = report()
@@ -1630,7 +1630,6 @@ describe('官方战报适配', () => {
     const cases = [
       ['sizhandaodi', '死战到底', { attackBonusRate: 0.35, attackModifiedUnits: { huWei: 5 }, triggerChance: 1 }, '主动进攻战斗前'],
       ['jinfan_qixi', '锦帆奇袭', { attackBonusRate: 0.1, attackModifiedUnits: { shadowGuard: 1 }, triggerChance: 1 }, '掠夺战战斗前'],
-      ['qibing_raohou', '奇兵绕后', { enemyDefenseReductionRate: 0.2, infantryDefenseModifiedUnits: { greedyWolf: -2 }, cavalryDefenseModifiedUnits: { greedyWolf: -2 }, triggerChance: 1 }, '主动进攻战斗前'],
     ] as const
     for (const [traitId, traitName, detailData, phase] of cases) {
       const source = report()
@@ -1865,7 +1864,7 @@ describe('官方战报适配', () => {
       },
       {
         generalId: 'zhangfei', generalName: '张飞', defenderFaction: 'shu', defenderUnit: 'shuInfantry', defenderUnitName: '蜀步兵',
-        attackerFaction: 'wei', attackerUnit: 'weiInfantry', attackerUnitName: '魏步兵', traitId: 'zhenhe_quanjun', traitName: '震慑全军', bonusId: 'wanren_nuhou', bonusName: '万人怒吼',
+        attackerFaction: 'wei', attackerUnit: 'weiInfantry', attackerUnitName: '魏步兵', traitId: 'zhenhe_quanjun', traitName: '万人怒吼', bonusId: 'wanren_nuhou', bonusName: '勇冠三军',
         defensePower: 1020, hitAttackPower: 500, hitDefenseLost: 36, hitAttackLost: 50, missDefenseLost: 97,
         detail: { effectRate: 0.5, maxAffectedRate: 0.5, suppressedUnits: { weiInfantry: 50 }, triggerChance: 1 },
         detailText: '设计效果比例：50%；设计最大影响比例：50%；本场压制兵力：魏步兵 +50；触发概率：100%',
@@ -2308,7 +2307,7 @@ describe('官方战报适配', () => {
         missBonusDetail: { attackBonusRate: 0.35, attackModifiedUnits: { weiCavalry: 5 }, triggerChance: 1 },
       },
       {
-        generalId: 'zhangfei', generalName: '张飞', attackerUnit: 'weiInfantry', attackerUnitName: '魏步兵', specialId: 'zhenhe_quanjun', specialName: '震慑全军', bonusId: 'wanren_nuhou', bonusName: '万人怒吼',
+        generalId: 'zhangfei', generalName: '张飞', attackerUnit: 'weiInfantry', attackerUnitName: '魏步兵', specialId: 'zhenhe_quanjun', specialName: '万人怒吼', bonusId: 'wanren_nuhou', bonusName: '勇冠三军',
         hitPower: [2400, 500], missPower: [2400, 1000], hitLosses: [21, 50], missLosses: [57, 100], hitExp: 50, missExp: 100,
         hitSpecialDetail: { effectRate: 0.5, maxAffectedRate: 0.5, suppressedUnits: { weiInfantry: 50 }, triggerChance: 1 },
         hitBonusDetail: { attackBonusRate: 0.2, attackModifiedUnits: { weiInfantry: 2 }, triggerChance: 1 },
@@ -2482,7 +2481,7 @@ describe('官方战报适配', () => {
     expect(model.sides[1]).toMatchObject({ role: 'defender', power: 1020 })
     expect(model.sides[1].units.find((unit) => unit.key === 'greedyWolf')).toMatchObject({ dispatched: 100, lost: 80, survived: 20 })
     expect(model.sides[1].traits).toEqual([{
-      key: 'longdan_jiuyuan-0', name: '龙胆救援', phase: '防守/增援战斗结算后',
+      key: 'longdan_jiuyuan-0', name: '龙胆救援', phase: '防守/增援战斗前及掠夺结算',
       detailText: '设计减损比例：20%；减少损失：贪狼营 +20；触发概率：100%',
     }])
   })
@@ -2522,7 +2521,7 @@ describe('官方战报适配', () => {
     expect(model.sides[1].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 500, lost: 200, survived: 300 })
     expect(model.sides[2].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 500, lost: 250, survived: 250 })
     expect(model.sides[1].traits).toEqual([{
-      key: 'longdan_jiuyuan-0', name: '龙胆救援', phase: '防守/增援战斗结算后',
+      key: 'longdan_jiuyuan-0', name: '龙胆救援', phase: '防守/增援战斗前及掠夺结算',
       detailText: '设计减损比例：20%；减少损失：蜀步兵 +50；触发概率：100%',
     }])
     expect(model.sides[0].traits).toEqual([])
@@ -2797,11 +2796,11 @@ describe('官方战报适配', () => {
     source.detail!.rewards.generalExp = 500
     source.detail!.traits = [
       {
-        traitId: 'zhenhe_quanjun', traitName: '震慑全军', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhangfei',
+        traitId: 'zhenhe_quanjun', traitName: '万人怒吼', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhangfei',
         detail: { effectRate: 0.5, maxAffectedRate: 0.5, suppressedUnits: { qingZhouArmy: 500 }, triggerChance: 1 },
       },
       {
-        traitId: 'wanren_nuhou', traitName: '万人怒吼', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhangfei',
+        traitId: 'wanren_nuhou', traitName: '勇冠三军', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhangfei',
         detail: { attackBonusRate: 0.2, attackModifiedUnits: { greedyWolf: 2 } },
       },
     ]
@@ -2812,11 +2811,11 @@ describe('官方战报适配', () => {
     expect(model.sides[1].units.find((unit) => unit.key === 'qingZhouArmy')).toMatchObject({ dispatched: 1000, lost: 500, survived: 500 })
     expect(model.sides[0].traits).toEqual([
       {
-        key: 'zhenhe_quanjun-0', name: '震慑全军', phase: '战斗前',
+      key: 'zhenhe_quanjun-0', name: '万人怒吼', phase: '战斗前',
         detailText: '设计效果比例：50%；设计最大影响比例：50%；本场压制兵力：青州军 +500；触发概率：100%',
       },
       {
-        key: 'wanren_nuhou-1', name: '万人怒吼', phase: '主动进攻战斗前',
+      key: 'wanren_nuhou-1', name: '勇冠三军', phase: '主动进攻战斗前',
         detailText: '设计攻击加成：20%；实际攻击修正：贪狼营 +2',
       },
     ])
@@ -2831,7 +2830,7 @@ describe('官方战报适配', () => {
     source.detail!.primarySide.power = 12000
     source.detail!.primarySide.generals = [{
       id: 'zhangfei', name: '张飞', level: 1,
-      traits: [{ traitId: 'zhenhe_quanjun', name: '震慑全军' }, { traitId: 'wanren_nuhou', name: '万人怒吼' }],
+      traits: [{ traitId: 'zhenhe_quanjun', name: '万人怒吼' }, { traitId: 'wanren_nuhou', name: '勇冠三军' }],
     }]
     source.detail!.primarySide.units = [{ unitType: 'shuInfantry', unitName: '蜀步兵', amountBefore: 1000, dispatched: 1000, lost: 804, survived: 196 }]
     source.detail!.secondarySide!.faction = 'wei'
@@ -2839,7 +2838,7 @@ describe('官方战报适配', () => {
     source.detail!.secondarySide!.units = [{ unitType: 'weiInfantry', unitName: '魏步兵', amountBefore: 1000, dispatched: 1000, lost: 1000, survived: 0 }]
     source.detail!.rewards.generalExp = 1000
     source.detail!.traits = [{
-      traitId: 'wanren_nuhou', traitName: '万人怒吼', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhangfei',
+      traitId: 'wanren_nuhou', traitName: '勇冠三军', ownerSide: 'primary', ownerRole: 'attacker', generalId: 'zhangfei',
       detail: { attackBonusRate: 0.2, attackModifiedUnits: { shuInfantry: 2 } },
     }]
     const model = toOfficialBattleReport(source)
@@ -2849,10 +2848,10 @@ describe('官方战报适配', () => {
     expect(model.sides[0].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 1000, lost: 804, survived: 196 })
     expect(model.sides[1].units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 1000, lost: 1000, survived: 0 })
     expect(model.sides[0].traits).toEqual([{
-      key: 'wanren_nuhou-0', name: '万人怒吼', phase: '主动进攻战斗前',
+      key: 'wanren_nuhou-0', name: '勇冠三军', phase: '主动进攻战斗前',
       detailText: '设计攻击加成：20%；实际攻击修正：蜀步兵 +2',
     }])
-    expect(model.sides.flatMap((side) => side.traits).some((trait) => trait.name === '震慑全军')).toBe(false)
+    expect(model.sides.flatMap((side) => side.traits).some((trait) => trait.name === '万人怒吼')).toBe(false)
   })
 
   it('张辽主动进攻双特性对齐骑兵加攻、溃逃返回、战力和经验', () => {
@@ -3617,7 +3616,7 @@ describe('官方战报适配', () => {
       }
       source.detail!.rewards = { generalExp: triggered ? 27 : 50 }
       source.detail!.traits = triggered ? [{
-        traitId: 'zhenhe_quanjun', traitName: '震慑全军', ownerSide: 'reinforcement', ownerRole: 'reinforcement', ownerPlayerId: 'helper_zhangfei', generalId: 'zhangfei',
+        traitId: 'zhenhe_quanjun', traitName: '万人怒吼', ownerSide: 'reinforcement', ownerRole: 'reinforcement', ownerPlayerId: 'helper_zhangfei', generalId: 'zhangfei',
         detail: { effectRate: 0.5, maxAffectedRate: 0.5, suppressedUnits: { weiInfantry: 50 }, triggerChance: 1 },
       }] : []
       source.pvpReinforcements = [{
@@ -3625,7 +3624,7 @@ describe('官方战报适配', () => {
         troops: { shuInfantry: 99 }, generalExpGained: triggered ? 36 : 50,
         generals: [{
           id: 'zhangfei', name: '张飞', level: 1,
-          traits: [{ traitId: 'zhenhe_quanjun', name: '震慑全军' }, { traitId: 'wanren_nuhou', name: '万人怒吼', allowedSides: ['attacker'] }],
+          traits: [{ traitId: 'zhenhe_quanjun', name: '万人怒吼' }, { traitId: 'wanren_nuhou', name: '勇冠三军', allowedSides: ['attacker'] }],
         }],
       }]
       source.pvpReinforcementLosses = { rein_zhangfei: { shuInfantry: triggered ? 27 : 49 } }
@@ -3639,7 +3638,7 @@ describe('官方战报适配', () => {
       expect(current.model.sides.map((side) => side.role)).toEqual(['attacker', 'defender', 'reinforcement'])
       expect(current.model.sides[1]).toMatchObject({ role: 'defender', power: 1000 })
       expect(current.model.sides.slice(0, 2).flatMap((side) => side.traits)).toEqual([])
-      expect(current.model.sides.flatMap((side) => side.traits).some((trait) => trait.name === '万人怒吼')).toBe(false)
+      expect(current.model.sides.flatMap((side) => side.traits).some((trait) => trait.name === '勇冠三军')).toBe(false)
     }
     expect(hit.model.sides[0]).toMatchObject({ role: 'attacker', power: 500, generalExp: 27 })
     expect(miss.model.sides[0]).toMatchObject({ role: 'attacker', power: 1000, generalExp: 50 })
@@ -3652,7 +3651,7 @@ describe('官方战报适配', () => {
     expect(hit.model.sides[2].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 99, lost: 27, survived: 72 })
     expect(miss.model.sides[2].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 99, lost: 49, survived: 50 })
     expect(hit.model.sides[2].traits).toEqual([{
-      key: 'zhenhe_quanjun-helper_zhangfei-0', name: '震慑全军', phase: '战斗前',
+      key: 'zhenhe_quanjun-helper_zhangfei-0', name: '万人怒吼', phase: '战斗前',
       detailText: '设计效果比例：50%；设计最大影响比例：50%；本场压制兵力：魏步兵 +50；触发概率：100%',
     }])
     expect(miss.model.sides.flatMap((side) => side.traits)).toEqual([])
@@ -4252,7 +4251,7 @@ describe('官方战报适配', () => {
     expect(attackModel.sides[0].units.find((unit) => unit.key === 'shuInfantry')).toMatchObject({ dispatched: 1000, lost: 421, survived: 579 })
     expect(attackModel.sides[1].units.find((unit) => unit.key === 'weiInfantry')).toMatchObject({ dispatched: 1000, lost: 578, survived: 422 })
     expect(attackModel.sides[0].traits).toEqual([{
-      key: 'qibing_raohou-0', name: '奇兵绕后', phase: '主动进攻战斗前',
+      key: 'qibing_raohou-0', name: '奇兵绕后', phase: '永久被动',
       detailText: '设计敌方防御降低：20%；实际步防修正：魏步兵 -2；实际骑防修正：魏步兵 -2；触发概率：100%',
     }])
     expect(attackModel.sides[1].traits).toEqual([])
@@ -4408,7 +4407,7 @@ describe('官方战报适配', () => {
     expect(model.sides[0].traits).toEqual([])
     expect(model.sides[1].traits).toEqual([])
     expect(model.sides[2].traits).toEqual([{
-      key: 'longdan_jiuyuan-0', name: '龙胆救援', phase: '防守/增援战斗结算后',
+      key: 'longdan_jiuyuan-0', name: '龙胆救援', phase: '防守/增援战斗前及掠夺结算',
       detailText: '设计减损比例：20%；减少损失：蜀步兵 +20；触发概率：100%',
     }])
     expect(model.sides.flatMap((side) => side.traits).some((trait) => trait.name === '七进七出')).toBe(false)
@@ -5049,7 +5048,7 @@ describe('官方战报适配', () => {
     source.detail!.traits = [{ traitId: 'qibing_raohou', traitName: '奇兵绕后', ownerSide: 'primary', generalId: 'weiyan', detail: { enemyDefenseReductionRate: 0.2, infantryDefenseModifiedUnits: { weiInfantry: -2 }, cavalryDefenseModifiedUnits: { weiInfantry: -2 }, triggerChance: 1 } }]
     const model = toOfficialBattleReport(source)
     expect(model.sides[0].traits[0]).toMatchObject({
-      name: '奇兵绕后', phase: '主动进攻战斗前',
+      name: '奇兵绕后', phase: '永久被动',
       detailText: '设计敌方防御降低：20%；实际步防修正：魏步兵 -2；实际骑防修正：魏步兵 -2；触发概率：100%',
     })
   })

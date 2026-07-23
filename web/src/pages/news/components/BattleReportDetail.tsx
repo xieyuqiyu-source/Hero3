@@ -181,6 +181,7 @@ function sidePassiveEffectText(side: BattleReportSide): string {
   const definitions: Record<string, { name: string; unitName: string }> = {
     jixing_benxi: { name: '疾行奔袭', unitName: '骁骑营' },
     huhu_shengwei: { name: '虎虎生威', unitName: '虎豹骑' },
+    qibing_raohou: { name: '奇兵绕后', unitName: '南蛮象' },
   }
   const lines = (side.generals ?? []).flatMap((general) => general.traits ?? []).flatMap((trait) => {
     if (trait.traitId === 'shengui_zhicai') {
@@ -194,6 +195,12 @@ function sidePassiveEffectText(side: BattleReportSide): string {
       const command = Number(trait.params?.commandBonus ?? 0)
       if (politics <= 0 && command <= 0) return []
       return [`仁德天下 · 内政 +${politics.toLocaleString()}，统率 +${command.toLocaleString()}`]
+    }
+    if (trait.traitId === 'laodang_yizhuang') {
+      const force = Number(trait.params?.forceBonus ?? 0)
+      const command = Number(trait.params?.commandBonus ?? 0)
+      if (force <= 0 && command <= 0) return []
+      return [`老当益壮 · 武力 +${force.toLocaleString()}，统率 +${command.toLocaleString()}`]
     }
     const definition = definitions[trait.traitId]
     if (!definition) return []

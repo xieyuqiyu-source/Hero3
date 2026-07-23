@@ -44,11 +44,14 @@ func (t *configurableTrait) Description(params general.Params) string { return t
 // ParamSchema 返回 GM 可配置参数 schema。
 func (t *configurableTrait) ParamSchema() []general.ParamField {
 	out := append([]general.ParamField(nil), t.schema...)
-	if t.effect == "passive_unit_stats" || t.effect == "passive_stat" {
+	if t.effect == "passive_unit_stats" || t.effect == "passive_stat" ||
+		t.id == "longdan_jiuyuan" || t.id == "qijin_qichu" || t.id == "gushou_hanzhong" {
 		return out
 	}
 	for _, field := range commonScopeFields(t.triggerChanceDefault()) {
-		if (t.id == "yibing_touxi" || t.id == "guicai_yice" || t.id == "renzhu_shouhu" || t.id == "qimen_dunjia" || t.effect == "disable_all_combat_traits") &&
+		if (t.id == "yibing_touxi" || t.id == "shuiyan_qijun" || t.id == "wusheng_pojun" ||
+			t.id == "zhenhe_quanjun" || t.id == "wanren_nuhou" || t.id == "baibu_chuanyang" ||
+			t.id == "guicai_yice" || t.id == "renzhu_shouhu" || t.id == "qimen_dunjia" || t.effect == "disable_all_combat_traits") &&
 			(field.Key == "maxAffectedRate" || field.Key == "maxAffectedCount") {
 			continue
 		}
@@ -125,24 +128,38 @@ func (t *configurableTrait) handleBeforeBattle(c *general.BeforeBattleContext, p
 	}
 	switch t.effect {
 	case "pre_damage":
-		effectParams := params
-		if t.id == "yibing_touxi" {
-			// 疑兵真实伤亡只由 effectRate 决定，不接受历史通用上限截断。
-			effectParams = general.Params{"effectRate": params.FloatWithBounds("effectRate", 0, 0, 1)}
+		var affected map[string]int
+		if t.id == "shuiyan_qijun" {
+			// 水淹七军按敌方参战总兵力精确形成真实伤亡，避免逐兵种取整少扣。
+			affected = reduceArmyUnitsByTotalRate(actorEnemyArmy(c), params, "effectRate", c.Actor.TargetUnitType)
+		} else {
+			effectParams := params
+			if t.id == "yibing_touxi" {
+				// 疑兵真实伤亡只由 effectRate 决定，不接受历史通用上限截断。
+				effectParams = general.Params{"effectRate": params.FloatWithBounds("effectRate", 0, 0, 1)}
+			}
+			affected = reduceArmyUnits(actorEnemyArmy(c), effectParams, "effectRate", c.Actor.TargetUnitType)
 		}
-		affected := reduceArmyUnits(actorEnemyArmy(c), effectParams, "effectRate", c.Actor.TargetUnitType)
 		recordPreBattleLosses(c, affected)
-		t.recordBefore(c, params, affected, "preBattleAffected")
+		if t.id == "shuiyan_qijun" {
+			t.recordBeforeDetail(c, params, map[string]interface{}{
+				"preBattleAffected":   affected,
+				"realCasualties":      affected,
+				"totalRealCasualties": sumPositiveMapValues(affected),
+			})
+		} else {
+			t.recordBefore(c, params, affected, "preBattleAffected")
+		}
 	case "suppress":
 		var affected map[string]int
-		if t.id == "weizhen_zhenhe" {
-			// 张辽按敌方本次参战总兵力精确计算溃逃人数，不受旧通用上限字段截断。
+		if t.id == "weizhen_zhenhe" || t.id == "zhenhe_quanjun" {
+			// 张辽和张飞按敌方本次参战总兵力精确计算溃逃人数，不受旧通用上限字段截断。
 			affected = reduceArmyUnitsByTotalRate(actorEnemyArmy(c), params, "effectRate", c.Actor.TargetUnitType)
 		} else {
 			affected = reduceArmyUnits(actorEnemyArmy(c), params, "effectRate", c.Actor.TargetUnitType)
 		}
 		recordSuppressedUnits(c, affected)
-		if t.id == "weizhen_zhenhe" && len(affected) > 0 {
+		if (t.id == "weizhen_zhenhe" || t.id == "zhenhe_quanjun") && len(affected) > 0 {
 			t.recordBeforeDetail(c, params, map[string]interface{}{
 				"suppressedUnits": affected,
 				"fledUnits":       affected,
@@ -151,6 +168,9 @@ func (t *configurableTrait) handleBeforeBattle(c *general.BeforeBattleContext, p
 		} else {
 			t.recordBefore(c, params, affected, "suppressedUnits")
 		}
+	case "longdan_rescue":
+		changed := applyBattleStatBonus(c, params, "unit_defense_bonus")
+		t.recordBeforeStatChanges(c, params, changed)
 	case "unit_attack_bonus", "unit_defense_bonus", "army_attack_bonus", "army_defense_bonus", "enemy_defense_reduce", "enemy_attack_reduce", "general_attack_flat", "general_defense_flat", "unit_attack_flat":
 		changed := applyBattleStatBonus(c, params, t.effect)
 		t.recordBeforeStatChanges(c, params, changed)
@@ -348,6 +368,10 @@ func (t *configurableTrait) handlePlunder(c *general.PlunderResolveContext, para
 	if c == nil || len(c.Rewards) == 0 {
 		return
 	}
+	if t.effect == "longdan_rescue" {
+		t.handleLongdanPlunder(c, params)
+		return
+	}
 	rate := params.FloatWithBounds("plunderBonusRate", params.FloatOr("effectRate", 0), -0.9, 1)
 	if rate == 0 {
 		return
@@ -362,6 +386,80 @@ func (t *configurableTrait) handlePlunder(c *general.PlunderResolveContext, para
 		c.Rewards[key] = next
 	}
 	t.recordPlunder(c, params, changed, "plunderDelta")
+}
+
+// handleLongdanPlunder 按主将固定值和援军递减序列累计保护被掠夺城池的资源。
+func (t *configurableTrait) handleLongdanPlunder(c *general.PlunderResolveContext, params general.Params) {
+	baseRate := params.FloatWithBounds("plunderProtectionRate", 0.2, 0, 0.9)
+	if baseRate <= 0 {
+		return
+	}
+	contribution := 0.0
+	switch c.Actor.Side {
+	case "defender":
+		if c.DefenderProtectionApplied {
+			return
+		}
+		c.DefenderProtectionApplied = true
+		contribution = baseRate
+	case "reinforcement":
+		contribution = baseRate / math.Pow(2, float64(c.ReinforcementProtectionCount))
+		c.ReinforcementProtectionCount++
+	default:
+		return
+	}
+	if contribution <= 0 {
+		return
+	}
+	if c.BaseRewards == nil {
+		c.BaseRewards = cloneIntMap(c.Rewards)
+	}
+	before := cloneIntMap(c.Rewards)
+	c.PlunderProtectionRate += contribution
+	maxRate := baseRate * 3
+	if maxRate > 0.9 {
+		maxRate = 0.9
+	}
+	if c.PlunderProtectionRate > maxRate {
+		c.PlunderProtectionRate = maxRate
+	}
+	protected := map[string]int{}
+	changed := map[string]int{}
+	for key, baseValue := range c.BaseRewards {
+		next := int(math.Floor(float64(baseValue)*(1-c.PlunderProtectionRate) + 1e-9))
+		if next < 0 {
+			next = 0
+		}
+		protected[key] = before[key] - next
+		changed[key] = next - before[key]
+		c.Rewards[key] = next
+	}
+	t.recordPlunderDetail(c, params, map[string]interface{}{
+		"plunderProtectionContributionRate": contribution,
+		"cumulativePlunderProtectionRate":   c.PlunderProtectionRate,
+		"protectedResources":                protected,
+		"plunderDelta":                      changed,
+	})
+}
+
+// cloneIntMap 复制整数映射，避免累计掠夺保护时丢失原始基数。
+func cloneIntMap(source map[string]int) map[string]int {
+	cloned := make(map[string]int, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+// sumPositiveMapValues 汇总逐兵种正数结果，供战报展示真实伤亡总量。
+func sumPositiveMapValues(values map[string]int) int {
+	total := 0
+	for _, value := range values {
+		if value > 0 {
+			total += value
+		}
+	}
+	return total
 }
 
 // triggered 按 GM 配置的触发概率判定是否触发。
@@ -864,10 +962,18 @@ func (t *configurableTrait) recordPlunder(c *general.PlunderResolveContext, para
 	if len(values) == 0 {
 		return
 	}
+	t.recordPlunderDetail(c, params, map[string]interface{}{key: values})
+}
+
+// recordPlunderDetail 写入包含累计保护比例和实际资源变化的掠夺特性结果。
+func (t *configurableTrait) recordPlunderDetail(c *general.PlunderResolveContext, params general.Params, detail map[string]interface{}) {
+	if len(detail) == 0 {
+		return
+	}
 	if c.Triggered == nil {
 		c.Triggered = map[string]general.TraitOutcome{}
 	}
-	storeTraitOutcome(c.Triggered, t.outcome(c.Actor, params, map[string]interface{}{key: values}))
+	storeTraitOutcome(c.Triggered, t.outcome(c.Actor, params, detail))
 }
 
 // storeTraitOutcome 保存特性结果，并在双方同特性同时触发时避免 map 覆盖。
@@ -915,6 +1021,9 @@ func (t *configurableTrait) outcome(actor general.TraitActor, params general.Par
 	}
 	if defenseBonusRate, configured := params["defenseBonusRate"]; configured {
 		detail["defenseBonusRate"] = defenseBonusRate
+	}
+	if plunderProtectionRate, configured := params["plunderProtectionRate"]; configured {
+		detail["plunderProtectionRate"] = params.FloatWithBounds("plunderProtectionRate", plunderProtectionRate, 0, 0.9)
 	}
 	if generalDefenseFlat, configured := params["generalDefenseFlat"]; configured {
 		detail["generalDefenseFlat"] = generalDefenseFlat
@@ -1006,19 +1115,19 @@ func init() {
 		{id: "neizheng_jingying", name: "内政精营", traitType: general.TraitTypeBonus, description: "被动提升资源产量。", effect: "passive_modifier", events: nil, schema: []general.ParamField{rateField("productionBonusRate", "资源产量提升", 0.05, 0.5)}},
 		{id: "rende", name: "仁德天下", traitType: general.TraitTypeSpecial, description: "全天候被动增加刘备的内政和统率，不作为战斗触发特性。", effect: "passive_stat", events: nil, schema: []general.ParamField{countField("politicsBonus", "内政增加", 10, 100), countField("commandBonus", "统率增加", 12, 100)}},
 		{id: "renzhu_shouhu", name: "仁主守护", traitType: general.TraitTypeBonus, description: "进攻、防守或增援战斗结束后，概率按所率部队本场真实阵亡复活士兵。", effect: "revive", events: []string{general.EventAfterBattle}, schema: []general.ParamField{rateField("effectRate", "真实阵亡复活比例", 0.35, 1)}, defaultTriggerChance: 0.6},
-		{id: "shuiyan_qijun", name: "水淹七军", traitType: general.TraitTypeSpecial, description: "战前水淹并造成敌军真实伤亡。", effect: "pre_damage", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "水淹伤亡比例", 0.35, 1)}},
-		{id: "wusheng_pojun", name: "武圣破军", traitType: general.TraitTypeBonus, description: "主动进攻时提升全军攻击。", effect: "army_attack_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("attackBonusRate", "攻击提升", 0.2, 2)}},
-		{id: "zhenhe_quanjun", name: "震慑全军", traitType: general.TraitTypeSpecial, description: "概率让敌军部分兵仅本场不参战，战后保留。", effect: "suppress", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "震慑比例", 0.5, 1)}},
-		{id: "wanren_nuhou", name: "万人怒吼", traitType: general.TraitTypeBonus, description: "主动进攻时提升步兵攻击。", effect: "unit_attack_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("attackBonusRate", "步兵攻击提升", 0.2, 2)}},
+		{id: "shuiyan_qijun", name: "水淹七军", traitType: general.TraitTypeSpecial, description: "主动进攻战斗前概率使敌方全军直接形成真实伤亡，剩余兵力再进入正常攻防。", effect: "pre_damage", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "真实伤亡比例", 0.3, 1)}, defaultTriggerChance: 0.35},
+		{id: "wusheng_pojun", name: "武圣破军", traitType: general.TraitTypeBonus, description: "主动进攻战斗前概率提升所率青龙军攻击。", effect: "unit_attack_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("attackBonusRate", "青龙军攻击提升", 0.38, 2)}, defaultTriggerChance: 0.5},
+		{id: "zhenhe_quanjun", name: "万人怒吼", traitType: general.TraitTypeSpecial, description: "主动进攻战斗前概率使敌方全军部分兵力逃跑；逃兵不参战、不死亡，战后完整返回。", effect: "suppress", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "逃跑比例", 0.5, 1)}, defaultTriggerChance: 0.5},
+		{id: "wanren_nuhou", name: "勇冠三军", traitType: general.TraitTypeBonus, description: "主动进攻战斗前概率提升所率南蛮象攻击。", effect: "unit_attack_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("attackBonusRate", "南蛮象攻击提升", 0.35, 2)}, defaultTriggerChance: 0.4},
 		{id: "qimen_dunjia", name: "奇门遁甲", traitType: general.TraitTypeSpecial, description: "进攻、防守或增援战斗前使敌方部分兵力仅本场不参战，战后完整保留。", effect: "suppress", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("effectRate", "困敌比例", 0.25, 1)}},
 		{id: "wolong_mouzhi", name: "卧龙奇谋", traitType: general.TraitTypeBonus, description: "进攻、防守或增援战斗前概率封禁敌方所有参战将领的战斗触发型特性，不影响被动特性。", effect: "disable_all_combat_traits", events: []string{general.EventBattleTraitControl}, defaultTriggerChance: 0.6},
-		{id: "longdan_jiuyuan", name: "龙胆救援", traitType: general.TraitTypeSpecial, description: "增援或防守时保护己方损失。", effect: "reduce_own_losses", events: []string{general.EventAfterCombatResolve}, schema: []general.ParamField{rateField("lossReductionRate", "减损比例", 0.2, 0.8)}},
+		{id: "longdan_jiuyuan", name: "龙胆救援", traitType: general.TraitTypeSpecial, description: "防守或增援战斗前使所率麒麟卫步防和骑防提升 25%；掠夺结算时为被保护城池保留资源。", effect: "longdan_rescue", events: []string{general.EventBeforeBattle, general.EventPlunderResolve}, schema: []general.ParamField{rateField("defenseBonusRate", "麒麟卫双防提升", 0.25, 2), rateField("plunderProtectionRate", "基础资源保护比例", 0.2, 0.9)}},
 		{id: "qijin_qichu", name: "七进七出", traitType: general.TraitTypeBonus, description: "主动出征或增援创建时缩短全军行军时间，不作为战斗触发特性。", effect: "march_speed", events: []string{general.EventMarchCreate}, schema: []general.ParamField{rateField("speedBonusRate", "速度提升", 1, 10), countField("minMarchSeconds", "最短行军秒数", 60, 86400)}},
 		{id: "xiliang_tuji", name: "西凉突击", traitType: general.TraitTypeSpecial, description: "进攻、守城或作为援军时只对敌方骑兵追加冲锋损失。", effect: "target_unit_damage", events: []string{general.EventAfterCombatResolve}, schema: []general.ParamField{rateField("effectRate", "冲锋伤害", 0.12, 1)}},
 		{id: "tianshen_xiafan", name: "天神下凡", traitType: general.TraitTypeBonus, description: "被动增加武将武力，不作为战斗触发特性。", effect: "passive_stat", events: nil, schema: []general.ParamField{countField("forceBonus", "武力增加", 20, 100)}},
-		{id: "baibu_chuanyang", name: "百步穿杨", traitType: general.TraitTypeSpecial, description: "主动进攻时概率削弱敌方防御。", effect: "enemy_defense_reduce", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("enemyDefenseReductionRate", "防御削弱", 0.2, 0.9)}},
-		{id: "laodang_yizhuang", name: "老当益壮", traitType: general.TraitTypeBonus, description: "战斗结算后追加敌方损失。", effect: "extra_damage", events: []string{general.EventAfterCombatResolve}, schema: []general.ParamField{rateField("effectRate", "额外伤害", 0.1, 1)}},
-		{id: "qibing_raohou", name: "奇兵绕后", traitType: general.TraitTypeSpecial, description: "主动进攻时绕过部分防御。", effect: "enemy_defense_reduce", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("enemyDefenseReductionRate", "绕防比例", 0.2, 0.9)}},
+		{id: "baibu_chuanyang", name: "百步穿杨", traitType: general.TraitTypeSpecial, description: "主动进攻战斗前概率使敌方全军防御降低 30%。", effect: "enemy_defense_reduce", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("enemyDefenseReductionRate", "敌方防御降低", 0.3, 0.9)}, defaultTriggerChance: 0.45},
+		{id: "laodang_yizhuang", name: "老当益壮", traitType: general.TraitTypeBonus, description: "永久增加黄忠武力 12 点、统率 12 点，不作为战斗触发特性。", effect: "passive_stat", events: nil, schema: []general.ParamField{countField("forceBonus", "武力增加", 12, 100), countField("commandBonus", "统率增加", 12, 100)}},
+		{id: "qibing_raohou", name: "奇兵绕后", traitType: general.TraitTypeSpecial, description: "被动使所率南蛮象固定增加攻击 18 点、移动 15 点，不作为战斗触发特性。", effect: "passive_unit_stats", events: nil, schema: []general.ParamField{countField("unitAttackFlat", "南蛮象攻击增加", 18, 100000), countField("unitSpeedFlat", "南蛮象移动增加", 15, 100000)}},
 		{id: "gushou_hanzhong", name: "固守汉中", traitType: general.TraitTypeBonus, description: "防守或增援时固定提升全军步兵、骑兵防御。", effect: "general_defense_flat", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{countField("generalDefenseFlat", "全军防御", 20, 100000)}},
 		{id: "jiangdong_haoling", name: "江东号令", traitType: general.TraitTypeSpecial, description: "防守失败时降低敌方掠夺收益。", effect: "plunder_reduce", events: []string{general.EventPlunderResolve}, schema: []general.ParamField{{Key: "plunderBonusRate", Label: "掠夺收益修正", Description: "负数降低敌方掠夺收益，正数提高收益", Default: -0.2, Min: -0.9, Max: 1, Step: 0.01}}},
 		{id: "jiangdong_gushou", name: "江东固守", traitType: general.TraitTypeBonus, description: "防守或增援时概率提升全军防御。", effect: "army_defense_bonus", events: []string{general.EventBeforeBattle}, schema: []general.ParamField{rateField("defenseBonusRate", "防御提升", 0.5, 2)}},

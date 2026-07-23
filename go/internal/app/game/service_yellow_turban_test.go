@@ -900,51 +900,6 @@ func TestYellowTurbanDianWeiHuzhuStrengthensJinwei(t *testing.T) {
 	}
 }
 
-// TestYellowTurbanZhaoYunAppliesLongdanWithoutMarchTraitTimeline 验证赵云守黄巾只触发龙胆减损，七进七出不伪装成战斗效果。
-func TestYellowTurbanZhaoYunAppliesLongdanWithoutMarchTraitTimeline(t *testing.T) {
-	buildHero := func(longdanEnabled bool) GeneralHeroConfig {
-		return GeneralHeroConfig{
-			ID: "zhaoyun", Name: "赵云", Faction: "shu", Enabled: true,
-			SpecialTrait: GeneralTraitConfig{
-				TraitID: "longdan_jiuyuan", TraitType: general.TraitTypeSpecial, Enabled: longdanEnabled,
-				Scope: "reinforcement_self", AllowedSides: []string{"defender", "reinforcement"},
-				Params: map[string]float64{"triggerChance": 1, "lossReductionRate": 0.2},
-			},
-			BonusTrait: GeneralTraitConfig{
-				TraitID: "qijin_qichu", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army",
-				Params: map[string]float64{"speedBonusRate": 1, "minMarchSeconds": 60},
-			},
-		}
-	}
-	control, _ := resolveYellowTurbanHeroFactionTest(t, buildHero(false), "shu", "greedyWolf", 100, "wei", "weiInfantry", 200, "zhaoyun_control")
-	report, stored := resolveYellowTurbanHeroFactionTest(t, buildHero(true), "shu", "greedyWolf", 100, "wei", "weiInfantry", 200, "zhaoyun_longdan")
-	if control.EnemyPower != 2000 || report.EnemyPower != 2000 || control.PlayerPower != 1020 || report.PlayerPower != 1020 || control.DefenderLostUnits["weiInfantry"] != 76 || report.DefenderLostUnits["weiInfantry"] != 76 {
-		t.Fatalf("expected Longdan to preserve 2000/1020 power and 76 enemy losses, control=%d/%d %+v active=%d/%d %+v", control.EnemyPower, control.PlayerPower, control.DefenderLostUnits, report.EnemyPower, report.PlayerPower, report.DefenderLostUnits)
-	}
-	if control.LostUnits["greedyWolf"] != 100 || control.SurvivedUnits["greedyWolf"] != 0 || report.LostUnits["greedyWolf"] != 80 || report.SurvivedUnits["greedyWolf"] != 20 {
-		t.Fatalf("expected Longdan to change real defender loss/survivor 100/0 -> 80/20, control=%+v/%+v active=%+v/%+v", control.LostUnits, control.SurvivedUnits, report.LostUnits, report.SurvivedUnits)
-	}
-	outcome, triggered := report.TraitOutcomes["longdan_jiuyuan"]
-	reduced, reducedOK := outcome.Detail["reducedLosses"].(map[string]int)
-	if !triggered || !reducedOK || reduced["greedyWolf"] != 20 || outcome.OwnerSide != "defender" || outcome.OwnerGeneralID != "zhaoyun" || outcome.Detail["lossReductionRate"] != 0.2 || outcome.Detail["triggerChance"] != 1.0 {
-		t.Fatalf("expected defender Longdan to record real reduction 20 and formal design values, outcome=%+v", outcome)
-	}
-	if report.Detail == nil || report.Detail.SecondarySide == nil || len(report.TraitTriggered) != 1 || report.TraitTriggered[0] != "longdan_jiuyuan" || len(report.TraitOutcomes) != 1 || len(report.Detail.Traits) != 1 ||
-		standardReportHasTrait(report.Detail, "qijin_qichu") || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "zhaoyun", "longdan_jiuyuan") || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "zhaoyun", "qijin_qichu") {
-		t.Fatalf("expected dual owned traits but only Longdan battle timeline, legacy=%+v outcomes=%+v detail=%+v", report.TraitTriggered, report.TraitOutcomes, report.Detail)
-	}
-	trait := report.Detail.Traits[0]
-	if trait.TraitID != "longdan_jiuyuan" || trait.OwnerSide != "secondary" || trait.OwnerRole != "defender" || trait.GeneralID != "zhaoyun" {
-		t.Fatalf("expected standard Longdan to belong to defending Zhao Yun, trait=%+v", trait)
-	}
-	if armySliceToMap(stored.Army)["greedyWolf"] != 20 || yellowTurbanStandardDefenderSurvived(report, "greedyWolf") != 20 {
-		t.Fatalf("expected player army and standard report to keep 20 troops, army=%+v detail=%+v", stored.Army, report.Detail)
-	}
-	if report.DefenderLostUnits["weiInfantry"] != control.DefenderLostUnits["weiInfantry"] || report.GeneralExpGained != report.DefenderLostUnits["weiInfantry"] || pvpTestGeneralExp(stored, "zhaoyun") != report.GeneralExpGained {
-		t.Fatalf("expected Longdan not to alter enemy losses and Zhao Yun exp to match them, control=%+v active=%+v reportExp=%d storedExp=%d", control.DefenderLostUnits, report.DefenderLostUnits, report.GeneralExpGained, pvpTestGeneralExp(stored, "zhaoyun"))
-	}
-}
-
 // TestYellowTurbanDefenderExtraDamageMatchesReport 验证防守方战后追加伤害进入黄巾损失和标准战报。
 func TestYellowTurbanDefenderExtraDamageMatchesReport(t *testing.T) {
 	traitCfg := GeneralTraitConfig{
@@ -961,61 +916,6 @@ func TestYellowTurbanDefenderExtraDamageMatchesReport(t *testing.T) {
 		t.Fatalf("expected legacy and standard yellow turban attacker losses to agree, report=%+v detail=%+v", report.DefenderLostUnits, report.Detail)
 	}
 	assertStandardUnitRow(t, report.ID, report.Detail.PrimarySide, "weiInfantry", 200, report.DefenderLostUnits["weiInfantry"], 200-report.DefenderLostUnits["weiInfantry"])
-}
-
-// TestYellowTurbanFormalAfterCombatDamageTraitsMatchStateAndReports 验证四项正式守城战后伤害逐项进入黄巾损失与双方格式战报。
-func TestYellowTurbanFormalAfterCombatDamageTraitsMatchStateAndReports(t *testing.T) {
-	cases := []struct {
-		name           string
-		traitID        string
-		traitType      string
-		generalID      string
-		generalName    string
-		targetUnitType string
-		rate           float64
-		detailKey      string
-	}{
-		{name: "老当益壮", traitID: "laodang_yizhuang", traitType: general.TraitTypeBonus, generalID: "huangzhong", generalName: "黄忠", rate: 0.1, detailKey: "extraLosses"},
-		{name: "火烧联营", traitID: "huoshao_lianying", traitType: general.TraitTypeSpecial, generalID: "luxun", generalName: "陆逊", targetUnitType: "infantry", rate: 1, detailKey: "targetExtraLosses"},
-		{name: "连营增伤", traitID: "lianying_zengshang", traitType: general.TraitTypeBonus, generalID: "luxun", generalName: "陆逊", targetUnitType: "infantry", rate: 0.1, detailKey: "targetExtraLosses"},
-		{name: "苦肉反击", traitID: "kurou_fanji", traitType: general.TraitTypeBonus, generalID: "huanggai", generalName: "黄盖", rate: 0.1, detailKey: "extraLosses"},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			baseline, _ := resolveYellowTurbanTraitTest(t, GeneralTraitConfig{}, 100, 200, "formal_after_baseline_"+tc.traitID)
-			traitCfg := GeneralTraitConfig{
-				TraitID: tc.traitID, TraitType: tc.traitType, Enabled: true, Scope: "enemy_army", TargetUnitType: tc.targetUnitType,
-				Params: map[string]float64{"effectRate": tc.rate, "maxAffectedRate": tc.rate, "triggerChance": 1},
-			}
-			report, stored := resolveYellowTurbanTraitForGeneralTest(t, traitCfg, 100, 200, "formal_after_"+tc.traitID, tc.generalID, tc.generalName)
-			outcome, ok := report.TraitOutcomes[tc.traitID]
-			extra, detailOK := outcome.Detail[tc.detailKey].(map[string]int)
-			wantExtra := int(200 * tc.rate)
-			if remaining := 200 - baseline.DefenderLostUnits["weiInfantry"]; wantExtra > remaining {
-				wantExtra = remaining
-			}
-			if !ok || !detailOK || extra["weiInfantry"] != wantExtra || outcome.Detail["effectRate"] != tc.rate || outcome.Detail["triggerChance"] != 1.0 || outcome.OwnerSide != "defender" || outcome.OwnerGeneralID != tc.generalID {
-				t.Fatalf("expected defender %s extra loss %d, outcome=%+v", tc.traitID, wantExtra, outcome)
-			}
-			if report.DefenderLostUnits["weiInfantry"] != baseline.DefenderLostUnits["weiInfantry"]+wantExtra {
-				t.Fatalf("expected %s yellow turban loss %d + %d, baseline=%+v actual=%+v", tc.traitID, baseline.DefenderLostUnits["weiInfantry"], wantExtra, baseline.DefenderLostUnits, report.DefenderLostUnits)
-			}
-			if armySliceToMap(stored.Army)["weiInfantry"] != report.SurvivedUnits["weiInfantry"] || yellowTurbanStandardDefenderSurvived(report, "weiInfantry") != report.SurvivedUnits["weiInfantry"] {
-				t.Fatalf("expected %s player army and reports to reconcile, stored=%+v report=%+v", tc.traitID, stored.Army, report)
-			}
-			standardFound := false
-			for _, trait := range report.Detail.Traits {
-				if trait.TraitID == tc.traitID && trait.OwnerSide == "secondary" && trait.OwnerRole == "defender" && trait.GeneralID == tc.generalID {
-					standardExtra, standardOK := trait.Detail[tc.detailKey].(map[string]int)
-					standardFound = standardOK && standardExtra["weiInfantry"] == wantExtra
-				}
-			}
-			if !standardFound {
-				t.Fatalf("expected standard yellow turban %s result, detail=%+v", tc.traitID, report.Detail)
-			}
-		})
-	}
 }
 
 // TestYellowTurbanAttackOnlyAfterCombatTraitsDoNotTriggerOnDefense 验证火攻和小霸王追击不会在黄巾守城方向误触发。
@@ -1043,119 +943,6 @@ func TestYellowTurbanAttackOnlyAfterCombatTraitsDoNotTriggerOnDefense(t *testing
 			}
 			if armySliceToMap(stored.Army)["weiInfantry"] != report.SurvivedUnits["weiInfantry"] {
 				t.Fatalf("expected negative %s player army to match report, stored=%+v report=%+v", tc.traitID, stored.Army, report)
-			}
-		})
-	}
-}
-
-// TestYellowTurbanRandomPreBattleTraitsHitAndMiss 验证关羽、张飞守黄巾时随机战前能力独立判断概率与方向。
-func TestYellowTurbanRandomPreBattleTraitsHitAndMiss(t *testing.T) {
-	cases := []struct {
-		name            string
-		generalID       string
-		generalName     string
-		defenderFaction string
-		defenderUnit    string
-		attackerFaction string
-		attackerUnit    string
-		specialTraitID  string
-		bonusTraitID    string
-		bonusTarget     string
-		bonusAttackRate float64
-		effectRate      float64
-		actualDetailKey string
-		defensePower    int
-		hitAttackPower  int
-		hitDefenseLost  int
-		hitAttackLost   int
-		missDefenseLost int
-	}{
-		{
-			name: "关羽水淹七军", generalID: "guanyu", generalName: "关羽",
-			defenderFaction: "shu", defenderUnit: "shuInfantry", attackerFaction: "wei", attackerUnit: "weiInfantry",
-			specialTraitID: "shuiyan_qijun", bonusTraitID: "wusheng_pojun", bonusAttackRate: 0.2, effectRate: 0.35, actualDetailKey: "preBattleAffected",
-			defensePower: 1020, hitAttackPower: 650, hitDefenseLost: 52, hitAttackLost: 100, missDefenseLost: 97,
-		},
-		{
-			name: "张飞震慑全军", generalID: "zhangfei", generalName: "张飞",
-			defenderFaction: "shu", defenderUnit: "shuInfantry", attackerFaction: "wei", attackerUnit: "weiInfantry",
-			specialTraitID: "zhenhe_quanjun", bonusTraitID: "wanren_nuhou", bonusTarget: "infantry", bonusAttackRate: 0.2, effectRate: 0.5, actualDetailKey: "suppressedUnits",
-			defensePower: 1020, hitAttackPower: 500, hitDefenseLost: 36, hitAttackLost: 50, missDefenseLost: 97,
-		},
-	}
-
-	for index, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			for _, triggerChance := range []float64{1, 0} {
-				label := "命中"
-				if triggerChance == 0 {
-					label = "合法未命中"
-				}
-				t.Run(label, func(t *testing.T) {
-					hero := GeneralHeroConfig{
-						ID: tc.generalID, Name: tc.generalName, Faction: tc.defenderFaction, Enabled: true,
-						SpecialTrait: GeneralTraitConfig{
-							TraitID: tc.specialTraitID, TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "enemy_army",
-							Params: map[string]float64{"effectRate": tc.effectRate, "maxAffectedRate": tc.effectRate, "triggerChance": triggerChance},
-						},
-						BonusTrait: GeneralTraitConfig{
-							TraitID: tc.bonusTraitID, TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", TargetUnitType: tc.bonusTarget,
-							AllowedSides: []string{"attacker"}, Params: map[string]float64{"attackBonusRate": tc.bonusAttackRate, "triggerChance": 1},
-						},
-					}
-					suffix := "random_prebattle_" + string(rune('a'+index)) + "_hit"
-					if triggerChance == 0 {
-						suffix = "random_prebattle_" + string(rune('a'+index)) + "_miss"
-					}
-					report, stored := resolveYellowTurbanHeroFactionTest(t, hero, tc.defenderFaction, tc.defenderUnit, 100, tc.attackerFaction, tc.attackerUnit, 100, suffix)
-
-					wantAttackPower := 1000
-					wantDefenseLost := tc.missDefenseLost
-					wantAttackLost := 100
-					if triggerChance == 1 {
-						wantAttackPower = tc.hitAttackPower
-						wantDefenseLost = tc.hitDefenseLost
-						wantAttackLost = tc.hitAttackLost
-					}
-					wantDefenseSurvived := 100 - wantDefenseLost
-					wantAttackSurvived := 100 - wantAttackLost
-					if report.Result != "defender_victory" || report.EnemyPower != wantAttackPower || report.PlayerPower != tc.defensePower {
-						t.Fatalf("expected exact yellow turban powers %d/%d and defender victory, report=%+v", wantAttackPower, tc.defensePower, report)
-					}
-					if report.LostUnits[tc.defenderUnit] != wantDefenseLost || report.DefenderLostUnits[tc.attackerUnit] != wantAttackLost || report.SurvivedUnits[tc.defenderUnit] != wantDefenseSurvived {
-						t.Fatalf("expected exact defender/attacker losses %d/%d and defender survived %d, report=%+v", wantDefenseLost, wantAttackLost, wantDefenseSurvived, report)
-					}
-					if armySliceToMap(stored.Army)[tc.defenderUnit] != wantDefenseSurvived || report.GeneralExpGained != wantAttackLost || pvpTestGeneralExp(stored, tc.generalID) != wantAttackLost {
-						t.Fatalf("expected authoritative army %d and general exp %d, state=%+v report=%+v", wantDefenseSurvived, wantAttackLost, stored, report)
-					}
-					if report.Detail == nil || report.Detail.SecondarySide == nil {
-						t.Fatalf("expected complete standard yellow turban detail, report=%+v", report)
-					}
-					assertStandardUnitRow(t, report.ID, report.Detail.PrimarySide, tc.attackerUnit, 100, wantAttackLost, wantAttackSurvived)
-					assertStandardUnitRow(t, report.ID, *report.Detail.SecondarySide, tc.defenderUnit, 100, wantDefenseLost, wantDefenseSurvived)
-					if !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, tc.generalID, tc.specialTraitID) || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, tc.generalID, tc.bonusTraitID) {
-						t.Fatalf("expected defender snapshot to preserve both owned traits, side=%+v", report.Detail.SecondarySide)
-					}
-					if _, triggered := report.TraitOutcomes[tc.bonusTraitID]; triggered || standardReportHasTrait(report.Detail, tc.bonusTraitID) {
-						t.Fatalf("attack-only trait %s must not trigger in yellow turban defense, report=%+v", tc.bonusTraitID, report)
-					}
-
-					outcome, triggered := report.TraitOutcomes[tc.specialTraitID]
-					if triggerChance == 0 {
-						if triggered || len(report.TraitTriggered) != 0 || len(report.TraitOutcomes) != 0 || len(report.Detail.Traits) != 0 {
-							t.Fatalf("expected legal random miss to keep an empty timeline, report=%+v", report)
-						}
-						return
-					}
-					actual, actualOK := outcome.Detail[tc.actualDetailKey].(map[string]int)
-					wantActual := int(100 * tc.effectRate)
-					if !triggered || outcome.OwnerSide != "defender" || outcome.OwnerGeneralID != tc.generalID || outcome.Detail["effectRate"] != tc.effectRate || outcome.Detail["maxAffectedRate"] != tc.effectRate || outcome.Detail["triggerChance"] != 1.0 || !actualOK || actual[tc.attackerUnit] != wantActual {
-						t.Fatalf("expected exact defender-owned %s result with actual %d, outcome=%+v", tc.specialTraitID, wantActual, outcome)
-					}
-					if len(report.Detail.Traits) != 1 || report.Detail.Traits[0].TraitID != tc.specialTraitID || report.Detail.Traits[0].OwnerSide != "secondary" || report.Detail.Traits[0].OwnerRole != "defender" || report.Detail.Traits[0].GeneralID != tc.generalID {
-						t.Fatalf("expected one correctly owned standard trait result, traits=%+v", report.Detail.Traits)
-					}
-				})
 			}
 		})
 	}
@@ -1434,42 +1221,6 @@ func TestYellowTurbanMaChaoXiliangHitAndMissKeepsPassiveSnapshot(t *testing.T) {
 				t.Fatalf("expected one defender-owned Xiliang result, report=%+v", report)
 			}
 		})
-	}
-}
-
-// TestYellowTurbanZhaoYunLongdanLegalMissKeepsMarchTraitSnapshot 验证赵云龙胆合法未命中时不减损且七进七出只保留为拥有快照。
-func TestYellowTurbanZhaoYunLongdanLegalMissKeepsMarchTraitSnapshot(t *testing.T) {
-	hero := GeneralHeroConfig{
-		ID: "zhaoyun", Name: "赵云", Faction: "shu", Enabled: true,
-		SpecialTrait: GeneralTraitConfig{
-			TraitID: "longdan_jiuyuan", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "reinforcement_self",
-			AllowedSides: []string{"defender", "reinforcement"}, Params: map[string]float64{"triggerChance": 0, "lossReductionRate": 0.2},
-		},
-		BonusTrait: GeneralTraitConfig{
-			TraitID: "qijin_qichu", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army",
-			Params: map[string]float64{"speedBonusRate": 1, "minMarchSeconds": 60},
-		},
-	}
-	report, stored := resolveYellowTurbanHeroFactionTest(t, hero, "shu", "greedyWolf", 100, "wei", "weiInfantry", 200, "zhaoyun_longdan_miss")
-	if report.Result != "attacker_victory" || report.EnemyPower != 2000 || report.PlayerPower != 1020 || report.DefenderLostUnits["weiInfantry"] != 76 {
-		t.Fatalf("expected unchanged 2000/1020 attack victory and enemy loss 76, report=%+v", report)
-	}
-	if report.LostUnits["greedyWolf"] != 100 || report.SurvivedUnits["greedyWolf"] != 0 || armySliceToMap(stored.Army)["greedyWolf"] != 0 {
-		t.Fatalf("expected missed Longdan to keep full defender loss, state=%+v report=%+v", stored.Army, report)
-	}
-	if report.GeneralExpGained != 76 || pvpTestGeneralExp(stored, "zhaoyun") != 76 {
-		t.Fatalf("expected Zhao Yun exp 76 from real enemy losses, state=%+v report=%+v", stored.Generals, report)
-	}
-	if report.Detail == nil || report.Detail.SecondarySide == nil || len(report.Detail.PrimarySide.Units) == 0 || len(report.Detail.SecondarySide.Units) == 0 {
-		t.Fatalf("expected complete standard yellow turban detail, report=%+v", report)
-	}
-	assertStandardUnitRow(t, report.ID, report.Detail.PrimarySide, "weiInfantry", 200, 76, 124)
-	assertStandardUnitRow(t, report.ID, *report.Detail.SecondarySide, "greedyWolf", 100, 100, 0)
-	if !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "zhaoyun", "longdan_jiuyuan") || !reportSideGeneralOwnsTrait(*report.Detail.SecondarySide, "zhaoyun", "qijin_qichu") {
-		t.Fatalf("expected Zhao Yun snapshot to preserve both owned traits, side=%+v", report.Detail.SecondarySide)
-	}
-	if len(report.TraitTriggered) != 0 || len(report.TraitOutcomes) != 0 || len(report.Detail.Traits) != 0 {
-		t.Fatalf("expected legal Longdan miss and march-only Qijin to keep an empty timeline, report=%+v", report)
 	}
 }
 

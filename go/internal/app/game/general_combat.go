@@ -291,13 +291,30 @@ func dispatchPlunderTraits(state *GameState, generalIDs []string, rewards map[st
 	if len(rewards) == 0 {
 		return rewards, nil
 	}
+	active := filterDisabledCombatTraits(buildActiveTraitsForGeneralIDs(state, generalIDs), combatTraitsDisabled)
+	return dispatchPlunderActiveTraits(rewards, scene, withTraitOwnerSide(active, ownerSide))
+}
+
+// dispatchPlunderActiveTraits 在同一上下文内按顺序结算全部掠夺特性，保证递减叠加基于同一份原始收益。
+func dispatchPlunderActiveTraits(rewards map[string]int, scene string, active []general.ActiveTrait) (map[string]int, map[string]general.TraitOutcome) {
+	if len(rewards) == 0 {
+		return rewards, nil
+	}
 	ctx := &general.PlunderResolveContext{
 		Rewards: rewards,
 		Scene:   scene,
 	}
-	active := filterDisabledCombatTraits(buildActiveTraitsForGeneralIDs(state, generalIDs), combatTraitsDisabled)
-	general.Dispatch(ctx, withTraitOwnerSide(active, ownerSide))
+	general.Dispatch(ctx, active)
 	return ctx.Rewards, ctx.Triggered
+}
+
+// defenderPlunderTraits 汇总守城主将和全部真实参战援军的掠夺保护特性。
+func defenderPlunderTraits(state *GameState, generalIDs []string, reinforcements []Reinforcement, combatTraitsDisabled bool) []general.ActiveTrait {
+	active := withTraitOwnerSide(buildActiveTraitsForGeneralIDs(state, generalIDs), "defender")
+	for _, reinforcement := range reinforcements {
+		active = append(active, buildActiveTraitsForReinforcement(reinforcement)...)
+	}
+	return filterDisabledCombatTraits(active, combatTraitsDisabled)
 }
 
 // buildActiveTraitsForReinforcement 从增援快照构建核心特性列表。
@@ -661,6 +678,9 @@ func mergeTraitOutcomes(report *BattleReport, outcomes map[string]general.TraitO
 			Detail:         outcome.Detail,
 		}
 		traitKey := reportTraitOutcomeStorageKey(report.TraitOutcomes, sourceKey, reportOutcome)
+		if current, exists := report.TraitOutcomes[traitKey]; exists && sameReportTraitOutcomeOwner(current, reportOutcome) {
+			reportOutcome.Detail = mergeTraitOutcomeDetail(current.Detail, reportOutcome.Detail)
+		}
 		report.TraitOutcomes[traitKey] = reportOutcome
 		alreadyIn := false
 		for _, id := range report.TraitTriggered {
@@ -673,6 +693,21 @@ func mergeTraitOutcomes(report *BattleReport, outcomes map[string]general.TraitO
 			report.TraitTriggered = append(report.TraitTriggered, traitKey)
 		}
 	}
+}
+
+// mergeTraitOutcomeDetail 合并同一特性跨阶段的设计参数和实际结果，避免后阶段覆盖战前结果。
+func mergeTraitOutcomeDetail(base map[string]interface{}, extra map[string]interface{}) map[string]interface{} {
+	if len(base) == 0 && len(extra) == 0 {
+		return nil
+	}
+	result := make(map[string]interface{}, len(base)+len(extra))
+	for key, value := range base {
+		result[key] = value
+	}
+	for key, value := range extra {
+		result[key] = value
+	}
+	return result
 }
 
 // traitOutcomeOwnerRank 按核心组合分发时的触发方顺序排列同一批战报结果。

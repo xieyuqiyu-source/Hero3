@@ -456,6 +456,20 @@ func setTestCombatUnitsConfig(t *testing.T) {
 				},
 			},
 		},
+		"shu": FactionUnits{
+			"azureDragon": {
+				Name: "青龙军", Category: "infantry",
+				Stats: map[string]int{"attack": 10, "infantryDefense": 10, "cavalryDefense": 10, "speed": 6, "carryCapacity": 5, "upkeep": 1},
+			},
+			"qilinGuard": {
+				Name: "麒麟卫", Category: "infantry",
+				Stats: map[string]int{"attack": 10, "infantryDefense": 10, "cavalryDefense": 10, "speed": 6, "carryCapacity": 5, "upkeep": 1},
+			},
+			"southernElephant": {
+				Name: "南蛮象", Category: "cavalry",
+				Stats: map[string]int{"attack": 10, "infantryDefense": 10, "cavalryDefense": 10, "speed": 6, "carryCapacity": 5, "upkeep": 1},
+			},
+		},
 	}
 	unitsMu.Unlock()
 

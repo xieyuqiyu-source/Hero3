@@ -77,26 +77,26 @@ const resourceLabels: Record<string, string> = { wood: '木材', clay: '泥土',
 const traitDetailLabels: Record<string, string> = {
   triggerCount: '触发场次', effectRate: '设计效果比例', triggerChance: '触发概率', damagePercent: '设计伤害比例', suppressRate: '压制比例', foodRatio: '口粮比例',
   attackBonusRate: '设计攻击加成', defenseBonusRate: '设计防御加成', attackReductionRate: '设计攻击降低', enemyDefenseReductionRate: '设计敌方防御降低', lossReductionRate: '设计减损比例',
-  speedBonusRate: '行军速度加成', productionBonusRate: '产量加成', resourceCostReduction: '资源消耗降低', plunderBonusRate: '设计掠夺修正',
+  speedBonusRate: '行军速度加成', productionBonusRate: '产量加成', resourceCostReduction: '资源消耗降低', plunderBonusRate: '设计掠夺修正', plunderProtectionRate: '资源保护比例',
   fireDamageBonusRate: '火攻伤害加成', warningDelayRate: '预警延迟', selfCostRate: '自身损失比例', reviveRate: '复活比例', captureRate: '俘虏比例',
   disableTraitRate: '禁用特性概率', maxAffectedRate: '设计最大影响比例', baseChance: '基础触发概率', chancePerRatio: '每倍差距概率', maxChance: '最高触发概率',
   baseSuppressRate: '基础震慑比例', suppressPerRatio: '每倍差距震慑', maxSuppressRate: '最高震慑比例',
   guardPerMinute: '每分钟产兵', maxGuardPerDay: '每日产兵上限', captureMax: '设计单兵种俘虏上限', maxReturnCount: '设计返还上限',
   maxReviveCount: '设计复活上限', maxAffectedCount: '最大影响数量', minMarchSeconds: '最低行军时间', disableTraitCount: '设计压制特性数',
   generalAttackFlat: '将领攻击固定加成', generalDefenseFlat: '设计全军防御增加', unitAttackFlat: '设计单位攻击增加', unitSpeedFlat: '设计单位移动增加',
-  preBattleAffected: '战前真实伤亡', suppressedUnits: '本场压制兵力', fledUnits: '本场溃逃兵力', capturedUnits: '俘虏归队', capturedToGarrison: '俘虏驻防', modifiedUnits: '实际攻防修正',
+  preBattleAffected: '战前真实伤亡', realCasualties: '真实伤亡兵力', totalRealCasualties: '真实伤亡总数', suppressedUnits: '本场压制兵力', fledUnits: '本场溃逃兵力', capturedUnits: '俘虏归队', capturedToGarrison: '俘虏驻防', modifiedUnits: '实际攻防修正',
   attackModifiedUnits: '实际攻击修正', infantryDefenseModifiedUnits: '实际步防修正', cavalryDefenseModifiedUnits: '实际骑防修正',
   extraLosses: '追加损失', targetExtraLosses: '目标兵种追加损失', reducedLosses: '减少损失', disabledTraits: '压制特性',
   actualLostUnits: '本场真实阵亡', revivedUnits: '复活兵力', returnedUnits: '返还兵力', returnedFledUnits: '战后返回兵力', extraDamage: '额外伤害', totalRevived: '复活总数',
   totalSuppressed: '压制总数', totalCaptured: '俘虏总数', disabledGeneralCount: '封禁将领数', disabledTraitCount: '实际压制特性数',
   status: '状态', invalidReason: '失效原因',
-  plunderDelta: '掠夺资源修正',
+  plunderDelta: '掠夺资源修正', plunderProtectionContributionRate: '本次资源保护', cumulativePlunderProtectionRate: '累计资源保护', protectedResources: '实际保护资源',
 }
 const traitPercentageKeys = new Set([
   'effectRate', 'triggerChance', 'damagePercent', 'suppressRate', 'foodRatio', 'attackBonusRate', 'defenseBonusRate', 'enemyDefenseReductionRate',
   'lossReductionRate', 'speedBonusRate', 'productionBonusRate', 'resourceCostReduction', 'plunderBonusRate', 'fireDamageBonusRate', 'warningDelayRate',
   'selfCostRate', 'reviveRate', 'captureRate', 'disableTraitRate', 'maxAffectedRate', 'baseChance', 'chancePerRatio', 'maxChance', 'baseSuppressRate',
-  'suppressPerRatio', 'maxSuppressRate',
+  'suppressPerRatio', 'maxSuppressRate', 'plunderProtectionRate', 'plunderProtectionContributionRate', 'cumulativePlunderProtectionRate',
 ])
 
 // 特殊场景特性使用比通用事件阶段更精确的玩家文案。
@@ -106,7 +106,7 @@ const traitPhaseOverrides: Record<string, string> = {
   meiren: '主动进攻战斗前',
   xiaobawang_zhuiji: '掠夺战结算后',
   jinfan_qixi: '掠夺战战斗前',
-  qibing_raohou: '主动进攻战斗前',
+  qibing_raohou: '永久被动',
   mouding_houfa: '防守/增援战斗前',
   meihuo_raozhen: '主动进攻战斗前',
   huchi_chongzhen: '主动进攻战斗前',
@@ -123,7 +123,7 @@ const traitPhaseOverrides: Record<string, string> = {
   dunzhen_fangyu: '防守/增援战斗前',
   gushou_hanzhong: '防守/增援战斗前',
   jiangdong_gushou: '防守/增援战斗前',
-  longdan_jiuyuan: '防守/增援战斗结算后',
+  longdan_jiuyuan: '防守/增援战斗前及掠夺结算',
   renzhu_shouhu: '进攻/防守/增援战斗结束后',
   guicai_yice: '进攻/防守/增援战斗结束后',
   qimen_dunjia: '进攻/防守/增援战斗前',
@@ -167,7 +167,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const visibleSelfTraitDetailKeys = new Set([
-  'modifiedUnits', 'reducedLosses', 'actualLostUnits', 'revivedUnits', 'returnedUnits', 'totalRevived', 'plunderDelta',
+  'modifiedUnits', 'reducedLosses', 'actualLostUnits', 'revivedUnits', 'returnedUnits', 'totalRevived', 'plunderDelta', 'protectedResources',
 ])
 
 /** 按战报情报可见性裁剪特性实际结果，避免从己方特性反推出隐藏敌军。 */
@@ -245,21 +245,25 @@ function sideResult(role: OfficialReportSideViewModel['role'], winnerSide?: stri
 const passiveUnitTraits: Record<string, { unitName: string }> = {
   jixing_benxi: { unitName: '骁骑营' },
   huhu_shengwei: { unitName: '虎豹骑' },
+  qibing_raohou: { unitName: '南蛮象' },
 }
 
 /** 从参战将领快照生成四维永久被动展示。 */
 function passiveStatTrait(general: BattleReportGeneralState, trait: NonNullable<BattleReportGeneralState['traits']>[number]): OfficialReportTraitViewModel | null {
-  if (trait.traitId !== 'shengui_zhicai' && trait.traitId !== 'rende') return null
-  const politics = Number(trait.params?.politicsBonus ?? 0)
-  const secondaryKey = trait.traitId === 'rende' ? 'commandBonus' : 'intelligenceBonus'
-  const secondaryLabel = trait.traitId === 'rende' ? '统率' : '智谋'
-  const secondary = Number(trait.params?.[secondaryKey] ?? 0)
-  if (politics <= 0 && secondary <= 0) return null
+  const statDefinitions: Record<string, Array<{ key: string; label: string }>> = {
+    shengui_zhicai: [{ key: 'politicsBonus', label: '内政' }, { key: 'intelligenceBonus', label: '智谋' }],
+    rende: [{ key: 'politicsBonus', label: '内政' }, { key: 'commandBonus', label: '统率' }],
+    laodang_yizhuang: [{ key: 'forceBonus', label: '武力' }, { key: 'commandBonus', label: '统率' }],
+  }
+  const definitions = statDefinitions[trait.traitId]
+  if (!definitions) return null
+  const values = definitions.map(({ key, label }) => ({ label, value: Number(trait.params?.[key] ?? 0) })).filter(({ value }) => value > 0)
+  if (!values.length) return null
   return {
     key: `passive-${general.id}-${trait.traitId}`,
     name: traitLabel(trait.traitId, trait.name),
     phase: '永久被动',
-    detailText: `内政 +${politics.toLocaleString('zh-CN')}；${secondaryLabel} +${secondary.toLocaleString('zh-CN')}`,
+    detailText: values.map(({ label, value }) => `${label} +${value.toLocaleString('zh-CN')}`).join('；'),
   }
 }
 

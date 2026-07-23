@@ -2582,7 +2582,8 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 		} else {
 			plundered = next
 		}
-		if next, outcomes := dispatchPlunderTraits(defender, defenderGeneralIDs, plundered, march.MarchType, "defender", traitControl.DisabledSides["defender"]); len(outcomes) > 0 {
+		defenderPlunderActive := defenderPlunderTraits(defender, defenderGeneralIDs, reinforcements, traitControl.DisabledSides["defender"])
+		if next, outcomes := dispatchPlunderActiveTraits(plundered, march.MarchType, defenderPlunderActive); len(outcomes) > 0 {
 			plundered = next
 			for k, v := range outcomes {
 				plunderOutcomes[k] = v
@@ -2680,9 +2681,11 @@ func resolvePvpCombat(attacker *GameState, defender *GameState, reinforcements [
 	defenderReport = NormalizeBattleReport(defenderReport)
 	syncPvpReportFinalSurvivors(&attackerReport, attackerSurvivors, defenderArmyMap)
 	syncPvpReportFinalSurvivors(&defenderReport, attackerSurvivors, defenderArmyMap)
+	_, reinforcementPlunderOutcomes := splitReinforcementTraitOutcomes(plunderOutcomes, changedReinforcements)
 	reinforcementReports := buildPvpReinforcementReportsByPhase(&defenderReport, battleID, attacker, defender, changedReinforcements, totalReinforcementLosses, reinforcementGeneralExp, reinforcementTraitReportPhases{
 		Before: reinforcementBeforeOutcomes, EnemyAfterCombat: reinforcementEnemyAfterOutcomes,
-		SelfAfterCombat: reinforcementSelfAfterCombatOutcomes, AfterBattle: reinforcementAfterBattleOutcomes, All: reinforcementTraitOutcomes,
+		SelfAfterCombat: reinforcementSelfAfterCombatOutcomes, AfterBattle: reinforcementAfterBattleOutcomes,
+		Plunder: reinforcementPlunderOutcomes, All: reinforcementTraitOutcomes,
 	}, reportResult, nowText)
 	eventReports := append([]BattleReport{attackerReport, defenderReport}, reinforcementReports...)
 	eventReports = synchronizeBattleReportGeneralResults(eventReports)
@@ -3135,6 +3138,7 @@ type reinforcementTraitReportPhases struct {
 	EnemyAfterCombat map[string]map[string]general.TraitOutcome
 	SelfAfterCombat  map[string]map[string]general.TraitOutcome
 	AfterBattle      map[string]map[string]general.TraitOutcome
+	Plunder          map[string]map[string]general.TraitOutcome
 	All              map[string]map[string]general.TraitOutcome
 }
 
@@ -3214,7 +3218,7 @@ func buildPvpReinforcementReportsByPhase(baseDefenseReport *BattleReport, eventI
 		report.GeneralExpGained = expByReinforcement[record.ID]
 		report.GeneralLevelBefore = reinforcementSnapshot.GeneralLevelBefore
 		report.GeneralLevelAfter = reinforcementSnapshot.GeneralLevelAfter
-		phaseOutcomes := []map[string]map[string]general.TraitOutcome{traitPhases.Before, traitPhases.EnemyAfterCombat, traitPhases.SelfAfterCombat, traitPhases.AfterBattle}
+		phaseOutcomes := []map[string]map[string]general.TraitOutcome{traitPhases.Before, traitPhases.EnemyAfterCombat, traitPhases.SelfAfterCombat, traitPhases.AfterBattle, traitPhases.Plunder}
 		mergedByPhase := false
 		for _, outcomes := range phaseOutcomes {
 			if len(outcomes[record.ID]) == 0 {

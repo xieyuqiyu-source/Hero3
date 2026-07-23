@@ -5,7 +5,7 @@ const traitLabels: Record<string, string> = {
   huzhu_xuezhan: '护主血战', sizhandaodi: '死战到底', jixing_benxi: '疾行奔袭', dunzhen_fangyu: '盾阵防御',
   weizhen_zhenhe: '震慑全军', weizhen_xiaoyao: '威震逍遥', shengui_zhicai: '神鬼之才', guicai_yice: '鬼才遗策',
   wangzuo_zhicai: '王佐之才', neizheng_jingying: '内政精营', rende: '仁德天下', renzhu_shouhu: '仁主守护',
-  shuiyan_qijun: '水淹七军', wusheng_pojun: '武圣破军', zhenhe_quanjun: '震慑全军', wanren_nuhou: '万人怒吼',
+  shuiyan_qijun: '水淹七军', wusheng_pojun: '武圣破军', zhenhe_quanjun: '万人怒吼', wanren_nuhou: '勇冠三军',
   qimen_dunjia: '奇门遁甲', wolong_mouzhi: '卧龙奇谋', longdan_jiuyuan: '龙胆救援', qijin_qichu: '七进七出',
   xiliang_tuji: '西凉突击', tianshen_xiafan: '天神下凡', baibu_chuanyang: '百步穿杨', laodang_yizhuang: '老当益壮',
   qibing_raohou: '奇兵绕后', gushou_hanzhong: '固守汉中', jiangdong_haoling: '江东号令', jiangdong_gushou: '江东固守',

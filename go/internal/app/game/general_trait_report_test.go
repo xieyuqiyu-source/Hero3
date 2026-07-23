@@ -46,6 +46,29 @@ func TestMergeTraitOutcomesPreservesSameTraitFromBothSides(t *testing.T) {
 	}
 }
 
+// TestMergeTraitOutcomesCombinesSameOwnerAcrossPhases 验证同一将领的战前与掠夺结果不会互相覆盖。
+func TestMergeTraitOutcomesCombinesSameOwnerAcrossPhases(t *testing.T) {
+	report := BattleReport{ViewType: ReportViewDefense, Type: "defense", BattleType: "plunder"}
+	owner := general.TraitOutcome{
+		TraitID: "longdan_jiuyuan", Name: "龙胆救援", OwnerSide: "defender",
+		OwnerGeneralID: "zhaoyun", OwnerPlayerID: "defender_player", Scope: "self_army",
+	}
+	before := owner
+	before.Detail = map[string]interface{}{"infantryDefenseModifiedUnits": map[string]int{"qilinGuard": 25}}
+	mergeTraitOutcomes(&report, map[string]general.TraitOutcome{"longdan_jiuyuan": before})
+	plunder := owner
+	plunder.Detail = map[string]interface{}{"protectedResources": map[string]int{"wood": 200}, "cumulativePlunderProtectionRate": 0.2}
+	mergeTraitOutcomes(&report, map[string]general.TraitOutcome{"longdan_jiuyuan": plunder})
+
+	if len(report.TraitOutcomes) != 1 || len(report.TraitTriggered) != 1 {
+		t.Fatalf("expected one combined timeline entry, got triggered=%+v outcomes=%+v", report.TraitTriggered, report.TraitOutcomes)
+	}
+	detail := report.TraitOutcomes["longdan_jiuyuan"].Detail
+	if detail["infantryDefenseModifiedUnits"] == nil || detail["protectedResources"] == nil || detail["cumulativePlunderProtectionRate"] != 0.2 {
+		t.Fatalf("expected both pre-battle and plunder details, got %+v", detail)
+	}
+}
+
 // TestMergeTraitOutcomesUsesDispatchOrder 验证同阶段结果按触发方及 special、bonus 配置顺序写入战报，而不是按 ID 字母排序。
 func TestMergeTraitOutcomesUsesDispatchOrder(t *testing.T) {
 	report := BattleReport{ViewType: ReportViewAttack, Type: "attack", BattleType: "attack"}
@@ -152,41 +175,6 @@ func TestDefenseOnlyTraitsModifyOwnReinforcementUnits(t *testing.T) {
 	}
 }
 
-// TestReinforcementLossReductionMatchesIndependentReport 验证赵云减损后的真实兵力与援军战报使用同一数值。
-func TestReinforcementLossReductionMatchesIndependentReport(t *testing.T) {
-	now := time.Date(2026, 7, 19, 1, 0, 0, 0, time.UTC)
-	record := Reinforcement{
-		ID: "rein_zhaoyun", OwnerPlayerID: "owner_zhaoyun", FromPlayerID: "owner_zhaoyun", FromPlayerName: "常山援军", FromPlayerFaction: "shu",
-		ToPlayerID: "host", Status: ReinforcementStatusStationed, RemainingTroops: map[string]int{"greedyWolf": 100}, Rules: GarrisonRules{CanFight: true},
-		Generals: []ReinforcementGeneralSnapshot{{ID: "zhaoyun", Name: "赵云", Traits: []GeneralTraitInstance{{
-			TraitID: "longdan_jiuyuan", TraitType: "special", Name: "龙胆救援", Scope: "reinforcement_self",
-			AllowedSides: []string{"defender", "reinforcement"}, Params: map[string]float64{"triggerChance": 1, "lossReductionRate": 0.2},
-		}}}},
-	}
-	losses, outcomes, suppressedCount := applyReinforcementAfterBattleTraits([]Reinforcement{record}, map[string]map[string]int{record.ID: {"greedyWolf": 50}}, "attacker", "attack", 0)
-	if suppressedCount != 0 {
-		t.Fatalf("expected no consumed suppression, got %d", suppressedCount)
-	}
-	if losses[record.ID]["greedyWolf"] != 40 {
-		t.Fatalf("expected Zhao Yun to reduce own losses 50 -> 40, got %+v", losses)
-	}
-	outcome := outcomes[record.ID]["longdan_jiuyuan"]
-	reduced, ok := outcome.Detail["reducedLosses"].(map[string]int)
-	if !ok || reduced["greedyWolf"] != 10 {
-		t.Fatalf("expected report outcome to record 10 reduced troops, got %+v", outcome)
-	}
-	changed := applyPvpReinforcementLosses([]Reinforcement{record}, losses, now)
-	attacker := newPlayerState("attacker", "进攻方", "wei", "caocao", now)
-	defender := newPlayerState("host", "驻防方", "shu", "liubei", now)
-	reports := buildPvpReinforcementReports("event_zhaoyun", &attacker, &defender, changed, losses, nil, outcomes, "attacker_victory", now.Format(resourceDateLayout))
-	if len(reports) != 1 || reports[0].LostUnits["greedyWolf"] != 40 || reports[0].TraitOutcomes["longdan_jiuyuan"].Detail["reducedLosses"] == nil {
-		t.Fatalf("expected independent report to use final loss and trait detail, got %+v", reports)
-	}
-	if reports[0].Detail == nil || len(reports[0].Detail.Traits) != 1 || reports[0].Detail.Traits[0].TraitID != "longdan_jiuyuan" {
-		t.Fatalf("expected normalized reinforcement report trait, got %+v", reports[0].Detail)
-	}
-}
-
 // TestReinforcementResolutionSeparatesCombatLossesAndAfterBattleRevival 验证经验口径保留真实阵亡，但不被战斗结束后的复活倒扣。
 func TestReinforcementResolutionSeparatesCombatReductionAndAfterBattleReturns(t *testing.T) {
 	record := Reinforcement{
@@ -211,48 +199,6 @@ func TestReinforcementResolutionSeparatesCombatReductionAndAfterBattleReturns(t 
 	}
 	if _, exists := resolution.Outcomes[record.ID]["rende"]; exists || resolution.Outcomes[record.ID]["renzhu_shouhu"].TraitID != "renzhu_shouhu" {
 		t.Fatalf("expected only Renzhu Shouhu after-battle outcome, outcomes=%+v", resolution.Outcomes)
-	}
-}
-
-// TestReinforcementLossReductionConsumesMainBattleSuppressionOnce 验证主战场剩余压制只跳过一个后续援军特性。
-func TestReinforcementLossReductionConsumesMainBattleSuppressionOnce(t *testing.T) {
-	buildRecord := func(id string) Reinforcement {
-		return Reinforcement{
-			ID: id, OwnerPlayerID: id + "_owner", FromPlayerID: id + "_owner", FromPlayerFaction: "shu",
-			RemainingTroops: map[string]int{"greedyWolf": 100},
-			Generals: []ReinforcementGeneralSnapshot{{ID: id + "_zhaoyun", Traits: []GeneralTraitInstance{{
-				TraitID: "longdan_jiuyuan", TraitType: "special", Name: "龙胆救援", Scope: "reinforcement_self",
-				AllowedSides: []string{"defender", "reinforcement"}, Params: map[string]float64{"triggerChance": 1, "lossReductionRate": 0.2},
-			}}}},
-		}
-	}
-	first := buildRecord("rein_first")
-	second := buildRecord("rein_second")
-	suppressionCtx := &general.AfterCombatResolveContext{
-		Result: &combat.CombatResult{}, AttackerOwnsTrait: true, DefenderOwnsTrait: true,
-	}
-	general.Dispatch(suppressionCtx, []general.ActiveTrait{{
-		TraitID: "kurouji", OwnerSide: "attacker", OwnerGeneralID: "huanggai",
-		Params: general.Params{"disableTraitCount": 1, "triggerChance": 1},
-	}})
-	losses, outcomes, suppressedCount := applyReinforcementAfterBattleTraits(
-		[]Reinforcement{first, second},
-		map[string]map[string]int{first.ID: {"greedyWolf": 50}, second.ID: {"greedyWolf": 50}},
-		"attacker", "attack", suppressionCtx.DisabledTraitSide["defender"],
-	)
-	if suppressedCount != 1 {
-		t.Fatalf("expected one consumed suppression, got %d", suppressedCount)
-	}
-	general.RecordActualTraitSuppressions(suppressionCtx, "defender", suppressedCount)
-	if suppressionCtx.Triggered["kurouji"].Detail["disabledTraitCount"] != 1 {
-		t.Fatalf("expected reinforcement interception to update the main suppression report, got %+v", suppressionCtx.Triggered)
-	}
-
-	if losses[first.ID]["greedyWolf"] != 50 || len(outcomes[first.ID]) != 0 {
-		t.Fatalf("expected first reinforcement trait suppressed, losses=%+v outcomes=%+v", losses[first.ID], outcomes[first.ID])
-	}
-	if losses[second.ID]["greedyWolf"] != 40 || outcomes[second.ID]["longdan_jiuyuan"].TraitID != "longdan_jiuyuan" {
-		t.Fatalf("expected suppression consumed once and second trait triggered, losses=%+v outcomes=%+v", losses[second.ID], outcomes[second.ID])
 	}
 }
 

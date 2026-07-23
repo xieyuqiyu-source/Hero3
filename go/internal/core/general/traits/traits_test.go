@@ -85,6 +85,30 @@ func TestSimaYiTraitSchemasExposeCurrentGmParameters(t *testing.T) {
 	}
 }
 
+// TestCurrentShuCombatSchemasHideUnusedCaps 验证本批蜀将概率攻防特性不向 GM 暴露未消费的通用上限。
+func TestCurrentShuCombatSchemasHideUnusedCaps(t *testing.T) {
+	for _, traitID := range []string{"shuiyan_qijun", "wusheng_pojun", "zhenhe_quanjun", "wanren_nuhou", "baibu_chuanyang"} {
+		t.Run(traitID, func(t *testing.T) {
+			trait, ok := general.Get(traitID)
+			if !ok {
+				t.Fatalf("expected trait %s registered", traitID)
+			}
+			fields := map[string]general.ParamField{}
+			for _, field := range trait.ParamSchema() {
+				fields[field.Key] = field
+			}
+			if _, exists := fields["triggerChance"]; !exists {
+				t.Fatalf("expected %s to expose triggerChance, fields=%+v", traitID, fields)
+			}
+			for _, unusedKey := range []string{"maxAffectedRate", "maxAffectedCount"} {
+				if _, exists := fields[unusedKey]; exists {
+					t.Fatalf("expected %s to hide unused %s, fields=%+v", traitID, unusedKey, fields)
+				}
+			}
+		})
+	}
+}
+
 // TestIndependentTraitsRespectZeroTriggerChance 验证独立实现和配置化特性不会在零概率时改状态或写触发结果。
 func TestIndependentTraitsRespectZeroTriggerChance(t *testing.T) {
 	t.Run("美人心计", func(t *testing.T) {
@@ -450,7 +474,7 @@ func TestDisableTraitsAtSamePriorityResolveSimultaneously(t *testing.T) {
 		{TraitID: "kurouji", OwnerSide: "attacker", Params: general.Params{"disableTraitCount": 1, "triggerChance": 1}},
 		{TraitID: "kurouji", OwnerSide: "defender", Params: general.Params{"disableTraitCount": 1, "triggerChance": 1}},
 		{TraitID: "kurou_fanji", OwnerSide: "attacker", Params: general.Params{"effectRate": 0.1, "triggerChance": 1}},
-		{TraitID: "laodang_yizhuang", OwnerSide: "defender", Params: general.Params{"effectRate": 0.1, "triggerChance": 1}},
+		{TraitID: "lianying_zengshang", OwnerSide: "defender", TargetUnitType: "infantry", Params: general.Params{"effectRate": 0.1, "triggerChance": 1}},
 	})
 
 	if result.AttackerLosses[0].Losses != 10 || result.DefenderLosses[0].Losses != 10 {
@@ -462,7 +486,7 @@ func TestDisableTraitsAtSamePriorityResolveSimultaneously(t *testing.T) {
 	if _, ok := ctx.Triggered["kurou_fanji"]; ok {
 		t.Fatalf("expected attacker damage trait suppressed, got %+v", ctx.Triggered)
 	}
-	if _, ok := ctx.Triggered["laodang_yizhuang"]; ok {
+	if _, ok := ctx.Triggered["lianying_zengshang"]; ok {
 		t.Fatalf("expected defender damage trait suppressed, got %+v", ctx.Triggered)
 	}
 	suppressionOutcomes := 0
@@ -752,19 +776,14 @@ func TestRemainingBeforeBattleTraitIDsModifyRealStats(t *testing.T) {
 				t.Fatalf("expected own attack 105, got %+v", attacker.Units)
 			}
 		}},
-		{traitID: "qibing_raohou", params: general.Params{"enemyDefenseReductionRate": 0.2, "triggerChance": 1}, outcomeKey: "infantryDefenseModifiedUnits", check: func(t *testing.T, _ combat.Army, defender combat.Army) {
-			if defender.Units[0].InfantryDefense != 80 {
-				t.Fatalf("expected enemy defense 80, got %+v", defender.Units)
-			}
-		}},
 		{traitID: "sizhandaodi", target: "infantry", params: general.Params{"attackBonusRate": 0.35, "triggerChance": 1}, outcomeKey: "attackModifiedUnits", check: func(t *testing.T, attacker combat.Army, _ combat.Army) {
 			if attacker.Units[0].Attack != 135 || attacker.Units[1].Attack != 100 {
 				t.Fatalf("expected only infantry attack 135, got %+v", attacker.Units)
 			}
 		}},
-		{traitID: "wanren_nuhou", target: "infantry", params: general.Params{"attackBonusRate": 0.2, "triggerChance": 1}, outcomeKey: "attackModifiedUnits", check: func(t *testing.T, attacker combat.Army, _ combat.Army) {
-			if attacker.Units[0].Attack != 120 || attacker.Units[1].Attack != 100 {
-				t.Fatalf("expected only infantry attack 120, got %+v", attacker.Units)
+		{traitID: "wanren_nuhou", target: "southernElephant", params: general.Params{"attackBonusRate": 0.35, "triggerChance": 1}, outcomeKey: "attackModifiedUnits", check: func(t *testing.T, attacker combat.Army, _ combat.Army) {
+			if attacker.Units[0].Attack != 100 || attacker.Units[1].Attack != 135 {
+				t.Fatalf("expected only Southern Elephant attack 135, got %+v", attacker.Units)
 			}
 		}},
 		{traitID: "weizhen_xiaoyao", target: "cavalry", params: general.Params{"attackBonusRate": 0.35, "triggerChance": 1}, outcomeKey: "attackModifiedUnits", check: func(t *testing.T, attacker combat.Army, _ combat.Army) {
@@ -772,17 +791,17 @@ func TestRemainingBeforeBattleTraitIDsModifyRealStats(t *testing.T) {
 				t.Fatalf("expected only cavalry attack 135, got %+v", attacker.Units)
 			}
 		}},
-		{traitID: "wusheng_pojun", params: general.Params{"attackBonusRate": 0.2, "triggerChance": 1}, outcomeKey: "attackModifiedUnits", check: func(t *testing.T, attacker combat.Army, _ combat.Army) {
-			if attacker.Units[0].Attack != 120 || attacker.Units[1].Attack != 120 {
-				t.Fatalf("expected all attacks 120, got %+v", attacker.Units)
+		{traitID: "wusheng_pojun", target: "azureDragon", params: general.Params{"attackBonusRate": 0.38, "triggerChance": 1}, outcomeKey: "attackModifiedUnits", check: func(t *testing.T, attacker combat.Army, _ combat.Army) {
+			if attacker.Units[0].Attack != 138 || attacker.Units[1].Attack != 100 {
+				t.Fatalf("expected only Azure Dragon attack 138, got %+v", attacker.Units)
 			}
 		}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.traitID, func(t *testing.T) {
 			attacker := combat.Army{Units: []combat.Unit{
-				{ID: "huWei", Category: "infantry", Count: 100, Attack: 100, InfantryDefense: 100, CavalryDefense: 100},
-				{ID: "huBaoQi", Category: "cavalry", Count: 100, Attack: 100, InfantryDefense: 100, CavalryDefense: 100},
+				{ID: "azureDragon", Category: "infantry", Count: 100, Attack: 100, InfantryDefense: 100, CavalryDefense: 100},
+				{ID: "southernElephant", Category: "cavalry", Count: 100, Attack: 100, InfantryDefense: 100, CavalryDefense: 100},
 			}}
 			defender := combat.Army{Units: []combat.Unit{
 				{ID: "shadowGuard", Category: "infantry", Count: 100, Attack: 100, InfantryDefense: 100, CavalryDefense: 100},

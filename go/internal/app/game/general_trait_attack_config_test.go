@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// TestFormalAttackTraitConfigsMatchDesign 逐项核对七项攻击加成，曹操防御特性不得混入进攻矩阵。
+// TestFormalAttackTraitConfigsMatchDesign 逐项核对七项攻击加成，锁定专属兵种与概率。
 func TestFormalAttackTraitConfigsMatchDesign(t *testing.T) {
 	path := filepath.Join("..", "..", "..", "config", "generals.json")
 	raw, err := os.ReadFile(path)
@@ -30,8 +30,8 @@ func TestFormalAttackTraitConfigsMatchDesign(t *testing.T) {
 	}{
 		{generalID: "dianwei", traitID: "sizhandaodi", targetUnitType: "infantry", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.6, "attackBonusRate": 0.35}},
 		{generalID: "zhangliao", traitID: "weizhen_xiaoyao", targetUnitType: "cavalry", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.6, "attackBonusRate": 0.35}},
-		{generalID: "guanyu", traitID: "wusheng_pojun", allowedSides: []string{"attacker"}, params: map[string]float64{"attackBonusRate": 0.2}},
-		{generalID: "zhangfei", traitID: "wanren_nuhou", targetUnitType: "infantry", allowedSides: []string{"attacker"}, params: map[string]float64{"attackBonusRate": 0.2}},
+		{generalID: "guanyu", traitID: "wusheng_pojun", targetUnitType: "azureDragon", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.5, "attackBonusRate": 0.38}},
+		{generalID: "zhangfei", traitID: "wanren_nuhou", targetUnitType: "southernElephant", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.4, "attackBonusRate": 0.35}},
 		{generalID: "sunce", traitID: "xiaobawang_tieqi", targetUnitType: "overlordRider", allowedSides: []string{"attacker"}, params: map[string]float64{"unitAttackFlat": 50}},
 		{generalID: "zhouyu", traitID: "meizhoulang_junlue", allowedSides: []string{"attacker"}, params: map[string]float64{"attackBonusRate": 0.05}},
 		{generalID: "ganning", traitID: "jinfan_qixi", allowedSides: []string{"attacker"}, allowedScenes: []string{"plunder"}, params: map[string]float64{"attackBonusRate": 0.1}},

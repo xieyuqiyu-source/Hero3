@@ -27,9 +27,9 @@ func TestFormalPreBattleForceTraitConfigsMatchDesign(t *testing.T) {
 		params       map[string]float64
 	}{
 		{generalID: "simayi", traitID: "yibing_touxi", params: map[string]float64{"triggerChance": 0.35, "effectRate": 0.35}},
-		{generalID: "guanyu", traitID: "shuiyan_qijun", params: map[string]float64{"triggerChance": 0.35, "effectRate": 0.35, "maxAffectedRate": 0.35}},
+		{generalID: "guanyu", traitID: "shuiyan_qijun", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.35, "effectRate": 0.3}},
 		{generalID: "zhangliao", traitID: "weizhen_zhenhe", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.35, "effectRate": 0.25}},
-		{generalID: "zhangfei", traitID: "zhenhe_quanjun", params: map[string]float64{"triggerChance": 0.5, "effectRate": 0.5, "maxAffectedRate": 0.5}},
+		{generalID: "zhangfei", traitID: "zhenhe_quanjun", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.5, "effectRate": 0.5}},
 		{generalID: "zhugeliang", traitID: "qimen_dunjia", allowedSides: []string{"attacker", "defender", "reinforcement"}, params: map[string]float64{"effectRate": 0.25, "triggerChance": 1}},
 	}
 	for _, tc := range tests {

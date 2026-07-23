@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// TestFormalPreBattleDefenseTraitConfigsMatchDesign 逐项核对十项战前防御相关特性的正式配置。
+// TestFormalPreBattleDefenseTraitConfigsMatchDesign 逐项核对九项战前防御相关特性的正式配置。
 func TestFormalPreBattleDefenseTraitConfigsMatchDesign(t *testing.T) {
 	path := filepath.Join("..", "..", "..", "config", "generals.json")
 	raw, err := os.ReadFile(path)
@@ -35,8 +35,7 @@ func TestFormalPreBattleDefenseTraitConfigsMatchDesign(t *testing.T) {
 		{generalID: "xuchu", traitID: "huchi_chongzhen", traitType: "special", scope: "enemy_army", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.5, "enemyDefenseReductionRate": 0.3}},
 		{generalID: "dianwei", traitID: "huzhu_xuezhan", traitType: "special", scope: "self_army", allowedSides: []string{"defender", "reinforcement"}, targetUnitType: "jinWeiSoldier", params: map[string]float64{"triggerChance": 1, "generalDefenseFlat": 20}},
 		{generalID: "xiahouyuan", traitID: "dunzhen_fangyu", traitType: "bonus", scope: "self_army", allowedSides: []string{"defender", "reinforcement"}, params: map[string]float64{"defenseBonusRate": 0.3, "triggerChance": 0.6}},
-		{generalID: "huangzhong", traitID: "baibu_chuanyang", traitType: "special", scope: "enemy_army", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.35, "enemyDefenseReductionRate": 0.2}},
-		{generalID: "weiyan", traitID: "qibing_raohou", traitType: "special", scope: "enemy_army", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.35, "enemyDefenseReductionRate": 0.2}},
+		{generalID: "huangzhong", traitID: "baibu_chuanyang", traitType: "special", scope: "enemy_army", allowedSides: []string{"attacker"}, params: map[string]float64{"triggerChance": 0.45, "enemyDefenseReductionRate": 0.3}},
 		{generalID: "weiyan", traitID: "gushou_hanzhong", traitType: "bonus", scope: "self_army", allowedSides: []string{"defender", "reinforcement"}, params: map[string]float64{"generalDefenseFlat": 20}},
 		{generalID: "sunquan", traitID: "jiangdong_gushou", traitType: "bonus", scope: "self_army", allowedSides: []string{"defender", "reinforcement"}, params: map[string]float64{"triggerChance": 0.5, "defenseBonusRate": 0.5}},
 	}

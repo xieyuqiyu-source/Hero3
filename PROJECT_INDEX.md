@@ -304,6 +304,7 @@ go/internal/transport/api/router.go
 | 郭嘉特性 | `docs/系统设计/郭嘉特性更新开发文档.md`、`go/config/generals.json`、永久四维 Modifier、PVP/NPC/黄巾/轮回/增援测试、两端战报被动与复活展示 |
 | 刘备特性 | `docs/系统设计/刘备特性更新开发文档.md`、`go/config/generals.json`、永久四维 Modifier、PVP/NPC/黄巾/轮回/增援测试、两端战报被动与概率复活展示 |
 | 诸葛亮特性 | `docs/系统设计/诸葛亮特性更新开发文档.md`、`go/config/generals.json`、战前特性控制阶段、主将/援军封禁测试、双方诸葛失效测试、两端战报展示 |
+| 蜀将五人特性批次 | `docs/系统设计/蜀将五人特性批次更新开发文档.md`、`go/config/generals.json`、关羽/张飞/赵云/黄忠/魏延真实战斗测试、赵云资源保护、两端战报展示 |
 | 产品方向 | `docs/产品/项目最终目的.md`、`docs/产品/未来开发规划.md` |
 
 专题设计文档可能同时包含已完成事实和后续规划，读取后必须用当前代码、OpenAPI 和最近记忆核验。

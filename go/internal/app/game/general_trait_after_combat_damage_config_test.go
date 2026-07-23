@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// TestFormalAfterCombatDamageTraitConfigsMatchDesign 逐项核对七项战后追加伤害特性的正式配置。
+// TestFormalAfterCombatDamageTraitConfigsMatchDesign 逐项核对六项战后追加伤害特性的正式配置。
 func TestFormalAfterCombatDamageTraitConfigsMatchDesign(t *testing.T) {
 	path := filepath.Join("..", "..", "..", "config", "generals.json")
 	raw, err := os.ReadFile(path)
@@ -31,7 +31,6 @@ func TestFormalAfterCombatDamageTraitConfigsMatchDesign(t *testing.T) {
 		params          map[string]float64
 	}{
 		{generalID: "machao", traitID: "xiliang_tuji", traitType: "special", targetUnitType: "cavalry", params: map[string]float64{"triggerChance": 0.35, "effectRate": 0.12}},
-		{generalID: "huangzhong", traitID: "laodang_yizhuang", traitType: "bonus", params: map[string]float64{"effectRate": 0.1}},
 		{generalID: "sunce", traitID: "xiaobawang_zhuiji", traitType: "special", allowedScenes: []string{"plunder"}, requiredOutcome: "win", params: map[string]float64{"triggerChance": 0.35, "effectRate": 0.1}},
 		{generalID: "zhouyu", traitID: "huogong", traitType: "special", allowedSides: []string{"attacker"}, params: map[string]float64{"effectRate": 0.25, "damagePercent": 0.25, "triggerChance": 1}},
 		{generalID: "luxun", traitID: "huoshao_lianying", traitType: "special", targetUnitType: "infantry", params: map[string]float64{"triggerChance": 0.35, "effectRate": 1, "maxAffectedRate": 1}},

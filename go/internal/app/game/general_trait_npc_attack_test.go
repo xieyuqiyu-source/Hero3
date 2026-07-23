@@ -71,7 +71,7 @@ func TestNpcMaChaoRandomHitAndMissKeepPassiveForceIndependent(t *testing.T) {
 	}
 }
 
-// TestNpcLateRandomTraitsHitAndMissKeepDeterministicDamageIndependent 验证黄忠、陆逊和黄盖的随机特性不会吞掉各自确定性战后伤害。
+// TestNpcLateRandomTraitsHitAndMissKeepDeterministicDamageIndependent 验证陆逊和黄盖的随机特性不会吞掉各自确定性战后伤害。
 func TestNpcLateRandomTraitsHitAndMissKeepDeterministicDamageIndependent(t *testing.T) {
 	type expectedResult struct {
 		playerPower, enemyPower int
@@ -85,18 +85,6 @@ func TestNpcLateRandomTraitsHitAndMissKeepDeterministicDamageIndependent(t *test
 		hit       expectedResult
 		miss      expectedResult
 	}{
-		{
-			name: "黄忠", generalID: "huangzhong",
-			buildHero: func(chance float64) GeneralHeroConfig {
-				return GeneralHeroConfig{
-					ID: "huangzhong", Name: "黄忠", Faction: "wei", Enabled: true,
-					SpecialTrait: GeneralTraitConfig{TraitID: "baibu_chuanyang", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "enemy_army", AllowedSides: []string{"attacker"}, Params: map[string]float64{"triggerChance": chance, "enemyDefenseReductionRate": 0.2}},
-					BonusTrait:   GeneralTraitConfig{TraitID: "laodang_yizhuang", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "enemy_army", Params: map[string]float64{"effectRate": 0.1}},
-				}
-			},
-			hit:  expectedResult{playerPower: 10000, enemyPower: 8000, playerLoss: 421, npcLoss: 678, timeline: []string{"baibu_chuanyang", "laodang_yizhuang"}},
-			miss: expectedResult{playerPower: 10000, enemyPower: 10000, playerLoss: 500, npcLoss: 600, timeline: []string{"laodang_yizhuang"}},
-		},
 		{
 			name: "陆逊", generalID: "luxun",
 			buildHero: func(chance float64) GeneralHeroConfig {
@@ -231,8 +219,8 @@ func TestNpcAttackBonusTraitsMatchPowerStateAndReports(t *testing.T) {
 	}{
 		{name: "死战到底", traitID: "sizhandaodi", generalID: "dianwei", unitType: "weiInfantry", target: "infantry", mode: "attack", params: map[string]float64{"triggerChance": 1, "attackBonusRate": 0.35}, designKey: "attackBonusRate", designValue: 0.35, baseAttack: 10, attackDelta: 4},
 		{name: "威震逍遥", traitID: "weizhen_xiaoyao", generalID: "zhangliao", unitType: "weiCavalry", target: "cavalry", mode: "attack", params: map[string]float64{"triggerChance": 1, "attackBonusRate": 0.35}, designKey: "attackBonusRate", designValue: 0.35, baseAttack: 14, attackDelta: 5},
-		{name: "武圣破军", traitID: "wusheng_pojun", generalID: "guanyu", unitType: "weiInfantry", mode: "attack", params: map[string]float64{"attackBonusRate": 0.2}, designKey: "attackBonusRate", designValue: 0.2, baseAttack: 10, attackDelta: 2},
-		{name: "万人怒吼", traitID: "wanren_nuhou", generalID: "zhangfei", unitType: "weiInfantry", target: "infantry", mode: "attack", params: map[string]float64{"attackBonusRate": 0.2}, designKey: "attackBonusRate", designValue: 0.2, baseAttack: 10, attackDelta: 2},
+		{name: "武圣破军", traitID: "wusheng_pojun", generalID: "guanyu", unitType: "azureDragon", target: "azureDragon", mode: "attack", params: map[string]float64{"triggerChance": 1, "attackBonusRate": 0.38}, designKey: "attackBonusRate", designValue: 0.38, baseAttack: 10, attackDelta: 4},
+		{name: "勇冠三军", traitID: "wanren_nuhou", generalID: "zhangfei", unitType: "southernElephant", target: "southernElephant", mode: "attack", params: map[string]float64{"triggerChance": 1, "attackBonusRate": 0.35}, designKey: "attackBonusRate", designValue: 0.35, baseAttack: 10, attackDelta: 4},
 		{name: "小霸王", traitID: "xiaobawang_tieqi", generalID: "sunce", unitType: "overlordRider", target: "overlordRider", mode: "attack", params: map[string]float64{"unitAttackFlat": 50}, designKey: "unitAttackFlat", designValue: 50, baseAttack: 28, attackDelta: 50},
 		{name: "美周郎军略", traitID: "meizhoulang_junlue", generalID: "zhouyu", unitType: "weiInfantry", mode: "attack", params: map[string]float64{"attackBonusRate": 0.05}, designKey: "attackBonusRate", designValue: 0.05, baseAttack: 10, attackDelta: 1},
 		{name: "锦帆奇袭", traitID: "jinfan_qixi", generalID: "ganning", unitType: "weiInfantry", mode: "plunder", params: map[string]float64{"attackBonusRate": 0.1}, designKey: "attackBonusRate", designValue: 0.1, baseAttack: 10, attackDelta: 1},
@@ -311,7 +299,7 @@ func TestNpcGeneralSnapshotStaysAtPreBattleLevelAfterUpgrade(t *testing.T) {
 	}
 }
 
-// TestNpcEnemyDefenseReductionTraitsMatchPowerStateAndReports 验证四项主动破防真实降低 NPC 防御战力并保存两类实际变化。
+// TestNpcEnemyDefenseReductionTraitsMatchPowerStateAndReports 验证三项主动破防真实降低 NPC 防御战力并保存两类实际变化。
 func TestNpcEnemyDefenseReductionTraitsMatchPowerStateAndReports(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -325,8 +313,7 @@ func TestNpcEnemyDefenseReductionTraitsMatchPowerStateAndReports(t *testing.T) {
 	}{
 		{name: "魅惑扰阵", traitID: "meihuo_raozhen", traitType: general.TraitTypeBonus, generalID: "zhenmi", rate: 0.25, defensePower: 800, defenseDelta: -2},
 		{name: "虎痴冲阵", traitID: "huchi_chongzhen", traitType: general.TraitTypeSpecial, generalID: "xuchu", rate: 0.3, defensePower: 700, defenseDelta: -3, cavalryDelta: -2},
-		{name: "百步穿杨", traitID: "baibu_chuanyang", traitType: general.TraitTypeSpecial, generalID: "huangzhong", rate: 0.2, defensePower: 800, defenseDelta: -2},
-		{name: "奇兵绕后", traitID: "qibing_raohou", traitType: general.TraitTypeSpecial, generalID: "weiyan", rate: 0.2, defensePower: 800, defenseDelta: -2},
+		{name: "百步穿杨", traitID: "baibu_chuanyang", traitType: general.TraitTypeSpecial, generalID: "huangzhong", rate: 0.3, defensePower: 700, defenseDelta: -3, cavalryDelta: -2},
 	}
 
 	for _, tc := range cases {
@@ -481,7 +468,7 @@ func TestNpcZhenMiTraitsRecalculateAttackDefenseAndLosses(t *testing.T) {
 	}
 }
 
-// TestNpcAfterCombatDamageTraitsMatchRealStateAndReports 验证四项正式战后追加伤害真实扣除 NPC 兵力并写入两套战报。
+// TestNpcAfterCombatDamageTraitsMatchRealStateAndReports 验证三项正式战后追加伤害真实扣除 NPC 兵力并写入两套战报。
 func TestNpcAfterCombatDamageTraitsMatchRealStateAndReports(t *testing.T) {
 	cases := []struct {
 		name           string
@@ -493,7 +480,6 @@ func TestNpcAfterCombatDamageTraitsMatchRealStateAndReports(t *testing.T) {
 		detailKey      string
 		killsTarget    bool
 	}{
-		{name: "老当益壮", traitID: "laodang_yizhuang", traitType: general.TraitTypeBonus, generalID: "huangzhong", effectRate: 0.1, detailKey: "extraLosses"},
 		{name: "火烧联营", traitID: "huoshao_lianying", traitType: general.TraitTypeSpecial, generalID: "luxun", targetUnitType: "infantry", effectRate: 1, detailKey: "targetExtraLosses", killsTarget: true},
 		{name: "连营增伤", traitID: "lianying_zengshang", traitType: general.TraitTypeBonus, generalID: "luxun", targetUnitType: "infantry", effectRate: 0.1, detailKey: "targetExtraLosses"},
 		{name: "苦肉反击", traitID: "kurou_fanji", traitType: general.TraitTypeBonus, generalID: "huanggai", effectRate: 0.1, detailKey: "extraLosses"},
@@ -1298,6 +1284,16 @@ func resolveNpcAttackBonusTraitTest(t *testing.T, traitID string, generalID stri
 	activeUnits["wei"]["overlordRider"] = UnitConfig{
 		Name: "霸王骑", Category: "cavalry",
 		Stats: map[string]int{"attack": 28, "infantryDefense": 10, "cavalryDefense": 33, "carryCapacity": 130, "upkeep": 4},
+	}
+	if _, exists := activeUnits["wei"][unitType]; !exists {
+		category := target
+		if category != "cavalry" {
+			category = "infantry"
+		}
+		activeUnits["wei"][unitType] = UnitConfig{
+			Name: unitType + "测试兵", Category: category,
+			Stats: map[string]int{"attack": 10, "infantryDefense": 10, "cavalryDefense": 8, "carryCapacity": 5, "upkeep": 1},
+		}
 	}
 	unitsMu.Unlock()
 

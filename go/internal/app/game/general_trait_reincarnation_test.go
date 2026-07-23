@@ -134,18 +134,18 @@ func fightReincarnationTraitFixture(t *testing.T, fixture reincarnationTraitFixt
 func TestReincarnationAttackAppliesBeforeBattleTraits(t *testing.T) {
 	hero := GeneralHeroConfig{
 		ID: "guanyu", Name: "关羽", Faction: "shu", Enabled: true,
-		SpecialTrait: GeneralTraitConfig{TraitID: "shuiyan_qijun", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "enemy_army", Params: map[string]float64{"effectRate": 0.35, "maxAffectedRate": 0.35, "triggerChance": 1}},
-		BonusTrait:   GeneralTraitConfig{TraitID: "wusheng_pojun", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", AllowedSides: []string{"attacker"}, Params: map[string]float64{"attackBonusRate": 0.2}},
+		SpecialTrait: GeneralTraitConfig{TraitID: "shuiyan_qijun", TraitType: general.TraitTypeSpecial, Enabled: true, Scope: "enemy_army", AllowedSides: []string{"attacker"}, Params: map[string]float64{"effectRate": 0.3, "triggerChance": 1}},
+		BonusTrait:   GeneralTraitConfig{TraitID: "wusheng_pojun", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "self_army", TargetUnitType: "azureDragon", AllowedSides: []string{"attacker"}, Params: map[string]float64{"attackBonusRate": 0.38, "triggerChance": 1}},
 	}
-	fixture := newReincarnationTraitFixture(t, "guanyu_attack", hero, "wei", ReincarnationWaveAttack, 500, 1000)
+	fixture := newReincarnationTraitFixtureWithUnits(t, "guanyu_attack", hero, "wei", ReincarnationWaveAttack, 500, 1000, "azureDragon", "infantry", "weiInfantry", "infantry")
 	result := fightReincarnationTraitFixture(t, fixture, 100, hero.ID, "guanyu-attack-once")
 	report := result.BattleReport
 	preDamage, ok := report.TraitOutcomes["shuiyan_qijun"].Detail["preBattleAffected"].(map[string]int)
 	attackModified, modifiedOK := report.TraitOutcomes["wusheng_pojun"].Detail["attackModifiedUnits"].(map[string]int)
-	if !ok || preDamage[fixture.enemyUnit] != 350 || !modifiedOK || attackModified[fixture.playerUnit] != 2 {
-		t.Fatalf("expected exact pre-damage 350 and attack +2, outcomes=%+v", report.TraitOutcomes)
+	if !ok || preDamage[fixture.enemyUnit] != 300 || !modifiedOK || attackModified[fixture.playerUnit] != 4 {
+		t.Fatalf("expected exact pre-damage 300 and Qinglong attack +4, outcomes=%+v", report.TraitOutcomes)
 	}
-	if report.PlayerPower != 1200 || report.DefenderLostUnits[fixture.enemyUnit] < 350 {
+	if report.PlayerPower != 1400 || report.DefenderLostUnits[fixture.enemyUnit] < 300 {
 		t.Fatalf("expected modified attack power and pre-damage in final losses, power=%d losses=%+v", report.PlayerPower, report.DefenderLostUnits)
 	}
 	storedRun, err := fixture.repo.GetReincarnationRun(result.Run.ID)
@@ -243,22 +243,6 @@ func TestReincarnationDefenseAppliesDefenseAndEnemyDamageTraits(t *testing.T) {
 		}
 	})
 
-	t.Run("huangzhong_enemy_damage", func(t *testing.T) {
-		hero := GeneralHeroConfig{
-			ID: "huangzhong", Name: "黄忠", Faction: "shu", Enabled: true,
-			BonusTrait: GeneralTraitConfig{TraitID: "laodang_yizhuang", TraitType: general.TraitTypeBonus, Enabled: true, Scope: "enemy_army", Params: map[string]float64{"effectRate": 0.1, "triggerChance": 1}},
-		}
-		fixture := newReincarnationTraitFixture(t, "huangzhong_defense", hero, "wei", ReincarnationWaveDefense, 500, 1000)
-		result := fightReincarnationTraitFixture(t, fixture, 100, hero.ID, "huangzhong-defense-once")
-		report := result.BattleReport
-		extra, ok := report.TraitOutcomes["laodang_yizhuang"].Detail["extraLosses"].(map[string]int)
-		if !ok || extra[fixture.enemyUnit] != 100 || report.TraitOutcomes["laodang_yizhuang"].OwnerSide != "defender" {
-			t.Fatalf("expected defender-owned enemy extra losses 100, outcomes=%+v", report.TraitOutcomes)
-		}
-		if result.Run.Waves[0].EnemyRemaining[fixture.enemyUnit] != 1000-report.DefenderLostUnits[fixture.enemyUnit] {
-			t.Fatalf("expected enemy wave state to match final losses, wave=%+v report=%+v", result.Run.Waves[0], report)
-		}
-	})
 }
 
 // TestReincarnationDefenseAppliesAfterBattleRecovery 验证刘备防守波仁主守护从主城真实阵亡中复活并进入防守侧战报。
@@ -439,7 +423,7 @@ func formalReincarnationTraitCases(t *testing.T, cfg GeneralsConfig) []reincarna
 	attackerOnly := map[string]bool{
 		"meiren": true, "meihuo_raozhen": true, "huchi_chongzhen": true,
 		"sizhandaodi": true, "weizhen_zhenhe": true, "weizhen_xiaoyao": true, "wusheng_pojun": true, "wanren_nuhou": true,
-		"baibu_chuanyang": true, "qibing_raohou": true, "xiaobawang_tieqi": true, "huogong": true,
+		"baibu_chuanyang": true, "shuiyan_qijun": true, "zhenhe_quanjun": true, "xiaobawang_tieqi": true, "huogong": true,
 		"meizhoulang_junlue": true,
 	}
 	defenderOnly := map[string]bool{
@@ -448,14 +432,14 @@ func formalReincarnationTraitCases(t *testing.T, cfg GeneralsConfig) []reincarna
 	}
 	bothSides := map[string]bool{
 		"yibing_touxi": true,
-		"guicai_yice":  true, "renzhu_shouhu": true, "shuiyan_qijun": true,
-		"zhenhe_quanjun": true, "qimen_dunjia": true, "xiliang_tuji": true,
-		"laodang_yizhuang": true, "huoshao_lianying": true, "lianying_zengshang": true,
+		"guicai_yice":  true, "renzhu_shouhu": true, "qimen_dunjia": true, "xiliang_tuji": true,
+		"huoshao_lianying": true, "lianying_zengshang": true,
 		"kurouji": true, "kurou_fanji": true,
 	}
 	nonBattle := map[string]bool{
 		"weiwu_haoling": true, "jixing_benxi": true, "huhu_shengwei": true, "shengui_zhicai": true, "rende": true, "wangzuo_zhicai": true,
 		"neizheng_jingying": true, "qijin_qichu": true, "tianshen_xiafan": true,
+		"laodang_yizhuang": true, "qibing_raohou": true,
 		"jiangdong_haoling": true, "xiaobawang_zhuiji": true, "baiyi_dujiang": true,
 		"baiyi_jixing": true, "kuairu_shandian": true, "xinyi_yonglie": true,
 		"jinfan_jielue": true, "jinfan_qixi": true, "wolong_mouzhi": true,
@@ -532,6 +516,14 @@ func reincarnationFormalTraitUnits(hero GeneralHeroConfig, enemyFaction string, 
 		playerUnit = "jinWeiSoldier"
 	case "weizhen_xiaoyao":
 		playerUnit, playerCategory = hero.Faction+"Cavalry", "cavalry"
+	case "wusheng_pojun":
+		playerUnit, playerCategory = "azureDragon", "infantry"
+	case "wanren_nuhou":
+		playerUnit, playerCategory = "southernElephant", "cavalry"
+	case "longdan_jiuyuan":
+		playerUnit, playerCategory = "qilinGuard", "infantry"
+	case "qibing_raohou":
+		playerUnit, playerCategory = "southernElephant", "cavalry"
 	case "xiaobawang_tieqi":
 		playerUnit, playerCategory = "overlordRider", "cavalry"
 	case "xiliang_tuji":

@@ -152,10 +152,14 @@ func (c *RecruitCostContext) EventType() string { return EventRecruitCost }
 
 // PlunderResolveContext 掠夺结算上下文，特性可修正本次掠夺收益。
 type PlunderResolveContext struct {
-	Rewards   map[string]int
-	Scene     string
-	Actor     TraitActor
-	Triggered map[string]TraitOutcome
+	Rewards                      map[string]int
+	BaseRewards                  map[string]int
+	Scene                        string
+	Actor                        TraitActor
+	Triggered                    map[string]TraitOutcome
+	PlunderProtectionRate        float64
+	DefenderProtectionApplied    bool
+	ReinforcementProtectionCount int
 }
 
 func (c *PlunderResolveContext) EventType() string { return EventPlunderResolve }

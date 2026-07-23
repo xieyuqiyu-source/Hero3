@@ -40,6 +40,8 @@ func TestFormalPassiveAndCityTraitConfigsMatchDesign(t *testing.T) {
 		{generalID: "machao", traitID: "tianshen_xiafan", traitType: "bonus", scope: "self_army", params: map[string]float64{"forceBonus": 20}},
 		{generalID: "xiahouyuan", traitID: "jixing_benxi", traitType: "special", scope: "self_army", targetUnitType: "qiQiYing", params: map[string]float64{"unitAttackFlat": 18, "unitSpeedFlat": 5}},
 		{generalID: "xuchu", traitID: "huhu_shengwei", traitType: "bonus", scope: "self_army", targetUnitType: "huBaoQi", params: map[string]float64{"unitAttackFlat": 12, "unitSpeedFlat": 5}},
+		{generalID: "huangzhong", traitID: "laodang_yizhuang", traitType: "bonus", scope: "self_army", params: map[string]float64{"forceBonus": 12, "commandBonus": 12}},
+		{generalID: "weiyan", traitID: "qibing_raohou", traitType: "special", scope: "self_army", targetUnitType: "southernElephant", params: map[string]float64{"unitAttackFlat": 18, "unitSpeedFlat": 15}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.traitID, func(t *testing.T) {

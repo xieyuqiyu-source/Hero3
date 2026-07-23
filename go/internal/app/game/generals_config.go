@@ -376,6 +376,170 @@ func normalizeTraitConfigParams(traitCfg *GeneralTraitConfig) {
 		traitCfg.AllowedSides = []string{"attacker", "defender", "reinforcement"}
 		traitCfg.AllowedScenes = nil
 		traitCfg.RequiredOutcome = ""
+	case "shuiyan_qijun":
+		// 旧 35% 逐兵种伤亡与通用上限迁移为主动进攻时 30% 全军真实伤亡。
+		_, hadLegacyCap := traitCfg.Params["maxAffectedRate"]
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		if rate, ok := traitCfg.Params["effectRate"]; !ok || (hadLegacyCap && math.Abs(rate-0.35) < 1e-9) {
+			traitCfg.Params["effectRate"] = 0.3
+		}
+		if _, ok := traitCfg.Params["triggerChance"]; !ok {
+			traitCfg.Params["triggerChance"] = 0.35
+		}
+		traitCfg.Scope = "enemy_army"
+		traitCfg.TargetUnitType = ""
+		traitCfg.AllowedSides = []string{"attacker"}
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "wusheng_pojun":
+		// 旧全军必定加攻迁移为青龙军 50% 概率增加 38% 攻击。
+		_, hadChance := traitCfg.Params["triggerChance"]
+		if rate, ok := traitCfg.Params["attackBonusRate"]; !ok || (!hadChance && math.Abs(rate-0.2) < 1e-9) {
+			traitCfg.Params["attackBonusRate"] = 0.38
+		}
+		if !hadChance {
+			traitCfg.Params["triggerChance"] = 0.5
+		}
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = "azureDragon"
+		traitCfg.AllowedSides = []string{"attacker"}
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "zhenhe_quanjun":
+		// 张飞旧通用震慑清理上限字段，统一为主动进攻时 50% 全军逃跑且战后返回。
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		if _, ok := traitCfg.Params["effectRate"]; !ok {
+			traitCfg.Params["effectRate"] = 0.5
+		}
+		if _, ok := traitCfg.Params["triggerChance"]; !ok {
+			traitCfg.Params["triggerChance"] = 0.5
+		}
+		traitCfg.Scope = "enemy_army"
+		traitCfg.TargetUnitType = ""
+		traitCfg.AllowedSides = []string{"attacker"}
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "wanren_nuhou":
+		// 旧万人怒吼步兵加攻迁移为勇冠三军南蛮象概率加攻。
+		_, hadChance := traitCfg.Params["triggerChance"]
+		legacyTarget := strings.EqualFold(strings.TrimSpace(traitCfg.TargetUnitType), "infantry")
+		if rate, ok := traitCfg.Params["attackBonusRate"]; !ok || (legacyTarget && !hadChance && math.Abs(rate-0.2) < 1e-9) {
+			traitCfg.Params["attackBonusRate"] = 0.35
+		}
+		if !hadChance {
+			traitCfg.Params["triggerChance"] = 0.4
+		}
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = "southernElephant"
+		traitCfg.AllowedSides = []string{"attacker"}
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "longdan_jiuyuan":
+		// 旧战后减损迁移为麒麟卫战前双防和守城资源保护。
+		_, hadLegacyLossReduction := traitCfg.Params["lossReductionRate"]
+		delete(traitCfg.Params, "lossReductionRate")
+		delete(traitCfg.Params, "triggerChance")
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		if _, ok := traitCfg.Params["defenseBonusRate"]; !ok || hadLegacyLossReduction {
+			traitCfg.Params["defenseBonusRate"] = 0.25
+		}
+		if _, ok := traitCfg.Params["plunderProtectionRate"]; !ok || hadLegacyLossReduction {
+			traitCfg.Params["plunderProtectionRate"] = 0.2
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = "qilinGuard"
+		traitCfg.AllowedSides = []string{"defender", "reinforcement"}
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "qijin_qichu":
+		// 七进七出是固定行军被动，仅保留速度倍率和最低时长。
+		delete(traitCfg.Params, "triggerChance")
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		if _, ok := traitCfg.Params["speedBonusRate"]; !ok {
+			traitCfg.Params["speedBonusRate"] = 1
+		}
+		if _, ok := traitCfg.Params["minMarchSeconds"]; !ok {
+			traitCfg.Params["minMarchSeconds"] = 60
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = ""
+		traitCfg.AllowedSides = nil
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "baibu_chuanyang":
+		// 旧 35% 概率降低 20% 防御迁移为 45% 概率降低 30%。
+		chance, hadChance := traitCfg.Params["triggerChance"]
+		legacyChance := !hadChance || math.Abs(chance-0.35) < 1e-9
+		if legacyChance {
+			traitCfg.Params["triggerChance"] = 0.45
+		}
+		if rate, ok := traitCfg.Params["enemyDefenseReductionRate"]; !ok || (legacyChance && math.Abs(rate-0.2) < 1e-9) {
+			traitCfg.Params["enemyDefenseReductionRate"] = 0.3
+		}
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		traitCfg.Scope = "enemy_army"
+		traitCfg.TargetUnitType = ""
+		traitCfg.AllowedSides = []string{"attacker"}
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "laodang_yizhuang":
+		// 旧战后追加伤亡能力废止，迁移为永久武力与统率。
+		_, hadLegacyDamage := traitCfg.Params["effectRate"]
+		delete(traitCfg.Params, "effectRate")
+		delete(traitCfg.Params, "triggerChance")
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		if _, ok := traitCfg.Params["forceBonus"]; !ok || hadLegacyDamage {
+			traitCfg.Params["forceBonus"] = 12
+		}
+		if _, ok := traitCfg.Params["commandBonus"]; !ok || hadLegacyDamage {
+			traitCfg.Params["commandBonus"] = 12
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = ""
+		traitCfg.AllowedSides = nil
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "qibing_raohou":
+		// 旧概率绕防能力废止，迁移为南蛮象永久攻击和移动属性。
+		_, hadLegacyDefenseReduction := traitCfg.Params["enemyDefenseReductionRate"]
+		delete(traitCfg.Params, "enemyDefenseReductionRate")
+		delete(traitCfg.Params, "triggerChance")
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		if _, ok := traitCfg.Params["unitAttackFlat"]; !ok || hadLegacyDefenseReduction {
+			traitCfg.Params["unitAttackFlat"] = 18
+		}
+		if _, ok := traitCfg.Params["unitSpeedFlat"]; !ok || hadLegacyDefenseReduction {
+			traitCfg.Params["unitSpeedFlat"] = 15
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = "southernElephant"
+		traitCfg.AllowedSides = nil
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
+	case "gushou_hanzhong":
+		// 固守汉中是防守或增援时固定双防，不暴露概率和通用影响上限。
+		delete(traitCfg.Params, "triggerChance")
+		delete(traitCfg.Params, "maxAffectedRate")
+		delete(traitCfg.Params, "maxAffectedCount")
+		if _, ok := traitCfg.Params["generalDefenseFlat"]; !ok {
+			traitCfg.Params["generalDefenseFlat"] = 20
+		}
+		traitCfg.Scope = "self_army"
+		traitCfg.TargetUnitType = ""
+		traitCfg.AllowedSides = []string{"defender", "reinforcement"}
+		traitCfg.AllowedScenes = nil
+		traitCfg.RequiredOutcome = ""
 	case "qimen_dunjia":
 		// 奇门遁甲清除旧通用上限，统一为全方向战前临时困兵。
 		delete(traitCfg.Params, "maxAffectedRate")
